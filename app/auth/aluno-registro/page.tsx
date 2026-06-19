@@ -1,8 +1,10 @@
 "use client";
+
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
 export default function AlunoRegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -14,25 +16,32 @@ export default function AlunoRegisterPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
     if (!form.name || !form.email || !form.password) {
       setError("Preencha todos os campos obrigatórios.");
       return;
     }
+
     if (form.password.length < 6) {
       setError("A senha deve ter no mínimo 6 caracteres.");
       return;
     }
+
     if (form.password !== form.confirmPassword) {
       setError("As senhas não conferem.");
       return;
     }
+
     setLoading(true);
+
     try {
       const res = await fetch("/api/aluno/register", {
         method: "POST",
@@ -44,17 +53,21 @@ export default function AlunoRegisterPage() {
           password: form.password,
         }),
       });
+
       const data = await res.json();
+
       if (!res.ok) {
         setError(data.error || "Erro ao criar conta.");
         setLoading(false);
         return;
       }
+
       const result = await signIn("credentials", {
         email: form.email,
         password: form.password,
         redirect: false,
       });
+
       if (result?.ok) {
         router.push("/aluno");
       } else {
@@ -67,6 +80,7 @@ export default function AlunoRegisterPage() {
       setLoading(false);
     }
   };
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -74,12 +88,14 @@ export default function AlunoRegisterPage() {
           <h1 className="text-2xl font-bold text-[#D4A373]">Funcional Vip Digital</h1>
           <p className="text-[#a1a1a1] mt-1">Crie sua conta de aluno</p>
         </div>
+
         <form onSubmit={handleSubmit} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6 space-y-4">
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg p-3">
               {error}
             </div>
           )}
+
           <div>
             <label className="block text-sm text-[#a1a1a1] mb-1">Nome completo *</label>
             <input
@@ -92,6 +108,7 @@ export default function AlunoRegisterPage() {
               className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
             />
           </div>
+
           <div>
             <label className="block text-sm text-[#a1a1a1] mb-1">E-mail *</label>
             <input
@@ -104,6 +121,7 @@ export default function AlunoRegisterPage() {
               className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
             />
           </div>
+
           <div>
             <label className="block text-sm text-[#a1a1a1] mb-1">Telefone</label>
             <input
@@ -115,6 +133,7 @@ export default function AlunoRegisterPage() {
               className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
             />
           </div>
+
           <div>
             <label className="block text-sm text-[#a1a1a1] mb-1">Senha *</label>
             <input
@@ -128,6 +147,7 @@ export default function AlunoRegisterPage() {
               className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
             />
           </div>
+
           <div>
             <label className="block text-sm text-[#a1a1a1] mb-1">Confirmar senha *</label>
             <input
@@ -140,6 +160,7 @@ export default function AlunoRegisterPage() {
               className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
             />
           </div>
+
           <button
             type="submit"
             disabled={loading}
@@ -147,6 +168,7 @@ export default function AlunoRegisterPage() {
           >
             {loading ? "Criando conta..." : "Criar conta"}
           </button>
+
           <div className="text-center pt-2">
             <p className="text-sm text-[#a1a1a1]">
               Já tem conta?{" "}
