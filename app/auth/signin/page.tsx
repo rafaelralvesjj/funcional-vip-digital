@@ -93,7 +93,7 @@ export default function SignInPage() {
             Não tem conta? Cadastre-se
           </Link>
           <Link
-            href="/aluno/register"
+            href="/auth/aluno-registro"
             className="text-[#D4A373] transition hover:underline font-medium"
           >
             Sou aluno
