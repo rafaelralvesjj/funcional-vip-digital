@@ -1,264 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model User {
-  id            String    @id @default(uuid())
-  name          String?
-  email         String?   @unique
+  id String @id @default(uuid())
+  name String?
+  email String? @unique
   emailVerified DateTime? @map("email_verified")
-  image         String?
-  password  String?  @map("password")
-  phone     String?  @map("phone")
-  role          String    @default("GESTOR")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  accounts  Account[]
-  sessions  Session[]
-  students  Student[]
-
+  image String?
+  password String? @map("password")
+  phone String? @map("phone")
+  role String @default("GESTOR")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  accounts Account[]
+  sessions Session[]
+  students Student[]
+  notices Notice[]
+  questions Question[]
+  studentAuths Student[] @relation("StudentAuth")
   @@map("users")
 }
 
 model Account {
-  id                String  @id @default(uuid())
-  userId            String  @map("user_id")
-  type              String
-  provider          String
-  providerAccountId String  @map("provider_account_id")
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
-
+  id String @id @default(cuid())
+  userId String @map("user_id")
+  type String
+  provider String
+  providerAccountId String @map("provider_account_id")
+  refresh_token String? @db.Text
+  access_token String? @db.Text
+  expires_at Int?
+  token_type String?
+  scope String?
+  id_token String? @db.Text
+  session_state String?
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([provider, providerAccountId])
   @@map("accounts")
 }
 
 model Session {
-  id           String   @id @default(uuid())
-  sessionToken String   @unique @map("session_token")
-  userId       String   @map("user_id")
-  expires      DateTime
-
+  id String @id @default(cuid())
+  sessionToken String @unique @map("session_token")
+  userId String @map("user_id")
+  expires DateTime
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@map("sessions")
 }
 
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-  @@map("verification_tokens")
-}
-
 model Student {
-  id          String    @id @default(uuid())
-  name        String
-  email       String
-  phone       String?
-  birthDate   DateTime? @map("birth_date")
-  objective   String?
-  level       String?
-  weight      Float?
-  height      Float?
-  imc         Float?
-  notes       String?
-  photo       String?
-  status      String    @default("ATIVO")
-  userId      String    @map("user_id")
-  productId   String?   @map("product_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product          Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
-  workoutPlans     WorkoutPlan[]
-  checkIns         CheckIn[]
-  weeklyFeedbacks  WeeklyFeedback[]
-  weeklyPlannings WeeklyPlanning[]
-  studentHistories StudentHistory[]
-  subscriptions    Subscription[]
-
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  name String
+  email String?
+  phone String?
+  notes String?
+  image String?
+  active Boolean @default(true)
+  userAuthId String? @unique @map("user_auth_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAuth User? @relation("StudentAuth", fields: [userAuthId], references: [id])
+  workoutPlans WorkoutPlan[]
+  checkIns CheckIn[]
+  weeklyFeedbacks WeeklyFeedback[]
+  notices Notice[]
+  questions Question[]
+  workouts Workout[]
   @@map("students")
 }
 
-model StudentHistory {
-  id        String    @id @default(uuid())
-  studentId String    @map("student_id")
-  date      DateTime  @default(now())
-  weight    Float?
-  height    Float?
-  imc       Float?
-  notes     String?
-
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@map("student_histories")
-}
-
-model Product {
-  id          String    @id @default(uuid())
-  name        String
-  description String?
-  price       Float?
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  students      Student[]
-  subscriptions Subscription[]
-
-  @@map("products")
-}
-
-model Subscription {
-  id        String    @id @default(uuid())
-  studentId String    @map("student_id")
-  productId String    @map("product_id")
-  status    String    @default("ATIVA")
-  startDate DateTime  @default(now()) @map("start_date")
-  endDate   DateTime? @map("end_date")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-
-  student  Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  product  Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  payments Payment[]
-
-  @@map("subscriptions")
-}
-
-model Payment {
-  id             String    @id @default(uuid())
-  subscriptionId String    @map("subscription_id")
-  amount         Float
-  dueDate        DateTime  @map("due_date")
-  paidAt         DateTime? @map("paid_at")
-  status         String    @default("PENDENTE")
-  createdAt      DateTime  @default(now()) @map("created_at")
-
-  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-
-  @@map("payments")
-}
-
-model Exercise {
-  id          String    @id @default(uuid())
-  name        String
-  description String?
-  videoUrl    String?   @map("video_url")
-  imageUrl    String?   @map("image_url")
-  muscleGroup String?   @map("muscle_group")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  workoutExercises WorkoutExercise[]
-
-  @@map("exercises")
-}
-
 model WorkoutPlan {
-  id          String    @id @default(uuid())
-  studentId   String    @map("student_id")
-  name        String
+  id String @id @default(uuid())
+  studentId String @map("student_id")
+  name String
   description String?
-  startDate   DateTime? @map("start_date")
-  endDate     DateTime? @map("end_date")
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  student     Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  workoutDays WorkoutDay[]
-
+  active Boolean @default(true)
+  notes String?
+  weekDay String? @map("week_day")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  exercises Exercise[]
+  workouts Workout[]
   @@map("workout_plans")
 }
 
-model WorkoutDay {
-  id            String    @id @default(uuid())
-  workoutPlanId String    @map("workout_plan_id")
-  name          String
-  order         Int
-  createdAt     DateTime  @default(now()) @map("created_at")
-
-  workoutPlan      WorkoutPlan       @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
-  workoutExercises WorkoutExercise[]
-
-  @@map("workout_days")
+model Exercise {
+  id String @id @default(uuid())
+  workoutPlanId String @map("workout_plan_id")
+  name String
+  description String?
+  series Int?
+  reps String?
+  weight String?
+  restTime String? @map("rest_time")
+  notes String?
+  order Int @default(0)
+  videoUrl String? @map("video_url")
+  imageUrl String? @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  workoutPlan WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+  @@map("exercises")
 }
 
-model WorkoutExercise {
-  id           String    @id @default(uuid())
-  workoutDayId String    @map("workout_day_id")
-  exerciseId   String    @map("exercise_id")
-  sets         Int?
-  reps         String?
-  restTime     String?   @map("rest_time")
-  order        Int
-  notes        String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-
-  workoutDay WorkoutDay @relation(fields: [workoutDayId], references: [id], onDelete: Cascade)
-  exercise   Exercise   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-
-  @@map("workout_exercises")
-}
-
-model WeeklyPlanning {
-  id         String    @id @default(uuid())
-  studentId  String    @map("student_id")
-  weekStart  DateTime  @map("week_start")
-  status     String    @default("PENDENTE")
-  notes      String?
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-
+model Workout {
+  id String @id @default(uuid())
+  studentId String @map("student_id")
+  workoutPlanId String? @map("workout_plan_id")
+  date DateTime
+  status String @default("PENDENTE")
+  notes String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@map("weekly_plannings")
+  workoutPlan WorkoutPlan? @relation(fields: [workoutPlanId], references: [id])
+  @@map("workouts")
 }
 
 model CheckIn {
-  id               String   @id @default(uuid())
-  studentId        String   @map("student_id")
-  date             DateTime @default(now())
-  workoutCompleted Boolean  @default(true) @map("workout_completed")
-  rating           Int?
-  energy           Int?
-  notes            String?
-  createdAt        DateTime @default(now()) @map("created_at")
-
+  id String @id @default(uuid())
+  studentId String @map("student_id")
+  date DateTime @default(now())
+  present Boolean @default(true)
+  notes String?
+  createdAt DateTime @default(now()) @map("created_at")
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
   @@map("check_ins")
 }
 
 model WeeklyFeedback {
-  id         String    @id @default(uuid())
-  studentId  String    @map("student_id")
-  weekStart  DateTime  @map("week_start")
-  progress   Int?
-  rating     Int?
-  feedback   String?
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-
+  id String @id @default(uuid())
+  studentId String @map("student_id")
+  content String
+  rating Int?
+  weekStart DateTime? @map("week_start")
+  createdAt DateTime @default(now()) @map("created_at")
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
   @@map("weekly_feedbacks")
+}
+
+model Notice {
+  id String @id @default(uuid())
+  title String?
+  content String
+  type String @default("AVISO")
+  authorId String @map("author_id")
+  studentId String? @map("student_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  author User @relation(fields: [authorId], references: [id])
+  student Student? @relation(fields: [studentId], references: [id])
+  @@map("notices")
+}
+
+model Question {
+  id String @id @default(uuid())
+  studentId String @map("student_id")
+  content String
+  answer String?
+  answeredAt DateTime? @map("answered_at")
+  answeredById String? @map("answered_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answeredBy User? @relation(fields: [answeredById], references: [id])
+  @@map("questions")
 }
