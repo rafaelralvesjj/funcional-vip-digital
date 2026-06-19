@@ -105,13 +105,13 @@ export default function Home() {
               Preços
             </a>
             <a
-              href="#"
+              href="/auth/signin"
               className="text-sm text-gray-300 hover:text-[#D4A373] transition-colors"
             >
               Login
             </a>
             <a
-              href="#"
+              href="/auth/register"
               className="text-sm bg-[#D4A373] text-[#0a0a0a] font-semibold px-4 py-2 rounded-lg hover:bg-[#b88a5e] transition-colors"
             >
               Começar agora
