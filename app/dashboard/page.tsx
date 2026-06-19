@@ -1,223 +1,245 @@
-"use client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../api/auth/[...nextauth]/auth";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 
-import { usePathname } from "next/navigation";
-import Link from "next/link";
-import { signOut, useSession } from "next-auth/react";
-import type { JSX } from "react";
+export const dynamic = "force-dynamic";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { data: session } = useSession();
-  const pathname = usePathname();
+async function getDashboardData(userId: string) {
+  const [
+    activeStudents,
+    newStudentsThisMonth,
+    totalStudents,
+    workoutsThisWeek,
+    checkinsPending,
+    feedbacksPending,
+    topStudents,
+    recentActivities,
+    activeWorkouts,
+    inactiveWorkouts,
+  ] = await Promise.all([
+    prisma.student.count({ where: { userId, active: true } }),
+    prisma.student.count({
+      where: { userId, createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } },
+    }),
+    prisma.student.count({ where: { userId } }),
+    prisma.workoutPlan.count({
+      where: { student: { userId }, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+    }),
+    prisma.checkIn.count({
+      where: { student: { userId }, present: false, date: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+    }),
+    prisma.weeklyFeedback.count({
+      where: { student: { userId }, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+    }),
+    prisma.student.findMany({
+      where: { userId, active: true },
+      include: { _count: { select: { checkIns: true } } },
+      orderBy: { checkIns: { _count: "desc" } },
+      take: 5,
+    }),
+    prisma.workoutPlan.findMany({
+      where: { student: { userId } },
+      include: { student: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    }),
+    prisma.workoutPlan.count({ where: { student: { userId }, active: true } }),
+    prisma.workoutPlan.count({ where: { student: { userId }, active: false } }),
+  ]);
 
-  const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: "grid" },
-    { href: "/dashboard/students", label: "Alunos", icon: "users" },
-    { href: "/dashboard/exercises", label: "Biblioteca", icon: "book" },
-    { href: "/dashboard/planning", label: "Planejamento", icon: "calendar" },
-    { href: "/dashboard/checkins", label: "Check-ins", icon: "check" },
-    { href: "/dashboard/feedbacks", label: "Feedbacks", icon: "star" },
-    { href: "/dashboard/controls", label: "Controle Semanal", icon: "chart" },
-  ];
-
-  function NavIcon({ icon }: { icon: string }) {
-    const icons: Record<string, JSX.Element> = {
-      grid: (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="3" width="7" height="7" />
-          <rect x="14" y="3" width="7" height="7" />
-          <rect x="14" y="14" width="7" height="7" />
-          <rect x="3" y="14" width="7" height="7" />
-        </svg>
-      ),
-      users: (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-      ),
-      book: (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-        </svg>
-      ),
-      calendar: (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-      ),
-      check: (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="9 11 12 14 22 4" />
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-        </svg>
-      ),
-      star: (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-        </svg>
-      ),
-      chart: (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="18" y1="20" x2="18" y2="10" />
-          <line x1="12" y1="20" x2="12" y2="4" />
-          <line x1="6" y1="20" x2="6" y2="14" />
-        </svg>
-      ),
-    };
-
-    return icons[icon] || null;
+  // Check-in evolution for last 6 months
+  const checkinEvolution = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const count = await prisma.checkIn.count({
+      where: { student: { userId }, date: { gte: start, lte: end }, present: true },
+    });
+    checkinEvolution.push({
+      month: d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", ""),
+      count,
+    });
   }
 
-  const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === "/dashboard";
-    return pathname.startsWith(href);
+  return {
+    activeStudents, newStudentsThisMonth, totalStudents,
+    workoutsThisWeek, checkinsPending, feedbacksPending,
+    topStudents, recentActivities,
+    activeWorkouts, inactiveWorkouts, checkinEvolution,
   };
+}
+
+export default async function DashboardPage() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect("/auth/signin");
+
+  const data = await getDashboardData(session.user.id);
+
+  const kpis = [
+    { label: "Alunos ativos", value: data.activeStudents, sub: `de ${data.totalStudents} total` },
+    { label: "Treinos na semana", value: data.workoutsThisWeek },
+    { label: "Check-ins pendentes", value: data.checkinsPending },
+    { label: "Feedbacks pendentes", value: data.feedbacksPending },
+    { label: "Novos alunos (mês)", value: data.newStudentsThisMonth },
+  ];
+
+  // Donut chart SVG functions
+  const totalWorkouts = data.activeWorkouts + data.inactiveWorkouts;
+  const circumference = 2 * Math.PI * 50;
+
+  // Bar chart
+  const maxC = Math.max(...data.checkinEvolution.map((c) => c.count), 1);
+  const barGap = (300 - data.checkinEvolution.length * 32) / (data.checkinEvolution.length + 1);
+
+  function getInitials(name: string | null) {
+    if (!name) return "??";
+    return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  }
+
+  function timeAgo(date: Date) {
+    const s = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (s < 60) return "agora";
+    if (s < 3600) return `há ${Math.floor(s / 60)} min`;
+    if (s < 86400) return `há ${Math.floor(s / 3600)}h`;
+    if (s < 604800) return `há ${Math.floor(s / 86400)}d`;
+    return `há ${Math.floor(s / 604800)}sem`;
+  }
 
   return (
-    <div className="flex min-h-screen bg-[#0a0a0a]">
-      {/* Sidebar */}
-      <aside className="w-64 lg:w-72 fixed left-0 top-0 h-screen bg-[#111111] border-r border-[#ffffff10] flex flex-col z-50">
-        {/* Logo */}
-        <div className="p-6 border-b border-[#ffffff10]">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">
-              F
-            </div>
-            <span className="text-[#D4A373] font-bold text-base leading-tight">
-              Funcional
-              <br />
-              Vip Digital
-            </span>
-          </Link>
-        </div>
+    <div className="space-y-6 p-6 min-h-screen bg-[#0a0a0a]">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-[#f5f5f5]">Dashboard</h1>
+        <p className="text-sm text-[#a1a1a1]">Bem-vindo de volta, {session.user.name}!</p>
+      </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition ${
-                isActive(item.href)
-                  ? "bg-[#D4A373]/10 text-[#D4A373] border-l-2 border-[#D4A373]"
-                  : "text-[#a1a1a1] hover:text-[#e5e5e5] hover:bg-white/5"
-              }`}
-            >
-              <NavIcon icon={item.icon} />
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </nav>
-
-        {/* User Info & Logout */}
-        <div className="p-4 border-t border-[#ffffff10] space-y-3">
-          <div className="px-4 py-2">
-            <p className="text-sm font-medium text-[#f5f5f5] truncate">
-              {session?.user?.name || "Usuário"}
-            </p>
-            <p className="text-xs text-[#a1a1a1]">
-              {session?.user?.role === "GESTOR" ? "Gestor" : "Professor"}
-            </p>
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {kpis.map((kpi, i) => (
+          <div key={i} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4">
+            <p className="text-xs text-[#a1a1a1] mb-1">{kpi.label}</p>
+            <p className="text-3xl font-bold text-white">{kpi.value}</p>
+            {kpi.sub && <p className="text-xs text-[#D4A373] mt-1">{kpi.sub}</p>}
           </div>
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: "/" })}
-            className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm text-[#a1a1a1] hover:text-red-400 hover:bg-red-500/5 transition"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            <span>Sair</span>
-          </button>
-        </div>
-      </aside>
+        ))}
+      </div>
 
-      {/* Main Content */}
-      <main className="flex-1 ml-64 lg:ml-72">{children}</main>
+      {/* Grid: 2 columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Alunos em destaque */}
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
+          <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">Alunos em destaque</h2>
+          {data.topStudents.length === 0 ? (
+            <p className="text-sm text-[#a1a1a1]">Nenhum aluno ativo.</p>
+          ) : (
+            <div className="space-y-1">
+              {data.topStudents.map((s) => (
+                <div key={s.id} className="flex items-center gap-3 py-3 border-b border-[#ffffff10] last:border-b-0">
+                  <div className="w-10 h-10 rounded-full bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">
+                    {getInitials(s.name)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[#f5f5f5] truncate">{s.name}</p>
+                    <p className="text-xs text-[#a1a1a1]">{s.active ? "Ativo" : "Inativo"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-[#D4A373]">{s._count.checkIns}</p>
+                    <p className="text-xs text-[#a1a1a1]">check-ins</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Atividades recentes */}
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
+          <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">Atividades recentes</h2>
+          {data.recentActivities.length === 0 ? (
+            <p className="text-sm text-[#a1a1a1]">Nenhuma atividade.</p>
+          ) : (
+            <div className="space-y-1">
+              {data.recentActivities.map((a) => (
+                <div key={a.id} className="flex items-start gap-3 py-3 border-b border-[#ffffff10] last:border-b-0">
+                  <div className="w-8 h-8 rounded-full bg-[#ffffff10] flex items-center justify-center shrink-0 text-sm">
+                    🏋️
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-[#f5f5f5]">
+                      Treino <span className="font-medium text-[#D4A373]">{a.name}</span> criado para{" "}
+                      <span className="font-medium text-white">{a.student.name}</span>
+                    </p>
+                    <p className="text-xs text-[#a1a1a1]">{timeAgo(a.createdAt)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Status dos treinos (Donut) */}
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
+          <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">Status dos treinos</h2>
+          <div className="flex items-center justify-center gap-6">
+            <svg viewBox="0 0 120 120" className="w-40 h-40 -rotate-90">
+              <circle cx="60" cy="60" r="50" fill="none" stroke="#1f1f1f" strokeWidth="12" />
+              {totalWorkouts > 0 && data.activeWorkouts > 0 && (
+                <circle cx="60" cy="60" r="50" fill="none" stroke="#22c55e" strokeWidth="12"
+                  strokeDasharray={`${(data.activeWorkouts / totalWorkouts) * circumference} ${circumference}`}
+                  strokeDashoffset="0" strokeLinecap="butt" />
+              )}
+              {totalWorkouts > 0 && data.inactiveWorkouts > 0 && (
+                <circle cx="60" cy="60" r="50" fill="none" stroke="#ef4444" strokeWidth="12"
+                  strokeDasharray={`${(data.inactiveWorkouts / totalWorkouts) * circumference} ${circumference}`}
+                  strokeDashoffset={`${-(data.activeWorkouts / totalWorkouts) * circumference}`}
+                  strokeLinecap="butt" />
+              )}
+            </svg>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-green-500" />
+                <span className="text-sm text-[#a1a1a1]">Ativos</span>
+                <span className="text-sm font-bold text-[#f5f5f5]">{data.activeWorkouts}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-red-500" />
+                <span className="text-sm text-[#a1a1a1]">Inativos</span>
+                <span className="text-sm font-bold text-[#f5f5f5]">{data.inactiveWorkouts}</span>
+              </div>
+            </div>
+          </div>
+          {totalWorkouts === 0 && <p className="mt-4 text-center text-sm text-[#a1a1a1]">Nenhum treino.</p>}
+        </div>
+
+        {/* Evolução de check-ins (Bar chart) */}
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
+          <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">Evolução de check-ins</h2>
+          <svg viewBox="0 0 300 170" className="w-full h-48">
+            {data.checkinEvolution.map((item, i) => {
+              const h = (item.count / maxC) * 120;
+              const x = barGap + i * (32 + barGap);
+              const y = 140 - h;
+              return (
+                <g key={i}>
+                  <rect x={x} y={y} width={32} height={h} rx="4" fill="#D4A373" />
+                  <text x={x + 16} y={y - 6} textAnchor="middle" fill="#f5f5f5" fontSize="10" fontWeight="600">
+                    {item.count}
+                  </text>
+                  <text x={x + 16} y="158" textAnchor="middle" fill="#a1a1a1" fontSize="10">
+                    {item.month}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          {data.checkinEvolution.every((c) => c.count === 0) && (
+            <p className="text-center text-sm text-[#a1a1a1]">Sem check-ins recentes.</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
