@@ -7,7 +7,6 @@ export const dynamic = "force-dynamic";
 
 async function getDashboardData(userId: string) {
   const [
-    activeStudents,
     newStudentsThisMonth,
     totalStudents,
     workoutsThisWeek,
@@ -18,7 +17,6 @@ async function getDashboardData(userId: string) {
     activeWorkouts,
     inactiveWorkouts,
   ] = await Promise.all([
-    prisma.student.count({ where: { userId, active: true } }),
     prisma.student.count({
       where: { userId, createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } },
     }),
@@ -33,7 +31,7 @@ async function getDashboardData(userId: string) {
       where: { student: { userId }, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
     }),
     prisma.student.findMany({
-      where: { userId, active: true },
+      where: { userId },
       include: { _count: { select: { checkIns: true } } },
       orderBy: { checkIns: { _count: "desc" } },
       take: 5,
@@ -65,7 +63,7 @@ async function getDashboardData(userId: string) {
   }
 
   return {
-    activeStudents, newStudentsThisMonth, totalStudents,
+    newStudentsThisMonth, totalStudents,
     workoutsThisWeek, checkinsPending, feedbacksPending,
     topStudents, recentActivities,
     activeWorkouts, inactiveWorkouts, checkinEvolution,
@@ -79,7 +77,7 @@ export default async function DashboardPage() {
   const data = await getDashboardData(session.user.id);
 
   const kpis = [
-    { label: "Alunos ativos", value: data.activeStudents, sub: `de ${data.totalStudents} total` },
+    { label: "Total de alunos", value: data.totalStudents },
     { label: "Treinos na semana", value: data.workoutsThisWeek },
     { label: "Check-ins pendentes", value: data.checkinsPending },
     { label: "Feedbacks pendentes", value: data.feedbacksPending },
@@ -133,7 +131,7 @@ export default async function DashboardPage() {
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
           <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">Alunos em destaque</h2>
           {data.topStudents.length === 0 ? (
-            <p className="text-sm text-[#a1a1a1]">Nenhum aluno ativo.</p>
+            <p className="text-sm text-[#a1a1a1]">Nenhum aluno encontrado.</p>
           ) : (
             <div className="space-y-1">
               {data.topStudents.map((s) => (
@@ -143,7 +141,7 @@ export default async function DashboardPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[#f5f5f5] truncate">{s.name}</p>
-                    <p className="text-xs text-[#a1a1a1]">{s.active ? "Ativo" : "Inativo"}</p>
+                    <p className="text-xs text-[#a1a1a1]">Aluno</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-[#D4A373]">{s._count.checkIns}</p>
