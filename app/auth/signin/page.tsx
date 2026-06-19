@@ -104,7 +104,7 @@ export default function SignInPage() {
             href="/auth/aluno-registro"
             className="text-[#D4A373] transition hover:underline font-medium"
           >
-            Sou aluno
+            Não tem conta? Aluno novo
           </Link>
           <Link
             href="/"
