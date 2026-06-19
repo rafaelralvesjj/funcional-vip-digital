@@ -72,7 +72,6 @@ export default async function AlunoDashboardPage() {
     ...q,
     createdAt: q.createdAt.toISOString(),
     answeredAt: q.answeredAt?.toISOString() || null,
-    answeredAt: q.answeredAt?.toISOString() || null,
   }));
 
   return (
