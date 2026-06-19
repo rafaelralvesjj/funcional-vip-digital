@@ -2,11 +2,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../api/auth/[...nextauth]/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
+
   if (!session?.user?.id) redirect("/auth/signin");
 
   const userId = session.user.id;
@@ -33,6 +35,22 @@ export default async function DashboardPage() {
         <p className="text-sm text-[#a1a1a1]">
           Bem-vindo de volta, {session.user.name ?? "Personal Trainer"}!
         </p>
+      </div>
+
+      {/* Botões de cadastro */}
+      <div className="flex flex-wrap gap-3">
+        <Link
+          href="/auth/register"
+          className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#b88a5e]"
+        >
+          + Cadastrar Professor
+        </Link>
+        <Link
+          href="/auth/register"
+          className="bg-[#111111] border border-[#D4A373] text-[#D4A373] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#D4A373] hover:text-[#0a0a0a]"
+        >
+          + Cadastrar Gestor
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
