@@ -58,7 +58,8 @@ export default async function AlunoDashboardPage() {
     take: 20,
   });
 
-  const questions = await prisma.question.findMany({
+  // Buscar e serializar datas para passar ao client component
+  const rawQuestions = await prisma.question.findMany({
     where: { studentId: student.id },
     include: {
       answeredBy: { select: { name: true } },
@@ -66,6 +67,13 @@ export default async function AlunoDashboardPage() {
     orderBy: { createdAt: "desc" },
     take: 20,
   });
+
+  const questions = rawQuestions.map((q) => ({
+    ...q,
+    createdAt: q.createdAt.toISOString(),
+    answeredAt: q.answeredAt?.toISOString() || null,
+    answeredAt: q.answeredAt?.toISOString() || null,
+  }));
 
   return (
     <div className="space-y-6">
@@ -149,15 +157,15 @@ export default async function AlunoDashboardPage() {
         </div>
       </div>
 
-      {questions.filter((q) => q.answer).length > 0 && (
+      {questions.filter((q: any) => q.answer).length > 0 && (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
           <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">
             ✅ Dúvidas respondidas
           </h2>
           <div className="space-y-3">
             {questions
-              .filter((q) => q.answer)
-              .map((q) => (
+              .filter((q: any) => q.answer)
+              .map((q: any) => (
                 <div
                   key={q.id}
                   className="bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-4"
@@ -169,7 +177,7 @@ export default async function AlunoDashboardPage() {
                     <div className="flex-1">
                       <p className="text-sm text-[#f5f5f5]">{q.content}</p>
                       <p className="text-xs text-[#525252] mt-1">
-                        {timeAgo(q.createdAt)}
+                        {timeAgo(new Date(q.createdAt))}
                       </p>
                     </div>
                   </div>
@@ -181,9 +189,8 @@ export default async function AlunoDashboardPage() {
                       <div className="flex-1">
                         <p className="text-sm text-[#a1a1a1]">{q.answer}</p>
                         <p className="text-xs text-[#525252] mt-1">
-                          {q.answeredBy?.name &&
-                            `Respondido por ${q.answeredBy.name}`}
-                          {q.answeredAt && ` • ${formatDate(q.answeredAt)}`}
+                          {q.answeredBy?.name && `Respondido por ${q.answeredBy.name}`}
+                          {q.answeredAt && ` • ${formatDate(new Date(q.answeredAt))}`}
                         </p>
                       </div>
                     </div>
