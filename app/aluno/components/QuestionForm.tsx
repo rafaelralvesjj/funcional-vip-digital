@@ -7,7 +7,7 @@ interface Question {
   content: string;
   answer: string | null;
   answeredAt: string | null;
-  answeredBy: { name: string } | null;
+  answeredBy: { name: string | null } | null;
   createdAt: string;
 }
 
