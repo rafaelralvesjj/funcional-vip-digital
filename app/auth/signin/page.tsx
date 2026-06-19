@@ -1,5 +1,4 @@
 "use client";
-
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -44,10 +43,7 @@ export default function SignInPage() {
 
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-[#e5e5e5]"
-            >
+            <label htmlFor="email" className="text-sm font-medium text-[#e5e5e5]">
               E-mail
             </label>
             <input
@@ -62,10 +58,7 @@ export default function SignInPage() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="password"
-              className="text-sm font-medium text-[#e5e5e5]"
-            >
+            <label htmlFor="password" className="text-sm font-medium text-[#e5e5e5]">
               Senha
             </label>
             <input
@@ -98,6 +91,12 @@ export default function SignInPage() {
             className="text-[#D4A373] transition hover:underline"
           >
             Não tem conta? Cadastre-se
+          </Link>
+          <Link
+            href="/aluno/register"
+            className="text-[#D4A373] transition hover:underline font-medium"
+          >
+            Sou aluno
           </Link>
           <Link
             href="/"
