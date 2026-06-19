@@ -28,7 +28,6 @@ export default function SignInPage() {
       return;
     }
 
-    // Buscar a sessão para saber o role e redirecionar corretamente
     const sessionRes = await fetch("/api/auth/session");
     const session = await sessionRes.json();
 
@@ -95,16 +94,10 @@ export default function SignInPage() {
 
         <div className="mt-6 flex flex-col items-center gap-2 text-sm">
           <Link
-            href="/auth/register"
-            className="text-[#D4A373] transition hover:underline"
-          >
-            Não tem conta? Cadastre-se
-          </Link>
-          <Link
             href="/auth/aluno-registro"
             className="text-[#D4A373] transition hover:underline font-medium"
           >
-            Não tem conta? Aluno novo
+            Sou aluno
           </Link>
           <Link
             href="/"
