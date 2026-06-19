@@ -26,7 +26,7 @@ function timeAgo(dateStr: string) {
 }
 
 export default function QuestionForm({ studentId, initialQuestions }: QuestionFormProps) {
-  const [questions, setQuestions] = useState<<Question[]>(initialQuestions);
+  const [questions, setQuestions] = useState<Question[]>(initialQuestions);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
