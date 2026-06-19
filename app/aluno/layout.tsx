@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../api/auth/[...nextauth]/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import SairButton from "./components/SairButton";
 
 export default async function AlunoLayout({
   children,
@@ -28,16 +29,10 @@ export default async function AlunoLayout({
           </Link>
           <div className="flex items-center gap-4">
             <span className="text-sm text-[#a1a1a1]">{session.user.name}</span>
-            <Link
-              href="/api/auth/signout"
-              className="text-xs text-[#a1a1a1] hover:text-red-400 transition"
-            >
-              Sair
-            </Link>
+            <SairButton />
           </div>
         </div>
       </header>
-
       {/* Conteúdo */}
       <main className="max-w-5xl mx-auto px-4 py-6">
         {children}
