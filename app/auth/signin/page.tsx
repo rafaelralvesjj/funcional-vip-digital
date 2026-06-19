@@ -28,7 +28,15 @@ export default function SignInPage() {
       return;
     }
 
-    router.push("/dashboard");
+    // Buscar a sessão para saber o role e redirecionar corretamente
+    const sessionRes = await fetch("/api/auth/session");
+    const session = await sessionRes.json();
+
+    if (session?.user?.role === "ALUNO") {
+      router.push("/aluno");
+    } else {
+      router.push("/dashboard");
+    }
   }
 
   return (
