@@ -15,7 +15,7 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
-export async function POST(request: Request): Promise<<NextResponse> {
+export async function POST(request: Request): Promise<NextResponse> {
   try {
     const body: RegisterBody = await request.json();
     const { name, email, password, phone, role } = body;
