@@ -21,6 +21,7 @@ export default function ExerciseGrid({
     name: "",
     description: "",
     muscleGroup: "",
+    imageUrl: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -37,7 +38,7 @@ export default function ExerciseGrid({
     if (res.ok) {
       const newExercise = await res.json();
       setExercises((prev) => [...prev, newExercise]);
-      setForm({ name: "", description: "", muscleGroup: "" });
+      setForm({ name: "", description: "", muscleGroup: "", imageUrl: "" });
       setShowForm(false);
     }
 
@@ -118,6 +119,17 @@ export default function ExerciseGrid({
               <option value="Corpo Inteiro">Corpo Inteiro</option>
               <option value="Cardio">Cardio / Condicionamento</option>
             </select>
+          </div>
+          <div>
+            <label className="text-sm text-[#e5e5e5] block mb-1">
+              URL da Imagem <span className="text-[#525252]">(opcional)</span>
+            </label>
+            <input
+              value={form.imageUrl}
+              onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+              placeholder="https://..."
+            />
           </div>
           <button
             type="submit"
