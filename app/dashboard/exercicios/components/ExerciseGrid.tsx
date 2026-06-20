@@ -26,7 +26,11 @@ export default function ExerciseGrid({
   });
   const [saving, setSaving] = useState(false);
 
-  const version = Date.now();
+  // Versão fixa - só muda quando você alterar manualmente
+  const cacheVersion = 1;
+
+  // Timestamp para forçar cache novo APENAS em exercícios recém-criados/editados
+  const [freshTimestamps, setFreshTimestamps] = useState<Record<string, number>>({});
 
   function resetForm() {
     setForm({ name: "", description: "", muscleGroup: "", imageUrl: "" });
@@ -45,6 +49,15 @@ export default function ExerciseGrid({
     setShowForm(true);
   }
 
+  function getImageSrc(ex: Exercise): string {
+    if (!ex.imageUrl) return "";
+    const timestamp = freshTimestamps[ex.id];
+    if (timestamp) {
+      return `${ex.imageUrl}?v=${timestamp}`;
+    }
+    return `${ex.imageUrl}?v=${cacheVersion}`;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -61,6 +74,11 @@ export default function ExerciseGrid({
         setExercises((prev) =>
           prev.map((ex) => (ex.id === editingId ? updated : ex))
         );
+        // Marca este exercício como "fresh" para forçar recarregar a imagem
+        setFreshTimestamps((prev) => ({
+          ...prev,
+          [editingId]: Date.now(),
+        }));
         resetForm();
       }
     } else {
@@ -72,6 +90,11 @@ export default function ExerciseGrid({
 
       if (res.ok) {
         const newExercise = await res.json();
+        // Marca o novo exercício como "fresh"
+        setFreshTimestamps((prev) => ({
+          ...prev,
+          [newExercise.id]: Date.now(),
+        }));
         setExercises((prev) => [...prev, newExercise]);
         resetForm();
       }
@@ -172,7 +195,7 @@ export default function ExerciseGrid({
               value={form.imageUrl}
               onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
               className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-              placeholder="https://  ou  /images/exercises/..."
+              placeholder="Ex: /images/exercises/agachamento.png"
             />
           </div>
           <button
@@ -198,11 +221,17 @@ export default function ExerciseGrid({
               >
                 {ex.imageUrl ? (
                   <img
-                    src={`${ex.imageUrl}?v=${version}`}
+                    src={getImageSrc(ex)}
                     alt={ex.name}
                     className="w-full h-48 object-cover"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
+                      const img = e.target as HTMLImageElement;
+                      // Se a imagem falhou, tenta com timestamp atual
+                      if (!img.src.includes('retry=1')) {
+                        img.src = `${ex.imageUrl}?retry=1&v=${Date.now()}`;
+                      } else {
+                        img.style.display = "none";
+                      }
                     }}
                   />
                 ) : null}
