@@ -17,6 +17,7 @@ export default function ExerciseGrid({
 }) {
   const [exercises, setExercises] = useState<Exercise[]>(initialExercises);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -25,21 +26,55 @@ export default function ExerciseGrid({
   });
   const [saving, setSaving] = useState(false);
 
+  function resetForm() {
+    setForm({ name: "", description: "", muscleGroup: "", imageUrl: "" });
+    setEditingId(null);
+    setShowForm(false);
+  }
+
+  function startEdit(ex: Exercise) {
+    setForm({
+      name: ex.name,
+      description: ex.description,
+      muscleGroup: ex.muscleGroup,
+      imageUrl: ex.imageUrl || "",
+    });
+    setEditingId(ex.id);
+    setShowForm(true);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
 
-    const res = await fetch("/api/exercise-library", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+    if (editingId) {
+      // Editar existente
+      const res = await fetch("/api/exercise-library", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingId, ...form }),
+      });
 
-    if (res.ok) {
-      const newExercise = await res.json();
-      setExercises((prev) => [...prev, newExercise]);
-      setForm({ name: "", description: "", muscleGroup: "", imageUrl: "" });
-      setShowForm(false);
+      if (res.ok) {
+        const updated = await res.json();
+        setExercises((prev) =>
+          prev.map((ex) => (ex.id === editingId ? updated : ex))
+        );
+        resetForm();
+      }
+    } else {
+      // Novo exercício
+      const res = await fetch("/api/exercise-library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      if (res.ok) {
+        const newExercise = await res.json();
+        setExercises((prev) => [...prev, newExercise]);
+        resetForm();
+      }
     }
 
     setSaving(false);
@@ -64,7 +99,10 @@ export default function ExerciseGrid({
   return (
     <div>
       <button
-        onClick={() => setShowForm(!showForm)}
+        onClick={() => {
+          resetForm();
+          setShowForm(!showForm);
+        }}
         className="mb-6 bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#b88a5e]"
       >
         {showForm ? "Cancelar" : "+ Novo Exercício"}
@@ -75,6 +113,12 @@ export default function ExerciseGrid({
           onSubmit={handleSubmit}
           className="mb-8 bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4"
         >
+          {editingId && (
+            <p className="text-sm text-[#D4A373] font-medium">
+              ✏️ Editando: {form.name}
+            </p>
+          )}
+
           <div>
             <label className="text-sm text-[#e5e5e5] block mb-1">Nome</label>
             <input
@@ -95,7 +139,7 @@ export default function ExerciseGrid({
               required
               rows={3}
               className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-              placeholder="Ex: Fortalece quadríceps, glúteos e core. Melhora a mobilidade..."
+              placeholder="Ex: Fortalece quadríceps, glúteos e core..."
             />
           </div>
           <div>
@@ -128,7 +172,7 @@ export default function ExerciseGrid({
               value={form.imageUrl}
               onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
               className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-              placeholder="https://..."
+              placeholder="https://drive.google.com/uc?export=view&id=..."
             />
           </div>
           <button
@@ -136,7 +180,7 @@ export default function ExerciseGrid({
             disabled={saving}
             className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#b88a5e] disabled:opacity-70"
           >
-            {saving ? "Salvando..." : "Salvar Exercício"}
+            {saving ? "Salvando..." : editingId ? "Salvar Alterações" : "Salvar Exercício"}
           </button>
         </form>
       )}
@@ -157,24 +201,36 @@ export default function ExerciseGrid({
                     src={ex.imageUrl}
                     alt={ex.name}
                     className="w-full h-48 object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                      (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                    }}
                   />
-                ) : (
-                  <div className="w-full h-48 bg-[#1a1a1a] flex items-center justify-center text-[#525252]">
-                    🏋️ Sem imagem
-                  </div>
-                )}
+                ) : null}
+                <div className={`${!ex.imageUrl ? "" : "hidden"} w-full h-48 bg-[#1a1a1a] flex items-center justify-center text-[#525252]`}>
+                  🏋️ Sem imagem
+                </div>
                 <div className="p-4">
                   <div className="flex items-start justify-between">
                     <h3 className="text-base font-semibold text-[#f5f5f5]">
                       {ex.name}
                     </h3>
-                    <button
-                      onClick={() => handleDelete(ex.id)}
-                      className="text-xs text-[#525252] hover:text-red-400 transition opacity-0 group-hover:opacity-100"
-                      title="Remover"
-                    >
-                      ✕
-                    </button>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                      <button
+                        onClick={() => startEdit(ex)}
+                        className="text-xs text-[#D4A373] hover:text-[#b88a5e]"
+                        title="Editar"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => handleDelete(ex.id)}
+                        className="text-xs text-[#525252] hover:text-red-400"
+                        title="Remover"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                   <p className="text-sm text-[#a1a1a1] mt-2">
                     {ex.description}
