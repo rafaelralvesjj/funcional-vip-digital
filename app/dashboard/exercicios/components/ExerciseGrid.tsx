@@ -26,12 +26,6 @@ export default function ExerciseGrid({
   });
   const [saving, setSaving] = useState(false);
 
-  // Versão fixa - só muda quando você alterar manualmente
-  const cacheVersion = 1;
-
-  // Timestamp para forçar cache novo APENAS em exercícios recém-criados/editados
-  const [freshTimestamps, setFreshTimestamps] = useState<Record<string, number>>({});
-
   function resetForm() {
     setForm({ name: "", description: "", muscleGroup: "", imageUrl: "" });
     setEditingId(null);
@@ -47,15 +41,6 @@ export default function ExerciseGrid({
     });
     setEditingId(ex.id);
     setShowForm(true);
-  }
-
-  function getImageSrc(ex: Exercise): string {
-    if (!ex.imageUrl) return "";
-    const timestamp = freshTimestamps[ex.id];
-    if (timestamp) {
-      return `${ex.imageUrl}?v=${timestamp}`;
-    }
-    return `${ex.imageUrl}?v=${cacheVersion}`;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -74,11 +59,6 @@ export default function ExerciseGrid({
         setExercises((prev) =>
           prev.map((ex) => (ex.id === editingId ? updated : ex))
         );
-        // Marca este exercício como "fresh" para forçar recarregar a imagem
-        setFreshTimestamps((prev) => ({
-          ...prev,
-          [editingId]: Date.now(),
-        }));
         resetForm();
       }
     } else {
@@ -90,11 +70,6 @@ export default function ExerciseGrid({
 
       if (res.ok) {
         const newExercise = await res.json();
-        // Marca o novo exercício como "fresh"
-        setFreshTimestamps((prev) => ({
-          ...prev,
-          [newExercise.id]: Date.now(),
-        }));
         setExercises((prev) => [...prev, newExercise]);
         resetForm();
       }
@@ -221,17 +196,11 @@ export default function ExerciseGrid({
               >
                 {ex.imageUrl ? (
                   <img
-                    src={getImageSrc(ex)}
+                    src={ex.imageUrl}
                     alt={ex.name}
                     className="w-full h-48 object-cover"
                     onError={(e) => {
-                      const img = e.target as HTMLImageElement;
-                      // Se a imagem falhou, tenta com timestamp atual
-                      if (!img.src.includes('retry=1')) {
-                        img.src = `${ex.imageUrl}?retry=1&v=${Date.now()}`;
-                      } else {
-                        img.style.display = "none";
-                      }
+                      (e.target as HTMLImageElement).style.display = "none";
                     }}
                   />
                 ) : null}
