@@ -26,6 +26,8 @@ export default function ExerciseGrid({
   });
   const [saving, setSaving] = useState(false);
 
+  const version = Date.now();
+
   function resetForm() {
     setForm({ name: "", description: "", muscleGroup: "", imageUrl: "" });
     setEditingId(null);
@@ -48,7 +50,6 @@ export default function ExerciseGrid({
     setSaving(true);
 
     if (editingId) {
-      // Editar existente
       const res = await fetch("/api/exercise-library", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -63,7 +64,6 @@ export default function ExerciseGrid({
         resetForm();
       }
     } else {
-      // Novo exercício
       const res = await fetch("/api/exercise-library", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -172,7 +172,7 @@ export default function ExerciseGrid({
               value={form.imageUrl}
               onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
               className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-              placeholder="https://drive.google.com/uc?export=view&id=..."
+              placeholder="https://  ou  /images/exercises/..."
             />
           </div>
           <button
@@ -198,16 +198,15 @@ export default function ExerciseGrid({
               >
                 {ex.imageUrl ? (
                   <img
-                    src={ex.imageUrl}
+                    src={`${ex.imageUrl}?v=${version}`}
                     alt={ex.name}
                     className="w-full h-48 object-cover"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = "none";
-                      (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
                     }}
                   />
                 ) : null}
-                <div className={`${!ex.imageUrl ? "" : "hidden"} w-full h-48 bg-[#1a1a1a] flex items-center justify-center text-[#525252]`}>
+                <div className={`${ex.imageUrl ? "hidden" : "flex"} w-full h-48 bg-[#1a1a1a] items-center justify-center text-[#525252]`}>
                   🏋️ Sem imagem
                 </div>
                 <div className="p-4">
