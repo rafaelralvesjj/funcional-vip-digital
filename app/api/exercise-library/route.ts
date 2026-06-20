@@ -32,6 +32,26 @@ export async function POST(req: Request) {
   return NextResponse.json(exercise, { status: 201 });
 }
 
+export async function PATCH(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
+  const { id, name, description, muscleGroup, imageUrl } = await req.json();
+
+  if (!id) {
+    return NextResponse.json({ error: "id é obrigatório" }, { status: 400 });
+  }
+
+  const exercise = await prisma.exerciseLibrary.update({
+    where: { id },
+    data: { name, description, muscleGroup, imageUrl },
+  });
+
+  return NextResponse.json(exercise);
+}
+
 export async function DELETE(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
