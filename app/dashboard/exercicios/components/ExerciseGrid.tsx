@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 type Exercise = {
   id: string;
@@ -25,6 +25,8 @@ export default function ExerciseGrid({
     imageUrl: "",
   });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function resetForm() {
     setForm({ name: "", description: "", muscleGroup: "", imageUrl: "" });
@@ -41,6 +43,37 @@ export default function ExerciseGrid({
     });
     setEditingId(ex.id);
     setShowForm(true);
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setForm((prev) => ({ ...prev, imageUrl: data.url }));
+      } else {
+        const err = await res.json();
+        alert(`Erro ao enviar imagem: ${err.error}`);
+      }
+    } catch {
+      alert("Erro ao conectar com o servidor");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -164,18 +197,40 @@ export default function ExerciseGrid({
           </div>
           <div>
             <label className="text-sm text-[#e5e5e5] block mb-1">
-              URL da Imagem <span className="text-[#525252]">(opcional)</span>
+              Imagem <span className="text-[#525252]">(opcional)</span>
             </label>
-            <input
-              value={form.imageUrl}
-              onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-              placeholder="Ex: /images/exercises/agachamento.png"
-            />
+            <div className="flex flex-col gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleImageUpload}
+                className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#b88a5e]"
+              />
+              {uploading && (
+                <p className="text-xs text-[#D4A373]">Enviando imagem...</p>
+              )}
+              {form.imageUrl && !uploading && (
+                <div className="flex items-center gap-2">
+                  <div className="w-16 h-16 bg-[#1a1a1a] rounded-lg border border-[#ffffff10] flex items-center justify-center text-xs text-[#525252]">
+                    Preview
+                  </div>
+                  <span className="text-xs text-[#a1a1a1] truncate flex-1">
+                    {form.imageUrl}
+                  </span>
+                </div>
+              )}
+              <input
+                value={form.imageUrl}
+                onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                placeholder="Ou cole a URL manualmente..."
+              />
+            </div>
           </div>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading}
             className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#b88a5e] disabled:opacity-70"
           >
             {saving ? "Salvando..." : editingId ? "Salvar Alterações" : "Salvar Exercício"}
