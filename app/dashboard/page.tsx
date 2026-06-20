@@ -37,7 +37,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Botões de cadastro */}
+      {/* Botões de navegação */}
       <div className="flex flex-wrap gap-3">
         <Link
           href="/auth/register"
@@ -50,6 +50,12 @@ export default async function DashboardPage() {
           className="bg-[#111111] border border-[#D4A373] text-[#D4A373] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#D4A373] hover:text-[#0a0a0a]"
         >
           + Cadastrar Gestor
+        </Link>
+        <Link
+          href="/dashboard/exercicios"
+          className="bg-[#111111] border border-[#ffffff10] text-[#f5f5f5] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#1a1a1a]"
+        >
+          📚 Biblioteca de Exercícios
         </Link>
       </div>
 
