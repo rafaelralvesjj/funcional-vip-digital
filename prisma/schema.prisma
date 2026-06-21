@@ -1,10 +1,12 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 model User {
   id String @id @default(uuid())
   name String?
@@ -24,6 +26,7 @@ model User {
   studentAuths Student[] @relation("StudentAuth")
   @@map("users")
 }
+
 model Account {
   id String @id @default(cuid())
   userId String @map("user_id")
@@ -41,6 +44,7 @@ model Account {
   @@unique([provider, providerAccountId])
   @@map("accounts")
 }
+
 model Session {
   id String @id @default(cuid())
   sessionToken String @unique @map("session_token")
@@ -49,6 +53,7 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@map("sessions")
 }
+
 model Student {
   id String @id @default(uuid())
   userId String @map("user_id")
@@ -59,6 +64,7 @@ model Student {
   image String?
   active Boolean @default(true)
   userAuthId String? @unique @map("user_auth_id")
+  onboardingCompleto Boolean @default(false) @map("onboarding_completo")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -69,8 +75,36 @@ model Student {
   notices Notice[]
   questions Question[]
   workouts Workout[]
+  avaliacoes Avaliacao[]
   @@map("students")
 }
+
+model Avaliacao {
+  id             String   @id @default(uuid())
+  alunoId        String   @map("aluno_id")
+  tipo           String   // "INICIAL" ou "MENSAL"
+  mesReferencia  Int      @map("mes_referencia")
+  objetivo       String   // emagrecimento, massa, condicionamento, definicao, reabilitacao, performance
+  metaEspecifica String?  @map("meta_especifica")
+  peso           Float?
+  altura         Float?
+  abdomen        Float?
+  quadril        Float?
+  braco          Float?
+  coxa           Float?
+  gluteo         Float?
+  preferencia    String?  // "casa" ou "academia"
+  frequencia     Int?
+  nivelAtividade String?  @map("nivel_atividade")
+  lesoes         String?
+  fotoUrl        String?  @map("foto_url")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  student        Student  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@map("avaliacoes")
+}
+
 model WorkoutPlan {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -86,6 +120,7 @@ model WorkoutPlan {
   workouts Workout[]
   @@map("workout_plans")
 }
+
 model Exercise {
   id String @id @default(uuid())
   workoutPlanId String @map("workout_plan_id")
@@ -103,6 +138,7 @@ model Exercise {
   workoutPlan WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
   @@map("exercises")
 }
+
 model Workout {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -116,6 +152,7 @@ model Workout {
   workoutPlan WorkoutPlan? @relation(fields: [workoutPlanId], references: [id])
   @@map("workouts")
 }
+
 model CheckIn {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -126,6 +163,7 @@ model CheckIn {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   @@map("check_ins")
 }
+
 model WeeklyFeedback {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -136,6 +174,7 @@ model WeeklyFeedback {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   @@map("weekly_feedbacks")
 }
+
 model Notice {
   id String @id @default(uuid())
   title String?
@@ -148,6 +187,7 @@ model Notice {
   student Student? @relation(fields: [studentId], references: [id])
   @@map("notices")
 }
+
 model Question {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -170,6 +210,5 @@ model ExerciseLibrary {
   imageUrl    String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-
   @@map("exercise_library")
 }
