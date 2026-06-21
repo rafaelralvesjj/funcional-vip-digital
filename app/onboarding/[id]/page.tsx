@@ -1,15 +1,12 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
 export default function OnboardingPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [alunoNome, setAlunoNome] = useState("");
   const fileInputRef = useState<HTMLInputElement | null>(null);
-
   const [form, setForm] = useState({
     objetivo: "",
     metaEspecifica: "",
@@ -26,7 +23,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
     lesoes: "",
     fotoUrl: "",
   });
-
   useEffect(() => {
     fetch(`/api/student/${params.id}`)
       .then((res) => res.json())
@@ -38,21 +34,17 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
       })
       .catch(() => {});
   }, [params.id, router]);
-
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
-
     try {
       const res = await fetch("/api/upload-image", {
         method: "POST",
         body: formData,
       });
-
       if (res.ok) {
         const data = await res.json();
         setForm((prev) => ({ ...prev, fotoUrl: data.url }));
@@ -66,11 +58,9 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
       setUploading(false);
     }
   }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-
     try {
       const res = await fetch("/api/avaliacao", {
         method: "POST",
@@ -82,8 +72,12 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
           ...form,
         }),
       });
-
       if (res.ok) {
+        // 🔥 Marcar onboarding como completo
+        await fetch(`/api/student/${params.id}/onboarding`, {
+          method: "PATCH",
+        });
+
         router.push(`/dashboard/aluno/${params.id}`);
       } else {
         const err = await res.json();
@@ -95,7 +89,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
       setLoading(false);
     }
   }
-
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
       {/* Header */}
@@ -114,7 +107,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       </div>
-
       {/* Form */}
       <div className="max-w-2xl mx-auto px-4 pb-16 -mt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -170,7 +162,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
               </div>
             </div>
           </div>
-
           {/* Seção: Dados Físicos */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
             <h2 className="text-lg font-semibold text-[#D4A373] mb-4">📏 Dados Físicos</h2>
@@ -259,7 +250,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
               </div>
             </div>
           </div>
-
           {/* Seção: Contexto */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
             <h2 className="text-lg font-semibold text-[#D4A373] mb-4">📋 Seu Contexto</h2>
@@ -315,7 +305,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
               </div>
             </div>
           </div>
-
           {/* Seção: Foto */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
             <h2 className="text-lg font-semibold text-[#D4A373] mb-4">📸 Foto Inicial</h2>
@@ -335,7 +324,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
               <p className="text-xs text-green-500 mt-2">✅ Foto enviada!</p>
             )}
           </div>
-
           {/* Botão */}
           <button
             type="submit"
