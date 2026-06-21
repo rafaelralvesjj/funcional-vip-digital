@@ -1,12 +1,10 @@
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
 model User {
   id String @id @default(uuid())
   name String?
@@ -26,7 +24,6 @@ model User {
   studentAuths Student[] @relation("StudentAuth")
   @@map("users")
 }
-
 model Account {
   id String @id @default(cuid())
   userId String @map("user_id")
@@ -44,7 +41,6 @@ model Account {
   @@unique([provider, providerAccountId])
   @@map("accounts")
 }
-
 model Session {
   id String @id @default(cuid())
   sessionToken String @unique @map("session_token")
@@ -53,7 +49,6 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@map("sessions")
 }
-
 model Student {
   id String @id @default(uuid())
   userId String @map("user_id")
@@ -78,7 +73,6 @@ model Student {
   avaliacoes Avaliacao[]
   @@map("students")
 }
-
 model Avaliacao {
   id             String   @id @default(uuid())
   alunoId        String   @map("aluno_id")
@@ -94,6 +88,7 @@ model Avaliacao {
   coxa           Float?
   gluteo         Float?
   preferencia    String?  // "casa" ou "academia"
+  equipamentos   String?  // lista separada por vírgula: "peso_corporal,halteres,elasticos,cadeira,barra,kettlebell,bola,nenhum"
   frequencia     Int?
   nivelAtividade String?  @map("nivel_atividade")
   lesoes         String?
@@ -103,7 +98,6 @@ model Avaliacao {
   student        Student  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
   @@map("avaliacoes")
 }
-
 model WorkoutPlan {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -119,7 +113,6 @@ model WorkoutPlan {
   workouts Workout[]
   @@map("workout_plans")
 }
-
 model Exercise {
   id String @id @default(uuid())
   workoutPlanId String @map("workout_plan_id")
@@ -137,7 +130,6 @@ model Exercise {
   workoutPlan WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
   @@map("exercises")
 }
-
 model Workout {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -151,7 +143,6 @@ model Workout {
   workoutPlan WorkoutPlan? @relation(fields: [workoutPlanId], references: [id])
   @@map("workouts")
 }
-
 model CheckIn {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -162,7 +153,6 @@ model CheckIn {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   @@map("check_ins")
 }
-
 model WeeklyFeedback {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -173,7 +163,6 @@ model WeeklyFeedback {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   @@map("weekly_feedbacks")
 }
-
 model Notice {
   id String @id @default(uuid())
   title String?
@@ -186,7 +175,6 @@ model Notice {
   student Student? @relation(fields: [studentId], references: [id])
   @@map("notices")
 }
-
 model Question {
   id String @id @default(uuid())
   studentId String @map("student_id")
@@ -202,7 +190,6 @@ model Question {
   answeredBy User? @relation(fields: [answeredById], references: [id])
   @@map("questions")
 }
-
 model ExerciseLibrary {
   id          String   @id @default(uuid())
   name        String
