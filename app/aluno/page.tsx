@@ -3,9 +3,7 @@ import { authOptions } from "../api/auth/[...nextauth]/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import QuestionForm from "./components/QuestionForm";
-
 export const dynamic = "force-dynamic";
-
 function timeAgo(date: Date) {
   const s = Math.floor((Date.now() - date.getTime()) / 1000);
   if (s < 60) return "agora";
@@ -14,29 +12,23 @@ function timeAgo(date: Date) {
   if (s < 604800) return `há ${Math.floor(s / 86400)}d`;
   return `há ${Math.floor(s / 604800)}sem`;
 }
-
 function formatDate(date: Date) {
   return date.toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "long",
   });
 }
-
 export default async function AlunoDashboardPage() {
   const session = await getServerSession(authOptions);
-
   if (!session?.user?.id) {
     redirect("/auth/signin");
   }
-
   if (session.user.role !== "ALUNO") {
     redirect("/dashboard");
   }
-
   const student = await prisma.student.findUnique({
     where: { userAuthId: session.user.id },
   });
-
   if (!student) {
     return (
       <div className="text-center py-20">
@@ -46,7 +38,6 @@ export default async function AlunoDashboardPage() {
       </div>
     );
   }
-
   const notices = await prisma.notice.findMany({
     where: {
       OR: [{ studentId: null }, { studentId: student.id }],
@@ -57,7 +48,6 @@ export default async function AlunoDashboardPage() {
     orderBy: { createdAt: "desc" },
     take: 20,
   });
-
   // Buscar e serializar datas para passar ao client component
   const rawQuestions = await prisma.question.findMany({
     where: { studentId: student.id },
@@ -67,13 +57,11 @@ export default async function AlunoDashboardPage() {
     orderBy: { createdAt: "desc" },
     take: 20,
   });
-
   const questions = rawQuestions.map((q) => ({
     ...q,
     createdAt: q.createdAt.toISOString(),
     answeredAt: q.answeredAt?.toISOString() || null,
   }));
-
   return (
     <div className="space-y-6">
       <div>
@@ -82,7 +70,6 @@ export default async function AlunoDashboardPage() {
         </h1>
         <p className="text-sm text-[#a1a1a1]">Bem-vindo à sua área do aluno</p>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
           <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">
@@ -132,7 +119,6 @@ export default async function AlunoDashboardPage() {
             </div>
           )}
         </div>
-
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
           <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">
             📅 Meus Treinos
@@ -146,7 +132,6 @@ export default async function AlunoDashboardPage() {
               Seu professor está montando seus treinos personalizados.
             </p>
           </div>
-
           <div className="mt-6">
             <h3 className="text-md font-semibold text-[#f5f5f5] mb-3">
               ❓ Dúvidas
@@ -155,7 +140,6 @@ export default async function AlunoDashboardPage() {
           </div>
         </div>
       </div>
-
       {questions.filter((q: any) => q.answer).length > 0 && (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
           <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">
@@ -175,6 +159,16 @@ export default async function AlunoDashboardPage() {
                     </div>
                     <div className="flex-1">
                       <p className="text-sm text-[#f5f5f5]">{q.content}</p>
+                      {q.videoUrl && (
+                        <a href={q.videoUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline mt-1 inline-block">
+                          🎥 Ver vídeo
+                        </a>
+                      )}
+                      {q.imageUrl && (
+                        <a href={q.imageUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline mt-1 inline-block ml-3">
+                          📸 Ver imagem
+                        </a>
+                      )}
                       <p className="text-xs text-[#525252] mt-1">
                         {timeAgo(new Date(q.createdAt))}
                       </p>
