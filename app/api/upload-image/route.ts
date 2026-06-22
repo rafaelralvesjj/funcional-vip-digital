@@ -1,5 +1,19 @@
 import { NextResponse } from "next/server";
 
+// 🔥 Tipos MIME permitidos
+const ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-msvideo",
+];
+
+// 🔥 Tamanho máximo: 50MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -7,6 +21,26 @@ export async function POST(req: Request) {
 
     if (!file) {
       return NextResponse.json({ error: "Nenhum arquivo enviado" }, { status: 400 });
+    }
+
+    // 🔥 Validação de tipo de arquivo
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        {
+          error: `Tipo de arquivo não permitido: ${file.type || "desconhecido"}. Aceitamos apenas imagens (JPEG, PNG, WebP) e vídeos (MP4, WebM, MOV, AVI).`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 🔥 Validação de tamanho máximo
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        {
+          error: `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). O limite é de 50MB.`,
+        },
+        { status: 400 }
+      );
     }
 
     const token = process.env.GITHUB_TOKEN;
