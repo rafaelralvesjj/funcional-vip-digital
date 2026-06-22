@@ -21,11 +21,15 @@ export default function DashboardLayout({
     { href: "/dashboard/checkins", label: "Check-ins", icon: "check" },
     { href: "/dashboard/feedbacks", label: "Feedbacks", icon: "star" },
     { href: "/dashboard/controls", label: "Controle Semanal", icon: "chart" },
+    { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
   ];
 
-  // Gestor não vê "Montar Treino"
+  // GESTOR: não vê "Montar Treino"
+  // PROFESSOR: não vê "Vincular Alunos"
   const navItems = role === "GESTOR"
     ? allNavItems.filter((item) => item.href !== "/dashboard/montar-treino")
+    : role === "PROFESSOR"
+    ? allNavItems.filter((item) => item.href !== "/dashboard/gestor/vincular-alunos")
     : allNavItems;
 
   function NavIcon({ icon }: { icon: string }) {
@@ -72,6 +76,12 @@ export default function DashboardLayout({
       chart: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+      ),
+      link: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
       ),
     };
