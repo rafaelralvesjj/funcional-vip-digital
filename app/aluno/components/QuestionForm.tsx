@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+
 interface Question {
   id: string;
   content: string;
@@ -10,18 +11,21 @@ interface Question {
   answeredBy: { name: string | null } | null;
   createdAt: string;
 }
+
 interface QuestionFormProps {
   studentId: string;
   initialQuestions: Question[];
 }
+
 function timeAgo(dateStr: string) {
   const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (s &lt; 60) return "agora";
-  if (s &lt; 3600) return `há ${Math.floor(s / 60)} min`;
-  if (s &lt; 86400) return `há ${Math.floor(s / 3600)}h`;
-  if (s &lt; 604800) return `há ${Math.floor(s / 86400)}d`;
+  if (s < 60) return "agora";
+  if (s < 3600) return `há ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `há ${Math.floor(s / 3600)}h`;
+  if (s < 604800) return `há ${Math.floor(s / 86400)}d`;
   return `há ${Math.floor(s / 604800)}sem`;
 }
+
 export default function QuestionForm({ studentId, initialQuestions }: QuestionFormProps) {
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
   const [content, setContent] = useState("");
@@ -35,15 +39,19 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+
     setUploading(true);
     setFileName(file.name);
+
     const formData = new FormData();
     formData.append("file", file);
+
     try {
       const res = await fetch("/api/upload-image", {
         method: "POST",
         body: formData,
       });
+
       if (res.ok) {
         const data = await res.json();
         setFileUrl(data.url);
@@ -62,13 +70,16 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
+
     setLoading(true);
     setError("");
+
     try {
       const body: any = {
         studentId,
         content: content.trim(),
       };
+
       if (fileUrl) {
         if (fileType === "video") {
           body.videoUrl = fileUrl;
@@ -76,16 +87,20 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
           body.imageUrl = fileUrl;
         }
       }
+
       const res = await fetch("/api/aluno/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
       const data = await res.json();
+
       if (!res.ok) {
         setError(data.error || "Erro ao enviar dúvida.");
         return;
       }
+
       setQuestions([data.question, ...questions]);
       setContent("");
       setFileUrl("");
@@ -113,7 +128,7 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
           className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-2.5 text-sm text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition resize-none"
         />
 
-        {/* 🔥 Único campo para foto ou vídeo — direto da galeria */}
+        {/* Único campo para foto ou vídeo — direto da galeria */}
         <div>
           <label className="block text-xs text-[#a1a1a1] mb-1">
             📎 Anexar foto ou vídeo <span className="text-[#525252]">(opcional)</span>
