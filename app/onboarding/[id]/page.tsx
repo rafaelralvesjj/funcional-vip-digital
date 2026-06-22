@@ -19,7 +19,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
     gluteo: "",
     preferencia: "",
     equipamentos: "",
-    frequencia: "",
     nivelAtividade: "",
     lesoes: "",
     fotoUrl: "",
@@ -74,7 +73,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
         }),
       });
       if (res.ok) {
-        // 🔥 Marcar onboarding como completo
         await fetch(`/api/student/${params.id}/onboarding`, {
           method: "PATCH",
         });
@@ -160,8 +158,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   <option value="academia">Na academia</option>
                 </select>
               </div>
-
-              {/* 🔥 Campo condicional de equipamentos - só aparece se escolher "casa" */}
               {form.preferencia === "casa" && (
                 <div>
                   <label className="text-sm text-[#e5e5e5] block mb-2">
@@ -194,7 +190,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                             const current = form.equipamentos
                               ? form.equipamentos.split(",").filter(Boolean)
                               : [];
-                            // Se marcar "nenhum", limpa tudo e marca só "nenhum"
                             if (eq.value === "nenhum") {
                               setForm({
                                 ...form,
@@ -202,7 +197,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                               });
                               return;
                             }
-                            // Se marcar qualquer outro, remove "nenhum" da lista
                             let updated = e.target.checked
                               ? [...current.filter((v) => v !== "nenhum"), eq.value]
                               : current.filter((v) => v !== eq.value);
@@ -311,42 +305,22 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
             <h2 className="text-lg font-semibold text-[#D4A373] mb-4">📋 Seu Contexto</h2>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-[#e5e5e5] block mb-1">
-                    Frequência semanal desejada
-                  </label>
-                  <select
-                    value={form.frequencia}
-                    onChange={(e) => setForm({ ...form, frequencia: e.target.value })}
-                    required
-                    className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-                  >
-                    <option value="">Selecione...</option>
-                    <option value="2">2 dias</option>
-                    <option value="3">3 dias</option>
-                    <option value="4">4 dias</option>
-                    <option value="5">5 dias</option>
-                    <option value="6">6 dias</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm text-[#e5e5e5] block mb-1">
-                    Nível de atividade
-                  </label>
-                  <select
-                    value={form.nivelAtividade}
-                    onChange={(e) => setForm({ ...form, nivelAtividade: e.target.value })}
-                    required
-                    className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-                  >
-                    <option value="">Selecione...</option>
-                    <option value="sedentario">Sedentário</option>
-                    <option value="leve">Leve</option>
-                    <option value="moderado">Moderado</option>
-                    <option value="ativo">Ativo</option>
-                  </select>
-                </div>
+              <div>
+                <label className="text-sm text-[#e5e5e5] block mb-1">
+                  Nível de atividade
+                </label>
+                <select
+                  value={form.nivelAtividade}
+                  onChange={(e) => setForm({ ...form, nivelAtividade: e.target.value })}
+                  required
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                >
+                  <option value="">Selecione...</option>
+                  <option value="sedentario">Sedentário</option>
+                  <option value="leve">Leve</option>
+                  <option value="moderado">Moderado</option>
+                  <option value="ativo">Ativo</option>
+                </select>
               </div>
               <div>
                 <label className="text-sm text-[#e5e5e5] block mb-1">
