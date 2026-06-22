@@ -181,3 +181,26 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
                   </a>
                 )}
                 {q.imageUrl && (
+                  <a href={q.imageUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
+                    📸 Ver foto
+                  </a>
+                )}
+              </div>
+              {q.answer && <p className="text-sm text-green-400 mt-1">💬 {q.answer}</p>}
+              <p className="text-xs text-[#525252] mt-1">
+                {q.answeredBy?.name && `Respondido por ${q.answeredBy.name}`}
+                {q.answeredAt && ` • ${timeAgo(q.answeredAt)}`}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {questions.length === 0 && (
+        <p className="text-sm text-[#525252] text-center py-4">
+          Nenhuma dúvida enviada ainda. Use o campo acima para perguntar algo.
+        </p>
+      )}
+    </div>
+  );
+}
