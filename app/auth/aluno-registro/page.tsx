@@ -12,11 +12,37 @@ export default function AlunoRegisterPage() {
     password: "",
     confirmPassword: "",
   });
+  const [imageUrl, setImageUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/upload-image", {
+        method: "POST",
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setImageUrl(data.url);
+      } else {
+        const err = await res.json();
+        alert(`Erro ao enviar imagem: ${err.error}`);
+      }
+    } catch {
+      alert("Erro ao conectar com o servidor");
+    } finally {
+      setUploading(false);
+    }
+  }
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -42,6 +68,7 @@ export default function AlunoRegisterPage() {
           email: form.email,
           phone: form.phone,
           password: form.password,
+          imageUrl: imageUrl || null,
         }),
       });
       const data = await res.json();
@@ -50,12 +77,9 @@ export default function AlunoRegisterPage() {
         setLoading(false);
         return;
       }
-
-      // 🔥 Redirecionar pro onboarding com o studentId
       if (data.studentId) {
         router.push(`/onboarding/${data.studentId}`);
       } else {
-        // Fallback: tenta login e vai pro dashboard
         const result = await signIn("credentials", {
           email: form.email,
           password: form.password,
@@ -87,6 +111,24 @@ export default function AlunoRegisterPage() {
               {error}
             </div>
           )}
+
+          {/* 🔥 Foto do aluno */}
+          <div>
+            <label className="block text-sm text-[#e5e5e5] mb-1">
+              📸 Sua foto <span className="text-[#525252]">(opcional)</span>
+            </label>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleImageUpload}
+              className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-xs hover:file:bg-[#b88a5e]"
+            />
+            {uploading && <p className="text-xs text-[#D4A373] mt-1">Enviando foto...</p>}
+            {imageUrl && !uploading && (
+              <p className="text-xs text-green-500 mt-1">✅ Foto enviada!</p>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm text-[#a1a1a1] mb-1">Nome completo *</label>
             <input
@@ -149,7 +191,7 @@ export default function AlunoRegisterPage() {
           </div>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || uploading}
             className="w-full bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg py-3 hover:bg-[#c49463] transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Criando conta..." : "Criar conta"}
