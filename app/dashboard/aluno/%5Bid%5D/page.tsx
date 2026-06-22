@@ -7,12 +7,12 @@ export default function AlunoDashboardPage() {
   const params = useParams();
   const studentId = params.id as string;
 
-  const [plans, setPlans] = useState([]);
-  const [workouts, setWorkouts] = useState([]);
-  const [notices, setNotices] = useState([]);
-  const [selectedPlan, setSelectedPlan] = useState(null);
-  const [selectedDay, setSelectedDay] = useState(null);
-  const [message, setMessage] = useState(null);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [workouts, setWorkouts] = useState<any[]>([]);
+  const [notices, setNotices] = useState<any[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [completing, setCompleting] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -33,7 +33,7 @@ export default function AlunoDashboardPage() {
       if (res.ok) {
         const data = await res.json();
         const students = Array.isArray(data) ? data : data.students || data || [];
-        const found = students.find((s) => s.id === studentId);
+        const found = students.find((s: any) => s.id === studentId);
         if (found) setStudentName(found.name);
       }
     } catch {}
@@ -73,7 +73,7 @@ export default function AlunoDashboardPage() {
     } catch {}
   }
 
-  async function markAsComplete(planId) {
+  async function markAsComplete(planId: string) {
     setCompleting(true);
     setMessage(null);
     try {
@@ -96,30 +96,30 @@ export default function AlunoDashboardPage() {
     setTimeout(() => setMessage(null), 4000);
   }
 
-  function getDaysInMonth(month, year) {
+  function getDaysInMonth(month: number, year: number) {
     return new Date(year, month + 1, 0).getDate();
   }
 
-  function getFirstDayOfMonth(month, year) {
+  function getFirstDayOfMonth(month: number, year: number) {
     return new Date(year, month, 1).getDay();
   }
 
-  function isToday(day) {
-    var today = new Date();
+  function isToday(day: number) {
+    const today = new Date();
     return day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
   }
 
-  var daysInMonth = getDaysInMonth(currentMonth, currentYear);
-  var firstDay = getFirstDayOfMonth(currentMonth, currentYear);
-  var diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
-  var meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
-  function isPlanCompletedOnDate(planId, day) {
-    var dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
-    return workouts.some(function(w) {
+  function isPlanCompletedOnDate(planId: string, day: number) {
+    const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+    return workouts.some(function(w: any) {
       return w.workoutPlanId === planId && w.date.startsWith(dateStr) && w.status === "CONCLUIDO";
     });
   }
+
+  const daysInMonth = getDaysInMonth(currentMonth, currentYear);
+  const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
+  const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
+  const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0a0a" }}>
@@ -145,7 +145,6 @@ export default function AlunoDashboardPage() {
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "24px", marginTop: "24px" }}>
-          {/* Calendario */}
           <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h2 style={{ color: "#f5f5f5", fontSize: "18px", fontWeight: "600" }}>Meus Treinos</h2>
@@ -159,26 +158,24 @@ export default function AlunoDashboardPage() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" }}>
-              {diasSemana.map(function(dia) {
-                return <div key={dia} style={{ textAlign: "center", fontSize: "12px", color: "#525252", padding: "8px 0" }}>{dia}</div>;
-              })}
-              {Array.from({ length: firstDay }).map(function(_, i) {
-                return <div key={"e" + i} style={{ aspectRatio: "1" }} />;
-              })}
-              {Array.from({ length: daysInMonth }).map(function(_, i) {
-                var day = i + 1;
-                var hoje = isToday(day);
-                var sel = selectedDay === day;
-                var completed = plans.some(function(p) { return isPlanCompletedOnDate(p.id, day); });
-                var bg = "transparent";
-                var border = "transparent";
-                var color = "#a1a1a1";
-                if (sel) { bg = "rgba(212,163,115,0.2)"; border = "#D4A373"; color = "#D4A373"; }
-                else if (hoje) { border = "rgba(212,163,115,0.5)"; color = "#D4A373"; }
+              {diasSemana.map((dia: string) => (
+                <div key={dia} style={{ textAlign: "center", fontSize: "12px", color: "#525252", padding: "8px 0" }}>{dia}</div>
+              ))}
+              {Array.from({ length: firstDay }).map((_, i: number) => (
+                <div key={"e" + i} style={{ aspectRatio: "1" }} />
+              ))}
+              {Array.from({ length: daysInMonth }).map((_, i: number) => {
+                const day = i + 1;
+                const hoje = isToday(day);
+                const sel = selectedDay === day;
+                const completed = plans.some((p: any) => isPlanCompletedOnDate(p.id, day));
+                const bg = sel ? "rgba(212,163,115,0.2)" : "transparent";
+                const border = sel ? "#D4A373" : hoje ? "rgba(212,163,115,0.5)" : "transparent";
+                const color = (sel || hoje) ? "#D4A373" : "#a1a1a1";
                 
                 return (
                   <button key={day} onClick={() => setSelectedDay(day)}
-                    style={{ aspectRatio: "1", borderRadius: "8px", border: "1px solid " + border, background: bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", color: color, fontSize: "14px", fontWeight: hoje ? "bold" : "normal", transition: "all 0.2s", position: "relative" }}>
+                    style={{ aspectRatio: "1", borderRadius: "8px", border: "1px solid " + border, background: bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", color: color, fontSize: "14px", fontWeight: hoje ? "bold" : "normal", position: "relative" }}>
                     <span>{day}</span>
                     {completed && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", marginTop: "2px" }} />}
                     {hoje && !completed && plans.length > 0 && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#D4A373", marginTop: "2px" }} />}
@@ -193,7 +190,6 @@ export default function AlunoDashboardPage() {
             </div>
           </div>
 
-          {/* Detalhe do treino */}
           {plans.length > 0 && selectedPlan ? (
             <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -208,22 +204,20 @@ export default function AlunoDashboardPage() {
                   </button>
                 )}
               </div>
-              {selectedPlan.exercises && selectedPlan.exercises.sort(function(a, b) { return a.order - b.order; }).map(function(ex, idx) {
-                return (
-                  <div key={ex.id || idx} style={{ background: "#1a1a1a", borderRadius: "8px", padding: "12px", marginBottom: "8px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ width: "24px", height: "24px", borderRadius: "50%", background: "rgba(212,163,115,0.2)", color: "#D4A373", fontSize: "12px", fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>{idx + 1}</span>
-                      <span style={{ color: "#f5f5f5", fontWeight: "500", fontSize: "14px" }}>{ex.name}</span>
-                    </div>
-                    <div style={{ display: "flex", gap: "8px", marginTop: "8px", fontSize: "13px", color: "#a1a1a1" }}>
-                      <span>{ex.series}x{ex.reps}</span>
-                      {ex.weight && <span>| {ex.weight}</span>}
-                      {ex.restTime && <span>| Descanso: {ex.restTime}</span>}
-                    </div>
-                    {ex.notes && <p style={{ color: "#6b6b6b", fontSize: "12px", marginTop: "4px" }}>{ex.notes}</p>}
+              {selectedPlan.exercises && selectedPlan.exercises.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
+                <div key={ex.id || idx} style={{ background: "#1a1a1a", borderRadius: "8px", padding: "12px", marginBottom: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ width: "24px", height: "24px", borderRadius: "50%", background: "rgba(212,163,115,0.2)", color: "#D4A373", fontSize: "12px", fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>{idx + 1}</span>
+                    <span style={{ color: "#f5f5f5", fontWeight: "500", fontSize: "14px" }}>{ex.name}</span>
                   </div>
-                );
-              })}
+                  <div style={{ display: "flex", gap: "8px", marginTop: "8px", fontSize: "13px", color: "#a1a1a1" }}>
+                    <span>{ex.series}x{ex.reps}</span>
+                    {ex.weight && <span>| {ex.weight}</span>}
+                    {ex.restTime && <span>| Descanso: {ex.restTime}</span>}
+                  </div>
+                  {ex.notes && <p style={{ color: "#6b6b6b", fontSize: "12px", marginTop: "4px" }}>{ex.notes}</p>}
+                </div>
+              ))}
             </div>
           ) : (
             <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "40px", textAlign: "center" }}>
