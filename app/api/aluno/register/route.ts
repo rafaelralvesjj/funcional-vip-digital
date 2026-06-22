@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 export async function POST(request: Request) {
   try {
-    const { name, email, phone, password } = await request.json();
+    const { name, email, phone, password, imageUrl } = await request.json();
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Nome, e-mail e senha são obrigatórios." },
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
           name,
           email,
           phone: phone || null,
+          image: imageUrl || null, // 🔥 Salva a foto
           userAuthId: user.id,
         },
       });
