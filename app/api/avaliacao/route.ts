@@ -31,6 +31,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+
     const {
       alunoId,
       tipo,
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
       coxa,
       gluteo,
       preferencia,
+      equipamentos, // 🔥 NOVO: campo de equipamentos para treino em casa
       frequencia,
       nivelAtividade,
       lesoes,
@@ -74,6 +76,7 @@ export async function POST(req: Request) {
         coxa: coxa ? parseFloat(coxa) : null,
         gluteo: gluteo ? parseFloat(gluteo) : null,
         preferencia,
+        equipamentos: equipamentos || null, // 🔥 NOVO: salva os equipamentos selecionados
         frequencia: frequencia ? parseInt(frequencia) : null,
         nivelAtividade,
         lesoes,
