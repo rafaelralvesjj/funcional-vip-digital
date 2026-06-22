@@ -107,9 +107,7 @@ export default function AlunoDashboardPage() {
 
   async function fetchWorkouts() {
     try {
-      const res = await fetch(
-        `/api/workout/mark-complete?studentId=${studentId}&month=${currentMonth + 1}&year=${currentYear}`
-      );
+      const res = await fetch(`/api/workout/mark-complete?studentId=${studentId}&month=${currentMonth + 1}&year=${currentYear}`);
       if (res.ok) {
         const data = await res.json();
         setWorkouts(Array.isArray(data) ? data : []);
@@ -141,7 +139,7 @@ export default function AlunoDashboardPage() {
         if (data.alreadyDone) {
           setMessage({ type: "info", text: "Você já concluiu este treino hoje!" });
         } else {
-          setMessage({ type: "success", text: data.message || "Treino concluído! 🎉" });
+          setMessage({ type: "success", text: data.message || "Treino concluído!" });
           fetchWorkouts();
         }
       } else {
@@ -206,18 +204,12 @@ export default function AlunoDashboardPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#f5f5f5]">Olá, {student?.name || "Aluno"}! 👋</h1>
+          <h1 className="text-2xl font-bold text-[#f5f5f5]">Olá, {student?.name || "Aluno"}!</h1>
           <p className="text-[#a1a1a1] text-sm mt-1">Bem-vindo à sua área do aluno</p>
         </div>
 
         {message && (
-          <div className={`mb-6 text-sm rounded-lg p-4 border ${
-            message.type === "success" 
-              ? "bg-green-500/10 border-green-500/20 text-green-400"
-              : message.type === "info"
-              ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
-              : "bg-red-500/10 border-red-500/20 text-red-400"
-          }`}>
+          <div className={`mb-6 text-sm rounded-lg p-4 border ${message.type === "success" ? "bg-green-500/10 border-green-500/20 text-green-400" : message.type === "info" ? "bg-blue-500/10 border-blue-500/20 text-blue-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
             {message.text}
           </div>
         )}
@@ -225,31 +217,24 @@ export default function AlunoDashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna Esquerda */}
           <div className="space-y-6">
+            {/* Avisos */}
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-lg">📢</span>
                 <h2 className="font-semibold text-[#f5f5f5]">Avisos e Feedbacks</h2>
               </div>
               {notices.length === 0 ? (
-                <div className="text-center py-6">
-                  <p className="text-[#a1a1a1] text-sm">Nenhum aviso ou feedback no momento.</p>
-                </div>
+                <div className="text-center py-6"><p className="text-[#a1a1a1] text-sm">Nenhum aviso ou feedback no momento.</p></div>
               ) : (
                 <div className="space-y-3 max-h-80 overflow-y-auto">
                   {notices.map((notice) => (
                     <div key={notice.id} className="bg-[#1a1a1a] rounded-lg p-3 border border-[#ffffff10]">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-[#D4A373] font-medium">
-                          {notice.type === "ALERTA" ? "⚠️ Alerta" : "📢 Aviso"}
-                        </span>
-                        <span className="text-xs text-[#525252]">
-                          {new Date(notice.createdAt).toLocaleDateString("pt-BR")}
-                        </span>
+                        <span className="text-xs text-[#D4A373] font-medium">{notice.type === "ALERTA" ? "Alerta" : "Aviso"}</span>
+                        <span className="text-xs text-[#525252]">{new Date(notice.createdAt).toLocaleDateString("pt-BR")}</span>
                       </div>
                       <p className="text-sm text-[#e5e5e5]">{notice.content}</p>
-                      {notice.author?.name && (
-                        <p className="text-xs text-[#525252] mt-1">— {notice.author.name}</p>
-                      )}
+                      {notice.author?.name && <p className="text-xs text-[#525252] mt-1">— {notice.author.name}</p>}
                     </div>
                   ))}
                 </div>
@@ -267,24 +252,10 @@ export default function AlunoDashboardPage() {
                   <h2 className="font-semibold text-[#f5f5f5]">Meus Treinos</h2>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => {
-                    if (currentMonth === 0) {
-                      setCurrentMonth(11);
-                      setCurrentYear(currentYear - 1);
-                    } else {
-                      setCurrentMonth(currentMonth - 1);
-                    }
-                  }}
+                  <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } }}
                     className="text-[#a1a1a1] hover:text-[#f5f5f5] transition text-sm px-2 py-1">←</button>
                   <span className="text-[#f5f5f5] text-sm font-medium">{meses[currentMonth]} {currentYear}</span>
-                  <button onClick={() => {
-                    if (currentMonth === 11) {
-                      setCurrentMonth(0);
-                      setCurrentYear(currentYear + 1);
-                    } else {
-                      setCurrentMonth(currentMonth + 1);
-                    }
-                  }}
+                  <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); } else { setCurrentMonth(currentMonth + 1); } }}
                     className="text-[#a1a1a1] hover:text-[#f5f5f5] transition text-sm px-2 py-1">→</button>
                 </div>
               </div>
@@ -301,95 +272,33 @@ export default function AlunoDashboardPage() {
                   const hasWorkout = hasPlanOnDay(day);
                   const isSelected = selectedDay === day;
                   const isHoje = isToday(day);
-                  const allCompleted = plans.length > 0 && plans.every(p => isPlanCompletedOnDate(p.id, day));
-                  const someCompleted = plans.length > 0 && plans.some(p => isPlanCompletedOnDate(p.id, day));
 
-                  let bgColor = "";
+                  let bgColor = "border-transparent";
                   if (isSelected) bgColor = "bg-[#D4A373]/20 border-[#D4A373]";
                   else if (isHoje) bgColor = "border-[#D4A373]/50";
-                  else bgColor = "border-transparent";
-
-                  let dotColor = "";
-                  if (allCompleted) dotColor = "bg-green-500";
-                  else if (someCompleted) dotColor = "bg-yellow-500";
-                  else if (!isHoje && hasWorkout && day < today.getDate()) dotColor = "bg-red-500";
-                  else if (isHoje && hasWorkout) dotColor = "bg-[#D4A373]";
 
                   return (
-                    <button
-                      key={day}
-                      onClick={() => handleDayClick(day)}
+                    <button key={day} onClick={() => handleDayClick(day)}
                       disabled={!hasWorkout && !isHoje}
-                      className={`aspect-square rounded-lg border ${bgColor} flex flex-col items-center justify-center relative transition ${hasWorkout || isHoje ? "hover:bg-white/5 cursor-pointer" : "opacity-30 cursor-default"} ${!hasWorkout && !isHoje ? "text-[#2a2a2a]" : "text-[#a1a1a1]"}`}
-                    >
+                      className={`aspect-square rounded-lg border ${bgColor} flex flex-col items-center justify-center relative transition ${hasWorkout || isHoje ? "hover:bg-white/5 cursor-pointer" : "opacity-30 cursor-default"} ${!hasWorkout && !isHoje ? "text-[#2a2a2a]" : "text-[#a1a1a1]"}`}>
                       <span className={`text-sm ${isHoje ? "text-[#D4A373] font-bold" : ""} ${isSelected ? "text-[#D4A373]" : ""}`}>{day}</span>
-                      {dotColor && <div className={`w-1.5 h-1.5 rounded-full ${dotColor} mt-0.5`} />}
-                      {isHoje && !dotColor && <div className="w-1.5 h-1.5 rounded-full bg-[#D4A373]/30 mt-0.5" />}
                     </button>
                   );
                 })}
-              </div>
-
-              <div className="flex items-center gap-4 mt-4 pt-3 border-t border-[#ffffff10]">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-                  <span className="text-xs text-[#525252]">Completo</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-                  <span className="text-xs text-[#525252]">Parcial</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                  <span className="text-xs text-[#525252]">Não feito</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#D4A373]" />
-                  <span className="text-xs text-[#525252]">Hoje</span>
-                </div>
               </div>
             </div>
 
             {/* Detalhe do Treino */}
             {plans.length > 0 && selectedPlan ? (
               <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-[#f5f5f5]">{selectedPlan.name}</h3>
-                    {selectedPlan.description && (
-                      <p className="text-sm text-[#a1a1a1] mt-1">{selectedPlan.description}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {selectedPlan.exercises
-                    .sort((a, b) => a.order - b.order)
-                    .map((exercise, index) => (
-                      <div key={exercise.id || index} className="bg-[#1a1a1a] rounded-lg p-3 border border-[#ffffff10]">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-xs font-bold flex items-center justify-center">{index + 1}</span>
-                          <span className="text-sm text-[#f5f5f5] font-medium">{exercise.name}</span>
-                        </div>
-                        <div className="grid grid-cols-4 gap-2 text-xs">
-                          <div className="text-[#a1a1a1]">{exercise.series} séries</div>
-                          <div className="text-[#a1a1a1]">{exercise.reps} reps</div>
-                          {exercise.weight && <div className="text-[#a1a1a1]">{exercise.weight}</div>}
-                          {exercise.restTime && <div className="text-[#a1a1a1]">{exercise.restTime}</div>}
-                        </div>
-                      </div>
-                    ))}
-                </div>
+                <h3 className="text-lg font-semibold text-[#f5f5f5] mb-2">{selectedPlan.name}</h3>
+                <p className="text-[#a1a1a1] text-sm">Treino com {selectedPlan.exercises.length} exercício(s)</p>
               </div>
             ) : (
               <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-8 text-center">
                 <div className="text-4xl mb-3">🏋️</div>
                 <h3 className="text-lg font-semibold text-[#f5f5f5] mb-2">Nenhum treino ainda</h3>
-                <p className="text-[#a1a1a1] text-sm">
-                  Seu professor ainda não montou seus treinos personalizados.
-                </p>
-                <p className="text-[#525252] text-xs mt-2">
-                  Assim que ele enviar, você verá aqui no calendário!
-                </p>
+                <p className="text-[#a1a1a1] text-sm">Seu professor ainda não montou seus treinos personalizados.</p>
               </div>
             )}
           </div>
