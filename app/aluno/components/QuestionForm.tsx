@@ -16,25 +16,27 @@ interface QuestionFormProps {
 }
 function timeAgo(dateStr: string) {
   const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (s < 60) return "agora";
-  if (s < 3600) return `há ${Math.floor(s / 60)} min`;
-  if (s < 86400) return `há ${Math.floor(s / 3600)}h`;
-  if (s < 604800) return `há ${Math.floor(s / 86400)}d`;
+  if (s &lt; 60) return "agora";
+  if (s &lt; 3600) return `há ${Math.floor(s / 60)} min`;
+  if (s &lt; 86400) return `há ${Math.floor(s / 3600)}h`;
+  if (s &lt; 604800) return `há ${Math.floor(s / 86400)}d`;
   return `há ${Math.floor(s / 604800)}sem`;
 }
 export default function QuestionForm({ studentId, initialQuestions }: QuestionFormProps) {
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
   const [content, setContent] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [fileUrl, setFileUrl] = useState("");
+  const [fileType, setFileType] = useState<"image" | "video" | "">("");
+  const [fileName, setFileName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setFileName(file.name);
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -44,10 +46,11 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
       });
       if (res.ok) {
         const data = await res.json();
-        setImageUrl(data.url);
+        setFileUrl(data.url);
+        setFileType(file.type.startsWith("video") ? "video" : "image");
       } else {
         const err = await res.json();
-        alert(`Erro ao enviar imagem: ${err.error}`);
+        alert(`Erro ao enviar arquivo: ${err.error}`);
       }
     } catch {
       alert("Erro ao conectar com o servidor");
@@ -62,15 +65,21 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
     setLoading(true);
     setError("");
     try {
+      const body: any = {
+        studentId,
+        content: content.trim(),
+      };
+      if (fileUrl) {
+        if (fileType === "video") {
+          body.videoUrl = fileUrl;
+        } else {
+          body.imageUrl = fileUrl;
+        }
+      }
       const res = await fetch("/api/aluno/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId,
-          content: content.trim(),
-          videoUrl: videoUrl.trim() || null,
-          imageUrl: imageUrl || null,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -79,8 +88,9 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
       }
       setQuestions([data.question, ...questions]);
       setContent("");
-      setVideoUrl("");
-      setImageUrl("");
+      setFileUrl("");
+      setFileType("");
+      setFileName("");
     } catch {
       setError("Erro ao enviar dúvida. Tente novamente.");
     } finally {
@@ -103,33 +113,24 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
           className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-2.5 text-sm text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition resize-none"
         />
 
-        {/* 🔥 Link de vídeo */}
+        {/* 🔥 Único campo para foto ou vídeo — direto da galeria */}
         <div>
           <label className="block text-xs text-[#a1a1a1] mb-1">
-            🎥 Link do vídeo (YouTube) <span className="text-[#525252]">(opcional)</span>
-          </label>
-          <input
-            type="url"
-            value={videoUrl}
-            onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="https://youtube.com/watch?v=..."
-            className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-2 text-sm text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
-          />
-        </div>
-
-        {/* 🔥 Upload de imagem */}
-        <div>
-          <label className="block text-xs text-[#a1a1a1] mb-1">
-            📸 Imagem <span className="text-[#525252]">(opcional)</span>
+            📎 Anexar foto ou vídeo <span className="text-[#525252]">(opcional)</span>
           </label>
           <input
             type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={handleImageUpload}
+            accept="image/*,video/*"
+            capture="environment"
+            onChange={handleFileUpload}
             className="w-full text-xs text-[#e5e5e5] file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-xs hover:file:bg-[#b88a5e]"
           />
-          {uploading && <p className="text-xs text-[#D4A373] mt-1">Enviando imagem...</p>}
-          {imageUrl && !uploading && <p className="text-xs text-green-500 mt-1">✅ Imagem anexada!</p>}
+          {uploading && <p className="text-xs text-[#D4A373] mt-1">Enviando arquivo...</p>}
+          {fileUrl && !uploading && (
+            <p className="text-xs text-green-500 mt-1">
+              ✅ {fileType === "video" ? "📹 Vídeo" : "📸 Foto"} anexado: {fileName}
+            </p>
+          )}
         </div>
 
         {error && <p className="text-xs text-red-400">{error}</p>}
@@ -152,16 +153,18 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
           {pendingQuestions.map((q) => (
             <div key={q.id} className="bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-3">
               <p className="text-sm text-[#f5f5f5]">{q.content}</p>
-              {q.videoUrl && (
-                <a href={q.videoUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline mt-1 inline-block">
-                  🎥 Ver vídeo
-                </a>
-              )}
-              {q.imageUrl && (
-                <a href={q.imageUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline mt-1 inline-block ml-3">
-                  📸 Ver imagem
-                </a>
-              )}
+              <div className="flex gap-2 mt-1">
+                {q.videoUrl && (
+                  <a href={q.videoUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
+                    📹 Ver vídeo
+                  </a>
+                )}
+                {q.imageUrl && (
+                  <a href={q.imageUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
+                    📸 Ver foto
+                  </a>
+                )}
+              </div>
               <p className="text-xs text-[#525252] mt-1">{timeAgo(q.createdAt)}</p>
             </div>
           ))}
@@ -177,16 +180,18 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
           {answeredQuestions.map((q) => (
             <div key={q.id} className="bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-3">
               <p className="text-sm text-[#f5f5f5]">❓ {q.content}</p>
-              {q.videoUrl && (
-                <a href={q.videoUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline mt-1 inline-block">
-                  🎥 Ver vídeo
-                </a>
-              )}
-              {q.imageUrl && (
-                <a href={q.imageUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline mt-1 inline-block ml-3">
-                  📸 Ver imagem
-                </a>
-              )}
+              <div className="flex gap-2 mt-1">
+                {q.videoUrl && (
+                  <a href={q.videoUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
+                    📹 Ver vídeo
+                  </a>
+                )}
+                {q.imageUrl && (
+                  <a href={q.imageUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
+                    📸 Ver foto
+                  </a>
+                )}
+              </div>
               {q.answer && <p className="text-sm text-green-400 mt-1">💬 {q.answer}</p>}
               <p className="text-xs text-[#525252] mt-1">
                 {q.answeredBy?.name && `Respondido por ${q.answeredBy.name}`}
