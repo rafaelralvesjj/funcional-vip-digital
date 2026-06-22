@@ -25,30 +25,53 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "ID do aluno é obrigatório" }, { status: 400 });
     }
 
-    // Deleta manualmente os registros relacionados antes do aluno
+    // Verifica se o aluno existe
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+    });
+
+    if (!student) {
+      return NextResponse.json({ error: "Aluno não encontrado" }, { status: 404 });
+    }
+
+    // Deleta na ordem correta para evitar erros de constraint
     await prisma.$transaction([
-      prisma.notice.deleteMany({ where: { studentId } }),
-      prisma.question.deleteMany({ where: { studentId } }),
-      prisma.checkIn.deleteMany({ where: { studentId } }),
-      prisma.weeklyFeedback.deleteMany({ where: { studentId } }),
+      // 1. Avaliações
       prisma.avaliacao.deleteMany({ where: { alunoId: studentId } }),
-
-      // Exercícios dos planos de treino
-      prisma.$executeRaw`DELETE FROM exercises WHERE workout_plan_id IN (SELECT id FROM workout_plans WHERE student_id = ${studentId})`,
-
-      // Workouts vinculados aos planos
-      prisma.$executeRaw`DELETE FROM workouts WHERE student_id = ${studentId}`,
-
-      // Planos de treino
+      
+      // 2. Exercícios dos planos de treino
+      prisma.$executeRawUnsafe(`DELETE FROM exercises WHERE workout_plan_id IN (SELECT id FROM workout_plans WHERE student_id = $1)`, studentId),
+      
+      // 3. Workouts
+      prisma.workout.deleteMany({ where: { studentId } }),
+      
+      // 4. Planos de treino
       prisma.workoutPlan.deleteMany({ where: { studentId } }),
-
-      // Finalmente, o aluno
+      
+      // 5. Check-ins
+      prisma.checkIn.deleteMany({ where: { studentId } }),
+      
+      // 6. Feedbacks
+      prisma.weeklyFeedback.deleteMany({ where: { studentId } }),
+      
+      // 7. Avisos
+      prisma.notice.deleteMany({ where: { studentId } }),
+      
+      // 8. Perguntas
+      prisma.question.deleteMany({ where: { studentId } }),
+      
+      // 9. Finalmente o aluno
       prisma.student.delete({ where: { id: studentId } }),
     ]);
 
     return NextResponse.json({ success: true, message: "Aluno excluído com sucesso" });
   } catch (error) {
-    console.error("Erro ao excluir aluno:", error);
-    return NextResponse.json({ error: "Erro ao excluir aluno. Detalhes: " + (error instanceof Error ? error.message : "Erro desconhecido") }, { status: 500 });
+    // Captura o erro real para diagnóstico
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    console.error("Erro detalhado ao excluir aluno:", errorMessage);
+    return NextResponse.json({ 
+      error: "Erro ao excluir aluno", 
+      detalhes: errorMessage 
+    }, { status: 500 });
   }
 }
