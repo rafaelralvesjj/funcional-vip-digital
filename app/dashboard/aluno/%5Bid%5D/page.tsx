@@ -3,100 +3,45 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 
-interface Exercise {
-  id: string;
-  name: string;
-  description: string;
-  series: number;
-  reps: string;
-  weight: string;
-  restTime: string;
-  notes: string;
-  order: number;
-  imageUrl?: string;
-  videoUrl?: string;
-}
-
-interface WorkoutPlan {
-  id: string;
-  name: string;
-  description: string;
-  weekDay: string;
-  notes: string;
-  createdAt: string;
-  exercises: Exercise[];
-}
-
-interface Workout {
-  id: string;
-  workoutPlanId: string;
-  date: string;
-  status: string;
-}
-
-interface Notice {
-  id: string;
-  title: string;
-  content: string;
-  type: string;
-  createdAt: string;
-  author: { name: string };
-}
-
-interface StudentInfo {
-  id: string;
-  name: string;
-}
-
-const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const meses = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-];
-
 export default function AlunoDashboardPage() {
   const params = useParams();
   const studentId = params.id as string;
 
-  // ATENCAO: cada useState usa APENAS UM sinal de menor (<)
-  // Exemplo: useState<StudentInfo | null>(null) e NUNCA useState<<StudentInfo
-  const [student, setStudent] = useState<StudentInfo | null>(null);
-  const [plans, setPlans] = useState<WorkoutPlan[]>([]);
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null);
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [plans, setPlans] = useState([]);
+  const [workouts, setWorkouts] = useState([]);
+  const [notices, setNotices] = useState([]);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [completing, setCompleting] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [showExerciseImage, setShowExerciseImage] = useState<string | null>(null);
-  const [completing, setCompleting] = useState(false);
-  const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  const [studentName, setStudentName] = useState("Aluno");
 
   useEffect(() => {
     if (studentId) {
-      fetchStudent();
       fetchPlans();
       fetchWorkouts();
       fetchNotices();
+      fetchStudent();
     }
   }, [studentId, currentMonth, currentYear]);
 
   async function fetchStudent() {
     try {
-      const res = await fetch(`/api/students`);
+      const res = await fetch("/api/students");
       if (res.ok) {
         const data = await res.json();
         const students = Array.isArray(data) ? data : data.students || data || [];
-        const found = students.find((s: any) => s.id === studentId);
-        if (found) setStudent(found);
+        const found = students.find((s) => s.id === studentId);
+        if (found) setStudentName(found.name);
       }
     } catch {}
   }
 
   async function fetchPlans() {
     try {
-      const res = await fetch(`/api/workout-plan?studentId=${studentId}`);
+      const res = await fetch("/api/workout-plan?studentId=" + studentId);
       if (res.ok) {
         const data = await res.json();
         setPlans(Array.isArray(data) ? data : []);
@@ -109,7 +54,8 @@ export default function AlunoDashboardPage() {
 
   async function fetchWorkouts() {
     try {
-      const res = await fetch(`/api/workout/mark-complete?studentId=${studentId}&month=${currentMonth + 1}&year=${currentYear}`);
+      const url = "/api/workout/mark-complete?studentId=" + studentId + "&month=" + (currentMonth + 1) + "&year=" + currentYear;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setWorkouts(Array.isArray(data) ? data : []);
@@ -119,7 +65,7 @@ export default function AlunoDashboardPage() {
 
   async function fetchNotices() {
     try {
-      const res = await fetch(`/api/notices/student/${studentId}`);
+      const res = await fetch("/api/notices/student/" + studentId);
       if (res.ok) {
         const data = await res.json();
         setNotices(Array.isArray(data) ? data : []);
@@ -127,169 +73,165 @@ export default function AlunoDashboardPage() {
     } catch {}
   }
 
-  async function markAsComplete(planId: string) {
+  async function markAsComplete(planId) {
     setCompleting(true);
     setMessage(null);
     try {
       const res = await fetch("/api/workout/mark-complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workoutPlanId: planId, studentId }),
+        body: JSON.stringify({ workoutPlanId: planId, studentId: studentId }),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.alreadyDone) {
-          setMessage({ type: "info", text: "Você já concluiu este treino hoje!" });
+          setMessage({ type: "info", text: "Voce ja concluiu este treino hoje!" });
         } else {
-          setMessage({ type: "success", text: data.message || "Treino concluído!" });
+          setMessage({ type: "success", text: "Treino concluido!" });
           fetchWorkouts();
         }
-      } else {
-        setMessage({ type: "error", text: "Erro ao marcar treino" });
       }
-    } catch {
-      setMessage({ type: "error", text: "Erro ao marcar treino" });
-    } finally {
-      setCompleting(false);
-      setTimeout(() => setMessage(null), 4000);
-    }
+    } catch {}
+    setCompleting(false);
+    setTimeout(() => setMessage(null), 4000);
   }
 
-  function getDaysInMonth(month: number, year: number) {
+  function getDaysInMonth(month, year) {
     return new Date(year, month + 1, 0).getDate();
   }
 
-  function getFirstDayOfMonth(month: number, year: number) {
+  function getFirstDayOfMonth(month, year) {
     return new Date(year, month, 1).getDay();
   }
 
-  function isPlanCompletedOnDate(planId: string, day: number) {
-    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return workouts.some(
-      (w) => w.workoutPlanId === planId && w.date.startsWith(dateStr) && w.status === "CONCLUIDO"
-    );
-  }
-
-  function isToday(day: number) {
-    const today = new Date();
+  function isToday(day) {
+    var today = new Date();
     return day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
   }
 
-  function hasPlanOnDay(day: number) {
-    return plans.length > 0;
-  }
+  var daysInMonth = getDaysInMonth(currentMonth, currentYear);
+  var firstDay = getFirstDayOfMonth(currentMonth, currentYear);
+  var diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
+  var meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-  function handleDayClick(day: number) {
-    setSelectedDay(day);
-    setMessage(null);
+  function isPlanCompletedOnDate(planId, day) {
+    var dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+    return workouts.some(function(w) {
+      return w.workoutPlanId === planId && w.date.startsWith(dateStr) && w.status === "CONCLUIDO";
+    });
   }
-
-  const daysInMonth = getDaysInMonth(currentMonth, currentYear);
-  const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
-  const today = new Date();
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      <header className="border-b border-[#ffffff10] bg-[#111111]">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">F</div>
-            <span className="text-[#D4A373] font-bold">Funcional Vip Digital</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-[#a1a1a1] text-sm">{student?.name || "Aluno"}</span>
-            <button onClick={() => signOut({ callbackUrl: "/" })}
-              className="text-xs text-[#525252] hover:text-red-400 transition">Sair</button>
-          </div>
+    <div style={{ minHeight: "100vh", background: "#0a0a0a" }}>
+      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", background: "#111", padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#D4A373", display: "flex", alignItems: "center", justifyContent: "center", color: "#0a0a0a", fontWeight: "bold" }}>F</div>
+          <span style={{ color: "#D4A373", fontWeight: "bold" }}>Funcional Vip Digital</span>
         </div>
-      </header>
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#f5f5f5]">Olá, {student?.name || "Aluno"}! 👋</h1>
-          <p className="text-[#a1a1a1] text-sm mt-1">Bem-vindo à sua área do aluno</p>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ color: "#a1a1a1", fontSize: "14px" }}>{studentName}</span>
+          <button onClick={() => signOut({ callbackUrl: "/" })} style={{ fontSize: "12px", color: "#525252", background: "none", border: "none", cursor: "pointer" }}>Sair</button>
         </div>
+      </div>
+
+      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px 16px" }}>
+        <h1 style={{ color: "#f5f5f5", fontSize: "24px", fontWeight: "bold" }}>Ola, {studentName}!</h1>
+        <p style={{ color: "#a1a1a1", fontSize: "14px", marginTop: "4px" }}>Bem-vindo a sua area do aluno</p>
+
         {message && (
-          <div className={`mb-6 text-sm rounded-lg p-4 border ${message.type === "success" ? "bg-green-500/10 border-green-500/20 text-green-400" : message.type === "info" ? "bg-blue-500/10 border-blue-500/20 text-blue-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
+          <div style={{ padding: "12px", borderRadius: "8px", marginTop: "16px", fontSize: "14px", background: message.type === "success" ? "rgba(34,197,94,0.1)" : "rgba(59,130,246,0.1)", border: "1px solid " + (message.type === "success" ? "rgba(34,197,94,0.2)" : "rgba(59,130,246,0.2)"), color: message.type === "success" ? "#22c55e" : "#3b82f6" }}>
             {message.text}
           </div>
         )}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="space-y-6">
-            <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-              <h2 className="font-semibold text-[#f5f5f5] mb-4">📢 Avisos e Feedbacks</h2>
-              {notices.length === 0 ? (
-                <p className="text-[#a1a1a1] text-sm">Nenhum aviso ou feedback no momento.</p>
-              ) : (
-                <div className="space-y-3">
-                  {notices.map((notice) => (
-                    <div key={notice.id} className="bg-[#1a1a1a] rounded-lg p-3">
-                      <p className="text-sm text-[#e5e5e5]">{notice.content}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-              <h2 className="font-semibold text-[#f5f5f5] mb-4">📅 Meus Treinos</h2>
-              <div className="grid grid-cols-7 gap-1">
-                {diasSemana.map((dia) => (
-                  <div key={dia} className="text-center text-xs text-[#525252] font-medium py-2">{dia}</div>
-                ))}
-                {Array.from({ length: firstDay }).map((_, i) => (
-                  <div key={`empty-${i}`} className="aspect-square" />
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1;
-                  const isHoje = isToday(day);
-                  const isSelected = selectedDay === day;
-                  const allCompleted = plans.length > 0 && plans.every(p => isPlanCompletedOnDate(p.id, day));
-                  return (
-                    <button key={day} onClick={() => handleDayClick(day)}
-                      className={`aspect-square rounded-lg border flex flex-col items-center justify-center text-sm transition 
-                        ${isSelected ? "bg-[#D4A373]/20 border-[#D4A373] text-[#D4A373]" : ""}
-                        ${isHoje && !isSelected ? "border-[#D4A373]/50 text-[#D4A373] font-bold" : ""}
-                        ${!isHoje && !isSelected ? "border-transparent text-[#a1a1a1]" : ""}
-                        ${hasPlanOnDay(day) || isHoje ? "hover:bg-white/5 cursor-pointer" : "opacity-30 cursor-default"}`}>
-                      <span>{day}</span>
-                      {allCompleted && <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-0.5" />}
-                      {isHoje && plans.length > 0 && !allCompleted && <div className="w-1.5 h-1.5 rounded-full bg-[#D4A373] mt-0.5" />}
-                    </button>
-                  );
-                })}
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "24px", marginTop: "24px" }}>
+          {/* Calendario */}
+          <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h2 style={{ color: "#f5f5f5", fontSize: "18px", fontWeight: "600" }}>Meus Treinos</h2>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } }}
+                  style={{ color: "#a1a1a1", background: "none", border: "none", cursor: "pointer", fontSize: "16px" }}>&larr;</button>
+                <span style={{ color: "#f5f5f5", fontSize: "14px" }}>{meses[currentMonth]} {currentYear}</span>
+                <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); } else { setCurrentMonth(currentMonth + 1); } }}
+                  style={{ color: "#a1a1a1", background: "none", border: "none", cursor: "pointer", fontSize: "16px" }}>&rarr;</button>
               </div>
             </div>
 
-            {plans.length > 0 && selectedPlan ? (
-              <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-[#f5f5f5]">{selectedPlan.name}</h3>
-                    <p className="text-[#a1a1a1] text-sm">{selectedPlan.description}</p>
-                  </div>
-                  <button onClick={() => markAsComplete(selectedPlan.id)}
-                    disabled={completing}
-                    className="bg-[#D4A373] hover:bg-[#b88a5e] text-[#0a0a0a] text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50">
-                    {completing ? "⏳" : "✅ Marcar como feito"}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" }}>
+              {diasSemana.map(function(dia) {
+                return <div key={dia} style={{ textAlign: "center", fontSize: "12px", color: "#525252", padding: "8px 0" }}>{dia}</div>;
+              })}
+              {Array.from({ length: firstDay }).map(function(_, i) {
+                return <div key={"e" + i} style={{ aspectRatio: "1" }} />;
+              })}
+              {Array.from({ length: daysInMonth }).map(function(_, i) {
+                var day = i + 1;
+                var hoje = isToday(day);
+                var sel = selectedDay === day;
+                var completed = plans.some(function(p) { return isPlanCompletedOnDate(p.id, day); });
+                var bg = "transparent";
+                var border = "transparent";
+                var color = "#a1a1a1";
+                if (sel) { bg = "rgba(212,163,115,0.2)"; border = "#D4A373"; color = "#D4A373"; }
+                else if (hoje) { border = "rgba(212,163,115,0.5)"; color = "#D4A373"; }
+                
+                return (
+                  <button key={day} onClick={() => setSelectedDay(day)}
+                    style={{ aspectRatio: "1", borderRadius: "8px", border: "1px solid " + border, background: bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", color: color, fontSize: "14px", fontWeight: hoje ? "bold" : "normal", transition: "all 0.2s", position: "relative" }}>
+                    <span>{day}</span>
+                    {completed && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", marginTop: "2px" }} />}
+                    {hoje && !completed && plans.length > 0 && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#D4A373", marginTop: "2px" }} />}
                   </button>
-                </div>
-                {selectedPlan.exercises.map((ex, idx) => (
-                  <div key={ex.id} className="bg-[#1a1a1a] rounded-lg p-3 mb-2">
-                    <p className="text-[#f5f5f5] font-medium">{idx + 1}. {ex.name}</p>
-                    <p className="text-[#a1a1a1] text-xs mt-1">{ex.series}x{ex.reps} | {ex.weight} | Descanso: {ex.restTime}</p>
-                    {ex.notes && <p className="text-[#525252] text-xs mt-1">📝 {ex.notes}</p>}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-8 text-center">
-                <p className="text-[#a1a1a1] text-sm">Seu professor ainda não montou seus treinos personalizados.</p>
-              </div>
-            )}
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", gap: "16px", marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(255,255,255,0.05)", fontSize: "12px", color: "#525252" }}>
+              <span><span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "#22c55e", marginRight: "4px" }} /> Completo</span>
+              <span><span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "#D4A373", marginRight: "4px" }} /> Hoje</span>
+            </div>
           </div>
+
+          {/* Detalhe do treino */}
+          {plans.length > 0 && selectedPlan ? (
+            <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div>
+                  <h3 style={{ color: "#f5f5f5", fontSize: "18px", fontWeight: "600" }}>{selectedPlan.name}</h3>
+                  {selectedPlan.description && <p style={{ color: "#a1a1a1", fontSize: "14px", marginTop: "4px" }}>{selectedPlan.description}</p>}
+                </div>
+                {selectedDay !== null && isToday(selectedDay) && (
+                  <button onClick={() => markAsComplete(selectedPlan.id)} disabled={completing}
+                    style={{ background: "#D4A373", color: "#0a0a0a", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "600", fontSize: "14px", cursor: "pointer" }}>
+                    {completing ? "Salvando..." : "Concluir treino"}
+                  </button>
+                )}
+              </div>
+              {selectedPlan.exercises && selectedPlan.exercises.sort(function(a, b) { return a.order - b.order; }).map(function(ex, idx) {
+                return (
+                  <div key={ex.id || idx} style={{ background: "#1a1a1a", borderRadius: "8px", padding: "12px", marginBottom: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ width: "24px", height: "24px", borderRadius: "50%", background: "rgba(212,163,115,0.2)", color: "#D4A373", fontSize: "12px", fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>{idx + 1}</span>
+                      <span style={{ color: "#f5f5f5", fontWeight: "500", fontSize: "14px" }}>{ex.name}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", marginTop: "8px", fontSize: "13px", color: "#a1a1a1" }}>
+                      <span>{ex.series}x{ex.reps}</span>
+                      {ex.weight && <span>| {ex.weight}</span>}
+                      {ex.restTime && <span>| Descanso: {ex.restTime}</span>}
+                    </div>
+                    {ex.notes && <p style={{ color: "#6b6b6b", fontSize: "12px", marginTop: "4px" }}>{ex.notes}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "40px", textAlign: "center" }}>
+              <p style={{ color: "#a1a1a1", fontSize: "14px" }}>Seu professor ainda nao montou seus treinos personalizados.</p>
+            </div>
+          )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
