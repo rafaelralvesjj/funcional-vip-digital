@@ -18,6 +18,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
     coxa: "",
     gluteo: "",
     preferencia: "",
+    equipamentos: "",
     frequencia: "",
     nivelAtividade: "",
     lesoes: "",
@@ -77,7 +78,6 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
         await fetch(`/api/student/${params.id}/onboarding`, {
           method: "PATCH",
         });
-
         router.push(`/dashboard/aluno/${params.id}`);
       } else {
         const err = await res.json();
@@ -160,6 +160,63 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   <option value="academia">Na academia</option>
                 </select>
               </div>
+
+              {/* 🔥 Campo condicional de equipamentos - só aparece se escolher "casa" */}
+              {form.preferencia === "casa" && (
+                <div>
+                  <label className="text-sm text-[#e5e5e5] block mb-2">
+                    📦 Quais equipamentos você tem disponível em casa?
+                  </label>
+                  <p className="text-xs text-[#a1a1a1] mb-3">Marque todos que tiver:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "nenhum", label: "Nada, só meu peso", icon: "🚫" },
+                      { value: "colchonete", label: "Colchonete / Tapete", icon: "🧘" },
+                      { value: "halteres", label: "Halteres / Anilhas", icon: "🏋️" },
+                      { value: "elasticos", label: "Elásticos", icon: "🔴" },
+                      { value: "cadeira", label: "Cadeira / Banco", icon: "🪑" },
+                      { value: "barra", label: "Barra fixa", icon: "🤸" },
+                      { value: "kettlebell", label: "Kettlebell", icon: "🔔" },
+                      { value: "bola", label: "Bola suíça", icon: "⚽" },
+                    ].map((eq) => (
+                      <label
+                        key={eq.value}
+                        className={`flex items-center gap-2 p-2.5 rounded-lg border text-sm cursor-pointer transition ${
+                          form.equipamentos.includes(eq.value)
+                            ? "bg-[#D4A373]/10 border-[#D4A373] text-[#f5f5f5]"
+                            : "bg-[#0a0a0a] border-[#ffffff10] text-[#a1a1a1] hover:border-[#D4A373]/50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.equipamentos.includes(eq.value)}
+                          onChange={(e) => {
+                            const current = form.equipamentos
+                              ? form.equipamentos.split(",").filter(Boolean)
+                              : [];
+                            // Se marcar "nenhum", limpa tudo e marca só "nenhum"
+                            if (eq.value === "nenhum") {
+                              setForm({
+                                ...form,
+                                equipamentos: e.target.checked ? "nenhum" : "",
+                              });
+                              return;
+                            }
+                            // Se marcar qualquer outro, remove "nenhum" da lista
+                            let updated = e.target.checked
+                              ? [...current.filter((v) => v !== "nenhum"), eq.value]
+                              : current.filter((v) => v !== eq.value);
+                            setForm({ ...form, equipamentos: updated.join(",") });
+                          }}
+                          className="sr-only"
+                        />
+                        <span>{eq.icon}</span>
+                        <span>{eq.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           {/* Seção: Dados Físicos */}
