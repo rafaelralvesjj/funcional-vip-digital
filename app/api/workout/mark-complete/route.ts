@@ -26,13 +26,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      // Se já existe e está concluído, avisa
       if (existing.status === "CONCLUIDO") {
         return NextResponse.json(
           { message: "Treino já foi marcado como concluído hoje!", alreadyDone: true }
         );
       }
-      // Se existe mas não está concluído, atualiza
       const updated = await prisma.workout.update({
         where: { id: existing.id },
         data: { status: "CONCLUIDO" },
@@ -40,7 +38,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, workout: updated, message: "Treino concluído com sucesso! 🎉" });
     }
 
-    // Cria novo registro de workout concluído
     const workout = await prisma.workout.create({
       data: {
         studentId,
