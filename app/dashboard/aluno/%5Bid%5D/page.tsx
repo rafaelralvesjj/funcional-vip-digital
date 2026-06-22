@@ -71,7 +71,6 @@ export default function AlunoDashboardPage() {
   const [completing, setCompleting] = useState(false);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
 
-  // Buscar dados do aluno
   useEffect(() => {
     if (studentId) {
       fetchStudent();
@@ -156,7 +155,6 @@ export default function AlunoDashboardPage() {
     }
   }
 
-  // Gerar calendário
   function getDaysInMonth(month: number, year: number) {
     return new Date(year, month + 1, 0).getDate();
   }
@@ -165,7 +163,6 @@ export default function AlunoDashboardPage() {
     return new Date(year, month, 1).getDay();
   }
 
-  // Verificar se um plano tem workout concluído numa data específica
   function isPlanCompletedOnDate(planId: string, day: number) {
     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return workouts.some(
@@ -173,7 +170,6 @@ export default function AlunoDashboardPage() {
     );
   }
 
-  // Verificar se HOJE tem plano para o aluno
   function isToday(day: number) {
     const today = new Date();
     return day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
@@ -188,31 +184,12 @@ export default function AlunoDashboardPage() {
     setMessage(null);
   }
 
-  // Filtrar planos com base no dia selecionado
-  function getPlansForSelectedDay() {
-    if (selectedDay === null) return plans;
-    return plans;
-  }
-
   const daysInMonth = getDaysInMonth(currentMonth, currentYear);
   const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
   const today = new Date();
 
-  // Verificar treinos não feitos
-  const hasUncompletedToday = plans.length > 0 && selectedDay !== null && isToday(selectedDay!) && 
-    !plans.some(p => isPlanCompletedOnDate(p.id, selectedDay!));
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <p className="text-[#a1a1a1]">Carregando...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
-      {/* Header */}
       <header className="border-b border-[#ffffff10] bg-[#111111]">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -228,13 +205,11 @@ export default function AlunoDashboardPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
-        {/* Saudação */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-[#f5f5f5]">Olá, {student?.name || "Aluno"}! 👋</h1>
           <p className="text-[#a1a1a1] text-sm mt-1">Bem-vindo à sua área do aluno</p>
         </div>
 
-        {/* Mensagem */}
         {message && (
           <div className={`mb-6 text-sm rounded-lg p-4 border ${
             message.type === "success" 
@@ -248,9 +223,8 @@ export default function AlunoDashboardPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Coluna Esquerda: Avisos e Feedbacks */}
+          {/* Coluna Esquerda: Avisos */}
           <div className="space-y-6">
-            {/* Avisos e Feedbacks */}
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-lg">📢</span>
@@ -283,7 +257,6 @@ export default function AlunoDashboardPage() {
               )}
             </div>
 
-            {/* Progresso */}
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-lg">🔥</span>
@@ -314,9 +287,9 @@ export default function AlunoDashboardPage() {
             </div>
           </div>
 
-          {/* Coluna Direita: Calendário e Treinos */}
+          {/* Coluna Direita */}
           <div className="lg:col-span-2 space-y-6">
-            {/* CALENDÁRIO */}
+            {/* Calendário */}
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -352,7 +325,6 @@ export default function AlunoDashboardPage() {
                 </div>
               </div>
 
-              {/* Grid do calendário */}
               <div className="grid grid-cols-7 gap-1">
                 {diasSemana.map((dia) => (
                   <div key={dia} className="text-center text-xs text-[#525252] font-medium py-2">
@@ -405,7 +377,6 @@ export default function AlunoDashboardPage() {
                 })}
               </div>
 
-              {/* Legenda */}
               <div className="flex items-center gap-4 mt-4 pt-3 border-t border-[#ffffff10]">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
@@ -427,133 +398,105 @@ export default function AlunoDashboardPage() {
             </div>
 
             {/* Detalhe do Treino */}
-            {plans.length > 0 ? (
-              <>
-                {/* Seletor de treino (se houver mais de um) */}
-                {plans.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto pb-2">
-                    {plans.map((plan) => {
-                      const isSelectedPlan = selectedPlan?.id === plan.id;
-                      const isComplete = selectedDay !== null && isPlanCompletedOnDate(plan.id, selectedDay);
-                      return (
-                        <button
-                          key={plan.id}
-                          onClick={() => setSelectedPlan(plan)}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
-                            isSelectedPlan
-                              ? "bg-[#D4A373] text-[#0a0a0a]"
-                              : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-[#f5f5f5]"
-                          }`}
-                        >
-                          {plan.name}
-                          {isComplete && " ✅"}
-                        </button>
-                      );
-                    })}
+            {plans.length > 0 && selectedPlan && (
+              <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#f5f5f5]">{selectedPlan.name}</h3>
+                    {selectedPlan.description && (
+                      <p className="text-sm text-[#a1a1a1] mt-0.5">{selectedPlan.description}</p>
+                    )}
                   </div>
-                )}
+                  <div className="flex items-center gap-2">
+                    {selectedDay !== null && isToday(selectedDay!) && (
+                      <button
+                        onClick={() => markAsComplete(selectedPlan.id)}
+                        disabled={completing || isPlanCompletedOnDate(selectedPlan.id, selectedDay!)}
+                        className={`text-sm font-medium px-4 py-2 rounded-lg transition ${
+                          isPlanCompletedOnDate(selectedPlan.id, selectedDay!)
+                            ? "bg-green-500/10 text-green-400 cursor-default"
+                            : "bg-[#D4A373] text-[#0a0a0a] hover:bg-[#c49463]"
+                        }`}
+                      >
+                        {completing ? "⏳" : isPlanCompletedOnDate(selectedPlan.id, selectedDay!) ? "✅ Concluído" : "✅ Marcar como feito"}
+                      </button>
+                    )}
+                    {selectedDay !== null && !isToday(selectedDay!) && isPlanCompletedOnDate(selectedPlan.id, selectedDay!) && (
+                      <span className="text-sm text-green-400 font-medium bg-green-500/10 px-3 py-1.5 rounded-lg">
+                        ✅ Concluído
+                      </span>
+                    )}
+                    {selectedDay !== null && !isToday(selectedDay!) && !isPlanCompletedOnDate(selectedPlan.id, selectedDay!) && (
+                      <span className="text-sm text-red-400 font-medium bg-red-500/10 px-3 py-1.5 rounded-lg">
+                        ❌ Não concluído
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-                {selectedPlan && (
-                  <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-[#f5f5f5]">{selectedPlan.name}</h3>
-                        {selectedPlan.description && (
-                          <p className="text-sm text-[#a1a1a1] mt-0.5">{selectedPlan.description}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {selectedDay !== null && isToday(selectedDay!) && (
-                          <button
-                            onClick={() => markAsComplete(selectedPlan.id)}
-                            disabled={completing || isPlanCompletedOnDate(selectedPlan.id, selectedDay!)}
-                            className={`text-sm font-medium px-4 py-2 rounded-lg transition ${
-                              isPlanCompletedOnDate(selectedPlan.id, selectedDay!)
-                                ? "bg-green-500/10 text-green-400 cursor-default"
-                                : "bg-[#D4A373] text-[#0a0a0a] hover:bg-[#c49463]"
-                            }`}
-                          >
-                            {completing ? "⏳" : isPlanCompletedOnDate(selectedPlan.id, selectedDay!) ? "✅ Concluído" : "✅ Marcar como feito"}
-                          </button>
-                        )}
-                        {selectedDay !== null && !isToday(selectedDay!) && isPlanCompletedOnDate(selectedPlan.id, selectedDay!) && (
-                          <span className="text-sm text-green-400 font-medium bg-green-500/10 px-3 py-1.5 rounded-lg">
-                            ✅ Concluído
-                          </span>
-                        )}
-                        {selectedDay !== null && !isToday(selectedDay!) && !isPlanCompletedOnDate(selectedPlan.id, selectedDay!) && (
-                          <span className="text-sm text-red-400 font-medium bg-red-500/10 px-3 py-1.5 rounded-lg">
-                            ❌ Não concluído
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Lista de exercícios */}
-                    <div className="space-y-3">
-                      {selectedPlan.exercises
-                        .sort((a, b) => a.order - b.order)
-                        .map((exercise, index) => (
-                          <div key={exercise.id || index}
-                            className="bg-[#1a1a1a] border border-[#ffffff10] rounded-lg p-4"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-xs font-bold flex items-center justify-center">
-                                    {index + 1}
-                                  </span>
-                                  <h4 className="text-[#f5f5f5] font-medium">{exercise.name}</h4>
-                                </div>
-
-                                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                  <div className="bg-[#0a0a0a] rounded-lg p-2 text-center">
-                                    <p className="text-[#D4A373] text-xs font-medium">Séries</p>
-                                    <p className="text-[#f5f5f5] text-sm font-bold">{exercise.series}</p>
-                                  </div>
-                                  <div className="bg-[#0a0a0a] rounded-lg p-2 text-center">
-                                    <p className="text-[#D4A373] text-xs font-medium">Repetições</p>
-                                    <p className="text-[#f5f5f5] text-sm font-bold">{exercise.reps}</p>
-                                  </div>
-                                  {exercise.weight && (
-                                    <div className="bg-[#0a0a0a] rounded-lg p-2 text-center">
-                                      <p className="text-[#D4A373] text-xs font-medium">Carga</p>
-                                      <p className="text-[#f5f5f5] text-sm font-bold">{exercise.weight}</p>
-                                    </div>
-                                  )}
-                                  {exercise.restTime && (
-                                    <div className="bg-[#0a0a0a] rounded-lg p-2 text-center">
-                                      <p className="text-[#D4A373] text-xs font-medium">Descanso</p>
-                                      <p className="text-[#f5f5f5] text-sm font-bold">{exercise.restTime}</p>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {exercise.notes && (
-                                  <p className="text-xs text-[#6b6b6b] mt-2">📝 {exercise.notes}</p>
-                                )}
-                              </div>
-
-                              {/* Botão para ver imagem do exercício */}
-                              <button
-                                onClick={() => setShowExerciseImage(exercise.imageUrl || exercise.name)}
-                                className="ml-3 text-sm text-[#D4A373] hover:text-[#c49463] transition flex items-center gap-1 shrink-0"
-                              >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                                  <polyline points="21 15 16 10 5 21"/>
-                                </svg>
-                                <span className="text-xs">Ver imagem</span>
-                              </button>
+                <div className="space-y-3">
+                  {selectedPlan.exercises
+                    .sort((a, b) => a.order - b.order)
+                    .map((exercise, index) => (
+                      <div key={exercise.id || index}
+                        className="bg-[#1a1a1a] border border-[#ffffff10] rounded-lg p-4"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-xs font-bold flex items-center justify-center">
+                                {index + 1}
+                              </span>
+                              <h4 className="text-[#f5f5f5] font-medium">{exercise.name}</h4>
                             </div>
+
+                            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <div className="bg-[#0a0a0a] rounded-lg p-2 text-center">
+                                <p className="text-[#D4A373] text-xs font-medium">Séries</p>
+                                <p className="text-[#f5f5f5] text-sm font-bold">{exercise.series}</p>
+                              </div>
+                              <div className="bg-[#0a0a0a] rounded-lg p-2 text-center">
+                                <p className="text-[#D4A373] text-xs font-medium">Repetições</p>
+                                <p className="text-[#f5f5f5] text-sm font-bold">{exercise.reps}</p>
+                              </div>
+                              {exercise.weight && (
+                                <div className="bg-[#0a0a0a] rounded-lg p-2 text-center">
+                                  <p className="text-[#D4A373] text-xs font-medium">Carga</p>
+                                  <p className="text-[#f5f5f5] text-sm font-bold">{exercise.weight}</p>
+                                </div>
+                              )}
+                              {exercise.restTime && (
+                                <div className="bg-[#0a0a0a] rounded-lg p-2 text-center">
+                                  <p className="text-[#D4A373] text-xs font-medium">Descanso</p>
+                                  <p className="text-[#f5f5f5] text-sm font-bold">{exercise.restTime}</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {exercise.notes && (
+                              <p className="text-xs text-[#6b6b6b] mt-2">📝 {exercise.notes}</p>
+                            )}
                           </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
+
+                          <button
+                            onClick={() => setShowExerciseImage(exercise.imageUrl || exercise.name)}
+                            className="ml-3 text-sm text-[#D4A373] hover:text-[#c49463] transition flex items-center gap-1 shrink-0"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                              <circle cx="8.5" cy="8.5" r="1.5"/>
+                              <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            <span className="text-xs">Ver imagem</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {plans.length === 0 && (
               <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-8 text-center">
                 <div className="text-4xl mb-3">🏋️</div>
                 <h3 className="text-lg font-semibold text-[#f5f5f5] mb-2">Nenhum treino ainda</h3>
@@ -569,7 +512,6 @@ export default function AlunoDashboardPage() {
         </div>
       </main>
 
-      {/* Modal para exibir imagem do exercício */}
       {showExerciseImage && (
         <div 
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
