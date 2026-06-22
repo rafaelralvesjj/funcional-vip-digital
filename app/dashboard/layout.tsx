@@ -10,7 +10,9 @@ export default function DashboardLayout({
 }) {
   const { data: session } = useSession();
   const pathname = usePathname();
-  const navItems = [
+  const role = session?.user?.role;
+
+  const allNavItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
     { href: "/dashboard/exercises", label: "Biblioteca", icon: "book" },
@@ -20,6 +22,12 @@ export default function DashboardLayout({
     { href: "/dashboard/feedbacks", label: "Feedbacks", icon: "star" },
     { href: "/dashboard/controls", label: "Controle Semanal", icon: "chart" },
   ];
+
+  // Gestor não vê "Montar Treino"
+  const navItems = role === "GESTOR"
+    ? allNavItems.filter((item) => item.href !== "/dashboard/montar-treino")
+    : allNavItems;
+
   function NavIcon({ icon }: { icon: string }) {
     const icons: Record<string, JSX.Element> = {
       grid: (
@@ -99,7 +107,7 @@ export default function DashboardLayout({
         <div className="p-4 border-t border-[#ffffff10] space-y-3">
           <div className="px-4 py-2">
             <p className="text-sm font-medium text-[#f5f5f5] truncate">{session?.user?.name || "Usuário"}</p>
-            <p className="text-xs text-[#a1a1a1]">{session?.user?.role === "GESTOR" ? "Gestor" : "Professor"}</p>
+            <p className="text-xs text-[#a1a1a1]">{role === "GESTOR" ? "Gestor" : "Professor"}</p>
           </div>
           <button type="button" onClick={() => signOut({ callbackUrl: "/" })}
             className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm text-[#a1a1a1] hover:text-red-400 hover:bg-red-500/5 transition"
