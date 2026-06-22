@@ -58,11 +58,11 @@ export default function AlunoDashboardPage() {
   const params = useParams();
   const studentId = params.id as string;
 
-  const [student, setStudent] = useState<StudentInfo | null>(null);
-  const [plans, setPlans] = useState<WorkoutPlan[]>([]);
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null);
+  const [student, setStudent] = useState<<StudentInfo | null>(null);
+  const [plans, setPlans] = useState<<WorkoutPlan[]>([]);
+  const [workouts, setWorkouts] = useState<<Workout[]>([]);
+  const [notices, setNotices] = useState<<Notice[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<<WorkoutPlan | null>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -223,7 +223,7 @@ export default function AlunoDashboardPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Coluna Esquerda: Avisos */}
+          {/* Coluna Esquerda: Avisos e Progresso */}
           <div className="space-y-6">
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
               <div className="flex items-center gap-2 mb-4">
@@ -287,9 +287,9 @@ export default function AlunoDashboardPage() {
             </div>
           </div>
 
-          {/* Coluna Direita */}
+          {/* Coluna Direita: Calendário e Treinos */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Calendário */}
+            {/* CALENDÁRIO */}
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -327,9 +327,7 @@ export default function AlunoDashboardPage() {
 
               <div className="grid grid-cols-7 gap-1">
                 {diasSemana.map((dia) => (
-                  <div key={dia} className="text-center text-xs text-[#525252] font-medium py-2">
-                    {dia}
-                  </div>
+                  <div key={dia} className="text-center text-xs text-[#525252] font-medium py-2">{dia}</div>
                 ))}
                 {Array.from({ length: firstDay }).map((_, i) => (
                   <div key={`empty-${i}`} className="aspect-square" />
@@ -341,12 +339,12 @@ export default function AlunoDashboardPage() {
                   const isHoje = isToday(day);
                   const allCompleted = plans.length > 0 && plans.every(p => isPlanCompletedOnDate(p.id, day));
                   const someCompleted = plans.length > 0 && plans.some(p => isPlanCompletedOnDate(p.id, day));
-                  
+
                   let bgColor = "";
                   if (isSelected) bgColor = "bg-[#D4A373]/20 border-[#D4A373]";
                   else if (isHoje) bgColor = "border-[#D4A373]/50";
                   else bgColor = "border-transparent";
-                  
+
                   let dotColor = "";
                   if (allCompleted) dotColor = "bg-green-500";
                   else if (someCompleted) dotColor = "bg-yellow-500";
