@@ -39,19 +39,15 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploading(true);
     setFileName(file.name);
-
     const formData = new FormData();
     formData.append("file", file);
-
     try {
       const res = await fetch("/api/upload-image", {
         method: "POST",
         body: formData,
       });
-
       if (res.ok) {
         const data = await res.json();
         setFileUrl(data.url);
@@ -70,16 +66,10 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
-
     setLoading(true);
     setError("");
-
     try {
-      const body: any = {
-        studentId,
-        content: content.trim(),
-      };
-
+      const body: any = { studentId, content: content.trim() };
       if (fileUrl) {
         if (fileType === "video") {
           body.videoUrl = fileUrl;
@@ -87,20 +77,16 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
           body.imageUrl = fileUrl;
         }
       }
-
       const res = await fetch("/api/aluno/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error || "Erro ao enviar dúvida.");
         return;
       }
-
       setQuestions([data.question, ...questions]);
       setContent("");
       setFileUrl("");
@@ -118,7 +104,6 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
 
   return (
     <div className="space-y-4">
-      {/* Formulário */}
       <form onSubmit={handleSubmit} className="space-y-3">
         <textarea
           value={content}
@@ -127,8 +112,6 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
           rows={3}
           className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-2.5 text-sm text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition resize-none"
         />
-
-        {/* Único campo para foto ou vídeo — direto da galeria */}
         <div>
           <label className="block text-xs text-[#a1a1a1] mb-1">
             📎 Anexar foto ou vídeo <span className="text-[#525252]">(opcional)</span>
@@ -147,9 +130,7 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
             </p>
           )}
         </div>
-
         {error && <p className="text-xs text-red-400">{error}</p>}
-
         <button
           type="submit"
           disabled={loading || uploading || !content.trim()}
@@ -159,7 +140,6 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
         </button>
       </form>
 
-      {/* Dúvidas pendentes */}
       {pendingQuestions.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs text-[#D4A373] font-medium">
@@ -186,7 +166,6 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
         </div>
       )}
 
-      {/* Dúvidas respondidas */}
       {answeredQuestions.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs text-green-400 font-medium">
@@ -202,26 +181,3 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
                   </a>
                 )}
                 {q.imageUrl && (
-                  <a href={q.imageUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
-                    📸 Ver foto
-                  </a>
-                )}
-              </div>
-              {q.answer && <p className="text-sm text-green-400 mt-1">💬 {q.answer}</p>}
-              <p className="text-xs text-[#525252] mt-1">
-                {q.answeredBy?.name && `Respondido por ${q.answeredBy.name}`}
-                {q.answeredAt && ` • ${timeAgo(q.answeredAt)}`}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {questions.length === 0 && (
-        <p className="text-sm text-[#525252] text-center py-4">
-          Nenhuma dúvida enviada ainda. Use o campo acima para perguntar algo.
-        </p>
-      )}
-    </div>
-  );
-}
