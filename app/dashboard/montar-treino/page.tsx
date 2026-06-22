@@ -65,12 +65,14 @@ export default function MontarTreinoPage() {
 
   async function fetchStudents() {
     try {
-      const res = await fetch("/api/student");
+      const res = await fetch("/api/students");
       if (res.ok) {
         const data = await res.json();
-        setStudents(data.students || data || []);
+        setStudents(Array.isArray(data) ? data : data.students || data || []);
       }
-    } catch {}
+    } catch (e) {
+      console.error("Erro ao buscar alunos:", e);
+    }
   }
 
   async function fetchLibrary() {
