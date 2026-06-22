@@ -1,64 +1,46 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "../auth/[...nextauth]/auth";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get("search") || undefined;
+  const muscleGroup = searchParams.get("muscleGroup") || undefined;
+
+  const where: {
+    AND?: Array<
+      | { name: { contains: string; mode: "insensitive" } }
+      | { muscleGroup: { contains: string; mode: "insensitive" } }
+      | { muscleGroup: string }
+    >;
+  } = {};
+
+  const filters: typeof where.AND = [];
+
+  if (search) {
+    filters.push({
+      name: { contains: search, mode: "insensitive" },
+    });
+    filters.push({
+      muscleGroup: { contains: search, mode: "insensitive" },
+    });
+  }
+
+  if (muscleGroup) {
+    filters.push({
+      muscleGroup: muscleGroup,
+    });
+  }
+
+  if (filters.length > 0) {
+    where.AND = filters;
+  }
+
   const exercises = await prisma.exerciseLibrary.findMany({
-    orderBy: { name: "asc" },
-  });
-  return NextResponse.json(exercises);
-}
-
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  }
-
-  const { name, description, muscleGroup, imageUrl } = await req.json();
-
-  if (!name || !description || !muscleGroup) {
-    return NextResponse.json(
-      { error: "name, description e muscleGroup são obrigatórios" },
-      { status: 400 }
-    );
-  }
-
-  const exercise = await prisma.exerciseLibrary.create({
-    data: { name, description, muscleGroup, imageUrl },
+    where,
+    orderBy: {
+      name: "asc",
+    },
   });
 
-  return NextResponse.json(exercise, { status: 201 });
-}
-
-export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  }
-
-  const { id, name, description, muscleGroup, imageUrl } = await req.json();
-
-  if (!id) {
-    return NextResponse.json({ error: "id é obrigatório" }, { status: 400 });
-  }
-
-  const exercise = await prisma.exerciseLibrary.update({
-    where: { id },
-    data: { name, description, muscleGroup, imageUrl },
-  });
-
-  return NextResponse.json(exercise);
-}
-
-export async function DELETE(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  }
-
-  const { id } = await req.json();
-  await prisma.exerciseLibrary.delete({ where: { id } });
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ exercises });
 }
