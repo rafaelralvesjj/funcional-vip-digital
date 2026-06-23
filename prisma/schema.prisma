@@ -105,7 +105,7 @@ model WorkoutPlan {
   description String?
   active Boolean @default(true)
   notes String?
-  weekDay String? @map("week_day")
+  date DateTime?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
