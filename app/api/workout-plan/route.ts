@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { studentId, name, description, weekDay, notes, exercises = [] } = body;
+    const { studentId, name, description, date, notes, exercises = [] } = body;
 
     if (!studentId || typeof studentId !== "string") {
       return NextResponse.json(
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
           studentId,
           name: name.trim(),
           description: description?.trim() || null,
-          weekDay: weekDay?.trim() || null,
+          date: date ? new Date(date) : null,
           notes: notes?.trim() || null,
           exercises: {
             create: normalizedExercises,
