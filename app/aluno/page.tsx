@@ -1,8 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
-
-
 export default function AlunoPage() {
   const [studentId, setStudentId] = useState<string>("");
   const [studentName, setStudentName] = useState("Aluno");
@@ -20,7 +18,6 @@ export default function AlunoPage() {
   const [newQuestion, setNewQuestion] = useState("");
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [sendingQuestion, setSendingQuestion] = useState(false);
-
   useEffect(() => { fetchStudentInfo(); }, []);
   useEffect(() => {
     if (studentId) {
@@ -28,31 +25,35 @@ export default function AlunoPage() {
       fetchNotices(studentId); fetchQuestions(studentId);
     }
   }, [studentId, currentMonth, currentYear]);
-
   async function fetchStudentInfo() {
     try {
       const res = await fetch("/api/auth/session");
       if (res.ok) {
         const session = await res.json();
-        const id = session?.user?.id || session?.id || "";
-        const name = session?.user?.name || session?.name || "";
-        setStudentId(id);
-        if (name) {
-          setStudentName(name);
-        } else if (id) {
+        const userEmail = session?.user?.email || "";
+        const userName = session?.user?.name || session?.name || "";
+
+        if (userEmail) {
+          // Busca o aluno pelo EMAIL (o ID da sessão é diferente do ID do aluno)
           const r2 = await fetch("/api/students");
           if (r2.ok) {
             const data = await r2.json();
             const list = Array.isArray(data) ? data : data.students || data || [];
-            const found = list.find((s: any) => s.id === id);
-            if (found) setStudentName(found.name);
+            // Encontra pelo email — único campo igual nas duas tabelas
+            const found = list.find((s: any) => s.email === userEmail);
+            if (found) {
+              setStudentId(found.id);  // ID REAL do Student no banco
+              setStudentName(found.name);
+            }
           }
         }
+
+        // Fallback: se não achou, usa o nome da sessão
+        if (userName && !studentId) setStudentName(userName);
       }
     } catch {}
     setLoading(false);
   }
-
   async function fetchPlans(id: string) {
     try {
       const res = await fetch("/api/workout-plan?studentId=" + id);
@@ -62,7 +63,6 @@ export default function AlunoPage() {
       }
     } catch {}
   }
-
   async function fetchWorkouts(id: string) {
     try {
       const url = "/api/workout/mark-complete?studentId=" + id + "&month=" + (currentMonth + 1) + "&year=" + currentYear;
@@ -73,7 +73,6 @@ export default function AlunoPage() {
       }
     } catch {}
   }
-
   async function fetchNotices(id: string) {
     try {
       const res = await fetch("/api/notices/student/" + id);
@@ -83,7 +82,6 @@ export default function AlunoPage() {
       }
     } catch {}
   }
-
   async function fetchQuestions(id: string) {
     try {
       const res = await fetch("/api/aluno/questions?studentId=" + id);
@@ -93,7 +91,6 @@ export default function AlunoPage() {
       }
     } catch {}
   }
-
   async function markAsComplete() {
     if (!selectedPlan || !studentId) return;
     setCompleting(true); setMessage(null);
@@ -108,7 +105,6 @@ export default function AlunoPage() {
     setCompleting(false);
     setTimeout(() => setMessage(null), 3000);
   }
-
   async function handleSendQuestion() {
     if (!newQuestion.trim() || !studentId) return;
     setSendingQuestion(true);
@@ -124,7 +120,6 @@ export default function AlunoPage() {
     setSendingQuestion(false);
     setTimeout(() => setMessage(null), 3000);
   }
-
   // Retorna o nome do dia da semana em portugues
   function getWeekDayName(day: number): string {
     const date = new Date(currentYear, currentMonth, day);
@@ -135,7 +130,6 @@ export default function AlunoPage() {
     };
     return reverseMap[dayIndex];
   }
-
   // ENCONTRA o plano pela DATA EXATA
   function getPlanForDay(day: number): any | null {
     const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
@@ -146,19 +140,16 @@ export default function AlunoPage() {
       return planStr === dateStr;
     }) || null;
   }
-
   // Quando clica em UM DIA, encontra o plano correspondente
   function handleDayClick(day: number) {
     setSelectedDay(day);
     const plan = getPlanForDay(day);
     setSelectedPlan(plan);
   }
-
   function isToday(day: number) {
     const d = new Date();
     return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
   }
-
   function isCompleted(day: number) {
     if (!selectedPlan) return false;
     const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
@@ -169,32 +160,26 @@ export default function AlunoPage() {
       return workoutStr === ds && w.status === "CONCLUIDO";
     });
   }
-
   // Verifica se UM DIA TEM PLANO
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
   }
-
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
-
   return (
     <div className="space-y-3">
       <div>
         <h1 className="text-lg font-bold text-[#f5f5f5]">Ola, {studentName}!</h1>
         <p className="text-xs text-[#a1a1a1]">Bem-vindo a sua area do aluno</p>
       </div>
-
       {message && (
         <div className={"text-sm rounded-lg p-2.5 " + (message.type === "success" ? "bg-green-500/10 text-green-400" : message.type === "error" ? "bg-red-500/10 text-red-400" : "bg-blue-500/10 text-blue-400")}>
           {message.text}
         </div>
       )}
-
       <div className="flex flex-col lg:flex-row gap-3">
         <div className="lg:w-[30%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
           <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">📢 Avisos e Feedbacks</h2>
@@ -210,7 +195,6 @@ export default function AlunoPage() {
             </div>
           )}
         </div>
-
         <div className="lg:w-[70%] space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="sm:w-[55%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
@@ -224,7 +208,6 @@ export default function AlunoPage() {
                     className="text-[#a1a1a1] hover:text-white text-[8px] px-0.5">▶</button>
                 </div>
               </div>
-
               <div className="grid grid-cols-7 gap-px">
                 {nomes.map((d) => <div key={d} className="text-center text-[6px] text-[#525252] py-px">{d}</div>)}
                 {Array.from({ length: firstDay }).map((_, i) => <div key={"e" + i} />)}
@@ -249,7 +232,6 @@ export default function AlunoPage() {
                   );
                 })}
               </div>
-
               {selectedPlan && selectedDay && (
                 <div className="mt-1 pt-1 border-t border-[#ffffff10]">
                   <div className="flex items-center justify-between">
@@ -284,7 +266,6 @@ export default function AlunoPage() {
                 <p className="text-[8px] text-[#D4A373] mt-1">🏋️ Em breve...</p>
               )}
             </div>
-
             <div className="sm:w-[45%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
               <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">❓ Duvidas</h2>
               <textarea value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
