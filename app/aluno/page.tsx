@@ -124,7 +124,7 @@ export default function AlunoPage() {
     setTimeout(() => setMessage(null), 3000);
   }
 
-  // Retorna o nome do dia da semana (portugues) para uma data
+  // Retorna o nome do dia da semana em portugues
   function getWeekDayName(day: number): string {
     const date = new Date(currentYear, currentMonth, day);
     const dayIndex = date.getDay();
@@ -135,7 +135,7 @@ export default function AlunoPage() {
     return reverseMap[dayIndex];
   }
 
-  // Retorna o plano pela DATA EXATA (comparando date do banco)
+  // ENCONTRA o plano pela DATA EXATA
   function getPlanForDay(day: number): any | null {
     const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
     return plans.find((p: any) => {
@@ -146,7 +146,7 @@ export default function AlunoPage() {
     }) || null;
   }
 
-  // Quando clica em um dia, atualiza selectedPlan baseado na data
+  // Quando clica em UM DIA, encontra o plano correspondente
   function handleDayClick(day: number) {
     setSelectedDay(day);
     const plan = getPlanForDay(day);
@@ -169,7 +169,7 @@ export default function AlunoPage() {
     });
   }
 
-  // Verifica se um dia TEM um plano associado (pela data)
+  // Verifica se UM DIA TEM PLANO
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
   }
