@@ -1,10 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 
 export default function AlunoPage() {
-  const router = useRouter();
   const [studentId, setStudentId] = useState<string>("");
   const [plans, setPlans] = useState<any[]>([]);
   const [workouts, setWorkouts] = useState<any[]>([]);
@@ -18,7 +16,6 @@ export default function AlunoPage() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [studentName, setStudentName] = useState("Aluno");
   const [loading, setLoading] = useState(true);
-
   const [newQuestion, setNewQuestion] = useState("");
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [sendingQuestion, setSendingQuestion] = useState(false);
@@ -136,13 +133,13 @@ export default function AlunoPage() {
       if (res.ok) {
         setNewQuestion("");
         setQuestionFile(null);
-        setMessage({ type: "success", text: "Duvida enviada com sucesso!" });
+        setMessage({ type: "success", text: "Duvida enviada!" });
         fetchQuestions(studentId);
       } else {
-        setMessage({ type: "error", text: "Erro ao enviar duvida" });
+        setMessage({ type: "error", text: "Erro ao enviar" });
       }
     } catch {
-      setMessage({ type: "error", text: "Erro ao enviar duvida" });
+      setMessage({ type: "error", text: "Erro ao enviar" });
     }
     setSendingQuestion(false);
     setTimeout(() => setMessage(null), 3000);
@@ -165,191 +162,138 @@ export default function AlunoPage() {
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <p className="text-[#a1a1a1]">Carregando...</p>
-      </div>
-    );
+    return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      <header className="border-b border-[#ffffff10] bg-[#111111] px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">F</div>
-          <span className="text-[#D4A373] font-bold">Funcional Vip Digital</span>
+    <div>
+      {message && (
+        <div className={"mb-4 text-sm rounded-lg p-3 " + (message.type === "success" ? "bg-green-500/10 text-green-400" : message.type === "error" ? "bg-red-500/10 text-red-400" : "bg-blue-500/10 text-blue-400")}>
+          {message.text}
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-[#a1a1a1] text-sm">{studentName}</span>
-          <button onClick={() => signOut({ callbackUrl: "/" })} className="text-xs text-[#525252] hover:text-red-400 transition">Sair</button>
-        </div>
-      </header>
+      )}
 
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#f5f5f5]">Ola, {studentName}!</h1>
-          <p className="text-[#a1a1a1] text-sm mt-1">Bem-vindo a sua area do aluno</p>
-        </div>
-
-        {message && (
-          <div className={"mb-6 text-sm rounded-lg p-4 border " + (message.type === "success" ? "bg-green-500/10 border-green-500/20 text-green-400" : message.type === "info" ? "bg-blue-500/10 border-blue-500/20 text-blue-400" : "bg-red-500/10 border-red-500/20 text-red-400")}>
-            {message.text}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Coluna Esquerda - Avisos */}
-          <div className="space-y-6">
-            <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg">📢</span>
-                <h2 className="font-semibold text-[#f5f5f5]">Avisos e Feedbacks</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* Coluna Esquerda - Avisos */}
+        <div>
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4">
+            <h2 className="font-semibold text-[#f5f5f5] text-sm mb-3">📢 Avisos e Feedbacks</h2>
+            {notices.length === 0 ? (
+              <p className="text-[#a1a1a1] text-xs">Nenhum aviso ou feedback no momento.</p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {notices.map((n: any) => (
+                  <div key={n.id} className="bg-[#1a1a1a] rounded-lg p-2.5">
+                    <p className="text-xs text-[#e5e5e5]">{n.content}</p>
+                  </div>
+                ))}
               </div>
-              {notices.length === 0 ? (
-                <p className="text-[#a1a1a1] text-sm">Nenhum aviso ou feedback no momento.</p>
-              ) : (
-                <div className="space-y-3 max-h-80 overflow-y-auto">
-                  {notices.map((n: any) => (
-                    <div key={n.id} className="bg-[#1a1a1a] rounded-lg p-3 border border-[#ffffff10]">
-                      <p className="text-sm text-[#e5e5e5]">{n.content}</p>
-                      {n.createdAt && <p className="text-xs text-[#525252] mt-1">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p>}
-                    </div>
-                  ))}
-                </div>
-              )}
+            )}
+          </div>
+        </div>
+
+        {/* Coluna Direita */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Calendario compacto */}
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-semibold text-[#f5f5f5] text-sm">📅 Meus Treinos</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } }}
+                  className="text-[#a1a1a1] hover:text-white px-1 text-xs">←</button>
+                <span className="text-[#f5f5f5] text-xs font-medium">{meses[currentMonth]} {currentYear}</span>
+                <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); } else { setCurrentMonth(currentMonth + 1); } }}
+                  className="text-[#a1a1a1] hover:text-white px-1 text-xs">→</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-7 gap-0.5">
+              {nomes.map((d) => <div key={d} className="text-center text-[10px] text-[#525252] py-1">{d}</div>)}
+              {Array.from({ length: firstDay }).map((_, i) => <div key={"e" + i} />)}
+              {Array.from({ length: daysInMonth }).map((_, i) => {
+                const day = i + 1;
+                const hoje = isToday(day);
+                const sel = selectedDay === day;
+                const done = isCompleted(day);
+                return (
+                  <button key={day} onClick={() => setSelectedDay(day)}
+                    className={"aspect-square rounded flex flex-col items-center justify-center text-[11px] transition cursor-pointer " +
+                      (sel ? "bg-[#D4A373]/20 border border-[#D4A373] text-[#D4A373]" :
+                       hoje ? "border border-[#D4A373]/50 text-[#D4A373] font-bold" :
+                       "text-[#a1a1a1] hover:bg-white/5")}>
+                    <span>{day}</span>
+                    {done && <div className="w-1 h-1 rounded-full bg-green-500 mt-0.5" />}
+                    {hoje && !done && plans.length > 0 && <div className="w-1 h-1 rounded-full bg-[#D4A373] mt-0.5" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Coluna Direita - Treinos + Duvidas */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Meus Treinos com Calendario */}
-            <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg">📅</span>
-                <h2 className="font-semibold text-[#f5f5f5]">Meus Treinos</h2>
+          {/* Detalhe do Treino */}
+          {plans.length > 0 && selectedPlan && (
+            <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="font-semibold text-[#f5f5f5] text-sm">{selectedPlan.name}</h3>
+                  {selectedPlan.description && <p className="text-[#a1a1a1] text-xs">{selectedPlan.description}</p>}
+                </div>
+                {selectedDay !== null && isToday(selectedDay) && (
+                  <button onClick={markAsComplete} disabled={completing}
+                    className="bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50">
+                    {completing ? "..." : isCompleted(selectedDay) ? "✅" : "Concluir"}
+                  </button>
+                )}
               </div>
+              {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
+                <div key={ex.id || idx} className="bg-[#1a1a1a] rounded-lg p-2.5 mb-1.5 last:mb-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[10px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+                    <span className="text-[#f5f5f5] text-xs font-medium">{ex.name}</span>
+                  </div>
+                  <div className="text-[10px] text-[#a1a1a1] ml-7">{ex.series}x{ex.reps}{ex.weight ? " | " + ex.weight : ""}{ex.restTime ? " | Desc: " + ex.restTime : ""}</div>
+                  {ex.notes && <p className="text-[10px] text-[#6b6b6b] ml-7 mt-0.5">{ex.notes}</p>}
+                </div>
+              ))}
+            </div>
+          )}
 
-              {/* Calendario */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } }}
-                    className="text-[#a1a1a1] hover:text-white px-2 text-sm">←</button>
-                  <span className="text-[#f5f5f5] text-sm font-medium">{meses[currentMonth]} {currentYear}</span>
-                  <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); } else { setCurrentMonth(currentMonth + 1); } }}
-                    className="text-[#a1a1a1] hover:text-white px-2 text-sm">→</button>
-                </div>
-                <div className="grid grid-cols-7 gap-1">
-                  {nomes.map((d) => <div key={d} className="text-center text-xs text-[#525252] py-1.5">{d}</div>)}
-                  {Array.from({ length: firstDay }).map((_, i) => <div key={"e" + i} />)}
-                  {Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day = i + 1;
-                    const hoje = isToday(day);
-                    const sel = selectedDay === day;
-                    const done = isCompleted(day);
-                    return (
-                      <button key={day} onClick={() => setSelectedDay(day)}
-                        className={"aspect-square rounded-lg border flex flex-col items-center justify-center text-xs transition cursor-pointer " +
-                          (sel ? "bg-[#D4A373]/20 border-[#D4A373] text-[#D4A373]" :
-                           hoje ? "border-[#D4A373]/50 text-[#D4A373] font-bold" :
-                           "border-transparent text-[#a1a1a1] hover:bg-white/5")}>
-                        <span>{day}</span>
-                        {done && <div className="w-1 h-1 rounded-full bg-green-500 mt-0.5" />}
-                        {hoje && !done && plans.length > 0 && <div className="w-1 h-1 rounded-full bg-[#D4A373] mt-0.5" />}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center gap-4 mt-3 pt-2 border-t border-[#ffffff10] text-xs text-[#525252]">
-                  <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" /> Completo</span>
-                  <span><span className="inline-block w-2 h-2 rounded-full bg-[#D4A373] mr-1" /> Hoje</span>
-                </div>
-              </div>
-
-              {/* Detalhe do Treino Selecionado */}
-              {plans.length > 0 && selectedPlan ? (
-                <div className="bg-[#1a1a1a] rounded-lg p-4 mt-2">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold text-[#f5f5f5]">{selectedPlan.name}</h3>
-                      {selectedPlan.description && <p className="text-[#a1a1a1] text-xs mt-0.5">{selectedPlan.description}</p>}
-                    </div>
-                    {selectedDay !== null && isToday(selectedDay) && (
-                      <button onClick={markAsComplete} disabled={completing}
-                        className="bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#c49463] disabled:opacity-50">
-                        {completing ? "..." : isCompleted(selectedDay) ? "Concluido" : "Concluir"}
-                      </button>
+          {/* Duvidas */}
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4">
+            <h2 className="font-semibold text-[#f5f5f5] text-sm mb-3">❓ Duvidas</h2>
+            <textarea value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
+              placeholder="Tem alguma duvida? Pergunte aqui..."
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-16 mb-2" />
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] text-[#a1a1a1]">📎 Anexar foto/video</span>
+              <input type="file" accept="image/*,video/*" onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
+                className="text-[10px] text-[#a1a1a1] file:mr-1 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[10px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
+              {questionFile && <span className="text-[10px] text-[#D4A373]">1 arquivo</span>}
+            </div>
+            <button onClick={handleSendQuestion} disabled={sendingQuestion || !newQuestion.trim()}
+              className="w-full bg-[#D4A373] text-[#0a0a0a] text-sm font-semibold py-2 rounded-lg disabled:opacity-50">
+              {sendingQuestion ? "Enviando..." : "Enviar duvida"}
+            </button>
+            {questions.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-[10px] text-[#525252] font-medium">Suas duvidas:</p>
+                {questions.map((q: any) => (
+                  <div key={q.id} className="bg-[#1a1a1a] rounded-lg p-2.5">
+                    <p className="text-xs text-[#e5e5e5]">{q.content}</p>
+                    {q.answer && (
+                      <div className="mt-1.5 pt-1.5 border-t border-[#ffffff10]">
+                        <p className="text-[10px] text-[#D4A373] font-medium">Resposta:</p>
+                        <p className="text-xs text-[#a1a1a1] mt-0.5">{q.answer}</p>
+                        {q.answeredBy?.name && <p className="text-[10px] text-[#525252] mt-0.5">— {q.answeredBy.name}</p>}
+                      </div>
                     )}
                   </div>
-                  {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
-                    <div key={ex.id || idx} className="bg-[#111111] rounded-lg p-3 mb-2 last:mb-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="w-5 h-5 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[10px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
-                        <span className="text-[#f5f5f5] text-sm font-medium">{ex.name}</span>
-                      </div>
-                      <div className="text-xs text-[#a1a1a1] ml-7">{ex.series}x{ex.reps}{ex.weight ? " | " + ex.weight : ""}{ex.restTime ? " | Desc: " + ex.restTime : ""}</div>
-                      {ex.notes && <p className="text-xs text-[#6b6b6b] ml-7 mt-1">{ex.notes}</p>}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-[#1a1a1a] rounded-lg p-4 text-center">
-                  <p className="text-[#D4A373] text-sm">🏋️ Em breve voce podera ver seus treinos aqui no calendario!</p>
-                  <p className="text-[#a1a1a1] text-xs mt-1">Seu professor esta montando seus treinos personalizados.</p>
-                </div>
-              )}
-            </div>
-
-            {/* Duvidas */}
-            <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg text-red-400">❓</span>
-                <h2 className="font-semibold text-[#f5f5f5]">Duvidas</h2>
+                ))}
               </div>
-
-              <textarea
-                value={newQuestion}
-                onChange={(e) => setNewQuestion(e.target.value)}
-                placeholder="Tem alguma duvida? Pergunte aqui..."
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-20 mb-3"
-              />
-
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-xs text-[#a1a1a1]">📎 Anexar foto ou video (opcional)</span>
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
-                  className="text-xs text-[#a1a1a1] file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a] hover:file:bg-[#c49463]"
-                />
-                {questionFile && <span className="text-xs text-[#D4A373]">1 arquivo</span>}
-              </div>
-
-              <button onClick={handleSendQuestion} disabled={sendingQuestion || !newQuestion.trim()}
-                className="w-full bg-[#D4A373] text-[#0a0a0a] text-sm font-semibold py-2.5 rounded-lg hover:bg-[#c49463] transition disabled:opacity-50">
-                {sendingQuestion ? "Enviando..." : "Enviar duvida"}
-              </button>
-
-              {questions.length > 0 && (
-                <div className="mt-4 space-y-3">
-                  <p className="text-xs text-[#525252] font-medium">Suas duvidas:</p>
-                  {questions.map((q: any) => (
-                    <div key={q.id} className="bg-[#1a1a1a] rounded-lg p-3">
-                      <p className="text-sm text-[#e5e5e5]">{q.content}</p>
-                      {q.answer && (
-                        <div className="mt-2 pt-2 border-t border-[#ffffff10]">
-                          <p className="text-xs text-[#D4A373] font-medium">Resposta:</p>
-                          <p className="text-sm text-[#a1a1a1] mt-1">{q.answer}</p>
-                          {q.answeredBy?.name && <p className="text-xs text-[#525252] mt-1">— {q.answeredBy.name}</p>}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
