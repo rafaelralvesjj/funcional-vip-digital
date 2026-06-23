@@ -20,6 +20,17 @@ export default function AlunoPage() {
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [sendingQuestion, setSendingQuestion] = useState(false);
 
+  // Mapeamento: nome do dia em portugues -> getDay()
+  const weekDayMap: Record<string, number> = {
+    domingo: 0,
+    segunda: 1,
+    terca: 2,
+    quarta: 3,
+    quinta: 4,
+    sexta: 5,
+    sabado: 6,
+  };
+
   useEffect(() => { fetchStudentInfo(); }, []);
   useEffect(() => {
     if (studentId) {
@@ -36,7 +47,6 @@ export default function AlunoPage() {
         const id = session?.user?.id || session?.id || "";
         const name = session?.user?.name || session?.name || "";
         setStudentId(id);
-        // Pega o nome da sessao primeiro
         if (name) {
           setStudentName(name);
         } else if (id) {
@@ -59,7 +69,6 @@ export default function AlunoPage() {
       if (res.ok) {
         const data = await res.json();
         setPlans(Array.isArray(data) ? data : []);
-        if (Array.isArray(data) && data.length > 0) setSelectedPlan(data[0]);
       }
     } catch {}
   }
@@ -126,11 +135,40 @@ export default function AlunoPage() {
     setTimeout(() => setMessage(null), 3000);
   }
 
+  // Retorna o nome do dia da semana (portugues) para uma data
+  function getWeekDayName(day: number): string {
+    const date = new Date(currentYear, currentMonth, day);
+    const dayIndex = date.getDay(); // 0=Dom, 1=Seg, ...
+    const reverseMap: Record<number, string> = {
+      0: "domingo", 1: "segunda", 2: "terca", 3: "quarta",
+      4: "quinta", 5: "sexta", 6: "sabado",
+    };
+    return reverseMap[dayIndex];
+  }
+
+  // Retorna o plano para um dia especifico
+  function getPlanForDay(day: number): any | null {
+    const dayName = getWeekDayName(day);
+    return plans.find((p: any) => p.weekDay === dayName) || null;
+  }
+
+  // Quando clica em um dia, atualiza selectedPlan baseado no weekDay
+  function handleDayClick(day: number) {
+    setSelectedDay(day);
+    const plan = getPlanForDay(day);
+    setSelectedPlan(plan);
+  }
+
   function isToday(day: number) { const d = new Date(); return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear(); }
   function isCompleted(day: number) {
     if (!selectedPlan) return false;
     const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
     return workouts.some((w: any) => w.workoutPlanId === selectedPlan.id && w.date.startsWith(ds) && w.status === "CONCLUIDO");
+  }
+
+  // Verifica se um dia TEM um plano associado (pelo weekDay)
+  function hasPlan(day: number): boolean {
+    return getPlanForDay(day) !== null;
   }
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -196,39 +234,53 @@ export default function AlunoPage() {
                   const hoje = isToday(day);
                   const sel = selectedDay === day;
                   const done = isCompleted(day);
+                  const plan = hasPlan(day);
                   return (
-                    <button key={day} onClick={() => setSelectedDay(day)}
+                    <button key={day} onClick={() => handleDayClick(day)}
                       className={"aspect-square rounded-sm flex flex-col items-center justify-center text-[7px] transition cursor-pointer " +
                         (sel ? "bg-[#D4A373]/20 border border-[#D4A373] text-[#D4A373]" :
                          hoje ? "border border-[#D4A373]/50 text-[#D4A373] font-bold" :
                          "text-[#a1a1a1] hover:bg-white/5")}>
                       <span>{day}</span>
-                      {done && <div className="w-[2px] h-[2px] rounded-full bg-green-500 mt-px" />}
-                      {hoje && !done && plans.length > 0 && <div className="w-[2px] h-[2px] rounded-full bg-[#D4A373] mt-px" />}
+                      <div className="flex gap-px mt-px">
+                        {done && <div className="w-[2px] h-[2px] rounded-full bg-green-500" />}
+                        {plan && !done && <div className="w-[2px] h-[2px] rounded-full bg-[#D4A373]" />}
+                      </div>
                     </button>
                   );
                 })}
               </div>
 
-              {plans.length > 0 && selectedPlan && (
+              {/* Detalhe do treino para o dia selecionado */}
+              {selectedPlan && selectedDay && (
                 <div className="mt-1 pt-1 border-t border-[#ffffff10]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] text-[#f5f5f5] font-medium">{selectedPlan.name}</span>
-                    {selectedDay !== null && isToday(selectedDay) && (
+                    <div>
+                      <span className="text-[9px] text-[#f5f5f5] font-medium">{selectedPlan.name}</span>
+                      <p className="text-[7px] text-[#525252]">
+                        {getWeekDayName(selectedDay)} - {selectedDay}/{currentMonth + 1}
+                      </p>
+                    </div>
+                    {isToday(selectedDay) && (
                       <button onClick={markAsComplete} disabled={completing}
                         className="bg-[#D4A373] text-[#0a0a0a] text-[7px] font-semibold px-1.5 py-0.5 rounded disabled:opacity-50">
                         {completing ? "..." : isCompleted(selectedDay) ? "✅" : "OK"}
                       </button>
                     )}
                   </div>
-                  {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).slice(0, 2).map((ex: any, idx: number) => (
+                  {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).slice(0, 3).map((ex: any, idx: number) => (
                     <div key={ex.id || idx} className="flex items-center gap-1 py-px">
                       <span className="w-3 h-3 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[6px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
                       <span className="text-[8px] text-[#a1a1a1]">{ex.name}</span>
+                      <span className="text-[7px] text-[#6b6b6b] ml-auto">{ex.series}x{ex.reps}</span>
                     </div>
                   ))}
-                  {selectedPlan.exercises?.length > 2 && <p className="text-[6px] text-[#525252]">+{selectedPlan.exercises.length - 2} exercicios</p>}
+                  {selectedPlan.exercises?.length > 3 && <p className="text-[6px] text-[#525252]">+{selectedPlan.exercises.length - 3} exercicios</p>}
+                  {selectedPlan.notes && <p className="text-[7px] text-[#6b6b6b] mt-px">{selectedPlan.notes}</p>}
                 </div>
+              )}
+              {(!selectedPlan || !selectedDay) && plans.length > 0 && (
+                <p className="text-[8px] text-[#525252] mt-1">Clique em um dia para ver o treino</p>
               )}
               {plans.length === 0 && (
                 <p className="text-[8px] text-[#D4A373] mt-1">🏋️ Em breve...</p>
