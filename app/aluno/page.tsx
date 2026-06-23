@@ -34,8 +34,12 @@ export default function AlunoPage() {
       if (res.ok) {
         const session = await res.json();
         const id = session?.user?.id || session?.id || "";
+        const name = session?.user?.name || session?.name || "";
         setStudentId(id);
-        if (id) {
+        // Pega o nome da sessao primeiro
+        if (name) {
+          setStudentName(name);
+        } else if (id) {
           const r2 = await fetch("/api/students");
           if (r2.ok) {
             const data = await r2.json();
