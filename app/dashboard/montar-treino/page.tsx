@@ -212,13 +212,18 @@ export default function MontarTreinoPage() {
             </div>
             <div>
               <label className="text-sm text-[#e5e5e5] block mb-1">Data do treino *</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-              />
+              <div className="relative">
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] [color-scheme:dark]"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#D4A373] pointer-events-none text-lg">
+                  📅
+                </div>
+              </div>
             </div>
             <div>
               <label className="text-sm text-[#e5e5e5] block mb-1">Descrição <span className="text-[#525252]">(opcional)</span></label>
