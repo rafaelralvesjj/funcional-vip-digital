@@ -98,7 +98,8 @@ export default function AlunoDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
-      <header className="border-b border-[#ffffff10] bg-[#111111] px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
+      {/* HEADER VERDE para teste */}
+      <header className="border-b border-[#ffffff10] bg-green-600 px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">F</div>
           <span className="text-[#D4A373] font-bold">Funcional Vip Digital</span>
@@ -108,17 +109,15 @@ export default function AlunoDashboardPage() {
           <button onClick={() => signOut({ callbackUrl: "/" })} className="text-xs text-[#525252] hover:text-red-400 transition">Sair</button>
         </div>
       </header>
-
       <main className="max-w-6xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold text-[#f5f5f5] mb-1">Ola, {studentName}!</h1>
+        {/* TEXTO ROSA para teste */}
+        <h1 className="text-2xl font-bold text-pink-400 mb-1">Ola, {studentName}!</h1>
         <p className="text-[#a1a1a1] text-sm mb-6">Bem-vindo a sua area do aluno</p>
-
         {message && (
           <div className={"mb-4 text-sm rounded-lg p-3 " + (message.type === "success" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400")}>
             {message.text}
           </div>
         )}
-
         <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-[#f5f5f5]">Meus Treinos</h2>
@@ -130,7 +129,6 @@ export default function AlunoDashboardPage() {
                 className="text-[#a1a1a1] hover:text-white px-2">→</button>
             </div>
           </div>
-
           <div className="grid grid-cols-7 gap-1">
             {nomes.map((d) => <div key={d} className="text-center text-xs text-[#525252] py-2">{d}</div>)}
             {Array.from({ length: firstDay }).map((_, i) => <div key={"e" + i} />)}
@@ -153,7 +151,6 @@ export default function AlunoDashboardPage() {
             })}
           </div>
         </div>
-
         {plans.length > 0 && selectedPlan ? (
           <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
