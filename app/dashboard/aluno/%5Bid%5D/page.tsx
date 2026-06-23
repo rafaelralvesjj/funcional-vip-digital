@@ -9,7 +9,6 @@ export default function AlunoDashboardPage() {
 
   const [plans, setPlans] = useState<any[]>([]);
   const [workouts, setWorkouts] = useState<any[]>([]);
-  const [notices, setNotices] = useState<any[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
@@ -22,7 +21,6 @@ export default function AlunoDashboardPage() {
     if (studentId) {
       fetchPlans();
       fetchWorkouts();
-      fetchNotices();
       fetchStudent();
     }
   }, [studentId, currentMonth, currentYear]);
@@ -32,8 +30,8 @@ export default function AlunoDashboardPage() {
       const res = await fetch("/api/students");
       if (res.ok) {
         const data = await res.json();
-        const students = Array.isArray(data) ? data : data.students || data || [];
-        const found = students.find((s: any) => s.id === studentId);
+        const list = Array.isArray(data) ? data : data.students || data || [];
+        const found = list.find((s: any) => s.id === studentId);
         if (found) setStudentName(found.name);
       }
     } catch {}
@@ -41,7 +39,8 @@ export default function AlunoDashboardPage() {
 
   async function fetchPlans() {
     try {
-      const res = await fetch("/api/workout-plan?studentId=" + studentId);
+      const url = "/api/workout-plan?studentId=" + studentId;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setPlans(Array.isArray(data) ? data : []);
@@ -63,162 +62,129 @@ export default function AlunoDashboardPage() {
     } catch {}
   }
 
-  async function fetchNotices() {
-    try {
-      const res = await fetch("/api/notices/student/" + studentId);
-      if (res.ok) {
-        const data = await res.json();
-        setNotices(Array.isArray(data) ? data : []);
-      }
-    } catch {}
-  }
-
-  async function markAsComplete(planId: string) {
+  async function markAsComplete() {
+    if (!selectedPlan) return;
     setCompleting(true);
     setMessage(null);
     try {
       const res = await fetch("/api/workout/mark-complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workoutPlanId: planId, studentId: studentId }),
+        body: JSON.stringify({ workoutPlanId: selectedPlan.id, studentId }),
       });
       if (res.ok) {
-        const data = await res.json();
-        if (data.alreadyDone) {
-          setMessage({ type: "info", text: "Voce ja concluiu este treino hoje!" });
-        } else {
-          setMessage({ type: "success", text: "Treino concluido!" });
-          fetchWorkouts();
-        }
+        setMessage({ type: "success", text: "Treino concluido!" });
+        fetchWorkouts();
       }
     } catch {}
     setCompleting(false);
-    setTimeout(() => setMessage(null), 4000);
-  }
-
-  function getDaysInMonth(month: number, year: number) {
-    return new Date(year, month + 1, 0).getDate();
-  }
-
-  function getFirstDayOfMonth(month: number, year: number) {
-    return new Date(year, month, 1).getDay();
+    setTimeout(() => setMessage(null), 3000);
   }
 
   function isToday(day: number) {
-    const today = new Date();
-    return day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
+    const d = new Date();
+    return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
   }
 
-  function isPlanCompletedOnDate(planId: string, day: number) {
-    const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
-    return workouts.some(function(w: any) {
-      return w.workoutPlanId === planId && w.date.startsWith(dateStr) && w.status === "CONCLUIDO";
-    });
+  function isCompleted(day: number) {
+    const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+    return workouts.some((w: any) => w.workoutPlanId === selectedPlan?.id && w.date.startsWith(ds) && w.status === "CONCLUIDO");
   }
 
-  const daysInMonth = getDaysInMonth(currentMonth, currentYear);
-  const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
-  const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+  const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0a0a" }}>
-      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", background: "#111", padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#D4A373", display: "flex", alignItems: "center", justifyContent: "center", color: "#0a0a0a", fontWeight: "bold" }}>F</div>
-          <span style={{ color: "#D4A373", fontWeight: "bold" }}>Funcional Vip Digital</span>
+    <div className="min-h-screen bg-[#0a0a0a]">
+      <header className="border-b border-[#ffffff10] bg-[#111111] px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">F</div>
+          <span className="text-[#D4A373] font-bold">Funcional Vip Digital</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ color: "#a1a1a1", fontSize: "14px" }}>{studentName}</span>
-          <button onClick={() => signOut({ callbackUrl: "/" })} style={{ fontSize: "12px", color: "#525252", background: "none", border: "none", cursor: "pointer" }}>Sair</button>
+        <div className="flex items-center gap-4">
+          <span className="text-[#a1a1a1] text-sm">{studentName}</span>
+          <button onClick={() => signOut({ callbackUrl: "/" })} className="text-xs text-[#525252] hover:text-red-400 transition">Sair</button>
         </div>
-      </div>
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px 16px" }}>
-        <h1 style={{ color: "#f5f5f5", fontSize: "24px", fontWeight: "bold" }}>Ola, {studentName}!</h1>
-        <p style={{ color: "#a1a1a1", fontSize: "14px", marginTop: "4px" }}>Bem-vindo a sua area do aluno</p>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 py-6">
+        <h1 className="text-2xl font-bold text-[#f5f5f5] mb-1">Ola, {studentName}!</h1>
+        <p className="text-[#a1a1a1] text-sm mb-6">Bem-vindo a sua area do aluno</p>
+
         {message && (
-          <div style={{ padding: "12px", borderRadius: "8px", marginTop: "16px", fontSize: "14px", background: message.type === "success" ? "rgba(34,197,94,0.1)" : "rgba(59,130,246,0.1)", border: "1px solid " + (message.type === "success" ? "rgba(34,197,94,0.2)" : "rgba(59,130,246,0.2)"), color: message.type === "success" ? "#22c55e" : "#3b82f6" }}>
+          <div className={"mb-4 text-sm rounded-lg p-3 " + (message.type === "success" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400")}>
             {message.text}
           </div>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "24px", marginTop: "24px" }}>
-          <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h2 style={{ color: "#f5f5f5", fontSize: "18px", fontWeight: "600" }}>Meus Treinos</h2>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } }}
-                  style={{ color: "#a1a1a1", background: "none", border: "none", cursor: "pointer", fontSize: "16px" }}>&larr;</button>
-                <span style={{ color: "#f5f5f5", fontSize: "14px" }}>{meses[currentMonth]} {currentYear}</span>
-                <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); } else { setCurrentMonth(currentMonth + 1); } }}
-                  style={{ color: "#a1a1a1", background: "none", border: "none", cursor: "pointer", fontSize: "16px" }}>&rarr;</button>
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" }}>
-              {diasSemana.map((dia: string) => (
-                <div key={dia} style={{ textAlign: "center", fontSize: "12px", color: "#525252", padding: "8px 0" }}>{dia}</div>
-              ))}
-              {Array.from({ length: firstDay }).map((_, i: number) => (
-                <div key={"e" + i} style={{ aspectRatio: "1" }} />
-              ))}
-              {Array.from({ length: daysInMonth }).map((_, i: number) => {
-                const day = i + 1;
-                const hoje = isToday(day);
-                const sel = selectedDay === day;
-                const completed = plans.some((p: any) => isPlanCompletedOnDate(p.id, day));
-                const bg = sel ? "rgba(212,163,115,0.2)" : "transparent";
-                const border = sel ? "#D4A373" : hoje ? "rgba(212,163,115,0.5)" : "transparent";
-                const color = (sel || hoje) ? "#D4A373" : "#a1a1a1";
-                return (
-                  <button key={day} onClick={() => setSelectedDay(day)}
-                    style={{ aspectRatio: "1", borderRadius: "8px", border: "1px solid " + border, background: bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", color: color, fontSize: "14px", fontWeight: hoje ? "bold" : "normal", position: "relative" }}>
-                    <span>{day}</span>
-                    {completed && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", marginTop: "2px" }} />}
-                    {hoje && !completed && plans.length > 0 && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#D4A373", marginTop: "2px" }} />}
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", gap: "16px", marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(255,255,255,0.05)", fontSize: "12px", color: "#525252" }}>
-              <span><span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "#22c55e", marginRight: "4px" }} /> Completo</span>
-              <span><span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "#D4A373", marginRight: "4px" }} /> Hoje</span>
+
+        <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-[#f5f5f5]">Meus Treinos</h2>
+            <div className="flex items-center gap-3">
+              <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } }}
+                className="text-[#a1a1a1] hover:text-white px-2">←</button>
+              <span className="text-[#f5f5f5] text-sm">{meses[currentMonth]} {currentYear}</span>
+              <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); } else { setCurrentMonth(currentMonth + 1); } }}
+                className="text-[#a1a1a1] hover:text-white px-2">→</button>
             </div>
           </div>
-          {plans.length > 0 && selectedPlan ? (
-            <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                <div>
-                  <h3 style={{ color: "#f5f5f5", fontSize: "18px", fontWeight: "600" }}>{selectedPlan.name}</h3>
-                  {selectedPlan.description && <p style={{ color: "#a1a1a1", fontSize: "14px", marginTop: "4px" }}>{selectedPlan.description}</p>}
-                </div>
-                {selectedDay !== null && isToday(selectedDay) && (
-                  <button onClick={() => markAsComplete(selectedPlan.id)} disabled={completing}
-                    style={{ background: "#D4A373", color: "#0a0a0a", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "600", fontSize: "14px", cursor: "pointer" }}>
-                    {completing ? "Salvando..." : "Concluir treino"}
-                  </button>
-                )}
-              </div>
-              {selectedPlan.exercises && selectedPlan.exercises.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
-                <div key={ex.id || idx} style={{ background: "#1a1a1a", borderRadius: "8px", padding: "12px", marginBottom: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ width: "24px", height: "24px", borderRadius: "50%", background: "rgba(212,163,115,0.2)", color: "#D4A373", fontSize: "12px", fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>{idx + 1}</span>
-                    <span style={{ color: "#f5f5f5", fontWeight: "500", fontSize: "14px" }}>{ex.name}</span>
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", marginTop: "8px", fontSize: "13px", color: "#a1a1a1" }}>
-                    <span>{ex.series}x{ex.reps}</span>
-                    {ex.weight && <span>| {ex.weight}</span>}
-                    {ex.restTime && <span>| Descanso: {ex.restTime}</span>}
-                  </div>
-                  {ex.notes && <p style={{ color: "#6b6b6b", fontSize: "12px", marginTop: "4px" }}>{ex.notes}</p>}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "40px", textAlign: "center" }}>
-              <p style={{ color: "#a1a1a1", fontSize: "14px" }}>Seu professor ainda nao montou seus treinos personalizados.</p>
-            </div>
-          )}
+
+          <div className="grid grid-cols-7 gap-1">
+            {nomes.map((d) => <div key={d} className="text-center text-xs text-[#525252] py-2">{d}</div>)}
+            {Array.from({ length: firstDay }).map((_, i) => <div key={"e" + i} />)}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const hoje = isToday(day);
+              const sel = selectedDay === day;
+              const done = selectedPlan && isCompleted(day);
+              return (
+                <button key={day} onClick={() => setSelectedDay(day)}
+                  className={"aspect-square rounded-lg border flex flex-col items-center justify-center text-sm transition cursor-pointer " + 
+                    (sel ? "bg-[#D4A373]/20 border-[#D4A373] text-[#D4A373]" : 
+                     hoje ? "border-[#D4A373]/50 text-[#D4A373] font-bold" : 
+                     "border-transparent text-[#a1a1a1] hover:bg-white/5")}>
+                  <span>{day}</span>
+                  {done && <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-0.5" />}
+                  {hoje && !done && plans.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-[#D4A373] mt-0.5" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+
+        {plans.length > 0 && selectedPlan ? (
+          <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-[#f5f5f5]">{selectedPlan.name}</h3>
+                {selectedPlan.description && <p className="text-[#a1a1a1] text-sm">{selectedPlan.description}</p>}
+              </div>
+              {selectedDay !== null && isToday(selectedDay) && (
+                <button onClick={markAsComplete} disabled={completing}
+                  className="bg-[#D4A373] text-[#0a0a0a] text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#c49463] disabled:opacity-50">
+                  {completing ? "⏳" : isCompleted(selectedDay) ? "✅ Concluido" : "✅ Marcar como feito"}
+                </button>
+              )}
+            </div>
+            {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
+              <div key={ex.id || idx} className="bg-[#1a1a1a] rounded-lg p-3 mb-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-xs font-bold flex items-center justify-center">{idx + 1}</span>
+                  <span className="text-[#f5f5f5] font-medium text-sm">{ex.name}</span>
+                </div>
+                <div className="text-xs text-[#a1a1a1] ml-8">{ex.series}x{ex.reps}{ex.weight ? " | " + ex.weight : ""}{ex.restTime ? " | Desc: " + ex.restTime : ""}</div>
+                {ex.notes && <p className="text-xs text-[#6b6b6b] ml-8 mt-1">{ex.notes}</p>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-8 text-center">
+            <p className="text-[#a1a1a1]">Seu professor ainda nao montou seus treinos.</p>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
