@@ -138,6 +138,12 @@ export default function AlunoPage() {
 
   return (
     <div className="space-y-3">
+      {/* Saudacao */}
+      <div>
+        <h1 className="text-lg font-bold text-[#f5f5f5]">Ola, {studentName}!</h1>
+        <p className="text-xs text-[#a1a1a1]">Bem-vindo a sua area do aluno</p>
+      </div>
+
       {message && (
         <div className={"text-sm rounded-lg p-2.5 " + (message.type === "success" ? "bg-green-500/10 text-green-400" : message.type === "error" ? "bg-red-500/10 text-red-400" : "bg-blue-500/10 text-blue-400")}>
           {message.text}
