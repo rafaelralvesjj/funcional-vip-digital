@@ -18,6 +18,7 @@ export default function AlunoPage() {
   const [newQuestion, setNewQuestion] = useState("");
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [sendingQuestion, setSendingQuestion] = useState(false);
+  const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   useEffect(() => { fetchStudentInfo(); }, []);
   useEffect(() => {
     if (studentId) {
@@ -31,12 +32,10 @@ export default function AlunoPage() {
       if (res.ok) {
         const session = await res.json();
         const userName = session?.user?.name || session?.name || "";
-
-        // Busca os dados do ALUNO pelo email da sessão (API nova)
         const r2 = await fetch("/api/student/me");
         if (r2.ok) {
           const data = await r2.json();
-          setStudentId(data.id);  // ID REAL do Student no banco
+          setStudentId(data.id);
           setStudentName(data.name);
         } else if (userName) {
           setStudentName(userName);
@@ -111,7 +110,6 @@ export default function AlunoPage() {
     setSendingQuestion(false);
     setTimeout(() => setMessage(null), 3000);
   }
-  // Retorna o nome do dia da semana em portugues
   function getWeekDayName(day: number): string {
     const date = new Date(currentYear, currentMonth, day);
     const dayIndex = date.getDay();
@@ -121,7 +119,6 @@ export default function AlunoPage() {
     };
     return reverseMap[dayIndex];
   }
-  // ENCONTRA o plano pela DATA EXATA
   function getPlanForDay(day: number): any | null {
     const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
     return plans.find((p: any) => {
@@ -131,7 +128,6 @@ export default function AlunoPage() {
       return planStr === dateStr;
     }) || null;
   }
-  // Quando clica em UM DIA, encontra o plano correspondente
   function handleDayClick(day: number) {
     setSelectedDay(day);
     const plan = getPlanForDay(day);
@@ -151,7 +147,6 @@ export default function AlunoPage() {
       return workoutStr === ds && w.status === "CONCLUIDO";
     });
   }
-  // Verifica se UM DIA TEM PLANO
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
   }
@@ -224,7 +219,7 @@ export default function AlunoPage() {
                 })}
               </div>
               {selectedPlan && selectedDay && (
-                <div className="mt-1 pt-1 border-t border-[#ffffff10]">
+                <div onClick={() => setShowWorkoutModal(true)} className="mt-1 pt-1 border-t border-[#ffffff10] cursor-pointer hover:bg-white/[0.02] rounded-lg transition">
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-[9px] text-[#f5f5f5] font-medium">{selectedPlan.name}</span>
@@ -233,7 +228,7 @@ export default function AlunoPage() {
                       </p>
                     </div>
                     {isToday(selectedDay) && (
-                      <button onClick={markAsComplete} disabled={completing}
+                      <button onClick={(e) => { e.stopPropagation(); markAsComplete(); }} disabled={completing}
                         className="bg-[#D4A373] text-[#0a0a0a] text-[7px] font-semibold px-1.5 py-0.5 rounded disabled:opacity-50">
                         {completing ? "..." : isCompleted(selectedDay) ? "✅" : "OK"}
                       </button>
@@ -241,7 +236,7 @@ export default function AlunoPage() {
                   </div>
                   {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).slice(0, 3).map((ex: any, idx: number) => (
                     <div key={ex.id || idx} className="flex items-center gap-1 py-px">
-                      <span className="w-3 h-3 rounded-full bg-[#D4A373]/20 text-[#D4A273] text-[6px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+                      <span className="w-3 h-3 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[6px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
                       <span className="text-[8px] text-[#a1a1a1]">{ex.name}</span>
                       <span className="text-[7px] text-[#6b6b6b] ml-auto">{ex.series}x{ex.reps}</span>
                     </div>
@@ -286,6 +281,68 @@ export default function AlunoPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal do treino completo */}
+      {showWorkoutModal && selectedPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
+              <div>
+                <h2 className="text-base font-bold text-[#f5f5f5]">{selectedPlan.name}</h2>
+                <p className="text-[11px] text-[#a1a1a1]">
+                  {getWeekDayName(selectedDay!)} - {selectedDay}/{currentMonth + 1}/{currentYear}
+                </p>
+              </div>
+              <button onClick={() => setShowWorkoutModal(false)}
+                className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">✕</button>
+            </div>
+
+            {/* Lista completa de exercícios */}
+            <div className="p-4 space-y-2">
+              {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
+                <div key={ex.id || idx} className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08]">
+                  <div className="flex items-start gap-2">
+                    <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#f5f5f5]">{ex.name}</p>
+                      <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-[#a1a1a1]">
+                        <span>🔁 {ex.series}x{ex.reps}</span>
+                        {ex.weight && <span>⚡ {ex.weight}kg</span>}
+                        {ex.rest && <span>⏱️ {ex.rest}</span>}
+                      </div>
+                      {ex.observation && (
+                        <p className="text-[10px] text-[#6b6b6b] mt-1 italic">{ex.observation}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {(!selectedPlan.exercises || selectedPlan.exercises.length === 0) && (
+                <p className="text-center text-[#6b6b6b] text-sm py-8">Nenhum exercício cadastrado neste treino.</p>
+              )}
+            </div>
+
+            {/* Observações do treino */}
+            {selectedPlan.notes && (
+              <div className="px-4 pb-4">
+                <div className="bg-[#D4A373]/10 border border-[#D4A373]/20 rounded-xl p-3">
+                  <p className="text-[10px] text-[#D4A373] font-semibold mb-1">📝 Observações</p>
+                  <p className="text-xs text-[#e5e5e5]">{selectedPlan.notes}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="p-4 border-t border-[#ffffff10] flex justify-end">
+              <button onClick={() => setShowWorkoutModal(false)}
+                className="bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold px-6 py-2 rounded-lg hover:bg-[#c4956a] transition">
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
