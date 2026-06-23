@@ -20,17 +20,6 @@ export default function AlunoPage() {
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [sendingQuestion, setSendingQuestion] = useState(false);
 
-  // Mapeamento: nome do dia em portugues -> getDay()
-  const weekDayMap: Record<string, number> = {
-    domingo: 0,
-    segunda: 1,
-    terca: 2,
-    quarta: 3,
-    quinta: 4,
-    sexta: 5,
-    sabado: 6,
-  };
-
   useEffect(() => { fetchStudentInfo(); }, []);
   useEffect(() => {
     if (studentId) {
@@ -138,7 +127,7 @@ export default function AlunoPage() {
   // Retorna o nome do dia da semana (portugues) para uma data
   function getWeekDayName(day: number): string {
     const date = new Date(currentYear, currentMonth, day);
-    const dayIndex = date.getDay(); // 0=Dom, 1=Seg, ...
+    const dayIndex = date.getDay();
     const reverseMap: Record<number, string> = {
       0: "domingo", 1: "segunda", 2: "terca", 3: "quarta",
       4: "quinta", 5: "sexta", 6: "sabado",
@@ -146,27 +135,41 @@ export default function AlunoPage() {
     return reverseMap[dayIndex];
   }
 
-  // Retorna o plano para um dia especifico
+  // Retorna o plano pela DATA EXATA (comparando date do banco)
   function getPlanForDay(day: number): any | null {
-    const dayName = getWeekDayName(day);
-    return plans.find((p: any) => p.weekDay === dayName) || null;
+    const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+    return plans.find((p: any) => {
+      if (!p.date) return false;
+      const planDate = new Date(p.date);
+      const planStr = planDate.getUTCFullYear() + "-" + String(planDate.getUTCMonth() + 1).padStart(2, "0") + "-" + String(planDate.getUTCDate()).padStart(2, "0");
+      return planStr === dateStr;
+    }) || null;
   }
 
-  // Quando clica em um dia, atualiza selectedPlan baseado no weekDay
+  // Quando clica em um dia, atualiza selectedPlan baseado na data
   function handleDayClick(day: number) {
     setSelectedDay(day);
     const plan = getPlanForDay(day);
     setSelectedPlan(plan);
   }
 
-  function isToday(day: number) { const d = new Date(); return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear(); }
+  function isToday(day: number) {
+    const d = new Date();
+    return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
+  }
+
   function isCompleted(day: number) {
     if (!selectedPlan) return false;
     const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
-    return workouts.some((w: any) => w.workoutPlanId === selectedPlan.id && w.date.startsWith(ds) && w.status === "CONCLUIDO");
+    return workouts.some((w: any) => {
+      if (w.workoutPlanId !== selectedPlan.id) return false;
+      const workoutDate = new Date(w.date);
+      const workoutStr = workoutDate.getUTCFullYear() + "-" + String(workoutDate.getUTCMonth() + 1).padStart(2, "0") + "-" + String(workoutDate.getUTCDate()).padStart(2, "0");
+      return workoutStr === ds && w.status === "CONCLUIDO";
+    });
   }
 
-  // Verifica se um dia TEM um plano associado (pelo weekDay)
+  // Verifica se um dia TEM um plano associado (pela data)
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
   }
@@ -180,7 +183,6 @@ export default function AlunoPage() {
 
   return (
     <div className="space-y-3">
-      {/* Saudacao */}
       <div>
         <h1 className="text-lg font-bold text-[#f5f5f5]">Ola, {studentName}!</h1>
         <p className="text-xs text-[#a1a1a1]">Bem-vindo a sua area do aluno</p>
@@ -193,7 +195,6 @@ export default function AlunoPage() {
       )}
 
       <div className="flex flex-col lg:flex-row gap-3">
-        {/* Coluna Esquerda - Avisos (30%) */}
         <div className="lg:w-[30%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
           <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">📢 Avisos e Feedbacks</h2>
           {notices.length === 0 ? (
@@ -209,11 +210,8 @@ export default function AlunoPage() {
           )}
         </div>
 
-        {/* Coluna Direita (70%) */}
         <div className="lg:w-[70%] space-y-3">
-          {/* Calendario MINI + Duvidas lado a lado */}
           <div className="flex flex-col sm:flex-row gap-3">
-            {/* Meus Treinos - Calendario */}
             <div className="sm:w-[55%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
                 <h2 className="font-semibold text-[#f5f5f5] text-xs">📅 Meus Treinos</h2>
@@ -251,7 +249,6 @@ export default function AlunoPage() {
                 })}
               </div>
 
-              {/* Detalhe do treino para o dia selecionado */}
               {selectedPlan && selectedDay && (
                 <div className="mt-1 pt-1 border-t border-[#ffffff10]">
                   <div className="flex items-center justify-between">
@@ -287,7 +284,6 @@ export default function AlunoPage() {
               )}
             </div>
 
-            {/* Duvidas */}
             <div className="sm:w-[45%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
               <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">❓ Duvidas</h2>
               <textarea value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
