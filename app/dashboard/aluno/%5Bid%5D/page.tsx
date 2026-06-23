@@ -133,17 +133,14 @@ export default function AlunoDashboardPage() {
           <button onClick={() => signOut({ callbackUrl: "/" })} style={{ fontSize: "12px", color: "#525252", background: "none", border: "none", cursor: "pointer" }}>Sair</button>
         </div>
       </div>
-
       <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px 16px" }}>
         <h1 style={{ color: "#f5f5f5", fontSize: "24px", fontWeight: "bold" }}>Ola, {studentName}!</h1>
         <p style={{ color: "#a1a1a1", fontSize: "14px", marginTop: "4px" }}>Bem-vindo a sua area do aluno</p>
-
         {message && (
           <div style={{ padding: "12px", borderRadius: "8px", marginTop: "16px", fontSize: "14px", background: message.type === "success" ? "rgba(34,197,94,0.1)" : "rgba(59,130,246,0.1)", border: "1px solid " + (message.type === "success" ? "rgba(34,197,94,0.2)" : "rgba(59,130,246,0.2)"), color: message.type === "success" ? "#22c55e" : "#3b82f6" }}>
             {message.text}
           </div>
         )}
-
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "24px", marginTop: "24px" }}>
           <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -156,7 +153,6 @@ export default function AlunoDashboardPage() {
                   style={{ color: "#a1a1a1", background: "none", border: "none", cursor: "pointer", fontSize: "16px" }}>&rarr;</button>
               </div>
             </div>
-
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" }}>
               {diasSemana.map((dia: string) => (
                 <div key={dia} style={{ textAlign: "center", fontSize: "12px", color: "#525252", padding: "8px 0" }}>{dia}</div>
@@ -172,7 +168,6 @@ export default function AlunoDashboardPage() {
                 const bg = sel ? "rgba(212,163,115,0.2)" : "transparent";
                 const border = sel ? "#D4A373" : hoje ? "rgba(212,163,115,0.5)" : "transparent";
                 const color = (sel || hoje) ? "#D4A373" : "#a1a1a1";
-                
                 return (
                   <button key={day} onClick={() => setSelectedDay(day)}
                     style={{ aspectRatio: "1", borderRadius: "8px", border: "1px solid " + border, background: bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", color: color, fontSize: "14px", fontWeight: hoje ? "bold" : "normal", position: "relative" }}>
@@ -183,13 +178,11 @@ export default function AlunoDashboardPage() {
                 );
               })}
             </div>
-
             <div style={{ display: "flex", gap: "16px", marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(255,255,255,0.05)", fontSize: "12px", color: "#525252" }}>
               <span><span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "#22c55e", marginRight: "4px" }} /> Completo</span>
               <span><span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "#D4A373", marginRight: "4px" }} /> Hoje</span>
             </div>
           </div>
-
           {plans.length > 0 && selectedPlan ? (
             <div style={{ background: "#111", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", padding: "20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
