@@ -34,7 +34,7 @@ export default function MontarTreinoPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStudent, setSelectedStudent] = useState("");
   const [planName, setPlanName] = useState("");
-  const [weekDay, setWeekDay] = useState("");
+  const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [exercises, setExercises] = useState<ExerciseItem[]>([]);
@@ -123,10 +123,8 @@ export default function MontarTreinoPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedStudent || !planName.trim() || exercises.length === 0) return;
-
     setSaving(true);
     setSuccess(false);
-
     try {
       const res = await fetch("/api/workout-plan", {
         method: "POST",
@@ -135,7 +133,7 @@ export default function MontarTreinoPage() {
           studentId: selectedStudent,
           name: planName.trim(),
           description: description || null,
-          weekDay: weekDay || null,
+          date: date || null,
           notes: notes || null,
           exercises: exercises.map((ex) => ({
             name: ex.name,
@@ -149,11 +147,10 @@ export default function MontarTreinoPage() {
           })),
         }),
       });
-
       if (res.ok) {
         setSuccess(true);
         setPlanName("");
-        setWeekDay("");
+        setDate("");
         setDescription("");
         setNotes("");
         setExercises([]);
@@ -168,17 +165,6 @@ export default function MontarTreinoPage() {
       setSaving(false);
     }
   }
-
-  const diasSemana = [
-    { value: "", label: "Selecione o dia" },
-    { value: "segunda", label: "Segunda-feira" },
-    { value: "terca", label: "Terça-feira" },
-    { value: "quarta", label: "Quarta-feira" },
-    { value: "quinta", label: "Quinta-feira" },
-    { value: "sexta", label: "Sexta-feira" },
-    { value: "sabado", label: "Sábado" },
-    { value: "domingo", label: "Domingo" },
-  ];
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -225,16 +211,14 @@ export default function MontarTreinoPage() {
               />
             </div>
             <div>
-              <label className="text-sm text-[#e5e5e5] block mb-1">Dia da semana</label>
-              <select
-                value={weekDay}
-                onChange={(e) => setWeekDay(e.target.value)}
+              <label className="text-sm text-[#e5e5e5] block mb-1">Data do treino *</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-              >
-                {diasSemana.map((d) => (
-                  <option key={d.value} value={d.value}>{d.label}</option>
-                ))}
-              </select>
+              />
             </div>
             <div>
               <label className="text-sm text-[#e5e5e5] block mb-1">Descrição <span className="text-[#525252]">(opcional)</span></label>
@@ -343,15 +327,15 @@ export default function MontarTreinoPage() {
 
         <button
           type="submit"
-          disabled={saving || !selectedStudent || !planName.trim() || exercises.length === 0}
+          disabled={saving || !selectedStudent || !planName.trim() || !date || exercises.length === 0}
           className="w-full bg-[#D4A373] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#b88a5e] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? "💾 Salvando treino..." : "✅ Salvar e enviar treino para o aluno"}
         </button>
-
         <p className="text-xs text-[#525252] text-center">
           {exercises.length} exercício{exercises.length !== 1 ? "s" : ""}
           {selectedStudent && ` • Aluno: ${students.find((s) => s.id === selectedStudent)?.name || ""}`}
+          {date && ` • Data: ${new Date(date).toLocaleDateString("pt-BR")}`}
         </p>
       </form>
     </div>
