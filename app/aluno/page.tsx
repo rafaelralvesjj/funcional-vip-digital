@@ -30,26 +30,17 @@ export default function AlunoPage() {
       const res = await fetch("/api/auth/session");
       if (res.ok) {
         const session = await res.json();
-        const userEmail = session?.user?.email || "";
         const userName = session?.user?.name || session?.name || "";
 
-        if (userEmail) {
-          // Busca o aluno pelo EMAIL (o ID da sessão é diferente do ID do aluno)
-          const r2 = await fetch("/api/students");
-          if (r2.ok) {
-            const data = await r2.json();
-            const list = Array.isArray(data) ? data : data.students || data || [];
-            // Encontra pelo email — único campo igual nas duas tabelas
-            const found = list.find((s: any) => s.email === userEmail);
-            if (found) {
-              setStudentId(found.id);  // ID REAL do Student no banco
-              setStudentName(found.name);
-            }
-          }
+        // Busca os dados do ALUNO pelo email da sessão (API nova)
+        const r2 = await fetch("/api/student/me");
+        if (r2.ok) {
+          const data = await r2.json();
+          setStudentId(data.id);  // ID REAL do Student no banco
+          setStudentName(data.name);
+        } else if (userName) {
+          setStudentName(userName);
         }
-
-        // Fallback: se não achou, usa o nome da sessão
-        if (userName && !studentId) setStudentName(userName);
       }
     } catch {}
     setLoading(false);
@@ -250,7 +241,7 @@ export default function AlunoPage() {
                   </div>
                   {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).slice(0, 3).map((ex: any, idx: number) => (
                     <div key={ex.id || idx} className="flex items-center gap-1 py-px">
-                      <span className="w-3 h-3 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[6px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+                      <span className="w-3 h-3 rounded-full bg-[#D4A373]/20 text-[#D4A273] text-[6px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
                       <span className="text-[8px] text-[#a1a1a1]">{ex.name}</span>
                       <span className="text-[7px] text-[#6b6b6b] ml-auto">{ex.series}x{ex.reps}</span>
                     </div>
