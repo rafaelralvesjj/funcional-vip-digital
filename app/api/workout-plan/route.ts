@@ -57,7 +57,8 @@ export async function POST(req: NextRequest) {
           studentId,
           name: name.trim(),
           description: description?.trim() || null,
-          date: date ? new Date(date) : null,
+          // Salva ao meio-dia UTC pra evitar problema de fuso horário
+          date: date ? new Date(date + "T12:00:00") : null,
           notes: notes?.trim() || null,
           exercises: {
             create: normalizedExercises,
