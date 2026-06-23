@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 
+
 export default function AlunoPage() {
   const [studentId, setStudentId] = useState<string>("");
   const [studentName, setStudentName] = useState("Aluno");
