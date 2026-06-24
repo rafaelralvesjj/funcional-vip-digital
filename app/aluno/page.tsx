@@ -421,6 +421,7 @@ export default function AlunoPage() {
                   </div>
                 </div>
                         )}
+              
             </div>
             <div className="p-3 border-t border-[#ffffff10] flex gap-2">
               <button onClick={() => setSelectedExercise(null)}
