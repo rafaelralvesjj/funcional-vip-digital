@@ -296,7 +296,7 @@ export default function AlunoPage() {
           </div>
         </div>
       </div>
-      {/* Modal do treino completo - MAIS COMPACTO */}
+      {/* Modal do treino completo */}
       {showWorkoutModal && selectedPlan && !selectedExercise && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[75vh] overflow-y-auto shadow-2xl">
@@ -349,11 +349,10 @@ export default function AlunoPage() {
           </div>
         </div>
       )}
-      {/* Modal de detalhe do exercicio - MAIS COMPACTO */}
+      {/* Modal de detalhe do exercicio */}
       {selectedExercise && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
-            {/* Foto com URL absoluta */}
             {getImageUrl(selectedExercise.imageUrl) && !imgError ? (
               <div className="w-full h-36 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
                 <img src={getImageUrl(selectedExercise.imageUrl)}
@@ -383,7 +382,6 @@ export default function AlunoPage() {
                 className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
             </div>
             <div className="p-3 space-y-2.5">
-              {/* Stats grid mais compacta */}
               <div className="grid grid-cols-4 gap-1.5">
                 <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
                   <p className="text-base font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
@@ -414,4 +412,6 @@ export default function AlunoPage() {
                 <div>
                   <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Observacoes</h3>
                   <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
-                    <p className="text-xs 
+                    <p className="text-xs text-[#e5e5e5]">{selectedExercise.notes}</p>
+                  </div>
+                </div>
