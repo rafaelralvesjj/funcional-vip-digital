@@ -5,6 +5,7 @@ interface Student {
   name: string;
   email?: string;
   image?: string;
+  
 }
 interface LibraryExercise {
   id: string;
