@@ -99,7 +99,7 @@ export default function MontarTreinoPage() {
   }
   function moveExercise(fromIndex: number, direction: "up" | "down") {
     const toIndex = direction === "up" ? fromIndex - 1 : fromIndex + 1;
-    if (toIndex &lt; 0 || toIndex >= exercises.length) return;
+    if (toIndex < 0 || toIndex >= exercises.length) return;
     const updated = [...exercises];
     [updated[fromIndex], updated[toIndex]] = [updated[toIndex], updated[fromIndex]];
     setExercises(updated.map((ex, i) => ({ ...ex, order: i })));
@@ -136,29 +136,4 @@ export default function MontarTreinoPage() {
             imageUrl: ex.imageUrl || null,
             videoUrl: ex.videoUrl || null,
           })),
-        }),
-      });
-      if (res.ok) {
-        setSuccess(true);
-        setPlanName("");
-        setWeekDay("");
-        setDescription("");
-        setNotes("");
-        setExercises([]);
-        setTimeout(() => setSuccess(false), 3000);
-      } else {
-        const err = await res.json();
-        alert("Erro ao salvar: " + (err.error || "erro desconhecido"));
-      }
-    } catch {
-      alert("Erro de conexao ao salvar treino");
-    }
-    setSaving(false);
-  }
-  return (
-    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
-      <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
-        <h1 className="text-xl font-bold text-[#D4A373]">Montar Treino</h1>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
-            <h2 className="text-lg 
+    
