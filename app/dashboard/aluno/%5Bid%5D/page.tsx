@@ -3,10 +3,18 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 
+// Interface da biblioteca de exercícios
+interface LibraryExercise {
+  id: string;
+  name: string;
+  description: string;
+  muscleGroup: string;
+  imageUrl?: string;
+}
+
 export default function AlunoDashboardPage() {
   const params = useParams();
   const studentId = params.id as string;
-
   const [plans, setPlans] = useState<any[]>([]);
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
@@ -16,14 +24,41 @@ export default function AlunoDashboardPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [studentName, setStudentName] = useState("Aluno");
+  // Estado para a biblioteca de exercícios (mapa nome -> imageUrl)
+  const [exerciseImages, setExerciseImages] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (studentId) {
       fetchPlans();
       fetchWorkouts();
       fetchStudent();
+      fetchExerciseLibrary(); // Carrega a biblioteca de exercícios
     }
   }, [studentId, currentMonth, currentYear]);
+
+  // Busca a biblioteca de exercícios e cria um mapa nome -> imageUrl
+  async function fetchExerciseLibrary() {
+    try {
+      const res = await fetch("/api/exercise-library");
+      if (res.ok) {
+        const data = await res.json();
+        const exercises: LibraryExercise[] = data.exercises || [];
+        const imageMap: Record<string, string> = {};
+        exercises.forEach((ex) => {
+          if (ex.imageUrl) {
+            imageMap[ex.name.toLowerCase()] = ex.imageUrl;
+          }
+        });
+        setExerciseImages(imageMap);
+      }
+    } catch {}
+  }
+
+  // Função para obter a imagem de um exercício pelo nome
+  function getExerciseImageUrl(exerciseName: string): string | null {
+    const key = exerciseName.toLowerCase();
+    return exerciseImages[key] || null;
+  }
 
   async function fetchStudent() {
     try {
@@ -98,7 +133,6 @@ export default function AlunoDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
-      {/* HEADER VERDE para teste */}
       <header className="border-b border-[#ffffff10] bg-green-600 px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">F</div>
@@ -110,7 +144,6 @@ export default function AlunoDashboardPage() {
         </div>
       </header>
       <main className="max-w-6xl mx-auto px-4 py-6">
-        {/* TEXTO ROSA para teste */}
         <h1 className="text-2xl font-bold text-pink-400 mb-1">Ola, {studentName}!</h1>
         <p className="text-[#a1a1a1] text-sm mb-6">Bem-vindo a sua area do aluno</p>
         {message && (
@@ -165,16 +198,37 @@ export default function AlunoDashboardPage() {
                 </button>
               )}
             </div>
-            {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
-              <div key={ex.id || idx} className="bg-[#1a1a1a] rounded-lg p-3 mb-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-xs font-bold flex items-center justify-center">{idx + 1}</span>
-                  <span className="text-[#f5f5f5] font-medium text-sm">{ex.name}</span>
+            {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => {
+              // Tenta pegar a imagem da biblioteca pelo nome
+              const imageUrl = ex.imageUrl || getExerciseImageUrl(ex.name);
+              return (
+                <div key={ex.id || idx} className="bg-[#1a1a1a] rounded-lg p-3 mb-2">
+                  <div className="flex items-center gap-3 mb-2">
+                    {/* IMAGEM DO EXERCÍCIO */}
+                    {imageUrl && (
+                      <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-[#0a0a0a]">
+                        <img
+                          src={imageUrl}
+                          alt={ex.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-xs font-bold flex items-center justify-center">{idx + 1}</span>
+                        <span className="text-[#f5f5f5] font-medium text-sm">{ex.name}</span>
+                      </div>
+                      <div className="text-xs text-[#a1a1a1] mt-1">{ex.series}x{ex.reps}{ex.weight ? " | " + ex.weight + "kg" : ""}{ex.restTime ? " | Desc: " + ex.restTime : ""}</div>
+                      {ex.notes && <p className="text-xs text-[#6b6b6b] mt-1">{ex.notes}</p>}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-xs text-[#a1a1a1] ml-8">{ex.series}x{ex.reps}{ex.weight ? " | " + ex.weight : ""}{ex.restTime ? " | Desc: " + ex.restTime : ""}</div>
-                {ex.notes && <p className="text-xs text-[#6b6b6b] ml-8 mt-1">{ex.notes}</p>}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-8 text-center">
