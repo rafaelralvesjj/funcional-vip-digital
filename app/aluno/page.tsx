@@ -418,3 +418,21 @@ export default function AlunoPage() {
                     <p className="text-xs text-[#e5e5e5]">{selectedExercise.notes}</p>
                   </div>
                 </div>
+                        )}
+            </div>
+            <div className="p-3 border-t border-[#ffffff10] flex gap-2">
+              <button onClick={() => setSelectedExercise(null)}
+                className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
+                Voltar
+              </button>
+              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
+                className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
