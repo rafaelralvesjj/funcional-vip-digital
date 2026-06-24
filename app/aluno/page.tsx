@@ -1,6 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
+
+interface LibraryExercise {
+  id: string;
+  name: string;
+  description: string;
+  muscleGroup: string;
+  imageUrl?: string;
+}
+
 export default function AlunoPage() {
   const [studentId, setStudentId] = useState<string>("");
   const [studentName, setStudentName] = useState("Aluno");
@@ -21,6 +30,8 @@ export default function AlunoPage() {
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
   const [imgError, setImgError] = useState(false);
+  // Estado para a biblioteca de exercícios (mapa nome -> imageUrl)
+  const [exerciseImages, setExerciseImages] = useState<Record<string, string>>({});
 
   const getImageUrl = (url?: string): string | null => {
     if (!url) return null;
@@ -33,13 +44,39 @@ export default function AlunoPage() {
     return url;
   };
 
+  // Busca a biblioteca de exercícios e cria um mapa nome -> imageUrl
+  async function fetchExerciseLibrary() {
+    try {
+      const res = await fetch("/api/exercise-library");
+      if (res.ok) {
+        const data = await res.json();
+        const exercises: LibraryExercise[] = data.exercises || [];
+        const imageMap: Record<string, string> = {};
+        exercises.forEach((ex) => {
+          if (ex.imageUrl) {
+            imageMap[ex.name.toLowerCase()] = ex.imageUrl;
+          }
+        });
+        setExerciseImages(imageMap);
+      }
+    } catch {}
+  }
+
+  // Função para obter a imagem de um exercício pelo nome
+  function getExerciseImageUrl(exerciseName: string): string | null {
+    const key = exerciseName.toLowerCase();
+    return exerciseImages[key] || null;
+  }
+
   useEffect(() => { fetchStudentInfo(); }, []);
   useEffect(() => {
     if (studentId) {
       fetchPlans(studentId); fetchWorkouts(studentId);
       fetchNotices(studentId); fetchQuestions(studentId);
+      fetchExerciseLibrary(); // Carrega a biblioteca de exercícios
     }
   }, [studentId, currentMonth, currentYear]);
+
   async function fetchStudentInfo() {
     try {
       const res = await fetch("/api/auth/session");
@@ -58,6 +95,7 @@ export default function AlunoPage() {
     } catch {}
     setLoading(false);
   }
+
   async function fetchPlans(id: string) {
     try {
       const res = await fetch("/api/workout-plan?studentId=" + id);
@@ -67,6 +105,7 @@ export default function AlunoPage() {
       }
     } catch {}
   }
+
   async function fetchWorkouts(id: string) {
     try {
       const url = "/api/workout/mark-complete?studentId=" + id + "&month=" + (currentMonth + 1) + "&year=" + currentYear;
@@ -77,6 +116,7 @@ export default function AlunoPage() {
       }
     } catch {}
   }
+
   async function fetchNotices(id: string) {
     try {
       const res = await fetch("/api/notices/student/" + id);
@@ -86,6 +126,7 @@ export default function AlunoPage() {
       }
     } catch {}
   }
+
   async function fetchQuestions(id: string) {
     try {
       const res = await fetch("/api/aluno/questions?studentId=" + id);
@@ -95,6 +136,7 @@ export default function AlunoPage() {
       }
     } catch {}
   }
+
   async function markAsComplete() {
     if (!selectedPlan || !studentId) return;
     setCompleting(true); setMessage(null);
@@ -109,6 +151,7 @@ export default function AlunoPage() {
     setCompleting(false);
     setTimeout(() => setMessage(null), 3000);
   }
+
   async function handleSendQuestion() {
     if (!newQuestion.trim() || !studentId) return;
     setSendingQuestion(true);
@@ -124,6 +167,7 @@ export default function AlunoPage() {
     setSendingQuestion(false);
     setTimeout(() => setMessage(null), 3000);
   }
+
   function getWeekDayName(day: number): string {
     const date = new Date(currentYear, currentMonth, day);
     const dayIndex = date.getDay();
@@ -133,6 +177,7 @@ export default function AlunoPage() {
     };
     return reverseMap[dayIndex];
   }
+
   function getPlanForDay(day: number): any | null {
     const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
     return plans.find((p: any) => {
@@ -142,16 +187,19 @@ export default function AlunoPage() {
       return planStr === dateStr;
     }) || null;
   }
+
   function handleDayClick(day: number) {
     setSelectedDay(day);
     setSelectedExercise(null);
     const plan = getPlanForDay(day);
     setSelectedPlan(plan);
   }
+
   function isToday(day: number) {
     const d = new Date();
     return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
   }
+
   function isCompleted(day: number) {
     if (!selectedPlan) return false;
     const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
@@ -162,14 +210,18 @@ export default function AlunoPage() {
       return workoutStr === ds && w.status === "CONCLUIDO";
     });
   }
+
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
   }
+
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
+
   return (
     <div className="space-y-3">
       <div>
@@ -296,6 +348,7 @@ export default function AlunoPage() {
           </div>
         </div>
       </div>
+
       {/* Modal do treino completo */}
       {showWorkoutModal && selectedPlan && !selectedExercise && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -349,93 +402,14 @@ export default function AlunoPage() {
           </div>
         </div>
       )}
+
       {/* Modal de detalhe do exercicio */}
       {selectedExercise && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
-         
-
-        
-
-                  {getImageUrl(selectedExercise.imageUrl) && !imgError ? (
-  <div className="w-full h-36 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
-    <img src={getImageUrl(selectedExercise.imageUrl) || undefined}
-                  
-                  alt={selectedExercise.name}
-                  className="w-full h-full object-cover"
-                  onError={() => setImgError(true)} />
-              </div>
-            ) : (
-              <div className="w-full h-20 bg-gradient-to-br from-[#1a1a1a] to-[#222] rounded-t-2xl flex items-center justify-center gap-1">
-                <svg className="w-6 h-6 text-[#333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p className="text-[9px] text-[#444]">Sem foto</p>
-              </div>
-            )}
-            <div className="flex items-center justify-between p-3 border-b border-[#ffffff10]">
-              <div className="flex items-center gap-2">
-                <button onClick={() => setSelectedExercise(null)}
-                  className="text-[#a1a1a1] hover:text-white">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <h2 className="text-base font-bold text-[#f5f5f5]">{selectedExercise.name}</h2>
-              </div>
-              <button onClick={() => setSelectedExercise(null)}
-                className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
-            </div>
-            <div className="p-3 space-y-2.5">
-              <div className="grid grid-cols-4 gap-1.5">
-                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
-                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
-                  <p className="text-[8px] text-[#6b6b6b]">Series</p>
-                </div>
-                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
-                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.reps || '-'}</p>
-                  <p className="text-[8px] text-[#6b6b6b]">Repeticoes</p>
-                </div>
-                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
-                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
-                  <p className="text-[8px] text-[#6b6b6b]">Carga</p>
-                </div>
-                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
-                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.restTime || '-'}</p>
-                  <p className="text-[8px] text-[#6b6b6b]">Descanso</p>
-                </div>
-              </div>
-              {selectedExercise.description && (
-                <div>
-                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Descricao</h3>
-                  <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
-                    <p className="text-xs text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedExercise.description}</p>
-                  </div>
-                </div>
-              )}
-              {selectedExercise.notes && (
-                <div>
-                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Observacoes</h3>
-                  <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
-                    <p className="text-xs text-[#e5e5e5]">{selectedExercise.notes}</p>
-                  </div>
-                </div>
-                        )}
-              
-            </div>
-            <div className="p-3 border-t border-[#ffffff10] flex gap-2">
-              <button onClick={() => setSelectedExercise(null)}
-                className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
-                Voltar
-              </button>
-              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
-                className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+            {/* IMAGEM DO EXERCÍCIO - busca da biblioteca pelo nome se não tiver no plano */}
+            {(() => {
+              const imgUrl = getImageUrl(selectedExercise.imageUrl) || getExerciseImageUrl(selectedExercise.name);
+              return imgUrl && !imgError ? (
+                <div className="w-full h-36 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
+ 
