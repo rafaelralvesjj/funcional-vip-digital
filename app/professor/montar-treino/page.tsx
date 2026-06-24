@@ -112,45 +112,52 @@ setExercises(updated);
 async function handleSubmit(e: React.FormEvent) {
 e.preventDefault();
 if (!selectedStudent || !planName.trim() || exercises.length === 0) return;
-
 setSaving(true);
 setSuccess(false);
-
 try {
-  const res = await fetch("/api/workout-plan", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      studentId: selectedStudent,
-      name: planName.trim(),
-      description: description || null,
-      weekDay: weekDay || null,
-      notes: notes || null,
-      exercises: exercises.map((ex) => ({
-        name: ex.name,
-        description: ex.description,
-        series: ex.series,
-        reps: ex.reps || null,
-        weight: ex.weight || null,
-        restTime: ex.restTime || null,
-        notes: ex.notes || null,
-        order: ex.order,
-        imageUrl: ex.imageUrl || null,
-        videoUrl: ex.videoUrl || null,
-      })),
-    }),
-  });
-
-  if (res.ok) {
-    setSuccess(true);
-    setPlanName("");
-    setWeekDay("");
-    setDescription("");
-    setNotes("");
-    setExercises([]);
-    setTimeout(() => setSuccess(false), 3000);
-  } else {
-    const err = await res.json();
-    alert(`Erro ao salvar: ${err.error}`);
-  }
+const res = await fetch("/api/workout-plan", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({
+studentId: selectedStudent,
+name: planName.trim(),
+description: description || null,
+weekDay: weekDay || null,
+notes: notes || null,
+exercises: exercises.map((ex) => ({
+name: ex.name,
+description: ex.description,
+series: ex.series,
+reps: ex.reps || null,
+weight: ex.weight || null,
+restTime: ex.restTime || null,
+notes: ex.notes || null,
+order: ex.order,
+imageUrl: ex.imageUrl || null,
+videoUrl: ex.videoUrl || null,
+})),
+}),
+});
+if (res.ok) {
+setSuccess(true);
+setPlanName("");
+setWeekDay("");
+setDescription("");
+setNotes("");
+setExercises([]);
+setTimeout(() => setSuccess(false), 3000);
+} else {
+const err = await res.json();
+alert("Erro ao salvar: " + (err.error || "erro desconhecido"));
+}
 } catch {
+alert("Erro de conexao ao salvar treino");
+}
+setSaving(false);
+}
+return (
+<div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-4 md:p-6">
+<div className="max-w-4xl mx-auto space-y-6"></div>
+</div>
+);
+}
