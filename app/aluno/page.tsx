@@ -412,4 +412,3 @@ export default function AlunoPage() {
               const imgUrl = getImageUrl(selectedExercise.imageUrl) || getExerciseImageUrl(selectedExercise.name);
               return imgUrl && !imgError ? (
                 <div className="w-full h-36 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
- 
