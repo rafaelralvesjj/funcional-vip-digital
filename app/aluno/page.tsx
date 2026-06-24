@@ -10,7 +10,7 @@ export default function AlunoPage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [message, setMessage] = useState&lt;{ type: string; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [completing, setCompleting] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -170,7 +170,7 @@ export default function AlunoPage() {
       )}
       <div className="flex flex-col lg:flex-row gap-3">
         <div className="lg:w-[30%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
-          <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">📢 Avisos e Feedbacks</h2>
+          <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">Avisos e Feedbacks</h2>
           {notices.length === 0 ? (
             <p className="text-[#a1a1a1] text-[11px]">Nenhum aviso ou feedback no momento.</p>
           ) : (
@@ -187,7 +187,7 @@ export default function AlunoPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="sm:w-[55%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
-                <h2 className="font-semibold text-[#f5f5f5] text-xs">📅 Meus Treinos</h2>
+                <h2 className="font-semibold text-[#f5f5f5] text-xs">Meus Treinos</h2>
                 <div className="flex items-center gap-1">
                   <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } }}
                     className="text-[#a1a1a1] hover:text-white text-[8px] px-0.5">◀</button>
@@ -232,7 +232,7 @@ export default function AlunoPage() {
                     {isToday(selectedDay) && (
                       <button onClick={(e) => { e.stopPropagation(); markAsComplete(); }} disabled={completing}
                         className="bg-[#D4A373] text-[#0a0a0a] text-[7px] font-semibold px-1.5 py-0.5 rounded disabled:opacity-50">
-                        {completing ? "..." : isCompleted(selectedDay) ? "✅" : "OK"}
+                        {completing ? "..." : isCompleted(selectedDay) ? "OK" : "OK"}
                       </button>
                     )}
                   </div>
@@ -251,16 +251,16 @@ export default function AlunoPage() {
                 <p className="text-[8px] text-[#525252] mt-1">Clique em um dia para ver o treino</p>
               )}
               {plans.length === 0 && (
-                <p className="text-[8px] text-[#D4A373] mt-1">🏋️ Em breve...</p>
+                <p className="text-[8px] text-[#D4A373] mt-1">Em breve...</p>
               )}
             </div>
             <div className="sm:w-[45%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
-              <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">❓ Duvidas</h2>
+              <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">Duvidas</h2>
               <textarea value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
                 placeholder="Pergunte aqui..."
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
               <div className="flex items-center gap-1 mb-1.5">
-                <span className="text-[9px] text-[#a1a1a1]">📎</span>
+                <span className="text-[9px] text-[#a1a1a1]"></span>
                 <input type="file" accept="image/*,video/*" onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
                   className="text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
                 {questionFile && <span className="text-[8px] text-[#D4A373]">1</span>}
@@ -295,8 +295,8 @@ export default function AlunoPage() {
                   {getWeekDayName(selectedDay!)} - {selectedDay}/{currentMonth + 1}/{currentYear}
                 </p>
               </div>
-              <button onClick={() => setShowWorkoutModal(false)}
-                className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">✕</button>
+              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
+                className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
             </div>
 
             <div className="p-4 space-y-2">
@@ -309,9 +309,9 @@ export default function AlunoPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[#f5f5f5]">{ex.name}</p>
                       <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-[#a1a1a1]">
-                        <span>🔁 {ex.series}x{ex.reps}</span>
-                        {ex.weight && <span>⚡ {ex.weight}kg</span>}
-                        {ex.restTime && <span>⏱️ {ex.restTime}</span>}
+                        <span>{ex.series}x{ex.reps}</span>
+                        {ex.weight && <span>{ex.weight}kg</span>}
+                        {ex.restTime && <span>{ex.restTime}</span>}
                       </div>
                       {ex.description && (
                         <p className="text-[10px] text-[#6b6b6b] mt-1 line-clamp-2">{ex.description}</p>
@@ -331,7 +331,7 @@ export default function AlunoPage() {
             {selectedPlan.notes && (
               <div className="px-4 pb-4">
                 <div className="bg-[#D4A373]/10 border border-[#D4A373]/20 rounded-xl p-3">
-                  <p className="text-[10px] text-[#D4A373] font-semibold mb-1">📝 Observacoes</p>
+                  <p className="text-[10px] text-[#D4A373] font-semibold mb-1">Observacoes</p>
                   <p className="text-xs text-[#e5e5e5]">{selectedPlan.notes}</p>
                 </div>
               </div>
@@ -370,7 +370,7 @@ export default function AlunoPage() {
                 <h2 className="text-lg font-bold text-[#f5f5f5]">{selectedExercise.name}</h2>
               </div>
               <button onClick={() => setSelectedExercise(null)}
-                className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">✕</button>
+                className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
             </div>
 
             {/* Ficha do exercicio */}
@@ -398,7 +398,7 @@ export default function AlunoPage() {
               {/* Descricao */}
               {selectedExercise.description && (
                 <div>
-                  <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">📖 Descricao</h3>
+                  <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">Descricao</h3>
                   <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08]">
                     <p className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedExercise.description}</p>
                   </div>
@@ -408,7 +408,7 @@ export default function AlunoPage() {
               {/* Observacoes do exercicio */}
               {selectedExercise.notes && (
                 <div>
-                  <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">📝 Observacoes</h3>
+                  <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">Observacoes</h3>
                   <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08]">
                     <p className="text-sm text-[#e5e5e5]">{selectedExercise.notes}</p>
                   </div>
@@ -422,7 +422,7 @@ export default function AlunoPage() {
                 className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-xs font-semibold py-2.5 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
                 Voltar para lista
               </button>
-              <button onClick={() => setShowWorkoutModal(false)}
+              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
                 className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-2.5 rounded-lg hover:bg-[#c4956a] transition">
                 Fechar
               </button>
