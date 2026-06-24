@@ -355,9 +355,11 @@ export default function AlunoPage() {
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
          
 
-         {getImageUrl(selectedExercise.imageUrl) && !imgError ? (
-              <div className="w-full h-36 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
-                <img src={getImageUrl(selectedExercise.imageUrl)}
+        
+
+                  {getImageUrl(selectedExercise.imageUrl) && !imgError ? (
+  <div className="w-full h-36 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
+    <img src={getImageUrl(selectedExercise.imageUrl) || undefined}
                   
                   alt={selectedExercise.name}
                   className="w-full h-full object-cover"
