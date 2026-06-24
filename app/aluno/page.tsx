@@ -10,7 +10,7 @@ export default function AlunoPage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [message, setMessage] = useState&lt;{ type: string; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
   const [completing, setCompleting] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -284,7 +284,6 @@ export default function AlunoPage() {
           </div>
         </div>
       </div>
-
       {/* Modal do treino completo */}
       {showWorkoutModal && selectedPlan && !selectedExercise && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -299,7 +298,6 @@ export default function AlunoPage() {
               <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
                 className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
             </div>
-
             <div className="p-4 space-y-2">
               {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
                 <div key={ex.id || idx}
@@ -309,7 +307,7 @@ export default function AlunoPage() {
                     <span className="w-7 h-7 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[#f5f5f5]">{ex.name}</p>
-                      {/* Preview com labels - aluno frequente já entende sem clicar */}
+                      {/* Preview com labels - aluno frequente ja entende sem clicar */}
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[10px] text-[#a1a1a1]">
                         <span>{ex.series || '-'} series x {ex.reps || '-'} reps</span>
                         {ex.weight && <span>Carga: {ex.weight}kg</span>}
@@ -329,7 +327,6 @@ export default function AlunoPage() {
                 <p className="text-center text-[#6b6b6b] text-sm py-8">Nenhum exercicio cadastrado neste treino.</p>
               )}
             </div>
-
             {selectedPlan.notes && (
               <div className="px-4 pb-4">
                 <div className="bg-[#D4A373]/10 border border-[#D4A373]/20 rounded-xl p-3">
@@ -338,14 +335,12 @@ export default function AlunoPage() {
                 </div>
               </div>
             )}
-
             <div className="p-4 border-t border-[#ffffff10]">
               <p className="text-[9px] text-[#525252] text-center">Clique em um exercicio para ver detalhes</p>
             </div>
           </div>
         </div>
       )}
-
       {/* Modal de detalhe do exercicio */}
       {selectedExercise && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -366,7 +361,6 @@ export default function AlunoPage() {
                 <p className="text-[10px] text-[#444]">Sem foto disponivel</p>
               </div>
             )}
-
             <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
               <div className="flex items-center gap-2">
                 <button onClick={() => setSelectedExercise(null)}
@@ -380,7 +374,6 @@ export default function AlunoPage() {
               <button onClick={() => setSelectedExercise(null)}
                 className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
             </div>
-
             <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
@@ -400,7 +393,6 @@ export default function AlunoPage() {
                   <p className="text-[9px] text-[#6b6b6b] mt-0.5">Descanso</p>
                 </div>
               </div>
-
               {selectedExercise.description && (
                 <div>
                   <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">Descricao</h3>
@@ -409,7 +401,6 @@ export default function AlunoPage() {
                   </div>
                 </div>
               )}
-
               {selectedExercise.notes && (
                 <div>
                   <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">Observacoes</h3>
@@ -419,7 +410,6 @@ export default function AlunoPage() {
                 </div>
               )}
             </div>
-
             <div className="p-4 border-t border-[#ffffff10] flex gap-2">
               <button onClick={() => setSelectedExercise(null)}
                 className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-xs font-semibold py-2.5 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
