@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 
-// Interface da biblioteca de exercícios
+// Interface da biblioteca de exercíciosss
 interface LibraryExercise {
   id: string;
   name: string;
