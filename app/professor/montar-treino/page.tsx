@@ -1,13 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-
 interface Student {
   id: string;
   name: string;
   email?: string;
   image?: string;
 }
-
 interface LibraryExercise {
   id: string;
   name: string;
@@ -15,7 +13,6 @@ interface LibraryExercise {
   muscleGroup: string;
   imageUrl?: string;
 }
-
 interface ExerciseItem {
   name: string;
   description: string;
@@ -28,7 +25,6 @@ interface ExerciseItem {
   imageUrl?: string;
   videoUrl?: string;
 }
-
 export default function MontarTreinoPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [library, setLibrary] = useState<LibraryExercise[]>([]);
@@ -44,12 +40,10 @@ export default function MontarTreinoPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
-
   useEffect(() => {
     fetchStudents();
     fetchLibrary();
   }, []);
-
   useEffect(() => {
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
@@ -64,7 +58,6 @@ export default function MontarTreinoPage() {
       setFilteredLibrary(library);
     }
   }, [searchTerm, library]);
-
   async function fetchStudents() {
     try {
       const res = await fetch("/api/student");
@@ -74,7 +67,6 @@ export default function MontarTreinoPage() {
       }
     } catch {}
   }
-
   async function fetchLibrary() {
     try {
       const res = await fetch("/api/exercise-library");
@@ -85,7 +77,6 @@ export default function MontarTreinoPage() {
       }
     } catch {}
   }
-
   function addExercise(ex: LibraryExercise) {
     const newExercise: ExerciseItem = {
       name: ex.name,
@@ -102,33 +93,27 @@ export default function MontarTreinoPage() {
     setExercises([...exercises, newExercise]);
     setShowLibrary(false);
   }
-
   function removeExercise(index: number) {
     const updated = exercises.filter((_, i) => i !== index);
     setExercises(updated.map((ex, i) => ({ ...ex, order: i })));
   }
-
   function moveExercise(fromIndex: number, direction: "up" | "down") {
     const toIndex = direction === "up" ? fromIndex - 1 : fromIndex + 1;
-    if (toIndex < 0 || toIndex >= exercises.length) return;
+    if (toIndex &lt; 0 || toIndex >= exercises.length) return;
     const updated = [...exercises];
     [updated[fromIndex], updated[toIndex]] = [updated[toIndex], updated[fromIndex]];
     setExercises(updated.map((ex, i) => ({ ...ex, order: i })));
   }
-
   function updateExercise(index: number, field: keyof ExerciseItem, value: any) {
     const updated = [...exercises];
     (updated[index] as any)[field] = value;
     setExercises(updated);
   }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedStudent || !planName.trim() || exercises.length === 0) return;
-
     setSaving(true);
     setSuccess(false);
-
     try {
       const res = await fetch("/api/workout-plan", {
         method: "POST",
@@ -153,7 +138,6 @@ export default function MontarTreinoPage() {
           })),
         }),
       });
-
       if (res.ok) {
         setSuccess(true);
         setPlanName("");
@@ -171,11 +155,10 @@ export default function MontarTreinoPage() {
     }
     setSaving(false);
   }
-
-  // O JSX do seu arquivo atual permanece IGUAL aqui
-  // Procure o arquivo completo no GitHub e mantenha o JSX original
-  // O importante é que as 3 alterações acima já estão feitas
-
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      {/* SEU JSX
+    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
+      <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+        <h1 className="text-xl font-bold text-[#D4A373]">Montar Treino</h1>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
+            <h2 className="text-lg 
