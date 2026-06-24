@@ -437,3 +437,54 @@ export default function AlunoPage() {
             </div>
             <div className="p-3 space-y-2.5">
               <div className="grid grid-cols-4 gap-1.5">
+
+                                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Series</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.reps || '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Repeticoes</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Carga</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.restTime || '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Descanso</p>
+                </div>
+              </div>
+              {selectedExercise.description && (
+                <div>
+                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Descricao</h3>
+                  <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
+                    <p className="text-xs text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedExercise.description}</p>
+                  </div>
+                </div>
+              )}
+              {selectedExercise.notes && (
+                <div>
+                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Observacoes</h3>
+                  <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
+                    <p className="text-xs text-[#e5e5e5]">{selectedExercise.notes}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-3 border-t border-[#ffffff10] flex gap-2">
+              <button onClick={() => setSelectedExercise(null)}
+                className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
+                Voltar
+              </button>
+              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
+                className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
