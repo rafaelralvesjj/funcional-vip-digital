@@ -284,139 +284,146 @@ export default function AlunoPage() {
           </div>
         </div>
       </div>
-      {/* Modal do treino completo */}
+
+      {/* Modal do treino completo - MAIS COMPACTO */}
       {showWorkoutModal && selectedPlan && !selectedExercise && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[75vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between p-3 border-b border-[#ffffff10] sticky top-0 bg-[#111] z-10">
               <div>
-                <h2 className="text-base font-bold text-[#f5f5f5]">{selectedPlan.name}</h2>
-                <p className="text-[11px] text-[#a1a1a1]">
+                <h2 className="text-sm font-bold text-[#f5f5f5]">{selectedPlan.name}</h2>
+                <p className="text-[10px] text-[#a1a1a1]">
                   {getWeekDayName(selectedDay!)} - {selectedDay}/{currentMonth + 1}/{currentYear}
                 </p>
               </div>
               <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
-                className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
+                className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
             </div>
-            <div className="p-4 space-y-2">
+
+            <div className="p-3 space-y-1.5">
               {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
                 <div key={ex.id || idx}
                   onClick={() => { setSelectedExercise(ex); setImgError(false); }}
-                  className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08] cursor-pointer hover:border-[#D4A373]/40 transition active:scale-[0.98]">
-                  <div className="flex items-start gap-3">
-                    <span className="w-7 h-7 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
+                  className="bg-[#1a1a1a] rounded-xl p-2.5 border border-[#ffffff08] cursor-pointer hover:border-[#D4A373]/40 transition active:scale-[0.98]">
+                  <div className="flex items-start gap-2">
+                    <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[#f5f5f5]">{ex.name}</p>
-                      {/* Preview com labels - aluno frequente ja entende sem clicar */}
-                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[10px] text-[#a1a1a1]">
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[9px] text-[#a1a1a1]">
                         <span>{ex.series || '-'} series x {ex.reps || '-'} reps</span>
                         {ex.weight && <span>Carga: {ex.weight}kg</span>}
                         {ex.restTime && <span>Descanso: {ex.restTime}</span>}
                       </div>
-                      {ex.description && (
-                        <p className="text-[10px] text-[#6b6b6b] mt-1 line-clamp-2">{ex.description}</p>
-                      )}
                     </div>
-                    <svg className="w-4 h-4 text-[#525252] shrink-0 mt-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-[#525252] shrink-0 mt-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
                 </div>
               ))}
               {(!selectedPlan.exercises || selectedPlan.exercises.length === 0) && (
-                <p className="text-center text-[#6b6b6b] text-sm py-8">Nenhum exercicio cadastrado neste treino.</p>
+                <p className="text-center text-[#6b6b6b] text-sm py-6">Nenhum exercicio cadastrado neste treino.</p>
               )}
             </div>
+
             {selectedPlan.notes && (
-              <div className="px-4 pb-4">
-                <div className="bg-[#D4A373]/10 border border-[#D4A373]/20 rounded-xl p-3">
-                  <p className="text-[10px] text-[#D4A373] font-semibold mb-1">Observacoes</p>
-                  <p className="text-xs text-[#e5e5e5]">{selectedPlan.notes}</p>
+              <div className="px-3 pb-3">
+                <div className="bg-[#D4A373]/10 border border-[#D4A373]/20 rounded-xl p-2">
+                  <p className="text-[9px] text-[#D4A373] font-semibold mb-0.5">Observacoes</p>
+                  <p className="text-[11px] text-[#e5e5e5]">{selectedPlan.notes}</p>
                 </div>
               </div>
             )}
-            <div className="p-4 border-t border-[#ffffff10]">
-              <p className="text-[9px] text-[#525252] text-center">Clique em um exercicio para ver detalhes</p>
+
+            <div className="p-2.5 border-t border-[#ffffff10]">
+              <p className="text-[8px] text-[#525252] text-center">Clique em um exercicio para ver detalhes</p>
             </div>
           </div>
         </div>
       )}
-      {/* Modal de detalhe do exercicio */}
+
+      {/* Modal de detalhe do exercicio - MAIS COMPACTO */}
       {selectedExercise && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-            {/* Foto do exercicio ou placeholder */}
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
+            {/* Foto menor */}
             {selectedExercise.imageUrl && !imgError ? (
-              <div className="w-full h-52 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
+              <div className="w-full h-36 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
                 <img src={selectedExercise.imageUrl}
                   alt={selectedExercise.name}
                   className="w-full h-full object-cover"
                   onError={() => setImgError(true)} />
               </div>
             ) : (
-              <div className="w-full h-36 bg-gradient-to-br from-[#1a1a1a] to-[#222] rounded-t-2xl flex flex-col items-center justify-center gap-1">
-                <svg className="w-10 h-10 text-[#333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-full h-20 bg-gradient-to-br from-[#1a1a1a] to-[#222] rounded-t-2xl flex items-center justify-center gap-1">
+                <svg className="w-6 h-6 text-[#333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p className="text-[10px] text-[#444]">Sem foto disponivel</p>
+                <p className="text-[9px] text-[#444]">Sem foto</p>
               </div>
             )}
-            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
+
+            <div className="flex items-center justify-between p-3 border-b border-[#ffffff10]">
               <div className="flex items-center gap-2">
                 <button onClick={() => setSelectedExercise(null)}
                   className="text-[#a1a1a1] hover:text-white">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <h2 className="text-lg font-bold text-[#f5f5f5]">{selectedExercise.name}</h2>
+                <h2 className="text-base font-bold text-[#f5f5f5]">{selectedExercise.name}</h2>
               </div>
               <button onClick={() => setSelectedExercise(null)}
-                className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
+                className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
             </div>
-            <div className="p-4 space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
-                  <p className="text-lg font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
-                  <p className="text-[9px] text-[#6b6b6b] mt-0.5">Series</p>
+
+            <div className="p-3 space-y-2.5">
+              {/* Stats grid mais compacta */}
+              <div className="grid grid-cols-4 gap-1.5">
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Series</p>
                 </div>
-                <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
-                  <p className="text-lg font-bold text-[#D4A373]">{selectedExercise.reps || '-'}</p>
-                  <p className="text-[9px] text-[#6b6b6b] mt-0.5">Repeticoes</p>
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.reps || '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Repeticoes</p>
                 </div>
-                <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
-                  <p className="text-lg font-bold text-[#D4A373]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
-                  <p className="text-[9px] text-[#6b6b6b] mt-0.5">Carga</p>
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Carga</p>
                 </div>
-                <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
-                  <p className="text-lg font-bold text-[#D4A373]">{selectedExercise.restTime || '-'}</p>
-                  <p className="text-[9px] text-[#6b6b6b] mt-0.5">Descanso</p>
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.restTime || '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Descanso</p>
                 </div>
               </div>
+
               {selectedExercise.description && (
                 <div>
-                  <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">Descricao</h3>
-                  <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08]">
-                    <p className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedExercise.description}</p>
+                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Descricao</h3>
+                  <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
+                    <p className="text-xs text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedExercise.description}</p>
                   </div>
                 </div>
               )}
+
               {selectedExercise.notes && (
                 <div>
-                  <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">Observacoes</h3>
-                  <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08]">
-                    <p className="text-sm text-[#e5e5e5]">{selectedExercise.notes}</p>
+                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Observacoes</h3>
+                  <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
+                    <p className="text-xs text-[#e5e5e5]">{selectedExercise.notes}</p>
                   </div>
                 </div>
               )}
             </div>
-            <div className="p-4 border-t border-[#ffffff10] flex gap-2">
+
+            <div className="p-3 border-t border-[#ffffff10] flex gap-2">
               <button onClick={() => setSelectedExercise(null)}
-                className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-xs font-semibold py-2.5 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
-                Voltar para lista
+                className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
+                Voltar
               </button>
               <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
-                className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-2.5 rounded-lg hover:bg-[#c4956a] transition">
+                className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">
                 Fechar
               </button>
             </div>
