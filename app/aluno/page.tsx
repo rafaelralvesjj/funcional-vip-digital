@@ -353,9 +353,12 @@ export default function AlunoPage() {
       {selectedExercise && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
-            {getImageUrl(selectedExercise.imageUrl) && !imgError ? (
+         
+
+         {getImageUrl(selectedExercise.imageUrl) && !imgError ? (
               <div className="w-full h-36 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
                 <img src={getImageUrl(selectedExercise.imageUrl)}
+                  
                   alt={selectedExercise.name}
                   className="w-full h-full object-cover"
                   onError={() => setImgError(true)} />
