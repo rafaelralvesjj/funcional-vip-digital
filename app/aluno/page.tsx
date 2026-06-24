@@ -404,13 +404,14 @@ export default function AlunoPage() {
       {selectedExercise && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
+        
             {(() => {
               const imgUrl = getImageUrl(selectedExercise.imageUrl) || getExerciseImageUrl(selectedExercise.name);
               return imgUrl && !imgError ? (
-                <div className="w-full h-36 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
+                <div className="w-full bg-[#1a1a1a] rounded-t-2xl overflow-hidden flex items-center justify-center" style={{ maxHeight: '280px' }}>
                   <img src={imgUrl}
                     alt={selectedExercise.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-auto max-h-[280px] object-contain"
                     onError={() => setImgError(true)} />
                 </div>
               ) : (
@@ -422,6 +423,7 @@ export default function AlunoPage() {
                 </div>
               );
             })()}
+            
             <div className="flex items-center justify-between p-3 border-b border-[#ffffff10]">
               <div className="flex items-center gap-2">
                 <button onClick={() => setSelectedExercise(null)}
