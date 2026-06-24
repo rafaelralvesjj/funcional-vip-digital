@@ -10,7 +10,7 @@ export default function AlunoPage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  const [message, setMessage] = useState&lt;{ type: string; text: string } | null>(null);
   const [completing, setCompleting] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -19,6 +19,7 @@ export default function AlunoPage() {
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [sendingQuestion, setSendingQuestion] = useState(false);
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<any>(null);
   useEffect(() => { fetchStudentInfo(); }, []);
   useEffect(() => {
     if (studentId) {
@@ -130,6 +131,7 @@ export default function AlunoPage() {
   }
   function handleDayClick(day: number) {
     setSelectedDay(day);
+    setSelectedExercise(null);
     const plan = getPlanForDay(day);
     setSelectedPlan(plan);
   }
@@ -283,10 +285,9 @@ export default function AlunoPage() {
       </div>
 
       {/* Modal do treino completo */}
-      {showWorkoutModal && selectedPlan && (
+      {showWorkoutModal && selectedPlan && !selectedExercise && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl">
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
               <div>
                 <h2 className="text-base font-bold text-[#f5f5f5]">{selectedPlan.name}</h2>
@@ -298,45 +299,131 @@ export default function AlunoPage() {
                 className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">✕</button>
             </div>
 
-            {/* Lista completa de exercícios */}
             <div className="p-4 space-y-2">
               {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
-                <div key={ex.id || idx} className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08]">
-                  <div className="flex items-start gap-2">
-                    <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
+                <div key={ex.id || idx}
+                  onClick={() => setSelectedExercise(ex)}
+                  className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08] cursor-pointer hover:border-[#D4A373]/40 transition active:scale-[0.98]">
+                  <div className="flex items-start gap-3">
+                    <span className="w-7 h-7 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[#f5f5f5]">{ex.name}</p>
                       <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-[#a1a1a1]">
                         <span>🔁 {ex.series}x{ex.reps}</span>
                         {ex.weight && <span>⚡ {ex.weight}kg</span>}
-                        {ex.rest && <span>⏱️ {ex.rest}</span>}
+                        {ex.restTime && <span>⏱️ {ex.restTime}</span>}
                       </div>
-                      {ex.observation && (
-                        <p className="text-[10px] text-[#6b6b6b] mt-1 italic">{ex.observation}</p>
+                      {ex.description && (
+                        <p className="text-[10px] text-[#6b6b6b] mt-1 line-clamp-2">{ex.description}</p>
                       )}
                     </div>
+                    <svg className="w-4 h-4 text-[#525252] shrink-0 mt-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
                 </div>
               ))}
               {(!selectedPlan.exercises || selectedPlan.exercises.length === 0) && (
-                <p className="text-center text-[#6b6b6b] text-sm py-8">Nenhum exercício cadastrado neste treino.</p>
+                <p className="text-center text-[#6b6b6b] text-sm py-8">Nenhum exercicio cadastrado neste treino.</p>
               )}
             </div>
 
-            {/* Observações do treino */}
             {selectedPlan.notes && (
               <div className="px-4 pb-4">
                 <div className="bg-[#D4A373]/10 border border-[#D4A373]/20 rounded-xl p-3">
-                  <p className="text-[10px] text-[#D4A373] font-semibold mb-1">📝 Observações</p>
+                  <p className="text-[10px] text-[#D4A373] font-semibold mb-1">📝 Observacoes</p>
                   <p className="text-xs text-[#e5e5e5]">{selectedPlan.notes}</p>
                 </div>
               </div>
             )}
 
-            {/* Footer */}
-            <div className="p-4 border-t border-[#ffffff10] flex justify-end">
+            <div className="p-4 border-t border-[#ffffff10]">
+              <p className="text-[9px] text-[#525252] text-center">Clique em um exercicio para ver detalhes</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de detalhe do exercicio */}
+      {selectedExercise && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+            {/* Foto do exercicio */}
+            {selectedExercise.imageUrl && (
+              <div className="w-full h-48 bg-[#1a1a1a] rounded-t-2xl overflow-hidden flex items-center justify-center">
+                <img src={selectedExercise.imageUrl}
+                  alt={selectedExercise.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              </div>
+            )}
+
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSelectedExercise(null)}
+                  className="text-[#a1a1a1] hover:text-white">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <h2 className="text-lg font-bold text-[#f5f5f5]">{selectedExercise.name}</h2>
+              </div>
+              <button onClick={() => setSelectedExercise(null)}
+                className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">✕</button>
+            </div>
+
+            {/* Ficha do exercicio */}
+            <div className="p-4 space-y-4">
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
+                  <p className="text-[18px] font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
+                  <p className="text-[9px] text-[#6b6b6b] mt-0.5">Series</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
+                  <p className="text-[18px] font-bold text-[#D4A373]">{selectedExercise.reps || '-'}</p>
+                  <p className="text-[9px] text-[#6b6b6b] mt-0.5">Repeticoes</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
+                  <p className="text-[18px] font-bold text-[#D4A373]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
+                  <p className="text-[9px] text-[#6b6b6b] mt-0.5">Carga</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
+                  <p className="text-[18px] font-bold text-[#D4A373]">{selectedExercise.restTime || '-'}</p>
+                  <p className="text-[9px] text-[#6b6b6b] mt-0.5">Descanso</p>
+                </div>
+              </div>
+
+              {/* Descricao */}
+              {selectedExercise.description && (
+                <div>
+                  <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">📖 Descricao</h3>
+                  <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08]">
+                    <p className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedExercise.description}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Observacoes do exercicio */}
+              {selectedExercise.notes && (
+                <div>
+                  <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">📝 Observacoes</h3>
+                  <div className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08]">
+                    <p className="text-sm text-[#e5e5e5]">{selectedExercise.notes}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Botao voltar */}
+            <div className="p-4 border-t border-[#ffffff10] flex gap-2">
+              <button onClick={() => setSelectedExercise(null)}
+                className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-xs font-semibold py-2.5 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
+                Voltar para lista
+              </button>
               <button onClick={() => setShowWorkoutModal(false)}
-                className="bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold px-6 py-2 rounded-lg hover:bg-[#c4956a] transition">
+                className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-2.5 rounded-lg hover:bg-[#c4956a] transition">
                 Fechar
               </button>
             </div>
