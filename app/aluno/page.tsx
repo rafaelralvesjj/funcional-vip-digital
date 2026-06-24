@@ -10,7 +10,7 @@ export default function AlunoPage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  const [message, setMessage] = useState&lt;{ type: string; text: string } | null>(null);
   const [completing, setCompleting] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -20,6 +20,7 @@ export default function AlunoPage() {
   const [sendingQuestion, setSendingQuestion] = useState(false);
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
+  const [imgError, setImgError] = useState(false);
   useEffect(() => { fetchStudentInfo(); }, []);
   useEffect(() => {
     if (studentId) {
@@ -302,16 +303,17 @@ export default function AlunoPage() {
             <div className="p-4 space-y-2">
               {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
                 <div key={ex.id || idx}
-                  onClick={() => setSelectedExercise(ex)}
+                  onClick={() => { setSelectedExercise(ex); setImgError(false); }}
                   className="bg-[#1a1a1a] rounded-xl p-3 border border-[#ffffff08] cursor-pointer hover:border-[#D4A373]/40 transition active:scale-[0.98]">
                   <div className="flex items-start gap-3">
                     <span className="w-7 h-7 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[#f5f5f5]">{ex.name}</p>
-                      <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-[#a1a1a1]">
-                        <span>{ex.series}x{ex.reps}</span>
-                        {ex.weight && <span>{ex.weight}kg</span>}
-                        {ex.restTime && <span>{ex.restTime}</span>}
+                      {/* Preview com labels - aluno frequente já entende sem clicar */}
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[10px] text-[#a1a1a1]">
+                        <span>{ex.series || '-'} series x {ex.reps || '-'} reps</span>
+                        {ex.weight && <span>Carga: {ex.weight}kg</span>}
+                        {ex.restTime && <span>Descanso: {ex.restTime}</span>}
                       </div>
                       {ex.description && (
                         <p className="text-[10px] text-[#6b6b6b] mt-1 line-clamp-2">{ex.description}</p>
@@ -348,17 +350,23 @@ export default function AlunoPage() {
       {selectedExercise && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-            {/* Foto do exercicio */}
-            {selectedExercise.imageUrl && (
-              <div className="w-full h-48 bg-[#1a1a1a] rounded-t-2xl overflow-hidden flex items-center justify-center">
+            {/* Foto do exercicio ou placeholder */}
+            {selectedExercise.imageUrl && !imgError ? (
+              <div className="w-full h-52 bg-[#1a1a1a] rounded-t-2xl overflow-hidden">
                 <img src={selectedExercise.imageUrl}
                   alt={selectedExercise.name}
                   className="w-full h-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  onError={() => setImgError(true)} />
+              </div>
+            ) : (
+              <div className="w-full h-36 bg-gradient-to-br from-[#1a1a1a] to-[#222] rounded-t-2xl flex flex-col items-center justify-center gap-1">
+                <svg className="w-10 h-10 text-[#333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-[10px] text-[#444]">Sem foto disponivel</p>
               </div>
             )}
 
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
               <div className="flex items-center gap-2">
                 <button onClick={() => setSelectedExercise(null)}
@@ -373,29 +381,26 @@ export default function AlunoPage() {
                 className="text-[#a1a1a1] hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
             </div>
 
-            {/* Ficha do exercicio */}
             <div className="p-4 space-y-4">
-              {/* Stats grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
-                  <p className="text-[18px] font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
+                  <p className="text-lg font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
                   <p className="text-[9px] text-[#6b6b6b] mt-0.5">Series</p>
                 </div>
                 <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
-                  <p className="text-[18px] font-bold text-[#D4A373]">{selectedExercise.reps || '-'}</p>
+                  <p className="text-lg font-bold text-[#D4A373]">{selectedExercise.reps || '-'}</p>
                   <p className="text-[9px] text-[#6b6b6b] mt-0.5">Repeticoes</p>
                 </div>
                 <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
-                  <p className="text-[18px] font-bold text-[#D4A373]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
+                  <p className="text-lg font-bold text-[#D4A373]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
                   <p className="text-[9px] text-[#6b6b6b] mt-0.5">Carga</p>
                 </div>
                 <div className="bg-[#1a1a1a] rounded-xl p-3 text-center border border-[#ffffff08]">
-                  <p className="text-[18px] font-bold text-[#D4A373]">{selectedExercise.restTime || '-'}</p>
+                  <p className="text-lg font-bold text-[#D4A373]">{selectedExercise.restTime || '-'}</p>
                   <p className="text-[9px] text-[#6b6b6b] mt-0.5">Descanso</p>
                 </div>
               </div>
 
-              {/* Descricao */}
               {selectedExercise.description && (
                 <div>
                   <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">Descricao</h3>
@@ -405,7 +410,6 @@ export default function AlunoPage() {
                 </div>
               )}
 
-              {/* Observacoes do exercicio */}
               {selectedExercise.notes && (
                 <div>
                   <h3 className="text-xs font-semibold text-[#D4A373] mb-1.5">Observacoes</h3>
@@ -416,7 +420,6 @@ export default function AlunoPage() {
               )}
             </div>
 
-            {/* Botao voltar */}
             <div className="p-4 border-t border-[#ffffff10] flex gap-2">
               <button onClick={() => setSelectedExercise(null)}
                 className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-xs font-semibold py-2.5 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
