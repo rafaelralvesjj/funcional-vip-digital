@@ -44,7 +44,8 @@ export default function StudentsPage() {
             {students.map((student) => (
               <Link
                 key={student.id}
-                href={`/dashboard/aluno/${student.id}`}
+                
+                href={`/dashboard/aluno?id=${student.id}`}
                 className="block bg-[#111111] border border-[#ffffff10] rounded-xl p-4 transition hover:border-[#D4A373]/50 hover:bg-[#1a1a1a]"
               >
                 <div className="flex items-center gap-4">
