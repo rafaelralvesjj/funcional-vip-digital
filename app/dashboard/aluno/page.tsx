@@ -12,7 +12,6 @@ function PerfilContent() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"treinos" | "avisos">("treinos");
 
-  // Modal states
   const [editPlan, setEditPlan] = useState<any>(null);
   const [editNotice, setEditNotice] = useState<any>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -25,8 +24,8 @@ function PerfilContent() {
     try {
       const [studentsRes, plansRes, noticesRes] = await Promise.all([
         fetch("/api/students"),
-        fetch(`/api/workout-plan?studentId=${studentId}`),
-        fetch(`/api/notices?studentId=${studentId}`)
+        fetch("/api/workout-plan?studentId=" + studentId),
+        fetch("/api/notices?studentId=" + studentId)
       ]);
 
       if (studentsRes.ok) {
@@ -53,7 +52,7 @@ function PerfilContent() {
 
   async function deletePlan(id: string) {
     if (!confirm("Excluir este plano de treino?")) return;
-    const res = await fetch(`/api/workout-plan?id=${id}`, { method: "DELETE" });
+    const res = await fetch("/api/workout-plan?id=" + id, { method: "DELETE" });
     if (res.ok) setPlans((prev) => prev.filter((p) => p.id !== id));
   }
 
@@ -73,7 +72,7 @@ function PerfilContent() {
 
   async function deleteNotice(id: string) {
     if (!confirm("Excluir este aviso?")) return;
-    const res = await fetch(`/api/notices?id=${id}`, { method: "DELETE" });
+    const res = await fetch("/api/notices?id=" + id, { method: "DELETE" });
     if (res.ok) setNotices((prev) => prev.filter((n) => n.id !== id));
   }
 
@@ -110,21 +109,18 @@ function PerfilContent() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Cabeçalho do Aluno */}
         <h1 className="text-xl font-bold text-[#D4A373]">{student?.name || "Aluno"}</h1>
         <p className="text-sm text-[#a1a1a1] mb-6">ID: {studentId}</p>
 
-        {/* Abas */}
         <div className="flex gap-4 border-b border-[#2a2a2a] mb-6">
-          <button onClick={() => setActiveTab("treinos")} className={`pb-2 px-4 text-sm font-medium transition-colors ${activeTab === "treinos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]"}`}>
+          <button onClick={() => setActiveTab("treinos")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "treinos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
             Planos de Treino
           </button>
-          <button onClick={() => setActiveTab("avisos")} className={`pb-2 px-4 text-sm font-medium transition-colors ${activeTab === "avisos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]"}`}>
+          <button onClick={() => setActiveTab("avisos")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "avisos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
             Avisos
           </button>
         </div>
 
-        {/* Conteúdo: Treinos */}
         {activeTab === "treinos" && (
           <div>
             {plans.length === 0 ? (
@@ -135,7 +131,7 @@ function PerfilContent() {
                   <div key={plan.id} className="bg-[#1a1a1a] rounded-lg p-4 flex items-center justify-between">
                     <div>
                       <h3 className="text-white font-medium">{plan.name} <span className="text-[#6b6b6b] text-xs font-normal ml-2">{plan.date ? new Date(plan.date).toLocaleDateString("pt-BR") : "Sem data"}</span></h3>
-                      <p className="text-[#6b6b6b] text-xs mt-1">{plan.description || "Sem descrição"} · {plan.exercises?.length || 0} exercícios</p>
+                      <p className="text-[#6b6b6b] text-xs mt-1">{plan.description || "Sem descricao"} - {plan.exercises?.length || 0} exercicios</p>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => { setEditPlan(plan); setEditName(plan.name); setEditDescription(plan.description || ""); }} className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors">Editar</button>
@@ -146,6 +142,71 @@ function PerfilContent() {
               </div>
             )}
 
-            {/* Modal Editar Plano */}
             {editPlan && (
-              <div className="fixed inset-0 bg-black/60 flex items-center 
+              <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditPlan(null)}>
+                <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+                  <h2 className="text-white font-medium mb-4">Editar Plano de Treino</h2>
+                  <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nome do plano" className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]" />
+                  <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} placeholder="Descricao" rows={3} className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373] resize-none" />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditPlan(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">Cancelar</button>
+                    <button onClick={savePlan} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors">Salvar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "avisos" && (
+          <div>
+            {notices.length === 0 ? (
+              <p className="text-[#6b6b6b] text-sm">Nenhum aviso encontrado.</p>
+            ) : (
+              <div className="space-y-3">
+                {notices.map((notice) => (
+                  <div key={notice.id} className="bg-[#1a1a1a] rounded-lg p-4 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-medium">{notice.title || "Sem titulo"}</h3>
+                      <p className="text-[#6b6b6b] text-xs mt-1">{notice.content?.substring(0, 80)}{notice.content?.length > 80 ? "..." : ""} - {new Date(notice.createdAt).toLocaleDateString("pt-BR")}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setEditNotice(notice); setEditTitle(notice.title || ""); setEditContent(notice.content); }} className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors">Editar</button>
+                      <button onClick={() => deleteNotice(notice.id)} className="text-xs bg-[#3a1a1a] hover:bg-[#4a2a2a] text-[#ff6b6b] px-3 py-1.5 rounded transition-colors">Excluir</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {editNotice && (
+              <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditNotice(null)}>
+                <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+                  <h2 className="text-white font-medium mb-4">Editar Aviso</h2>
+                  <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Titulo" className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]" />
+                  <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} placeholder="Conteudo" rows={3} className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373] resize-none" />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditNotice(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">Cancelar</button>
+                    <button onClick={saveNotice} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors">Salvar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function PerfilAlunoPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
+        <p className="text-[#6b6b6b]">Carregando...</p>
+      </div>
+    }>
+      <PerfilContent />
+    </Suspense>
+  );
+}
