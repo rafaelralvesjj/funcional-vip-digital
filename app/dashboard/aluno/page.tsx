@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function PerfilAlunoPage() {
+function PerfilContent() {
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
 
@@ -60,5 +60,17 @@ export default function PerfilAlunoPage() {
         <p className="text-sm text-[#6b6b6b] mt-4">Perfil do aluno carregado com sucesso!</p>
       </div>
     </div>
+  );
+}
+
+export default function PerfilAlunoPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
+        <p className="text-[#6b6b6b]">Carregando...</p>
+      </div>
+    }>
+      <PerfilContent />
+    </Suspense>
   );
 }
