@@ -32,7 +32,7 @@ export default function MuralPage() {
 
   async function fetchStudents() {
     try {
-      const res = await fetch("/api/student");
+      const res = await fetch("/api/students");
       if (res.ok) {
         const data = await res.json();
         setStudents(data.students || data || []);
