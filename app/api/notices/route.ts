@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { studentId, content, title, type } = body;
+    const { studentId, content, title, type, expiresAt } = body;
 
     if (!content || typeof content !== "string" || !content.trim()) {
       return NextResponse.json(
@@ -22,14 +22,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const data: any = {
+      content: content.trim(),
+      type: type || "AVISO",
+      title: title || null,
+      author: { connect: { id: userId } },
+    };
+
+    if (studentId) {
+      data.student = { connect: { id: studentId } };
+    }
+
+    if (expiresAt) {
+      data.expiresAt = new Date(expiresAt);
+    }
+
     const notice = await prisma.notice.create({
-      data: {
-        content: content.trim(),
-        type: type || "AVISO",
-        title: title || null,
-        author: { connect: { id: userId } },
-        ...(studentId && { student: { connect: { id: studentId } } }),
-      },
+      data,
       include: {
         author: { select: { id: true, name: true } },
         student: { select: { id: true, name: true } },
