@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
+
 interface Student {
   id: string;
   name: string;
