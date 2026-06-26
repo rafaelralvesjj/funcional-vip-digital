@@ -19,10 +19,12 @@ function PerfilContent() {
 
   async function fetchStudent() {
     try {
-      const res = await fetch(`/api/student/${studentId}`);
+      const res = await fetch(`/api/students`);
       if (res.ok) {
         const data = await res.json();
-        setStudent(data);
+        const list = Array.isArray(data) ? data : data.students || data || [];
+        const found = list.find((s: any) => s.id === studentId);
+        if (found) setStudent(found);
       }
     } catch {}
     setLoading(false);
