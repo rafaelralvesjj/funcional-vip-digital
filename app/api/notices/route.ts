@@ -1,63 +1,82 @@
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.id as string | undefined;
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
-    }
-
-    const notices = await prisma.notice.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-    });
-
-    return NextResponse.json(notices);
-  } catch (error) {
-    console.error("[GET /api/notices]", error);
-    return NextResponse.json(
-      { message: "Erro ao buscar avisos" },
-      { status: 500 }
-    );
+  if (!userId) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
-}
 
-export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const body = await req.json();
+    const { studentId, content, title, type } = body;
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { title, content, published } = body;
-
-    if (!title || !content) {
+    if (!content || typeof content !== "string" || !content.trim()) {
       return NextResponse.json(
-        { message: "Título e conteúdo são obrigatórios" },
+        { error: "Conteúdo é obrigatório" },
         { status: 400 }
       );
     }
 
     const notice = await prisma.notice.create({
       data: {
-        title,
-        content,
-        published: published ?? false,
-        userId: session.user.id,
+        content: content.trim(),
+        type: type || "AVISO",
+        title: title || null,
+        author: { connect: { id: userId } },
+        ...(studentId && { student: { connect: { id: studentId } } }),
+      },
+      include: {
+        author: { select: { id: true, name: true } },
+        student: { select: { id: true, name: true } },
       },
     });
 
     return NextResponse.json(notice, { status: 201 });
   } catch (error) {
-    console.error("[POST /api/notices]", error);
+    console.error("Erro ao criar aviso:", error);
     return NextResponse.json(
-      { message: "Erro ao criar aviso" },
+      { error: "Erro ao criar aviso" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.id as string | undefined;
+
+  if (!userId) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = req.nextUrl;
+    const studentId = searchParams.get("studentId") || undefined;
+    const authorId = searchParams.get("authorId") || undefined;
+
+    const where: any = {};
+    if (studentId) where.studentId = studentId;
+    if (authorId) where.authorId = authorId;
+
+    const notices = await prisma.notice.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        author: { select: { id: true, name: true } },
+        student: { select: { id: true, name: true } },
+      },
+    });
+
+    return NextResponse.json(notices);
+  } catch (error) {
+    console.error("Erro ao listar avisos:", error);
+    return NextResponse.json(
+      { error: "Erro ao listar avisos" },
       { status: 500 }
     );
   }
