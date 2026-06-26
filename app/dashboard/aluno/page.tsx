@@ -110,7 +110,7 @@ function PerfilContent() {
     <div className="min-h-screen bg-[#0a0a0a] p-6">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-xl font-bold text-[#D4A373]">{student?.name || "Aluno"}</h1>
-        <p className="text-sm text-[#a1a1a1] mb-6">ID: {studentId}</p>
+        <p className="text-sm text-[#6b6b6b] mb-6">Bem vindo ao perfil do aluno!</p>
 
         <div className="flex gap-4 border-b border-[#2a2a2a] mb-6">
           <button onClick={() => setActiveTab("treinos")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "treinos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
