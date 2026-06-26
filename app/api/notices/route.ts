@@ -1,88 +1,63 @@
-import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import prisma from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-
-  if (!userId) {
-    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-  }
-
+export async function GET() {
   try {
-    const body = await req.json();
-    const { studentId, content, title, type } = body;
+    const session = await getServerSession(authOptions);
 
-    if (!content || typeof content !== "string" || !content.trim()) {
-      return NextResponse.json(
-        { error: "Conteúdo é obrigatório" },
-        { status: 400 }
-      );
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
     }
 
-    const data: Prisma.NoticeCreateInput = {
-      content: content.trim(),
-      type: type && typeof type === "string" ? type : "AVISO",
-      author: { connect: { id: userId } },
-      ...(title && typeof title === "string" && { title: title.trim() }),
-      ...(studentId &&
-        typeof studentId === "string" && {
-          student: { connect: { id: studentId } },
-        }),
-    };
-
-    const notice = await prisma.notice.create({
-      data,
-      include: {
-        author: { select: { id: true, name: true } },
-        student: { select: { id: true, name: true } },
-      },
+    const notices = await prisma.notice.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(notice, { status: 201 });
+    return NextResponse.json(notices);
   } catch (error) {
-    console.error("Erro ao criar aviso:", error);
+    console.error("[GET /api/notices]", error);
     return NextResponse.json(
-      { error: "Erro ao criar aviso" },
+      { message: "Erro ao buscar avisos" },
       { status: 500 }
     );
   }
 }
 
-export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-
-  if (!userId) {
-    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-  }
-
+export async function POST(request: Request) {
   try {
-    const { searchParams } = req.nextUrl;
-    const studentId = searchParams.get("studentId") || undefined;
-    const authorId = searchParams.get("authorId") || undefined;
+    const session = await getServerSession(authOptions);
 
-    const where: Prisma.NoticeWhereInput = {};
-    if (studentId) where.studentId = studentId;
-    if (authorId) where.authorId = authorId;
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
+    }
 
-    const notices = await prisma.notice.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      include: {
-        author: { select: { id: true, name: true } },
-        student: { select: { id: true, name: true } },
+    const body = await request.json();
+    const { title, content, published } = body;
+
+    if (!title || !content) {
+      return NextResponse.json(
+        { message: "Título e conteúdo são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    const notice = await prisma.notice.create({
+      data: {
+        title,
+        content,
+        published: published ?? false,
+        userId: session.user.id,
       },
     });
 
-    return NextResponse.json(notices);
+    return NextResponse.json(notice, { status: 201 });
   } catch (error) {
-    console.error("Erro ao listar avisos:", error);
+    console.error("[POST /api/notices]", error);
     return NextResponse.json(
-      { error: "Erro ao listar avisos" },
+      { message: "Erro ao criar aviso" },
       { status: 500 }
     );
   }
