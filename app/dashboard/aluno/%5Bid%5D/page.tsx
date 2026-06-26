@@ -1,241 +1,438 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { signOut } from "next-auth/react";
 
-// Interface da biblioteca de exercíciosss
-interface LibraryExercise {
+interface Student {
   id: string;
   name: string;
-  description: string;
-  muscleGroup: string;
-  imageUrl?: string;
+  email?: string;
+  phone?: string;
+  active: boolean;
+  createdAt: string;
 }
 
-export default function AlunoDashboardPage() {
+interface WorkoutPlan {
+  id: string;
+  name: string;
+  description?: string;
+  active: boolean;
+  date?: string;
+  createdAt: string;
+  exercises: Exercise[];
+}
+
+interface Exercise {
+  id: string;
+  name: string;
+  series?: number;
+  reps?: string;
+  weight?: string;
+  restTime?: string;
+  notes?: string;
+  order: number;
+}
+
+interface Notice {
+  id: string;
+  title?: string;
+  content: string;
+  type: string;
+  expiresAt?: string;
+  createdAt: string;
+  author?: { name: string };
+}
+
+interface Avaliacao {
+  id: string;
+  tipo: string;
+  mesReferencia: number;
+  objetivo: string;
+  peso?: number;
+  altura?: number;
+  createdAt: string;
+}
+
+export default function PerfilAlunoPage() {
   const params = useParams();
   const studentId = params.id as string;
-  const [plans, setPlans] = useState<any[]>([]);
-  const [workouts, setWorkouts] = useState<any[]>([]);
-  const [selectedPlan, setSelectedPlan] = useState<any>(null);
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
-  const [completing, setCompleting] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [studentName, setStudentName] = useState("Aluno");
-  // Estado para a biblioteca de exercícios (mapa nome -> imageUrl)
-  const [exerciseImages, setExerciseImages] = useState<Record<string, string>>({});
+
+  const [student, setStudent] = useState<Student | null>(null);
+  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"treinos" | "avisos" | "avaliacoes">("treinos");
+
+  // Estados para editar treino
+  const [editingWorkout, setEditingWorkout] = useState<string | null>(null);
+  const [editWorkoutName, setEditWorkoutName] = useState("");
+  const [editWorkoutDesc, setEditWorkoutDesc] = useState("");
+
+  // Estados para editar aviso
+  const [editingNotice, setEditingNotice] = useState<string | null>(null);
+  const [editNoticeTitle, setEditNoticeTitle] = useState("");
+  const [editNoticeContent, setEditNoticeContent] = useState("");
 
   useEffect(() => {
     if (studentId) {
-      fetchPlans();
-      fetchWorkouts();
       fetchStudent();
-      fetchExerciseLibrary(); // Carrega a biblioteca de exercícios
+      fetchWorkoutPlans();
+      fetchNotices();
+      fetchAvaliacoes();
     }
-  }, [studentId, currentMonth, currentYear]);
-
-  // Busca a biblioteca de exercícios e cria um mapa nome -> imageUrl
-  async function fetchExerciseLibrary() {
-    try {
-      const res = await fetch("/api/exercise-library");
-      if (res.ok) {
-        const data = await res.json();
-        const exercises: LibraryExercise[] = data.exercises || [];
-        const imageMap: Record<string, string> = {};
-        exercises.forEach((ex) => {
-          if (ex.imageUrl) {
-            imageMap[ex.name.toLowerCase()] = ex.imageUrl;
-          }
-        });
-        setExerciseImages(imageMap);
-      }
-    } catch {}
-  }
-
-  // Função para obter a imagem de um exercício pelo nome
-  function getExerciseImageUrl(exerciseName: string): string | null {
-    const key = exerciseName.toLowerCase();
-    return exerciseImages[key] || null;
-  }
+  }, [studentId]);
 
   async function fetchStudent() {
     try {
-      const res = await fetch("/api/students");
+      const res = await fetch(`/api/student/${studentId}`);
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : data.students || data || [];
-        const found = list.find((s: any) => s.id === studentId);
-        if (found) setStudentName(found.name);
+        setStudent(data);
+      }
+    } catch {}
+    setLoading(false);
+  }
+
+  async function fetchWorkoutPlans() {
+    try {
+      const res = await fetch(`/api/workout-plan?studentId=${studentId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWorkoutPlans(Array.isArray(data) ? data : []);
       }
     } catch {}
   }
 
-  async function fetchPlans() {
+  async function fetchNotices() {
     try {
-      const url = "/api/workout-plan?studentId=" + studentId;
-      const res = await fetch(url);
+      const res = await fetch(`/api/notices?studentId=${studentId}`);
       if (res.ok) {
         const data = await res.json();
-        setPlans(Array.isArray(data) ? data : []);
-        if (Array.isArray(data) && data.length > 0) {
-          setSelectedPlan(data[0]);
-        }
+        setNotices(Array.isArray(data) ? data : []);
       }
     } catch {}
   }
 
-  async function fetchWorkouts() {
+  async function fetchAvaliacoes() {
     try {
-      const url = "/api/workout/mark-complete?studentId=" + studentId + "&month=" + (currentMonth + 1) + "&year=" + currentYear;
-      const res = await fetch(url);
+      const res = await fetch(`/api/avaliacao?alunoId=${studentId}`);
       if (res.ok) {
         const data = await res.json();
-        setWorkouts(Array.isArray(data) ? data : []);
+        setAvaliacoes(Array.isArray(data) ? data : []);
       }
     } catch {}
   }
 
-  async function markAsComplete() {
-    if (!selectedPlan) return;
-    setCompleting(true);
-    setMessage(null);
+  async function handleDeleteWorkout(workoutId: string) {
+    if (!confirm("Tem certeza que deseja excluir este treino?")) return;
     try {
-      const res = await fetch("/api/workout/mark-complete", {
-        method: "POST",
+      const res = await fetch(`/api/workout-plan?id=${workoutId}`, { method: "DELETE" });
+      if (res.ok) {
+        fetchWorkoutPlans();
+      }
+    } catch {}
+  }
+
+  async function handleEditWorkout(workoutId: string) {
+    try {
+      const res = await fetch(`/api/workout-plan`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workoutPlanId: selectedPlan.id, studentId }),
+        body: JSON.stringify({
+          id: workoutId,
+          name: editWorkoutName,
+          description: editWorkoutDesc,
+        }),
       });
       if (res.ok) {
-        setMessage({ type: "success", text: "Treino concluido!" });
-        fetchWorkouts();
+        setEditingWorkout(null);
+        fetchWorkoutPlans();
       }
     } catch {}
-    setCompleting(false);
-    setTimeout(() => setMessage(null), 3000);
   }
 
-  function isToday(day: number) {
-    const d = new Date();
-    return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
+  async function handleDeleteNotice(noticeId: string) {
+    if (!confirm("Tem certeza que deseja excluir este aviso?")) return;
+    try {
+      const res = await fetch(`/api/notices?id=${noticeId}`, { method: "DELETE" });
+      if (res.ok) {
+        fetchNotices();
+      }
+    } catch {}
   }
 
-  function isCompleted(day: number) {
-    const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
-    return workouts.some((w: any) => w.workoutPlanId === selectedPlan?.id && w.date.startsWith(ds) && w.status === "CONCLUIDO");
+  async function handleEditNotice(noticeId: string) {
+    try {
+      const res = await fetch(`/api/notices`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: noticeId,
+          title: editNoticeTitle,
+          content: editNoticeContent,
+        }),
+      });
+      if (res.ok) {
+        setEditingNotice(null);
+        fetchNotices();
+      }
+    } catch {}
   }
 
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-  const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
-  const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  function formatDate(dateStr: string) {
+    return new Date(dateStr).toLocaleDateString("pt-BR", {
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
+        <p className="text-[#6b6b6b]">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (!student) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
+        <p className="text-[#6b6b6b]">Aluno não encontrado</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      <header className="border-b border-[#ffffff10] bg-green-600 px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">F</div>
-          <span className="text-[#D4A373] font-bold">Funcional Vip Digital</span>
+    <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header do Aluno */}
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-[#D4A373]/20 flex items-center justify-center text-2xl font-bold text-[#D4A373]">
+              {student.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-[#f5f5f5]">{student.name}</h1>
+              <p className="text-sm text-[#6b6b6b]">
+                {student.email && `${student.email}  |  `}
+                {student.phone && `${student.phone}  |  `}
+                Aluno desde {formatDate(student.createdAt)}
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-[#a1a1a1] text-sm">{studentName}</span>
-          <button onClick={() => signOut({ callbackUrl: "/" })} className="text-xs text-[#525252] hover:text-red-400 transition">Sair</button>
+
+        {/* Abas */}
+        <div className="flex gap-2 border-b border-[#ffffff10] pb-2">
+          {(["treinos", "avisos", "avaliacoes"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                activeTab === tab
+                  ? "bg-[#D4A373] text-[#0a0a0a]"
+                  : "text-[#a1a1a1] hover:text-[#f5f5f5] hover:bg-[#ffffff10]"
+              }`}
+            >
+              {tab === "treinos" && `Treinos (${workoutPlans.length})`}
+              {tab === "avisos" && `Avisos (${notices.length})`}
+              {tab === "avaliacoes" && `Avaliações (${avaliacoes.length})`}
+            </button>
+          ))}
         </div>
-      </header>
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold text-pink-400 mb-1">Ola, {studentName}!</h1>
-        <p className="text-[#a1a1a1] text-sm mb-6">Bem-vindo a sua area do aluno</p>
-        {message && (
-          <div className={"mb-4 text-sm rounded-lg p-3 " + (message.type === "success" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400")}>
-            {message.text}
+
+        {/* Conteúdo das Abas */}
+        {activeTab === "treinos" && (
+          <div className="space-y-3">
+            {workoutPlans.length === 0 ? (
+              <p className="text-[#525252] text-sm text-center py-8">Nenhum treino enviado para este aluno.</p>
+            ) : (
+              workoutPlans.map((plan) => (
+                <div key={plan.id} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
+                  {editingWorkout === plan.id ? (
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={editWorkoutName}
+                        onChange={(e) => setEditWorkoutName(e.target.value)}
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                        placeholder="Nome do treino"
+                      />
+                      <textarea
+                        value={editWorkoutDesc}
+                        onChange={(e) => setEditWorkoutDesc(e.target.value)}
+                        rows={2}
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] resize-none"
+                        placeholder="Descrição"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditWorkout(plan.id)}
+                          className="bg-[#D4A373] text-[#0a0a0a] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#b88a5e]"
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          onClick={() => setEditingWorkout(null)}
+                          className="text-[#a1a1a1] px-4 py-2 rounded-lg text-sm hover:bg-[#ffffff10]"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <h3 className="text-sm font-semibold text-[#f5f5f5]">{plan.name}</h3>
+                          {plan.description && (
+                            <p className="text-sm text-[#a1a1a1] mt-1">{plan.description}</p>
+                          )}
+                          <p className="text-[11px] text-[#6b6b6b] mt-2">
+                            {formatDate(plan.createdAt)} {plan.date && `| Data: ${formatDate(plan.date)}`}
+                          </p>
+                          {plan.exercises.length > 0 && (
+                            <div className="mt-3 space-y-1">
+                              <p className="text-[11px] text-[#D4A373] font-medium">Exercícios:</p>
+                              {plan.exercises.map((ex) => (
+                                <p key={ex.id} className="text-xs text-[#a1a1a1]">
+                                  {ex.name} {ex.series && `- ${ex.series}x`} {ex.reps && `${ex.reps}`}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingWorkout(plan.id);
+                              setEditWorkoutName(plan.name);
+                              setEditWorkoutDesc(plan.description || "");
+                            }}
+                            className="text-[#D4A373] hover:text-[#b88a5e] text-xs px-2 py-1 rounded transition"
+                            title="Editar treino"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDeleteWorkout(plan.id)}
+                            className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded transition"
+                            title="Excluir treino"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         )}
-        <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-5 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-[#f5f5f5]">Meus Treinos</h2>
-            <div className="flex items-center gap-3">
-              <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); } else { setCurrentMonth(currentMonth - 1); } }}
-                className="text-[#a1a1a1] hover:text-white px-2">←</button>
-              <span className="text-[#f5f5f5] text-sm">{meses[currentMonth]} {currentYear}</span>
-              <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); } else { setCurrentMonth(currentMonth + 1); } }}
-                className="text-[#a1a1a1] hover:text-white px-2">→</button>
-            </div>
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {nomes.map((d) => <div key={d} className="text-center text-xs text-[#525252] py-2">{d}</div>)}
-            {Array.from({ length: firstDay }).map((_, i) => <div key={"e" + i} />)}
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-              const day = i + 1;
-              const hoje = isToday(day);
-              const sel = selectedDay === day;
-              const done = selectedPlan && isCompleted(day);
-              return (
-                <button key={day} onClick={() => setSelectedDay(day)}
-                  className={"aspect-square rounded-lg border flex flex-col items-center justify-center text-sm transition cursor-pointer " + 
-                    (sel ? "bg-[#D4A373]/20 border-[#D4A373] text-[#D4A373]" : 
-                     hoje ? "border-[#D4A373]/50 text-[#D4A373] font-bold" : 
-                     "border-transparent text-[#a1a1a1] hover:bg-white/5")}>
-                  <span>{day}</span>
-                  {done && <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-0.5" />}
-                  {hoje && !done && plans.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-[#D4A373] mt-0.5" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {plans.length > 0 && selectedPlan ? (
-          <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-[#f5f5f5]">{selectedPlan.name}</h3>
-                {selectedPlan.description && <p className="text-[#a1a1a1] text-sm">{selectedPlan.description}</p>}
-              </div>
-              {selectedDay !== null && isToday(selectedDay) && (
-                <button onClick={markAsComplete} disabled={completing}
-                  className="bg-[#D4A373] text-[#0a0a0a] text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#c49463] disabled:opacity-50">
-                  {completing ? "⏳" : isCompleted(selectedDay) ? "✅ Concluido" : "✅ Marcar como feito"}
-                </button>
-              )}
-            </div>
-            {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => {
-              // Tenta pegar a imagem da biblioteca pelo nome
-              const imageUrl = ex.imageUrl || getExerciseImageUrl(ex.name);
-              return (
-                <div key={ex.id || idx} className="bg-[#1a1a1a] rounded-lg p-3 mb-2">
-                  <div className="flex items-center gap-3 mb-2">
-                    {/* IMAGEM DO EXERCÍCIO */}
-                    {imageUrl && (
-                      <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-[#0a0a0a]">
-                        <img
-                          src={imageUrl}
-                          alt={ex.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
-                        />
+
+        {activeTab === "avisos" && (
+          <div className="space-y-3">
+            {notices.length === 0 ? (
+              <p className="text-[#525252] text-sm text-center py-8">Nenhum aviso enviado para este aluno.</p>
+            ) : (
+              notices.map((notice) => (
+                <div key={notice.id} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
+                  {editingNotice === notice.id ? (
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={editNoticeTitle}
+                        onChange={(e) => setEditNoticeTitle(e.target.value)}
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                        placeholder="Título do aviso"
+                      />
+                      <textarea
+                        value={editNoticeContent}
+                        onChange={(e) => setEditNoticeContent(e.target.value)}
+                        rows={3}
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] resize-none"
+                        placeholder="Conteúdo do aviso"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditNotice(notice.id)}
+                          className="bg-[#D4A373] text-[#0a0a0a] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#b88a5e]"
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          onClick={() => setEditingNotice(null)}
+                          className="text-[#a1a1a1] px-4 py-2 rounded-lg text-sm hover:bg-[#ffffff10]"
+                        >
+                          Cancelar
+                        </button>
                       </div>
-                    )}
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          {notice.title && (
+                            <h3 className="text-sm font-semibold text-[#f5f5f5] mb-1">{notice.title}</h3>
+                          )}
+                          <p className="text-sm text-[#e5e5e5]">{notice.content}</p>
+                          <p className="text-[11px] text-[#6b6b6b] mt-2">{formatDate(notice.createdAt)}</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingNotice(notice.id);
+                              setEditNoticeTitle(notice.title || "");
+                              setEditNoticeContent(notice.content);
+                            }}
+                            className="text-[#D4A373] hover:text-[#b88a5e] text-xs px-2 py-1 rounded transition"
+                            title="Editar aviso"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDeleteNotice(notice.id)}
+                            className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded transition"
+                            title="Excluir aviso"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {activeTab === "avaliacoes" && (
+          <div className="space-y-3">
+            {avaliacoes.length === 0 ? (
+              <p className="text-[#525252] text-sm text-center py-8">Nenhuma avaliação registrada para este aluno.</p>
+            ) : (
+              avaliacoes.map((av) => (
+                <div key={av.id} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-xs font-bold flex items-center justify-center">{idx + 1}</span>
-                        <span className="text-[#f5f5f5] font-medium text-sm">{ex.name}</span>
+                      <h3 className="text-sm font-semibold text-[#f5f5f5]">
+                        {av.tipo} - Mês {av.mesReferencia}
+                      </h3>
+                      <p className="text-sm text-[#a1a1a1] mt-1">{av.objetivo}</p>
+                      <div className="flex flex-wrap gap-3 mt-2 text-[11px] text-[#6b6b6b]">
+                        {av.peso && <span>Peso: {av.peso}kg</span>}
+                        {av.altura && <span>Altura: {av.altura}m</span>}
+                        <span>{formatDate(av.createdAt)}</span>
                       </div>
-                      <div className="text-xs text-[#a1a1a1] mt-1">{ex.series}x{ex.reps}{ex.weight ? " | " + ex.weight + "kg" : ""}{ex.restTime ? " | Desc: " + ex.restTime : ""}</div>
-                      {ex.notes && <p className="text-xs text-[#6b6b6b] mt-1">{ex.notes}</p>}
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="bg-[#111] border border-[#ffffff10] rounded-xl p-8 text-center">
-            <p className="text-[#a1a1a1]">Seu professor ainda nao montou seus treinos.</p>
+              ))
+            )}
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
