@@ -11,20 +11,19 @@ export default function DashboardLayout({
   const { data: session } = useSession();
   const pathname = usePathname();
   const role = session?.user?.role;
-
   const allNavItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
     { href: "/dashboard/exercises", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/planning", label: "Planejamento", icon: "calendar" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
+    { href: "/dashboard/mural", label: "Mural", icon: "message" },
     { href: "/dashboard/checkins", label: "Check-ins", icon: "check" },
     { href: "/dashboard/feedbacks", label: "Feedbacks", icon: "star" },
     { href: "/dashboard/controls", label: "Controle Semanal", icon: "chart" },
     { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "settings" },
   ];
-
   // GESTOR: não vê "Montar Treino"
   // PROFESSOR: não vê "Vincular Alunos" nem "Gerenciar Alunos"
   const navItems = role === "GESTOR"
@@ -36,7 +35,6 @@ export default function DashboardLayout({
           item.href !== "/dashboard/gestor/alunos"
       )
     : allNavItems;
-
   function NavIcon({ icon }: { icon: string }) {
     const icons: Record<string, JSX.Element> = {
       grid: (
@@ -66,6 +64,11 @@ export default function DashboardLayout({
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      ),
+      message: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
       ),
       check: (
