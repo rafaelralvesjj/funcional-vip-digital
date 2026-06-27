@@ -17,6 +17,11 @@ export default function GerenciarGestoresPage() {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [addGestor, setAddGestor] = useState(false);
+  const [newGestorName, setNewGestorName] = useState("");
+  const [newGestorEmail, setNewGestorEmail] = useState("");
+  const [newGestorPassword, setNewGestorPassword] = useState("");
+  const [savingAdd, setSavingAdd] = useState(false);
 
   useEffect(() => {
     loadGestores();
@@ -94,12 +99,43 @@ export default function GerenciarGestoresPage() {
     }
   }
 
+  async function handleAddGestor() {
+    if (!newGestorName || !newGestorEmail || !newGestorPassword) {
+      setMessage({ type: "error", text: "Preencha todos os campos" });
+      return;
+    }
+    setSavingAdd(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newGestorName, email: newGestorEmail, password: newGestorPassword, role: "GESTOR" }),
+      });
+      if (res.ok) {
+        setMessage({ type: "success", text: "Gestor cadastrado com sucesso!" });
+        setAddGestor(false);
+        setNewGestorName("");
+        setNewGestorEmail("");
+        setNewGestorPassword("");
+        loadGestores();
+      } else {
+        const err = await res.json();
+        setMessage({ type: "error", text: "Erro: " + (err.error || "Erro ao cadastrar") });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao cadastrar gestor" });
+    } finally {
+      setSavingAdd(false);
+    }
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#D4A373]">Gerenciar Gestores</h1>
         <p className="text-[#a1a1a1] mt-1">
-          Visualize, edite e exclua gestores do sistema
+          Cadastre, edite e exclua gestores do sistema
         </p>
       </div>
 
@@ -108,6 +144,12 @@ export default function GerenciarGestoresPage() {
           {message.text}
         </div>
       )}
+
+      <div className="mb-4">
+        <button onClick={() => setAddGestor(true)} className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#c49563]">
+          + Cadastrar Gestor
+        </button>
+      </div>
 
       {loading ? (
         <div className="text-center py-12 text-[#525252]">Carregando...</div>
@@ -205,6 +247,42 @@ export default function GerenciarGestoresPage() {
               </button>
               <button onClick={salvarEdicao} disabled={saving} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50">
                 {saving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addGestor && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => { setAddGestor(false); setMessage(null); }}>
+          <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-white font-medium mb-4">Cadastrar Gestor</h2>
+            <input
+              value={newGestorName}
+              onChange={(e) => setNewGestorName(e.target.value)}
+              placeholder="Nome completo"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
+            />
+            <input
+              value={newGestorEmail}
+              onChange={(e) => setNewGestorEmail(e.target.value)}
+              placeholder="Email"
+              type="email"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
+            />
+            <input
+              value={newGestorPassword}
+              onChange={(e) => setNewGestorPassword(e.target.value)}
+              placeholder="Senha"
+              type="password"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373]"
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setAddGestor(false); setMessage(null); }} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={handleAddGestor} disabled={savingAdd} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50">
+                {savingAdd ? "Cadastrando..." : "Cadastrar"}
               </button>
             </div>
           </div>
