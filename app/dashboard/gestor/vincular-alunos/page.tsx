@@ -31,15 +31,12 @@ export default function VincularAlunosPage() {
     setLoading(true);
     try {
       const [studentsRes, professorsRes] = await Promise.all([
-        fetch("/api/students"),
+        fetch("/api/students/todos"),
         fetch("/api/professores"),
       ]);
       if (studentsRes.ok) {
         const data = await studentsRes.json();
-        console.log("Students API response:", data);
-        if (data && data.students && Array.isArray(data.students)) {
-          setStudents(data.students);
-        } else if (Array.isArray(data)) {
+        if (Array.isArray(data)) {
           setStudents(data);
         } else {
           setStudents([]);
@@ -47,11 +44,8 @@ export default function VincularAlunosPage() {
       }
       if (professorsRes.ok) {
         const data = await professorsRes.json();
-        console.log("Professors API response:", data);
         if (Array.isArray(data)) {
           setProfessors(data);
-        } else if (data && data.professors && Array.isArray(data.professors)) {
-          setProfessors(data.professors);
         } else {
           setProfessors([]);
         }
