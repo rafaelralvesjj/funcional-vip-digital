@@ -17,7 +17,6 @@ interface Professor {
 export default function VincularAlunosPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [professors, setProfessors] = useState<Professor[]>([]);
-  const [gestorId, setGestorId] = useState<string>("");
   const [selectedProfessor, setSelectedProfessor] = useState<Record<string, string>>({});
   const [selectedPlan, setSelectedPlan] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -32,19 +31,10 @@ export default function VincularAlunosPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [studentsRes, professorsRes, sessionRes] = await Promise.all([
+      const [studentsRes, professorsRes] = await Promise.all([
         fetch("/api/students/todos"),
         fetch("/api/professores"),
-        fetch("/api/auth/session"),
       ]);
-
-      if (sessionRes.ok) {
-        const sessionData = await sessionRes.json();
-        if (sessionData?.user?.id) {
-          setGestorId(sessionData.user.id);
-        }
-      }
-
       if (studentsRes.ok) {
         const data = await studentsRes.json();
         if (Array.isArray(data)) {
@@ -53,7 +43,6 @@ export default function VincularAlunosPage() {
           setStudents([]);
         }
       }
-
       if (professorsRes.ok) {
         const data = await professorsRes.json();
         if (Array.isArray(data)) {
@@ -98,8 +87,9 @@ export default function VincularAlunosPage() {
     }
   }
 
+  const professorIds = new Set(professors.map((p) => p.id));
   const studentsWithoutProfessor = students.filter(
-    (s) => s.userId === gestorId || !s.userId
+    (s) => !professorIds.has(s.userId)
   );
 
   const displayStudents = activeTab === "unassigned"
