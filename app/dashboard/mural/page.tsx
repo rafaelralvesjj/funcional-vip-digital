@@ -14,7 +14,7 @@ interface Notice {
   expiresAt?: string;
   createdAt: string;
   student?: { id: string; name: string };
-  author?: { id: string; name: string };
+  author?: { id: string; name: string; role?: string };
 }
 
 export default function MuralPage() {
@@ -163,7 +163,7 @@ export default function MuralPage() {
             />
           </div>
 
-             <div>
+          <div>
             <label className="text-sm text-[#a1a1a1] block mb-1">
               Data de expiração <span className="text-[#6b6b6b]">(opcional)</span>
             </label>
@@ -184,9 +184,6 @@ export default function MuralPage() {
               </div>
             </div>
           </div>
-
-
-          
 
           {error && <p className="text-sm text-red-400">{error}</p>}
 
@@ -213,7 +210,7 @@ export default function MuralPage() {
               {notices.map((notice) => {
                 const expired = isExpired(notice.expiresAt);
                 return (
-                  <div key={notice.id} className={`bg-[#0a0a0a] border rounded-lg p-4 ${expired ? "border-red-500/20 opacity-50" : "border-[#ffffff10]"}`}>
+                  <div key={notice.id} className={"bg-[#0a0a0a] border rounded-lg p-4 " + (expired ? "border-red-500/20 opacity-50" : "border-[#ffffff10]")}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
                         {notice.title && (
@@ -222,10 +219,18 @@ export default function MuralPage() {
                         <p className="text-sm text-[#e5e5e5]">{notice.content}</p>
                         <div className="flex flex-wrap gap-3 mt-2 text-[11px] text-[#6b6b6b]">
                           <span>{formatDate(notice.createdAt)}</span>
+                          {notice.author && (
+                            <span className="flex items-center gap-1">
+                              <span className={"px-1.5 py-0.5 rounded text-[10px] " + (notice.author.role === "GESTOR" ? "bg-blue-500/10 text-blue-400" : "bg-green-500/10 text-green-400")}>
+                                {notice.author.role === "GESTOR" ? "Gestao" : "Professor"}
+                              </span>
+                              {notice.author.name}
+                            </span>
+                          )}
                           {notice.student ? (
-                            <span>{notice.student.name}</span>
+                            <span>Para: {notice.student.name}</span>
                           ) : (
-                            <span>Todos os alunos</span>
+                            <span>Para: Todos os alunos</span>
                           )}
                           {notice.expiresAt && (
                             <span className={expired ? "text-red-400" : "text-green-400"}>
