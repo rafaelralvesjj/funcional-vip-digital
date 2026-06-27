@@ -38,7 +38,7 @@ export default function GerenciarGestoresPage() {
     setMessage(null);
 
     try {
-      const res = await fetch(`/api/gestores/${gestorId}`, {
+      const res = await fetch("/api/gestores/" + gestorId, {
         method: "DELETE",
       });
 
@@ -106,4 +106,41 @@ export default function GerenciarGestoresPage() {
                     <td className="px-5 py-4 text-right">
                       {confirmDelete === gestor.id ? (
                         <div className="flex items-center justify-end gap-2">
-       
+                          <span className="text-xs text-red-400">Confirmar exclusao?</span>
+                          <button
+                            onClick={() => excluirGestor(gestor.id)}
+                            disabled={deleting === gestor.id}
+                            className="bg-red-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-red-600 transition disabled:opacity-50"
+                          >
+                            {deleting === gestor.id ? "..." : "Sim, excluir"}
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete(null)}
+                            className="text-[#a1a1a1] text-xs px-3 py-1.5 rounded-lg hover:bg-white/5 transition"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDelete(gestor.id)}
+                          className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg hover:bg-red-500/5 transition"
+                        >
+                          Excluir
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-[#525252] text-center mt-6">
+        {gestores.length} gestor(es) no total
+      </p>
+    </div>
+  );
+}
