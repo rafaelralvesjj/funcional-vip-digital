@@ -24,6 +24,8 @@ export default function DashboardLayout({
     { href: "/dashboard/controls", label: "Controle Semanal", icon: "chart" },
     { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "settings" },
+    { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "users" },
+    { href: "/dashboard/gestor/gestores", label: "Gerenciar Gestores", icon: "user" },
   ];
   // GESTOR: não vê "Montar Treino"
   // PROFESSOR: não vê "Vincular Alunos" nem "Gerenciar Alunos"
