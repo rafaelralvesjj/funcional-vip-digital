@@ -31,6 +31,7 @@ export default function AlunoPage() {
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
   const [imgError, setImgError] = useState(false);
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>({});
+  const [selectedNotice, setSelectedNotice] = useState<any>(null);
 
   const getImageUrl = (url?: string): string | null => {
     if (!url) return null;
@@ -134,6 +135,19 @@ export default function AlunoPage() {
     } catch {}
   }
 
+  async function markNoticeAsRead(noticeId: string) {
+    try {
+      await fetch("/api/notices/" + noticeId + "/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId }),
+      });
+      setNotices((prev: any[]) =>
+        prev.map((n) => (n.id === noticeId ? { ...n, readByStudent: true } : n))
+      );
+    } catch {}
+  }
+
   async function markAsComplete() {
     if (!selectedPlan || !studentId) return;
     setCompleting(true); setMessage(null);
@@ -216,6 +230,7 @@ export default function AlunoPage() {
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  const unreadCount = notices.filter((n: any) => !n.readByStudent).length;
 
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
 
@@ -225,26 +240,44 @@ export default function AlunoPage() {
         <h1 className="text-lg font-bold text-[#f5f5f5]">Ola, {studentName}!</h1>
         <p className="text-xs text-[#a1a1a1]">Bem-vindo a sua area do aluno</p>
       </div>
+
       {message && (
         <div className={"text-sm rounded-lg p-2.5 " + (message.type === "success" ? "bg-green-500/10 text-green-400" : message.type === "error" ? "bg-red-500/10 text-red-400" : "bg-blue-500/10 text-blue-400")}>
           {message.text}
         </div>
       )}
+
       <div className="flex flex-col lg:flex-row gap-3">
+        {/* AVISOS E FEEDBACKS */}
         <div className="lg:w-[30%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
-          <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">Avisos e Feedbacks</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-semibold text-[#f5f5f5] text-xs">Avisos e Feedbacks</h2>
+            {unreadCount > 0 && (
+              <span className="bg-green-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
+                {unreadCount}
+              </span>
+            )}
+          </div>
           {notices.length === 0 ? (
             <p className="text-[#a1a1a1] text-[11px]">Nenhum aviso ou feedback no momento.</p>
           ) : (
-            <div className="space-y-1.5 max-h-32 overflow-y-auto">
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
               {notices.map((n: any) => (
-                <div key={n.id} className="bg-[#1a1a1a] rounded-lg p-2">
-                  <p className="text-xs text-[#e5e5e5]">{n.content}</p>
+                <div key={n.id}
+                  onClick={() => { setSelectedNotice(n); if (!n.readByStudent) markNoticeAsRead(n.id); }}
+                  className="bg-[#1a1a1a] rounded-lg p-2 cursor-pointer hover:bg-[#222] transition flex items-start gap-2">
+                  <div className={"w-2 h-2 rounded-full mt-1 shrink-0 " + (n.readByStudent ? "bg-[#525252]" : "bg-green-500")} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-[#e5e5e5] font-medium truncate">{n.title || n.type || "Aviso"}</p>
+                    <p className="text-[9px] text-[#6b6b6b] mt-0.5">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* TREINOS E DUVIDAS */}
         <div className="lg:w-[70%] space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="sm:w-[55%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
@@ -316,6 +349,7 @@ export default function AlunoPage() {
                 <p className="text-[8px] text-[#D4A373] mt-1">Em breve...</p>
               )}
             </div>
+
             <div className="sm:w-[45%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
               <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">Duvidas</h2>
               <textarea value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
@@ -346,16 +380,49 @@ export default function AlunoPage() {
         </div>
       </div>
 
-      {/* Modal do treino completo */}
+      {/* MODAL DO AVISO */}
+      {selectedNotice && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedNotice(null)}>
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
+              <div>
+                <h2 className="text-sm font-bold text-[#f5f5f5]">{selectedNotice.title || selectedNotice.type || "Aviso"}</h2>
+                <p className="text-[10px] text-[#a1a1a1] mt-0.5">{new Date(selectedNotice.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+              </div>
+              <button onClick={() => setSelectedNotice(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
+            </div>
+            <div className="p-4">
+              <p className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedNotice.content}</p>
+              {selectedNotice.author && (
+                <div className="mt-4 pt-3 border-t border-[#ffffff10]">
+                  <p className="text-[10px] text-[#6b6b6b]">
+                    Enviado por: <span className="text-[#a1a1a1]">{selectedNotice.author.name}</span>
+                    {selectedNotice.author.role && (
+                      <span className={"ml-1 px-1.5 py-0.5 rounded text-[9px] " + (selectedNotice.author.role === "GESTOR" ? "bg-blue-500/10 text-blue-400" : "bg-green-500/10 text-green-400")}>
+                        {selectedNotice.author.role === "GESTOR" ? "Gestao" : "Professor"}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="p-3 border-t border-[#ffffff10]">
+              <button onClick={() => setSelectedNotice(null)} className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DO TREINO */}
       {showWorkoutModal && selectedPlan && !selectedExercise && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[75vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between p-3 border-b border-[#ffffff10] sticky top-0 bg-[#111] z-10">
               <div>
                 <h2 className="text-sm font-bold text-[#f5f5f5]">{selectedPlan.name}</h2>
-                <p className="text-[10px] text-[#a1a1a1]">
-                  {getWeekDayName(selectedDay!)} - {selectedDay}/{currentMonth + 1}/{currentYear}
-                </p>
+                <p className="text-[10px] text-[#a1a1a1]">{getWeekDayName(selectedDay!)} - {selectedDay}/{currentMonth + 1}/{currentYear}</p>
               </div>
               <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
                 className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
@@ -400,19 +467,15 @@ export default function AlunoPage() {
         </div>
       )}
 
-      {/* Modal de detalhe do exercicio */}
+      {/* MODAL DETALHE DO EXERCICIO */}
       {selectedExercise && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
-        
             {(() => {
               const imgUrl = getImageUrl(selectedExercise.imageUrl) || getExerciseImageUrl(selectedExercise.name);
               return imgUrl && !imgError ? (
                 <div className="w-full bg-[#1a1a1a] rounded-t-2xl overflow-hidden flex items-center justify-center" style={{ maxHeight: '280px' }}>
-                  <img src={imgUrl}
-                    alt={selectedExercise.name}
-                    className="w-full h-auto max-h-[280px] object-contain"
-                    onError={() => setImgError(true)} />
+                  <img src={imgUrl} alt={selectedExercise.name} className="w-full h-auto max-h-[280px] object-contain" onError={() => setImgError(true)} />
                 </div>
               ) : (
                 <div className="w-full h-20 bg-gradient-to-br from-[#1a1a1a] to-[#222] rounded-t-2xl flex items-center justify-center gap-1">
@@ -423,24 +486,20 @@ export default function AlunoPage() {
                 </div>
               );
             })()}
-            
             <div className="flex items-center justify-between p-3 border-b border-[#ffffff10]">
               <div className="flex items-center gap-2">
-                <button onClick={() => setSelectedExercise(null)}
-                  className="text-[#a1a1a1] hover:text-white">
+                <button onClick={() => setSelectedExercise(null)} className="text-[#a1a1a1] hover:text-white">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
                 <h2 className="text-base font-bold text-[#f5f5f5]">{selectedExercise.name}</h2>
               </div>
-              <button onClick={() => setSelectedExercise(null)}
-                className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
+              <button onClick={() => setSelectedExercise(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
             </div>
             <div className="p-3 space-y-2.5">
               <div className="grid grid-cols-4 gap-1.5">
-
-                                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
                   <p className="text-base font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
                   <p className="text-[8px] text-[#6b6b6b]">Series</p>
                 </div>
@@ -475,14 +534,8 @@ export default function AlunoPage() {
               )}
             </div>
             <div className="p-3 border-t border-[#ffffff10] flex gap-2">
-              <button onClick={() => setSelectedExercise(null)}
-                className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">
-                Voltar
-              </button>
-              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
-                className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">
-                Fechar
-              </button>
+              <button onClick={() => setSelectedExercise(null)} className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">Voltar</button>
+              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }} className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">Fechar</button>
             </div>
           </div>
         </div>
