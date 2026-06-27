@@ -37,27 +37,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Botões de navegação */}
-      <div className="flex flex-wrap gap-3">
-        <Link
-          href="/auth/register"
-          className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#b88a5e]"
-        >
-          + Cadastrar Professor
-        </Link>
-        <Link
-          href="/auth/register"
-          className="bg-[#111111] border border-[#D4A373] text-[#D4A373] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#D4A373] hover:text-[#0a0a0a]"
-        >
-          + Cadastrar Gestor
-        </Link>
-        <Link
-          href="/dashboard/exercicios"
-          className="bg-[#111111] border border-[#ffffff10] text-[#f5f5f5] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#1a1a1a]"
-        >
-          📚 Biblioteca de Exercícios
-        </Link>
-      </div>
+
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {kpis.map((kpi, i) => (
