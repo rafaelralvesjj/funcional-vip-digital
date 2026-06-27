@@ -11,7 +11,7 @@ export async function GET(
   const userId = (session?.user as any)?.id as string | undefined;
 
   if (!userId) {
-    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
   }
 
   try {
@@ -19,20 +19,35 @@ export async function GET(
 
     if (!studentId) {
       return NextResponse.json(
-        { error: "ID do aluno é obrigatório" },
+        { error: "ID do aluno e obrigatorio" },
         { status: 400 }
       );
     }
 
     const notices = await prisma.notice.findMany({
-      where: { studentId },
+      where: {
+        OR: [
+          { studentId },
+          { studentId: null },
+        ],
+      },
       orderBy: { createdAt: "desc" },
       include: {
-        author: { select: { id: true, name: true } },
+        author: { select: { id: true, name: true, role: true } },
+        reads: {
+          where: { studentId },
+          select: { id: true, readAt: true },
+        },
       },
     });
 
-    return NextResponse.json(notices);
+    const noticesWithReadStatus = notices.map((notice) => ({
+      ...notice,
+      readByStudent: notice.reads.length > 0,
+      reads: undefined,
+    }));
+
+    return NextResponse.json(noticesWithReadStatus);
   } catch (error) {
     console.error("Erro ao buscar avisos do aluno:", error);
     return NextResponse.json(
