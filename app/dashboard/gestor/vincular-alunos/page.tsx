@@ -89,7 +89,8 @@ export default function VincularAlunosPage() {
 
   const professorIds = new Set(professors.map((p) => p.id));
   const studentsWithoutProfessor = students.filter(
-    (s) => !professorIds.has(s.userId)
+   
+    (s) => !s.userId || !professorIds.has(s.userId)
   );
 
   const displayStudents = activeTab === "unassigned"
