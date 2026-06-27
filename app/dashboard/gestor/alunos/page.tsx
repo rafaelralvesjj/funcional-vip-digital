@@ -25,7 +25,7 @@ export default function GerenciarAlunosPage() {
   async function loadStudents() {
     setLoading(true);
     try {
-      const res = await fetch("/api/students");
+      const res = await fetch("/api/students/todos");
       if (res.ok) {
         const data = await res.json();
         setStudents(Array.isArray(data) ? data : data.students || data || []);
@@ -47,12 +47,12 @@ export default function GerenciarAlunosPage() {
       });
 
       if (res.ok) {
-        setMessage({ type: "success", text: "✅ Aluno excluído com sucesso!" });
+        setMessage({ type: "success", text: "Aluno excluido com sucesso!" });
         setStudents((prev) => prev.filter((s) => s.id !== studentId));
         setConfirmDelete(null);
       } else {
         const err = await res.json();
-        setMessage({ type: "error", text: `Erro: ${err.error}` });
+        setMessage({ type: "error", text: "Erro: " + err.error });
       }
     } catch {
       setMessage({ type: "error", text: "Erro ao excluir aluno" });
@@ -64,20 +64,14 @@ export default function GerenciarAlunosPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#D4A373]">⚙️ Gerenciar Alunos</h1>
+        <h1 className="text-2xl font-bold text-[#D4A373]">Gerenciar Alunos</h1>
         <p className="text-[#a1a1a1] mt-1">
           Visualize e exclua alunos do sistema
         </p>
       </div>
 
       {message && (
-        <div
-          className={`text-sm rounded-lg p-4 mb-6 ${
-            message.type === "success"
-              ? "bg-green-500/10 border border-green-500/20 text-green-400"
-              : "bg-red-500/10 border border-red-500/20 text-red-400"
-          }`}
-        >
+        <div className={"text-sm rounded-lg p-4 mb-6 " + (message.type === "success" ? "bg-green-500/10 border border-green-500/20 text-green-400" : "bg-red-500/10 border border-red-500/20 text-red-400")}>
           {message.text}
         </div>
       )}
@@ -97,7 +91,7 @@ export default function GerenciarAlunosPage() {
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Aluno</th>
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Contato</th>
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Status</th>
-                  <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Ações</th>
+                  <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Acoes</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,20 +110,14 @@ export default function GerenciarAlunosPage() {
                       {student.phone && <p className="text-xs text-[#525252]">{student.phone}</p>}
                     </td>
                     <td className="px-5 py-4">
-                      <span
-                        className={`text-xs font-medium px-2 py-1 rounded-full ${
-                          student.active
-                            ? "bg-green-500/10 text-green-400"
-                            : "bg-red-500/10 text-red-400"
-                        }`}
-                      >
+                      <span className={"text-xs font-medium px-2 py-1 rounded-full " + (student.active ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400")}>
                         {student.active ? "Ativo" : "Inativo"}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-right">
                       {confirmDelete === student.id ? (
                         <div className="flex items-center justify-end gap-2">
-                          <span className="text-xs text-red-400">Confirmar exclusão?</span>
+                          <span className="text-xs text-red-400">Confirmar exclusao?</span>
                           <button
                             onClick={() => excluirAluno(student.id)}
                             disabled={deleting === student.id}
@@ -149,7 +137,7 @@ export default function GerenciarAlunosPage() {
                           onClick={() => setConfirmDelete(student.id)}
                           className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg hover:bg-red-500/5 transition"
                         >
-                          🗑️ Excluir
+                          Excluir
                         </button>
                       )}
                     </td>
@@ -162,7 +150,7 @@ export default function GerenciarAlunosPage() {
       )}
 
       <p className="text-xs text-[#525252] text-center mt-6">
-        {students.length} aluno(s) no total • Clique em "Excluir" para remover um aluno
+        {students.length} aluno(s) no total
       </p>
     </div>
   );
