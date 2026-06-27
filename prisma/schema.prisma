@@ -83,6 +83,7 @@ model Student {
   questions      Question[]
   workouts       Workout[]
   avaliacoes     Avaliacao[]
+  noticeReads    NoticeRead[]
 
   @@map("students")
 }
@@ -96,11 +97,11 @@ model Avaliacao {
   metaEspecifica String? @map("meta_especifica")
   peso          Float?
   altura        Float?
+  braco         Float?
   abdomen       Float?
   quadril       Float?
-  braco         Float?
-  coxa          Float?
   gluteo        Float?
+  coxa          Float?
   preferencia   String?
   equipamentos  String?
   frequencia    Int?
@@ -207,6 +208,7 @@ model Notice {
 
   author  User     @relation(fields: [authorId], references: [id])
   student Student? @relation(fields: [studentId], references: [id])
+  reads   NoticeRead[]
 
   @@map("notices")
 }
