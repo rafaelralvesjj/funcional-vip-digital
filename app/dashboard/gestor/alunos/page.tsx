@@ -15,7 +15,7 @@ export default function GerenciarAlunosPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [message, setMessage] = useState&lt;{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [editStudent, setEditStudent] = useState<Student | null>(null);
   const [editName, setEditName] = useState("");
@@ -128,4 +128,25 @@ export default function GerenciarAlunosPage() {
               <thead>
                 <tr className="border-b border-[#ffffff10]">
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Aluno</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium 
+                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Contato</th>
+                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Status</th>
+                  <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Acoes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student.id} className="border-b border-[#ffffff10] hover:bg-white/5">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-sm">
+                          {student.name.charAt(0).toUpperCase()}
+                        </div>
+                        <p className="text-[#f5f5f5] text-sm font-medium">{student.name}</p>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-[#a1a1a1]">
+                      {student.email && <p>{student.email}</p>}
+                      {student.phone && <p className="text-xs text-[#525252]">{student.phone}</p>}
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className={"text-xs font-medium px-2 py-1 rounded-full " + (student.active 
