@@ -13,6 +13,10 @@ export default function GerenciarGestoresPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [editGestor, setEditGestor] = useState<Gestor | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadGestores();
@@ -57,12 +61,45 @@ export default function GerenciarGestoresPage() {
     }
   }
 
+  function abrirEditar(gestor: Gestor) {
+    setEditGestor(gestor);
+    setEditName(gestor.name);
+    setEditEmail(gestor.email || "");
+  }
+
+  async function salvarEdicao() {
+    if (!editGestor) return;
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/gestores/" + editGestor.id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editName, email: editEmail }),
+      });
+
+      if (res.ok) {
+        setMessage({ type: "success", text: "Gestor atualizado com sucesso!" });
+        setEditGestor(null);
+        loadGestores();
+      } else {
+        const err = await res.json();
+        setMessage({ type: "error", text: "Erro: " + err.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao atualizar gestor" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#D4A373]">Gerenciar Gestores</h1>
         <p className="text-[#a1a1a1] mt-1">
-          Visualize e exclua gestores do sistema
+          Visualize, edite e exclua gestores do sistema
         </p>
       </div>
 
@@ -104,36 +141,72 @@ export default function GerenciarGestoresPage() {
                       {gestor.email || "-"}
                     </td>
                     <td className="px-5 py-4 text-right">
-                      {confirmDelete === gestor.id ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="text-xs text-red-400">Confirmar exclusao?</span>
-                          <button
-                            onClick={() => excluirGestor(gestor.id)}
-                            disabled={deleting === gestor.id}
-                            className="bg-red-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-red-600 transition disabled:opacity-50"
-                          >
-                            {deleting === gestor.id ? "..." : "Sim, excluir"}
-                          </button>
-                          <button
-                            onClick={() => setConfirmDelete(null)}
-                            className="text-[#a1a1a1] text-xs px-3 py-1.5 rounded-lg hover:bg-white/5 transition"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      ) : (
+                      <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => setConfirmDelete(gestor.id)}
-                          className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg hover:bg-red-500/5 transition"
+                          onClick={() => abrirEditar(gestor)}
+                          className="text-[#D4A373] hover:text-[#c49563] text-sm px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
                         >
-                          Excluir
+                          Editar
                         </button>
-                      )}
+                        {confirmDelete === gestor.id ? (
+                          <>
+                            <span className="text-xs text-red-400">Confirmar?</span>
+                            <button
+                              onClick={() => excluirGestor(gestor.id)}
+                              disabled={deleting === gestor.id}
+                              className="bg-red-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-red-600 transition disabled:opacity-50"
+                            >
+                              {deleting === gestor.id ? "..." : "Excluir"}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              className="text-[#a1a1a1] text-xs px-3 py-1.5 rounded-lg hover:bg-white/5 transition"
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDelete(gestor.id)}
+                            className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg hover:bg-red-500/5 transition"
+                          >
+                            Excluir
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {editGestor && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditGestor(null)}>
+          <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-white font-medium mb-4">Editar Gestor</h2>
+            <input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Nome"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
+            />
+            <input
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              placeholder="Email"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373]"
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setEditGestor(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={salvarEdicao} disabled={saving} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50">
+                {saving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
           </div>
         </div>
       )}
