@@ -36,11 +36,25 @@ export default function VincularAlunosPage() {
       ]);
       if (studentsRes.ok) {
         const data = await studentsRes.json();
-        setStudents(Array.isArray(data) ? data : data.students || data || []);
+        console.log("Students API response:", data);
+        if (data && data.students && Array.isArray(data.students)) {
+          setStudents(data.students);
+        } else if (Array.isArray(data)) {
+          setStudents(data);
+        } else {
+          setStudents([]);
+        }
       }
       if (professorsRes.ok) {
         const data = await professorsRes.json();
-        setProfessors(Array.isArray(data) ? data : []);
+        console.log("Professors API response:", data);
+        if (Array.isArray(data)) {
+          setProfessors(data);
+        } else if (data && data.professors && Array.isArray(data.professors)) {
+          setProfessors(data.professors);
+        } else {
+          setProfessors([]);
+        }
       }
     } catch (e) {
       console.error(e);
