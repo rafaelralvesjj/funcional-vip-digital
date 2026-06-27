@@ -14,17 +14,10 @@ interface Professor {
   email?: string;
 }
 
-interface WorkoutPlan {
-  id: string;
-  name: string;
-}
-
 export default function VincularAlunosPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [professors, setProfessors] = useState<Professor[]>([]);
-  const [plans, setPlans] = useState<WorkoutPlan[]>([]);
   const [selectedProfessor, setSelectedProfessor] = useState<Record<string, string>>({});
-  const [selectedPlan, setSelectedPlan] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [success, setSuccess] = useState("");
@@ -85,9 +78,7 @@ export default function VincularAlunosPage() {
     }
   }
 
-  const displayStudents = activeTab === "unassigned"
-    ? students
-    : students;
+  const displayStudents = students;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -153,4 +144,51 @@ export default function VincularAlunosPage() {
                         </div>
                       </div>
                     </td>
-                    <td 
+                    <td className="px-5 py-4">
+                      <select
+                        value={selectedProfessor[student.id] || ""}
+                        onChange={(e) =>
+                          setSelectedProfessor((prev) => ({
+                            ...prev,
+                            [student.id]: e.target.value,
+                          }))
+                        }
+                        className="w-full max-w-xs rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                      >
+                        <option value="">Selecione um professor...</option>
+                        {professors.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <button
+                        onClick={() => vincularAluno(student.id)}
+                        disabled={!selectedProfessor[student.id] || saving === student.id}
+                        className="bg-[#D4A373] text-[#0a0a0a] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#c49463] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {saving === student.id ? "Vinculando..." : "Vincular"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {professors.length === 0 && !loading && (
+        <div className="mt-4 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-sm rounded-lg p-4">
+          Nenhum professor encontrado no sistema. Cadastre professores primeiro.
+        </div>
+      )}
+
+      <p className="text-xs text-[#525252] text-center mt-6">
+        {displayStudents.length} aluno(s) - {professors.length} professor(es) disponiveis
+      </p>
+    </div>
+  );
+}
