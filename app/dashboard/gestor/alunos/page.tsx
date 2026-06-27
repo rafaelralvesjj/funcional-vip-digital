@@ -149,4 +149,90 @@ export default function GerenciarAlunosPage() {
                       {student.phone && <p className="text-xs text-[#525252]">{student.phone}</p>}
                     </td>
                     <td className="px-5 py-4">
-                      <span className={"text-xs font-medium px-2 py-1 rounded-full " + (student.active 
+                      <span className={"text-xs font-medium px-2 py-1 rounded-full " + (student.active ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400")}>
+                        {student.active ? "Ativo" : "Inativo"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => abrirEditar(student)}
+                          className="text-[#D4A373] hover:text-[#c49563] text-sm px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                        >
+                          Editar
+                        </button>
+                        {confirmDelete === student.id ? (
+                          <>
+                            <span className="text-xs text-red-400">Confirmar?</span>
+                            <button
+                              onClick={() => excluirAluno(student.id)}
+                              disabled={deleting === student.id}
+                              className="bg-red-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-red-600 transition disabled:opacity-50"
+                            >
+                              {deleting === student.id ? "..." : "Excluir"}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              className="text-[#a1a1a1] text-xs px-3 py-1.5 rounded-lg hover:bg-white/5 transition"
+                            >
+                              Cancelar
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDelete(student.id)}
+                            className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg hover:bg-red-500/5 transition"
+                          >
+                            Excluir
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {editStudent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditStudent(null)}>
+          <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-white font-medium mb-4">Editar Aluno</h2>
+            <input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Nome"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
+            />
+            <input
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              placeholder="Email"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
+            />
+            <input
+              value={editPhone}
+              onChange={(e) => setEditPhone(e.target.value)}
+              placeholder="Telefone"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373]"
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setEditStudent(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={salvarEdicao} disabled={saving} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50">
+                {saving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-[#525252] text-center mt-6">
+        {students.length} aluno(s) no total
+      </p>
+    </div>
+  );
+}
