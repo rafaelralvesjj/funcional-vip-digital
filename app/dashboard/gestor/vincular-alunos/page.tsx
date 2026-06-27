@@ -89,13 +89,19 @@ export default function VincularAlunosPage() {
 
   const professorIds = new Set(professors.map((p) => p.id));
   const studentsWithoutProfessor = students.filter(
-   
     (s) => !s.userId || !professorIds.has(s.userId)
   );
 
   const displayStudents = activeTab === "unassigned"
     ? studentsWithoutProfessor
     : students;
+
+  function getProfessorName(studentId: string): string {
+    const professorId = students.find((s) => s.id === studentId)?.userId;
+    if (!professorId) return "";
+    const professor = professors.find((p) => p.id === professorId);
+    return professor ? professor.name : "";
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -141,74 +147,87 @@ export default function VincularAlunosPage() {
               <thead>
                 <tr className="border-b border-[#ffffff10]">
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Aluno</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Vincular Professor</th>
+                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Professor Atual</th>
+                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Vincular / Trocar</th>
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Plano (dias/semana)</th>
                   <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Acao</th>
                 </tr>
               </thead>
               <tbody>
-                {displayStudents.map((student) => (
-                  <tr key={student.id} className="border-b border-[#ffffff10] hover:bg-white/5">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-sm">
-                          {student.name.charAt(0).toUpperCase()}
+                {displayStudents.map((student) => {
+                  const currentProfessor = getProfessorName(student.id);
+                  return (
+                    <tr key={student.id} className="border-b border-[#ffffff10] hover:bg-white/5">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-sm">
+                            {student.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-[#f5f5f5] text-sm font-medium">{student.name}</p>
+                            {student.email && (
+                              <p className="text-[#525252] text-xs">{student.email}</p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[#f5f5f5] text-sm font-medium">{student.name}</p>
-                          {student.email && (
-                            <p className="text-[#525252] text-xs">{student.email}</p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <select
-                        value={selectedProfessor[student.id] || ""}
-                        onChange={(e) =>
-                          setSelectedProfessor((prev) => ({
-                            ...prev,
-                            [student.id]: e.target.value,
-                          }))
-                        }
-                        className="w-full max-w-xs rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-                      >
-                        <option value="">Selecione um professor...</option>
-                        {professors.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-5 py-4">
-                      <select
-                        value={selectedPlan[student.id] || ""}
-                        onChange={(e) =>
-                          setSelectedPlan((prev) => ({
-                            ...prev,
-                            [student.id]: e.target.value,
-                          }))
-                        }
-                        className="w-full max-w-[160px] rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-                      >
-                        <option value="">Selecione o plano...</option>
-                        <option value="2">2 dias por semana</option>
-                        <option value="3">3 dias por semana</option>
-                        <option value="5">5 dias por semana</option>
-                      </select>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => vincularAluno(student.id)}
-                        disabled={!selectedProfessor[student.id] || saving === student.id}
-                        className="bg-[#D4A373] text-[#0a0a0a] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#c49463] transition disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {saving === student.id ? "Vinculando..." : "Vincular"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-5 py-4">
+                        {currentProfessor ? (
+                          <span className="text-xs bg-[#D4A373]/20 text-[#D4A373] px-2 py-1 rounded-full">
+                            {currentProfessor}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[#525252]">Sem professor</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <select
+                          value={selectedProfessor[student.id] || ""}
+                          onChange={(e) =>
+                            setSelectedProfessor((prev) => ({
+                              ...prev,
+                              [student.id]: e.target.value,
+                            }))
+                          }
+                          className="w-full max-w-xs rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                        >
+                          <option value="">{currentProfessor ? "Trocar professor..." : "Selecione um professor..."}</option>
+                          {professors.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-5 py-4">
+                        <select
+                          value={selectedPlan[student.id] || ""}
+                          onChange={(e) =>
+                            setSelectedPlan((prev) => ({
+                              ...prev,
+                              [student.id]: e.target.value,
+                            }))
+                          }
+                          className="w-full max-w-[160px] rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                        >
+                          <option value="">Selecione o plano...</option>
+                          <option value="2">2 dias por semana</option>
+                          <option value="3">3 dias por semana</option>
+                          <option value="5">5 dias por semana</option>
+                        </select>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <button
+                          onClick={() => vincularAluno(student.id)}
+                          disabled={!selectedProfessor[student.id] || saving === student.id}
+                          className="bg-[#D4A373] text-[#0a0a0a] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#c49463] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {saving === student.id ? "Vinculando..." : "Vincular"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
