@@ -15,7 +15,7 @@ export default function DashboardLayout({
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
     { href: "/dashboard/aluno", label: "Perfil do Aluno", icon: "user" },
-    { href: "/dashboard/exercises", label: "Biblioteca", icon: "book" },
+    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/planning", label: "Planejamento", icon: "calendar" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
