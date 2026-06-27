@@ -240,3 +240,16 @@ model ExerciseLibrary {
 
   @@map("exercise_library")
 }
+
+model NoticeRead {
+  id        String   @id @default(uuid())
+  noticeId  String   @map("notice_id")
+  studentId String   @map("student_id")
+  readAt    DateTime @default(now()) @map("read_at")
+
+  notice  Notice  @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, studentId])
+  @@map("notice_reads")
+}
