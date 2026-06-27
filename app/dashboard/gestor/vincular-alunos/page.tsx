@@ -5,7 +5,7 @@ interface Student {
   id: string;
   name: string;
   email?: string;
-  image?: string;
+  userId?: string;
 }
 
 interface Professor {
@@ -17,7 +17,9 @@ interface Professor {
 export default function VincularAlunosPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [professors, setProfessors] = useState<Professor[]>([]);
+  const [gestorId, setGestorId] = useState<string>("");
   const [selectedProfessor, setSelectedProfessor] = useState<Record<string, string>>({});
+  const [selectedPlan, setSelectedPlan] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [success, setSuccess] = useState("");
@@ -30,10 +32,19 @@ export default function VincularAlunosPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [studentsRes, professorsRes] = await Promise.all([
+      const [studentsRes, professorsRes, sessionRes] = await Promise.all([
         fetch("/api/students/todos"),
         fetch("/api/professores"),
+        fetch("/api/auth/session"),
       ]);
+
+      if (sessionRes.ok) {
+        const sessionData = await sessionRes.json();
+        if (sessionData?.user?.id) {
+          setGestorId(sessionData.user.id);
+        }
+      }
+
       if (studentsRes.ok) {
         const data = await studentsRes.json();
         if (Array.isArray(data)) {
@@ -42,6 +53,7 @@ export default function VincularAlunosPage() {
           setStudents([]);
         }
       }
+
       if (professorsRes.ok) {
         const data = await professorsRes.json();
         if (Array.isArray(data)) {
@@ -86,7 +98,13 @@ export default function VincularAlunosPage() {
     }
   }
 
-  const displayStudents = students;
+  const studentsWithoutProfessor = students.filter(
+    (s) => s.userId === gestorId || !s.userId
+  );
+
+  const displayStudents = activeTab === "unassigned"
+    ? studentsWithoutProfessor
+    : students;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -133,6 +151,7 @@ export default function VincularAlunosPage() {
                 <tr className="border-b border-[#ffffff10]">
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Aluno</th>
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Vincular Professor</th>
+                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Plano (dias/semana)</th>
                   <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Acao</th>
                 </tr>
               </thead>
@@ -169,6 +188,23 @@ export default function VincularAlunosPage() {
                             {p.name}
                           </option>
                         ))}
+                      </select>
+                    </td>
+                    <td className="px-5 py-4">
+                      <select
+                        value={selectedPlan[student.id] || ""}
+                        onChange={(e) =>
+                          setSelectedPlan((prev) => ({
+                            ...prev,
+                            [student.id]: e.target.value,
+                          }))
+                        }
+                        className="w-full max-w-[160px] rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                      >
+                        <option value="">Selecione o plano...</option>
+                        <option value="2">2 dias por semana</option>
+                        <option value="3">3 dias por semana</option>
+                        <option value="5">5 dias por semana</option>
                       </select>
                     </td>
                     <td className="px-5 py-4 text-right">
