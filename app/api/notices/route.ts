@@ -78,10 +78,20 @@ export async function GET(req: NextRequest) {
       include: {
         author: { select: { id: true, name: true, role: true } },
         student: { select: { id: true, name: true } },
+        reads: {
+          where: studentId ? { studentId } : undefined,
+          select: { id: true },
+        },
       },
     });
 
-    return NextResponse.json(notices);
+    const noticesWithReadStatus = notices.map((notice: any) => ({
+      ...notice,
+      readByStudent: notice.reads ? notice.reads.length > 0 : false,
+      reads: undefined,
+    }));
+
+    return NextResponse.json(noticesWithReadStatus);
   } catch (error) {
     console.error("Erro ao listar avisos:", error);
     return NextResponse.json(
