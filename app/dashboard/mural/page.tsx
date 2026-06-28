@@ -132,7 +132,7 @@ export default function MuralPage() {
   }
   function isExpired(expiresAt?: string) {
     if (!expiresAt) return false;
-    return new Date(expiresAt) &lt; new Date();
+    return new Date(expiresAt) < new Date();
   }
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-6">
