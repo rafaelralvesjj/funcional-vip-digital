@@ -236,6 +236,7 @@ model Question {
   answer        String?
   answeredAt    DateTime? @map("answered_at")
   answeredById  String?   @map("answered_by_id")
+  resolvedAt    DateTime? @map("resolved_at")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
