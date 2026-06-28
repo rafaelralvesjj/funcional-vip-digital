@@ -34,18 +34,27 @@ export async function GET(
       orderBy: { createdAt: "desc" },
       include: {
         author: { select: { id: true, name: true, role: true } },
-        reads: {
-          where: { studentId },
-          select: { id: true, readAt: true },
-        },
       },
     });
 
-    const noticesWithReadStatus = notices.map((notice) => ({
-      ...notice,
-      readByStudent: notice.reads.length > 0,
-      reads: undefined,
-    }));
+    // Tenta buscar leituras, mas funciona mesmo se a tabela nao existir
+    let noticesWithReadStatus = notices;
+    try {
+      const reads = await prisma.noticeRead.findMany({
+        where: { studentId },
+        select: { noticeId: true },
+      });
+      const readNoticeIds = new Set(reads.map((r: any) => r.noticeId));
+      noticesWithReadStatus = notices.map((notice) => ({
+        ...notice,
+        readByStudent: readNoticeIds.has(notice.id),
+      }));
+    } catch {
+      noticesWithReadStatus = notices.map((notice) => ({
+        ...notice,
+        readByStudent: false,
+      }));
+    }
 
     return NextResponse.json(noticesWithReadStatus);
   } catch (error) {
