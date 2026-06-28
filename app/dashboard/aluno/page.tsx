@@ -124,7 +124,6 @@ function PerfilContent() {
                   return (
                     <div key={plan.id} className="bg-[#1a1a1a] rounded-lg p-4 flex items-center justify-between">
                       <div className="flex items-start gap-3">
-                        {/* BOLINHA DE CONCLUSÃO */}
                         <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (completed ? "bg-green-500" : "bg-[#525252]")} />
                         <div>
                           <h3 className="text-white font-medium">
@@ -168,11 +167,21 @@ function PerfilContent() {
                 {notices.map((notice) => (
                   <div key={notice.id} className="bg-[#1a1a1a] rounded-lg p-4 flex items-center justify-between">
                     <div className="flex items-start gap-3">
-                      {/* BOLINHA DE LEITURA DO AVISO */}
                       <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (notice.readByStudent ? "bg-[#525252]" : "bg-green-500")} />
                       <div>
                         <h3 className="text-white font-medium">{notice.title || "Sem titulo"}</h3>
                         <p className="text-[#6b6b6b] text-xs mt-1">{notice.content?.substring(0, 80)}{notice.content?.length > 80 ? "..." : ""} - {new Date(notice.createdAt).toLocaleDateString("pt-BR")}</p>
+                        {/* INFO DE QUEM ENVIOU */}
+                        {notice.author && (
+                          <p className="text-[10px] text-[#6b6b6b] mt-1">
+                            Enviado por: {notice.author.name}
+                            {notice.author.role && (
+                              <span className={"ml-1 px-1 py-0.5 rounded text-[9px] " + (notice.author.role === "GESTOR" ? "bg-blue-500/10 text-blue-400" : "bg-green-500/10 text-green-400")}>
+                                {notice.author.role === "GESTOR" ? "Gestao" : "Professor"}
+                              </span>
+                            )}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2">
