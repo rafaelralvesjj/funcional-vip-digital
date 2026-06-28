@@ -8,8 +8,9 @@ function PerfilContent() {
   const [plans, setPlans] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
   const [workouts, setWorkouts] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"treinos" | "avisos">("treinos");
+  const [activeTab, setActiveTab] = useState<"treinos" | "avisos" | "duvidas">("treinos");
   const [editPlan, setEditPlan] = useState<any>(null);
   const [editNotice, setEditNotice] = useState<any>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -18,21 +19,25 @@ function PerfilContent() {
   const [editDescription, setEditDescription] = useState("");
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [answerText, setAnswerText] = useState("");
+  const [answeringId, setAnsweringId] = useState<string | null>(null);
+  const [sendingAnswer, setSendingAnswer] = useState(false);
+  const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
   const loadData = useCallback(async () => {
     if (!studentId) { setLoading(false); return; }
     try {
-      // Busca sessão para saber o role do usuário logado
       const sessionRes = await fetch("/api/auth/session");
       if (sessionRes.ok) {
         const session = await sessionRes.json();
         setCurrentUserRole(session?.user?.role || "");
         setCurrentUserId(session?.user?.id || "");
       }
-      const [studentsRes, plansRes, noticesRes, workoutsRes] = await Promise.all([
+      const [studentsRes, plansRes, noticesRes, workoutsRes, questionsRes] = await Promise.all([
         fetch("/api/students"),
         fetch("/api/workout-plan?studentId=" + studentId),
         fetch("/api/notices?studentId=" + studentId),
-        fetch("/api/workout/mark-complete?studentId=" + studentId)
+        fetch("/api/workout/mark-complete?studentId=" + studentId),
+        fetch("/api/aluno/questions?studentId=" + studentId)
       ]);
       if (studentsRes.ok) {
         const data = await studentsRes.json();
@@ -52,6 +57,10 @@ function PerfilContent() {
         const data = await workoutsRes.json();
         setWorkouts(Array.isArray(data) ? data : []);
       }
+      if (questionsRes.ok) {
+        const data = await questionsRes.json();
+        setQuestions(Array.isArray(data) ? data : []);
+      }
     } catch {}
     setLoading(false);
   }, [studentId]);
@@ -60,7 +69,6 @@ function PerfilContent() {
     return workouts.some((w: any) => w.workoutPlanId === planId && w.status === "CONCLUIDO");
   }
   function canEditOrDelete(notice: any): boolean {
-    // Só GESTOR (dono) pode editar/excluir
     return currentUserRole === "GESTOR" || notice.authorId === currentUserId;
   }
   async function deletePlan(id: string) {
@@ -99,6 +107,25 @@ function PerfilContent() {
       setEditNotice(null);
     }
   }
+  async function handleAnswer(questionId: string) {
+    if (!answerText.trim()) return;
+    setSendingAnswer(true);
+    try {
+      const res = await fetch("/api/aluno/questions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: questionId, answer: answerText.trim() }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setQuestions((prev) => prev.map((q) => (q.id === questionId ? updated : q)));
+        setAnswerText("");
+        setAnsweringId(null);
+        setSelectedQuestion(null);
+      }
+    } catch {}
+    setSendingAnswer(false);
+  }
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
@@ -124,6 +151,13 @@ function PerfilContent() {
           </button>
           <button onClick={() => setActiveTab("avisos")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "avisos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
             Avisos
+          </button>
+          <button onClick={() => setActiveTab("duvidas")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "duvidas" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
+            Duvidas {questions.filter((q: any) => !q.answer).length > 0 && (
+              <span className="ml-1 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                {questions.filter((q: any) => !q.answer).length}
+              </span>
+            )}
           </button>
         </div>
         {activeTab === "treinos" && (
@@ -196,7 +230,6 @@ function PerfilContent() {
                         )}
                       </div>
                     </div>
-                    {/* SÓ MOSTRA BOTÕES SE FOR GESTOR OU O PRÓPRIO AUTOR */}
                     {canEditOrDelete(notice) && (
                       <div className="flex gap-2">
                         <button onClick={() => { setEditNotice(notice); setEditTitle(notice.title || ""); setEditContent(notice.content); }} className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors">Editar</button>
@@ -218,6 +251,104 @@ function PerfilContent() {
                     <button onClick={saveNotice} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors">Salvar</button>
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+        {activeTab === "duvidas" && (
+          <div>
+            {questions.length === 0 ? (
+              <p className="text-[#6b6b6b] text-sm">Nenhuma duvida enviada pelo aluno.</p>
+            ) : (
+              <div className="space-y-3">
+                {questions.map((q) => (
+                  <div key={q.id} className="bg-[#1a1a1a] rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (q.answer ? "bg-blue-500" : "bg-green-500")} />
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <p className="text-white text-sm">{q.content}</p>
+                            <p className="text-[10px] text-[#6b6b6b] mt-1">
+                              {new Date(q.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                            {/* ANEXOS */}
+                            {(q.imageUrl || q.videoUrl) && (
+                              <div className="mt-2 flex gap-2">
+                                {q.imageUrl && (
+                                  <a href={q.imageUrl} target="_blank" className="text-[10px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                    Ver imagem
+                                  </a>
+                                )}
+                                {q.videoUrl && (
+                                  <a href={q.videoUrl} target="_blank" className="text-[10px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    Ver video
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <span className={"text-[10px] px-2 py-0.5 rounded shrink-0 " + (q.answer ? "bg-blue-500/10 text-blue-400" : "bg-green-500/10 text-green-400")}>
+                            {q.answer ? "Respondida" : "Pendente"}
+                          </span>
+                        </div>
+                        {/* RESPOSTA */}
+                        {q.answer && (
+                          <div className="mt-2 ml-4 pl-3 border-l-2 border-[#D4A373]/30">
+                            <p className="text-xs text-[#D4A373] font-medium">Resposta:</p>
+                            <p className="text-xs text-[#e5e5e5] mt-0.5">{q.answer}</p>
+                            {q.answeredBy && (
+                              <p className="text-[9px] text-[#6b6b6b] mt-0.5">
+                                Respondido por: {q.answeredBy.name}
+                                {q.answeredAt && " em " + new Date(q.answeredAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {/* BOTAO RESPONDER */}
+                        {!q.answer && (
+                          <div className="mt-2">
+                            {answeringId === q.id ? (
+                              <div className="space-y-2">
+                                <textarea
+                                  value={answerText}
+                                  onChange={(e) => setAnswerText(e.target.value)}
+                                  placeholder="Digite sua resposta..."
+                                  rows={3}
+                                  className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373] resize-none"
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleAnswer(q.id)}
+                                    disabled={sendingAnswer || !answerText.trim()}
+                                    className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50"
+                                  >
+                                    {sendingAnswer ? "Enviando..." : "Responder"}
+                                  </button>
+                                  <button
+                                    onClick={() => { setAnsweringId(null); setAnswerText(""); }}
+                                    className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => { setAnsweringId(q.id); setAnswerText(""); }}
+                                className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors"
+                              >
+                                Responder
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
