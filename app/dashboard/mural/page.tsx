@@ -36,16 +36,20 @@ export default function MuralPage() {
     fetchStudents();
     fetchNotices();
   }, []);
-  async function fetchSession() {
-    try {
-      const res = await fetch("/api/auth/session");
-      if (res.ok) {
-        const session = await res.json();
-        setCurrentUserRole(session?.user?.role || "");
-        setCurrentUserId(session?.user?.id || "");
-      }
-    } catch {}
-  }
+ 
+async function fetchSession() {
+  try {
+    const res = await fetch("/api/auth/session");
+    if (res.ok) {
+      const session = await res.json();
+      console.log("Sessão:", session);
+      setCurrentUserRole(session?.user?.role || "");
+      setCurrentUserId(session?.user?.id || "");
+    }
+  } catch {}
+}
+
+  
   async function fetchStudents() {
     try {
       const res = await fetch("/api/students");
