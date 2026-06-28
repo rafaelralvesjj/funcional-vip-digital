@@ -144,7 +144,11 @@ export default function AlunoPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workoutPlanId: selectedPlan.id, studentId }),
       });
-      if (res.ok) { setMessage({ type: "success", text: "Treino concluido!" }); fetchWorkouts(studentId); }
+      if (res.ok) {
+        setMessage({ type: "success", text: "Treino concluido!" });
+        fetchWorkouts(studentId);
+        setShowWorkoutModal(false); // FECHA O MODAL
+      }
     } catch {}
     setCompleting(false);
     setTimeout(() => setMessage(null), 3000);
@@ -185,18 +189,21 @@ export default function AlunoPage() {
   function handleDayClick(day: number) {
     setSelectedDay(day);
     setSelectedExercise(null);
+    setSelectedPlan(null); // limpa antes pra garantir
     const plan = getPlanForDay(day);
-    setSelectedPlan(plan);
+    if (plan) {
+      setSelectedPlan(plan);
+      setShowWorkoutModal(true); // JÁ ABRE O MODAL DIRETO
+    }
   }
   function isToday(day: number) {
     const d = new Date();
     return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
   }
+  // CORRIGIDO: agora NAO depende de selectedPlan
   function isCompleted(day: number) {
-    if (!selectedPlan) return false;
     const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
     return workouts.some((w: any) => {
-      if (w.workoutPlanId !== selectedPlan.id) return false;
       const workoutDate = new Date(w.date);
       const workoutStr = workoutDate.getUTCFullYear() + "-" + String(workoutDate.getUTCMonth() + 1).padStart(2, "0") + "-" + String(workoutDate.getUTCDate()).padStart(2, "0");
       return workoutStr === ds && w.status === "CONCLUIDO";
