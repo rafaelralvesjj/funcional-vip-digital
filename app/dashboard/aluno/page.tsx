@@ -19,12 +19,10 @@ function PerfilContent() {
   const [editDescription, setEditDescription] = useState("");
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string>("");
-
   // Estados do modal de dúvidas
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
   const [answerText, setAnswerText] = useState("");
   const [sendingAnswer, setSendingAnswer] = useState(false);
-
   const loadData = useCallback(async () => {
     if (!studentId) { setLoading(false); return; }
     try {
@@ -67,7 +65,6 @@ function PerfilContent() {
     setLoading(false);
   }, [studentId]);
   useEffect(() => { loadData(); }, [loadData]);
-
   function isPlanCompleted(planId: string): boolean {
     return workouts.some((w: any) => w.workoutPlanId === planId && w.status === "CONCLUIDO");
   }
@@ -110,19 +107,15 @@ function PerfilContent() {
       setEditNotice(null);
     }
   }
-
-  // Lógica de status da thread para o professor
+  // 🟢 Verde = aluno enviou pergunta sem resposta (professor precisa responder)
+  // 🔵 Azul = professor já respondeu (aguardando aluno)
   function getThreadStatus(q: any): "pending" | "answered" {
-    // 🟢 Verde = alguma pergunta sem resposta (professor precisa responder)
-    // 🔵 Azul = todas respondidas
-    if (!q.answer) return "pending";
-    const children = q.children || [];
-    for (const child of children) {
-      if (!child.answer) return "pending";
-    }
-    return "answered";
+    const messages = [q, ...(q.children || [])];
+    const last = messages[messages.length - 1];
+    // Última mensagem NÃO tem resposta → aluno aguardando professor → 🟢
+    // Última mensagem TEM resposta → professor respondeu → 🔵
+    return !last.answer ? "pending" : "answered";
   }
-
   async function handleAnswerFromModal(questionId: string) {
     if (!answerText.trim()) return;
     setSendingAnswer(true);
@@ -141,7 +134,6 @@ function PerfilContent() {
     } catch {}
     setSendingAnswer(false);
   }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
@@ -310,7 +302,6 @@ function PerfilContent() {
           </div>
         )}
       </div>
-
       {/* MODAL DA THREAD DE DÚVIDA (PROFESSOR) */}
       {selectedQuestion && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedQuestion(null)}>
@@ -320,7 +311,6 @@ function PerfilContent() {
               <h2 className="text-sm font-bold text-[#f5f5f5]">Duvida de {student?.name || "Aluno"}</h2>
               <button onClick={() => setSelectedQuestion(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
             </div>
-
             {/* Histórico da thread */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {(() => {
@@ -329,7 +319,7 @@ function PerfilContent() {
                   <div key={msg.id || idx}>
                     {/* Pergunta do aluno */}
                     <div className="flex items-start gap-2">
-                      <div className="w-2 h-2 rounded-full mt-1.5 bg-green-500 shrink-0" />
+                      <div className={"w-2 h-2 rounded-full mt-1.5 shrink-0 " + (msg.answer ? "bg-blue-500" : "bg-green-500")} />
                       <div className="flex-1 bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
                         <div className="flex items-center gap-1.5 mb-1">
                           <span className="text-[9px] font-semibold text-green-400">{student?.name || "Aluno"}</span>
@@ -356,7 +346,6 @@ function PerfilContent() {
                         )}
                       </div>
                     </div>
-
                     {/* Resposta do professor */}
                     {msg.answer && (
                       <div className="flex items-start gap-2 ml-4 mt-2">
@@ -374,7 +363,6 @@ function PerfilContent() {
                         </div>
                       </div>
                     )}
-
                     {idx < messages.length - 1 && (
                       <div className="border-t border-[#ffffff05] my-2" />
                     )}
@@ -382,7 +370,6 @@ function PerfilContent() {
                 ));
               })()}
             </div>
-
             {/* Área de resposta do professor */}
             <div className="border-t border-[#ffffff10] p-3 shrink-0">
               <p className="text-[9px] text-[#D4A373] font-medium mb-1">Sua resposta:</p>
@@ -391,7 +378,6 @@ function PerfilContent() {
                 rows={3}
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none mb-1.5" />
               <button onClick={() => handleAnswerFromModal(
-                // Responde sempre a última pergunta sem resposta
                 (() => {
                   const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
                   for (let i = msgs.length - 1; i >= 0; i--) {
