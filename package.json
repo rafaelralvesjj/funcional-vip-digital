@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
+    "vercel-build": "prisma db push && next build",
     "db:prepare": "prisma migrate dev --name init",
     "db:seed": "prisma db seed",
     "health": "node scripts/check-health.mjs",
