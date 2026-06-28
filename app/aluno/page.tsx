@@ -187,7 +187,7 @@ export default function AlunoPage() {
         if (parentId) {
           setFollowUpText("");
           setFollowUpFile(null);
-          setSelectedQuestion(null); // Fecha a modal
+          setSelectedQuestion(null);
         } else {
           setNewQuestion("");
           setQuestionFile(null);
@@ -206,14 +206,28 @@ export default function AlunoPage() {
     setTimeout(() => setMessage(null), 3000);
   }
 
-  // 🟢 Verde = o professor acabou de responder (tem novidade)
-  // 🔵 Azul = você (aluno) acabou de agir, aguardando professor
-  function getThreadStatus(q: any): "new_reply" | "waiting" {
+  // ⚫ Cinza = duvida resolvida (fechada)
+  // 🟢 Verde = professor respondeu (tem novidade)
+  // 🔵 Azul = aluno enviou, aguardando professor
+  function getThreadStatus(q: any): "resolved" | "new_reply" | "waiting" {
+    if (q.resolvedAt) return "resolved";
     const messages = [q, ...(q.children || [])];
     const last = messages[messages.length - 1];
-    // Última mensagem TEM resposta → professor respondeu → 🟢 novidade pro aluno
-    // Última mensagem NÃO TEM resposta → aluno enviou, aguardando → 🔵
     return last.answer ? "new_reply" : "waiting";
+  }
+
+  async function handleResolveDoubt(questionId: string) {
+    try {
+      const res = await fetch("/api/aluno/questions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: questionId, action: "resolve" }),
+      });
+      if (res.ok) {
+        setSelectedQuestion(null);
+        await fetchQuestions(studentId);
+      }
+    } catch {}
   }
 
   function getThreadPreview(q: any): string {
@@ -430,9 +444,12 @@ export default function AlunoPage() {
                     const status = getThreadStatus(q);
                     return (
                       <div key={q.id}
-                        onClick={() => setSelectedQuestion(q)}
-                        className="bg-[#1a1a1a] rounded-lg p-2 cursor-pointer hover:bg-[#222] transition flex items-start gap-2">
+                        onClick={() => {
+                          if (status !== "resolved") setSelectedQuestion(q);
+                        }}
+                        className={"bg-[#1a1a1a] rounded-lg p-2 flex items-start gap-2 " + (status !== "resolved" ? "cursor-pointer hover:bg-[#222] transition" : "opacity-60")}>
                         <div className={"w-2.5 h-2.5 rounded-full mt-1 shrink-0 " + (
+                          status === "resolved" ? "bg-[#525252]" :
                           status === "new_reply" ? "bg-green-500" : "bg-blue-500"
                         )} />
                         <div className="flex-1 min-w-0">
@@ -442,9 +459,10 @@ export default function AlunoPage() {
                           <div className="flex items-center gap-1 mt-0.5">
                             <p className="text-[8px] text-[#6b6b6b]">{getThreadTime(q)}</p>
                             <span className={"text-[8px] px-1 py-px rounded " + (
+                              status === "resolved" ? "bg-[#525252]/20 text-[#6b6b6b]" :
                               status === "new_reply" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400"
                             )}>
-                              {status === "new_reply" ? "Nova resposta" : "Aguardando"}
+                              {status === "resolved" ? "Resolvida" : status === "new_reply" ? "Nova resposta" : "Aguardando"}
                             </span>
                             {(q.children?.length || 0) > 0 && (
                               <span className="text-[7px] text-[#525252]">
@@ -537,7 +555,7 @@ export default function AlunoPage() {
               {(() => {
                 const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
                 const last = msgs[msgs.length - 1];
-                if (!last.answer) {
+                if (!last.answer && !selectedQuestion.resolvedAt) {
                   return (
                     <div className="flex items-center gap-2 text-[10px] text-yellow-400 bg-yellow-500/10 rounded-lg p-2">
                       <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -551,37 +569,63 @@ export default function AlunoPage() {
               })()}
             </div>
 
-            {/* Área de continuar perguntando */}
-            <div className="border-t border-[#ffffff10] p-3 shrink-0">
-              <p className="text-[9px] text-[#D4A373] font-medium mb-1">
-                {(() => {
-                  const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
-                  const last = msgs[msgs.length - 1];
-                  return last.answer
-                    ? "Nao entendeu? Continue perguntando:"
-                    : "Enquanto isso, envie mais detalhes:";
-                })()}
-              </p>
-              <textarea value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}
-                placeholder="Digite aqui..."
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
-              <div className="flex items-center gap-1 mb-1.5">
-                <input type="file" accept="image/*,video/*" onChange={(e) => setFollowUpFile(e.target.files?.[0] || null)}
-                  className="text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
-                {followUpFile && <span className="text-[8px] text-[#D4A373]">1</span>}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => handleSendQuestion(selectedQuestion.id)}
-                  disabled={sendingFollowUp || !followUpText.trim()}
-                  className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
-                  {sendingFollowUp ? "..." : "Continuar perguntando"}
-                </button>
+            {/* Área inferior - varia conforme status */}
+            {selectedQuestion.resolvedAt ? (
+              <div className="border-t border-[#ffffff10] p-3 shrink-0">
+                <p className="text-[9px] text-[#525252] text-center italic">
+                  Duvida encerrada. Se precisar de ajuda, abra uma nova duvida.
+                </p>
                 <button onClick={() => { setSelectedQuestion(null); setNewQuestion(""); }}
-                  className="text-[8px] text-[#6b6b6b] hover:text-white px-2 transition-colors">
+                  className="w-full mt-1 bg-[#2a2a2a] text-[#a1a1a1] text-xs font-semibold py-1.5 rounded-lg hover:bg-[#333] transition">
                   Nova duvida
                 </button>
               </div>
-            </div>
+            ) : (
+              <div className="border-t border-[#ffffff10] p-3 shrink-0">
+                {/* Botao "Marcar como resolvida" - aparece quando professor respondeu */}
+                {(() => {
+                  const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
+                  const last = msgs[msgs.length - 1];
+                  if (last.answer && !selectedQuestion.resolvedAt) {
+                    return (
+                      <button onClick={() => handleResolveDoubt(selectedQuestion.id)}
+                        className="w-full text-[9px] bg-transparent border border-[#525252] text-[#6b6b6b] py-1.5 rounded-lg hover:border-[#D4A373] hover:text-[#D4A373] transition mb-1">
+                        Marcar como resolvida
+                      </button>
+                    );
+                  }
+                })()}
+
+                <p className="text-[9px] text-[#D4A373] font-medium mb-1">
+                  {(() => {
+                    const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
+                    const last = msgs[msgs.length - 1];
+                    return last.answer
+                      ? "Nao entendeu? Continue perguntando:"
+                      : "Enquanto isso, envie mais detalhes:";
+                  })()}
+                </p>
+                <textarea value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}
+                  placeholder="Digite aqui..."
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
+                <div className="flex items-center gap-1 mb-1.5">
+                  <input type="file" accept="image/*,video/*" onChange={(e) => setFollowUpFile(e.target.files?.[0] || null)}
+                    className="text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
+                  {followUpFile && <span className="text-[8px] text-[#D4A373]">1</span>}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleSendQuestion(selectedQuestion.id)}
+                    disabled={sendingFollowUp || !followUpText.trim()}
+                    className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
+                    {sendingFollowUp ? "..." : "Continuar perguntando"}
+                  </button>
+                  <button onClick={() => { setSelectedQuestion(null); setNewQuestion(""); }}
+                    className="text-[8px] text-[#6b6b6b] hover:text-white px-2 transition-colors">
+                    Nova duvida
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
