@@ -16,9 +16,18 @@ function PerfilContent() {
   const [editContent, setEditContent] = useState("");
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [currentUserRole, setCurrentUserRole] = useState<string>("");
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const loadData = useCallback(async () => {
     if (!studentId) { setLoading(false); return; }
     try {
+      // Busca sessão para saber o role do usuário logado
+      const sessionRes = await fetch("/api/auth/session");
+      if (sessionRes.ok) {
+        const session = await sessionRes.json();
+        setCurrentUserRole(session?.user?.role || "");
+        setCurrentUserId(session?.user?.id || "");
+      }
       const [studentsRes, plansRes, noticesRes, workoutsRes] = await Promise.all([
         fetch("/api/students"),
         fetch("/api/workout-plan?studentId=" + studentId),
@@ -49,6 +58,10 @@ function PerfilContent() {
   useEffect(() => { loadData(); }, [loadData]);
   function isPlanCompleted(planId: string): boolean {
     return workouts.some((w: any) => w.workoutPlanId === planId && w.status === "CONCLUIDO");
+  }
+  function canEditOrDelete(notice: any): boolean {
+    // Só GESTOR (dono) pode editar/excluir
+    return currentUserRole === "GESTOR" || notice.authorId === currentUserId;
   }
   async function deletePlan(id: string) {
     if (!confirm("Excluir este plano de treino?")) return;
@@ -171,7 +184,6 @@ function PerfilContent() {
                       <div>
                         <h3 className="text-white font-medium">{notice.title || "Sem titulo"}</h3>
                         <p className="text-[#6b6b6b] text-xs mt-1">{notice.content?.substring(0, 80)}{notice.content?.length > 80 ? "..." : ""} - {new Date(notice.createdAt).toLocaleDateString("pt-BR")}</p>
-                        {/* INFO DE QUEM ENVIOU */}
                         {notice.author && (
                           <p className="text-[10px] text-[#6b6b6b] mt-1">
                             Enviado por: {notice.author.name}
@@ -184,10 +196,13 @@ function PerfilContent() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => { setEditNotice(notice); setEditTitle(notice.title || ""); setEditContent(notice.content); }} className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors">Editar</button>
-                      <button onClick={() => deleteNotice(notice.id)} className="text-xs bg-[#3a1a1a] hover:bg-[#4a2a2a] text-[#ff6b6b] px-3 py-1.5 rounded transition-colors">Excluir</button>
-                    </div>
+                    {/* SÓ MOSTRA BOTÕES SE FOR GESTOR OU O PRÓPRIO AUTOR */}
+                    {canEditOrDelete(notice) && (
+                      <div className="flex gap-2">
+                        <button onClick={() => { setEditNotice(notice); setEditTitle(notice.title || ""); setEditContent(notice.content); }} className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors">Editar</button>
+                        <button onClick={() => deleteNotice(notice.id)} className="text-xs bg-[#3a1a1a] hover:bg-[#4a2a2a] text-[#ff6b6b] px-3 py-1.5 rounded transition-colors">Excluir</button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
