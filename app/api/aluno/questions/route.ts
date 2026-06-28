@@ -5,28 +5,26 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export async function POST(request: NextRequest) {
   try {
-    // Detecta se é FormData ou JSON
     const contentType = request.headers.get("content-type") || "";
 
     let studentId: string | null = null;
     let content: string | null = null;
+    let parentId: string | null = null;
     let imageUrl: string | null = null;
     let videoUrl: string | null = null;
 
     if (contentType.includes("multipart/form-data")) {
-      // É FormData (vindo do frontend do aluno)
       const form = await request.formData();
       studentId = form.get("studentId") as string | null;
       content = form.get("content") as string | null;
+      parentId = form.get("parentId") as string | null;
       const file = form.get("file") as File | null;
 
-      // Se tiver arquivo, converte para base64
       if (file) {
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
         const base64 = buffer.toString("base64");
         const mimeType = file.type;
-
         if (mimeType.startsWith("video/")) {
           videoUrl = `data:${mimeType};base64,${base64}`;
         } else {
@@ -34,10 +32,10 @@ export async function POST(request: NextRequest) {
         }
       }
     } else {
-      // É JSON
       const body = await request.json();
       studentId = body.studentId;
       content = body.content;
+      parentId = body.parentId || null;
       videoUrl = body.videoUrl || null;
       imageUrl = body.imageUrl || null;
     }
@@ -53,11 +51,13 @@ export async function POST(request: NextRequest) {
       data: {
         studentId,
         content,
+        parentId: parentId || null,
         videoUrl: videoUrl || null,
         imageUrl: imageUrl || null,
       },
       include: {
         answeredBy: { select: { name: true } },
+        parent: { select: { id: true, content: true, answer: true } },
       },
     });
 
@@ -85,12 +85,22 @@ export async function GET(req: NextRequest) {
     const where: any = {};
     if (studentId) where.studentId = studentId;
 
+    // Busca apenas as threads raiz (parentId = null) com suas children
     const questions = await prisma.question.findMany({
-      where,
+      where: {
+        ...where,
+        parentId: null,
+      },
       orderBy: { createdAt: "desc" },
       include: {
         answeredBy: { select: { id: true, name: true } },
         student: { select: { id: true, name: true } },
+        children: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            answeredBy: { select: { id: true, name: true } },
+          },
+        },
       },
     });
 
@@ -132,6 +142,13 @@ export async function PUT(req: NextRequest) {
       include: {
         answeredBy: { select: { id: true, name: true } },
         student: { select: { id: true, name: true, email: true } },
+        parent: { select: { id: true, content: true, answer: true } },
+        children: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            answeredBy: { select: { id: true, name: true } },
+          },
+        },
       },
     });
 
