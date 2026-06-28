@@ -275,13 +275,10 @@ function PerfilContent() {
                 <div className="space-y-3">
                   {questions.map((q) => {
                     const status = getThreadStatus(q);
-                    const canOpen = status !== "resolved";
                     return (
                       <div key={q.id}
-                        onClick={() => {
-                          if (canOpen) setSelectedQuestion(q);
-                        }}
-                        className={"bg-[#1a1a1a] rounded-lg p-4 transition " + (canOpen ? "cursor-pointer hover:bg-[#222]" : "opacity-60")}>
+                        onClick={() => setSelectedQuestion(q)}
+                        className={"bg-[#1a1a1a] rounded-lg p-4 transition " + (status === "resolved" ? "opacity-60" : "cursor-pointer hover:bg-[#222]")}>
                         <div className="flex items-start gap-3">
                           <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (
                             status === "resolved" ? "bg-[#525252]" :
