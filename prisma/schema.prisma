@@ -1,3 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String?
+  email     String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image     String?
+  password  String?   @map("password")
+  phone     String?   @map("phone")
+  role      String    @default("GESTOR")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  accounts    Account[]
+  sessions    Session[]
+  students    Student[]
+  notices     Notice[]
+  questions   Question[]
+  studentAuths Student[] @relation("StudentAuth")
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Student {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  email     String?
+  phone     String?
+  notes     String?
+  image     String?
+  active    Boolean  @default(true)
+  userAuthId String? @unique @map("user_auth_id")
+  onboardingCompleto Boolean @default(false) @map("onboarding_completo")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAuth  User?     @relation("StudentAuth", fields: [userAuthId], references: [id])
+  workoutPlans   WorkoutPlan[]
+  checkIns       CheckIn[]
+  weeklyFeedbacks WeeklyFeedback[]
+  notices        Notice[]
+  questions      Question[]
+  workouts       Workout[]
+  avaliacoes     Avaliacao[]
+  noticeReads    NoticeRead[]
+
+  @@map("students")
+}
+
+model Avaliacao {
+  id            String   @id @default(uuid())
+  alunoId       String   @map("aluno_id")
+  tipo          String
+  mesReferencia Int      @map("mes_referencia")
+  objetivo      String
+  metaEspecifica String? @map("meta_especifica")
+  peso          Float?
+  altura        Float?
+  abdomen       Float?
+  quadril       Float?
+  braco         Float?
+  coxa          Float?
+  gluteo        Float?
+  preferencia   String?
+  equipamentos  String?
+  frequencia    Int?
+  nivelAtividade String? @map("nivel_atividade")
+  lesoes        String?
+  fotoUrl       String? @map("foto_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@map("avaliacoes")
+}
+
+model WorkoutPlan {
+  id          String   @id @default(uuid())
+  studentId   String   @map("student_id")
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  notes       String?
+  date        DateTime?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  exercises Exercise[]
+  workouts  Workout[]
+
+  @@map("workout_plans")
+}
+
+model Exercise {
+  id            String   @id @default(uuid())
+  workoutPlanId String   @map("workout_plan_id")
+  name          String
+  description   String?
+  series        Int?
+  reps          String?
+  weight        String?
+  restTime      String?  @map("rest_time")
+  notes         String?
+  order         Int      @default(0)
+  videoUrl      String?  @map("video_url")
+  imageUrl      String?  @map("image_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  workoutPlan WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+
+  @@map("exercises")
+}
+
+model Workout {
+  id            String   @id @default(uuid())
+  studentId     String   @map("student_id")
+  workoutPlanId String?  @map("workout_plan_id")
+  date          DateTime
+  status        String   @default("PENDENTE")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  workoutPlan WorkoutPlan? @relation(fields: [workoutPlanId], references: [id])
+
+  @@map("workouts")
+}
+
+model CheckIn {
+  id        String   @id @default(uuid())
+  studentId String   @map("student_id")
+  date      DateTime @default(now())
+  present   Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("check_ins")
+}
+
+model WeeklyFeedback {
+  id        String   @id @default(uuid())
+  studentId String   @map("student_id")
+  content   String
+  rating    Int?
+  weekStart DateTime? @map("week_start")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("weekly_feedbacks")
+}
+
+model Notice {
+  id        String   @id @default(uuid())
+  title     String?
+  content   String
+  type      String   @default("AVISO")
+  authorId  String   @map("author_id")
+  studentId String?  @map("student_id")
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  author  User      @relation(fields: [authorId], references: [id])
+  student Student?  @relation(fields: [studentId], references: [id])
+  reads   NoticeRead[]
+
+  @@map("notices")
+}
+
+model NoticeRead {
+  id        String   @id @default(uuid())
+  noticeId  String   @map("notice_id")
+  studentId String   @map("student_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  notice  Notice  @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, studentId])
+  @@map("notice_reads")
+}
+
 model Question {
   id            String    @id @default(uuid())
   studentId     String    @map("student_id")
@@ -17,4 +245,16 @@ model Question {
   answeredBy User?     @relation(fields: [answeredById], references: [id])
 
   @@map("questions")
+}
+
+model ExerciseLibrary {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  muscleGroup String
+  imageUrl    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("exercise_library")
 }
