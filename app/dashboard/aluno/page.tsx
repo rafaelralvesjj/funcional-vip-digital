@@ -107,9 +107,11 @@ function PerfilContent() {
       setEditNotice(null);
     }
   }
+  // ⚫ Cinza = duvida resolvida (fechada)
   // 🟢 Verde = aluno enviou pergunta sem resposta (professor precisa responder)
   // 🔵 Azul = professor ja respondeu (aguardando aluno)
-  function getThreadStatus(q: any): "pending" | "answered" {
+  function getThreadStatus(q: any): "pending" | "answered" | "resolved" {
+    if (q.resolvedAt) return "resolved";
     const messages = [q, ...(q.children || [])];
     const last = messages[messages.length - 1];
     return !last.answer ? "pending" : "answered";
@@ -273,12 +275,18 @@ function PerfilContent() {
                 <div className="space-y-3">
                   {questions.map((q) => {
                     const status = getThreadStatus(q);
+                    const canOpen = status !== "resolved";
                     return (
                       <div key={q.id}
-                        onClick={() => setSelectedQuestion(q)}
-                        className="bg-[#1a1a1a] rounded-lg p-4 cursor-pointer hover:bg-[#222] transition">
+                        onClick={() => {
+                          if (canOpen) setSelectedQuestion(q);
+                        }}
+                        className={"bg-[#1a1a1a] rounded-lg p-4 transition " + (canOpen ? "cursor-pointer hover:bg-[#222]" : "opacity-60")}>
                         <div className="flex items-start gap-3">
-                          <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (status === "pending" ? "bg-green-500" : "bg-blue-500")} />
+                          <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (
+                            status === "resolved" ? "bg-[#525252]" :
+                            status === "pending" ? "bg-green-500" : "bg-blue-500"
+                          )} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
@@ -287,8 +295,11 @@ function PerfilContent() {
                                   {new Date(q.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                                 </p>
                               </div>
-                              <span className={"text-[10px] px-2 py-0.5 rounded shrink-0 " + (status === "pending" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400")}>
-                                {status === "pending" ? "Pendente" : "Respondida"}
+                              <span className={"text-[10px] px-2 py-0.5 rounded shrink-0 " + (
+                                status === "resolved" ? "bg-[#525252]/20 text-[#6b6b6b]" :
+                                status === "pending" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400"
+                              )}>
+                                {status === "resolved" ? "Resolvida" : status === "pending" ? "Pendente" : "Respondida"}
                               </span>
                             </div>
                             {(q.children?.length || 0) > 0 && (
@@ -369,26 +380,34 @@ function PerfilContent() {
                 ));
               })()}
             </div>
-            <div className="border-t border-[#ffffff10] p-3 shrink-0">
-              <p className="text-[9px] text-[#D4A373] font-medium mb-1">Sua resposta:</p>
-              <textarea value={answerText} onChange={(e) => setAnswerText(e.target.value)}
-                placeholder="Digite sua resposta..."
-                rows={3}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none mb-1.5" />
-              <button onClick={() => handleAnswerFromModal(
-                (() => {
-                  const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
-                  for (let i = msgs.length - 1; i >= 0; i--) {
-                    if (!msgs[i].answer) return msgs[i].id;
-                  }
-                  return selectedQuestion.id;
-                })()
-              )}
-                disabled={sendingAnswer || !answerText.trim()}
-                className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
-                {sendingAnswer ? "Enviando..." : "Responder"}
-              </button>
-            </div>
+            {selectedQuestion.resolvedAt ? (
+              <div className="border-t border-[#ffffff10] p-3 shrink-0">
+                <p className="text-[9px] text-[#525252] text-center italic">
+                  Duvida encerrada pelo aluno.
+                </p>
+              </div>
+            ) : (
+              <div className="border-t border-[#ffffff10] p-3 shrink-0">
+                <p className="text-[9px] text-[#D4A373] font-medium mb-1">Sua resposta:</p>
+                <textarea value={answerText} onChange={(e) => setAnswerText(e.target.value)}
+                  placeholder="Digite sua resposta..."
+                  rows={3}
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none mb-1.5" />
+                <button onClick={() => handleAnswerFromModal(
+                  (() => {
+                    const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
+                    for (let i = msgs.length - 1; i >= 0; i--) {
+                      if (!msgs[i].answer) return msgs[i].id;
+                    }
+                    return selectedQuestion.id;
+                  })()
+                )}
+                  disabled={sendingAnswer || !answerText.trim()}
+                  className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
+                  {sendingAnswer ? "Enviando..." : "Responder"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
