@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
-
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
@@ -46,7 +45,6 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
@@ -58,7 +56,6 @@ export async function GET(req: NextRequest) {
     const studentId = searchParams.get("studentId") || undefined;
     const authorId = searchParams.get("authorId") || undefined;
     const where: any = {};
-
     // CORREÇÃO: busca avisos DO aluno OU avisos GLOBAIS (studentId = null)
     if (studentId) {
       where.OR = [
@@ -67,7 +64,6 @@ export async function GET(req: NextRequest) {
       ];
     }
     if (authorId) where.authorId = authorId;
-
     const notices = await prisma.notice.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -78,9 +74,11 @@ export async function GET(req: NextRequest) {
           where: { studentId },
           select: { id: true },
         } : false,
+        _count: {
+          reads: true,
+        },
       },
     });
-
     let noticesWithReadStatus = notices;
     if (studentId) {
       noticesWithReadStatus = notices.map((notice: any) => ({
@@ -89,7 +87,6 @@ export async function GET(req: NextRequest) {
         reads: undefined,
       }));
     }
-
     return NextResponse.json(noticesWithReadStatus);
   } catch (error) {
     console.error("Erro ao listar avisos:", error);
@@ -99,7 +96,6 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
 export async function PUT(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
@@ -138,7 +134,6 @@ export async function PUT(req: NextRequest) {
     );
   }
 }
-
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
