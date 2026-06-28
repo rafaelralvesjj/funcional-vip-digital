@@ -187,7 +187,7 @@ export default function AlunoPage() {
         if (parentId) {
           setFollowUpText("");
           setFollowUpFile(null);
-          setSelectedQuestion(null); // ← FECHA A MODAL
+          setSelectedQuestion(null); // Fecha a modal
         } else {
           setNewQuestion("");
           setQuestionFile(null);
@@ -206,12 +206,14 @@ export default function AlunoPage() {
     setTimeout(() => setMessage(null), 3000);
   }
 
-  // 🟢 Verde = thread nova (só pergunta inicial, sem resposta)
-  // 🔵 Azul = já houve interação (respondeu, continuou, etc)
-  function getThreadStatus(q: any): "new" | "interacted" {
-    const children = q.children || [];
-    if (!q.answer && children.length === 0) return "new";
-    return "interacted";
+  // 🟢 Verde = o professor acabou de responder (tem novidade)
+  // 🔵 Azul = você (aluno) acabou de agir, aguardando professor
+  function getThreadStatus(q: any): "new_reply" | "waiting" {
+    const messages = [q, ...(q.children || [])];
+    const last = messages[messages.length - 1];
+    // Última mensagem TEM resposta → professor respondeu → 🟢 novidade pro aluno
+    // Última mensagem NÃO TEM resposta → aluno enviou, aguardando → 🔵
+    return last.answer ? "new_reply" : "waiting";
   }
 
   function getThreadPreview(q: any): string {
@@ -280,7 +282,7 @@ export default function AlunoPage() {
   const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const unreadCount = notices.filter((n: any) => !n.readByStudent).length;
-  const pendingCount = questions.filter((q: any) => getThreadStatus(q) === "new").length;
+  const pendingCount = questions.filter((q: any) => getThreadStatus(q) === "new_reply").length;
 
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
   return (
@@ -431,7 +433,7 @@ export default function AlunoPage() {
                         onClick={() => setSelectedQuestion(q)}
                         className="bg-[#1a1a1a] rounded-lg p-2 cursor-pointer hover:bg-[#222] transition flex items-start gap-2">
                         <div className={"w-2.5 h-2.5 rounded-full mt-1 shrink-0 " + (
-                          status === "new" ? "bg-green-500" : "bg-blue-500"
+                          status === "new_reply" ? "bg-green-500" : "bg-blue-500"
                         )} />
                         <div className="flex-1 min-w-0">
                           <p className="text-[10px] text-[#e5e5e5] font-medium truncate">
@@ -440,9 +442,9 @@ export default function AlunoPage() {
                           <div className="flex items-center gap-1 mt-0.5">
                             <p className="text-[8px] text-[#6b6b6b]">{getThreadTime(q)}</p>
                             <span className={"text-[8px] px-1 py-px rounded " + (
-                              status === "new" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400"
+                              status === "new_reply" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400"
                             )}>
-                              {status === "new" ? "Nova" : "Respondida"}
+                              {status === "new_reply" ? "Nova resposta" : "Aguardando"}
                             </span>
                             {(q.children?.length || 0) > 0 && (
                               <span className="text-[7px] text-[#525252]">
@@ -474,13 +476,12 @@ export default function AlunoPage() {
             {/* Histórico da thread (scrollável) */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {(() => {
-                // Monta timeline: pergunta raiz + children
                 const messages: any[] = [selectedQuestion, ...(selectedQuestion.children || [])];
                 return messages.map((msg: any, idx: number) => (
                   <div key={msg.id || idx}>
                     {/* Pergunta do aluno */}
                     <div className="flex items-start gap-2">
-                      <div className={"w-2 h-2 rounded-full mt-1.5 shrink-0 " + (msg.answer ? "bg-blue-500" : "bg-green-500")} />
+                      <div className={"w-2 h-2 rounded-full mt-1.5 shrink-0 " + (msg.answer ? "bg-green-500" : "bg-blue-500")} />
                       <div className="flex-1 bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
                         <div className="flex items-center gap-1.5 mb-1">
                           <span className="text-[9px] font-semibold text-[#D4A373]">Voce</span>
@@ -489,7 +490,6 @@ export default function AlunoPage() {
                           </span>
                         </div>
                         <p className="text-xs text-[#e5e5e5]">{msg.content}</p>
-                        {/* Anexos */}
                         {(msg.imageUrl || msg.videoUrl) && (
                           <div className="mt-1.5 flex gap-2">
                             {msg.imageUrl && (
@@ -509,7 +509,7 @@ export default function AlunoPage() {
                       </div>
                     </div>
 
-                    {/* Resposta do professor (se existir) */}
+                    {/* Resposta do professor */}
                     {msg.answer && (
                       <div className="flex items-start gap-2 ml-4 mt-2">
                         <div className="w-2 h-2 rounded-full mt-1.5 bg-[#D4A373] shrink-0" />
@@ -527,7 +527,6 @@ export default function AlunoPage() {
                       </div>
                     )}
 
-                    {/* Separador entre mensagens */}
                     {idx < messages.length - 1 && (
                       <div className="border-t border-[#ffffff05] my-2" />
                     )}
@@ -535,7 +534,6 @@ export default function AlunoPage() {
                 ));
               })()}
 
-              {/* Indicador de aguardando resposta */}
               {(() => {
                 const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
                 const last = msgs[msgs.length - 1];
