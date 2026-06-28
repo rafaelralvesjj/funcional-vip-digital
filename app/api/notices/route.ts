@@ -75,7 +75,9 @@ export async function GET(req: NextRequest) {
           select: { id: true },
         } : false,
         _count: {
-          reads: true,
+          select: {
+            reads: true,
+          },
         },
       },
     });
