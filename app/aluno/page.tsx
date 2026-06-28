@@ -30,6 +30,13 @@ export default function AlunoPage() {
   const [imgError, setImgError] = useState(false);
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>({});
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
+
+  // Estados para o modal de dúvidas (thread)
+  const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
+  const [followUpText, setFollowUpText] = useState("");
+  const [followUpFile, setFollowUpFile] = useState<File | null>(null);
+  const [sendingFollowUp, setSendingFollowUp] = useState(false);
+
   const getImageUrl = (url?: string): string | null => {
     if (!url) return null;
     if (url.startsWith("/")) {
@@ -139,7 +146,6 @@ export default function AlunoPage() {
     if (!selectedPlan || !studentId || selectedDay === null) return;
     setCompleting(true); setMessage(null);
     try {
-      // Envia a data do dia selecionado no calendário
       const planDate = new Date(currentYear, currentMonth, selectedDay);
       const res = await fetch("/api/workout/mark-complete", {
         method: "POST",
@@ -159,21 +165,76 @@ export default function AlunoPage() {
     setCompleting(false);
     setTimeout(() => setMessage(null), 3000);
   }
-  async function handleSendQuestion() {
-    if (!newQuestion.trim() || !studentId) return;
-    setSendingQuestion(true);
+
+  // Envia nova dúvida (fora do modal) ou follow-up (dentro do modal)
+  async function handleSendQuestion(parentId?: string) {
+    const text = parentId ? followUpText : newQuestion;
+    if (!text.trim() || !studentId) return;
+
+    if (parentId) setSendingFollowUp(true);
+    else setSendingQuestion(true);
+
     try {
       const form = new FormData();
-      form.append("content", newQuestion.trim());
+      form.append("content", text.trim());
       form.append("studentId", studentId);
-      if (questionFile) form.append("file", questionFile);
+      if (parentId) form.append("parentId", parentId);
+      const file = parentId ? followUpFile : questionFile;
+      if (file) form.append("file", file);
+
       const res = await fetch("/api/aluno/questions", { method: "POST", body: form });
-      if (res.ok) { setNewQuestion(""); setQuestionFile(null); setMessage({ type: "success", text: "Duvida enviada!" }); fetchQuestions(studentId); }
-      else { setMessage({ type: "error", text: "Erro ao enviar" }); }
-    } catch { setMessage({ type: "error", text: "Erro ao enviar" }); }
-    setSendingQuestion(false);
+      if (res.ok) {
+        if (parentId) {
+          setFollowUpText("");
+          setFollowUpFile(null);
+        } else {
+          setNewQuestion("");
+          setQuestionFile(null);
+        }
+        setMessage({ type: "success", text: "Duvida enviada!" });
+        await fetchQuestions(studentId);
+      } else {
+        setMessage({ type: "error", text: "Erro ao enviar" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao enviar" });
+    }
+
+    if (parentId) setSendingFollowUp(false);
+    else setSendingQuestion(false);
     setTimeout(() => setMessage(null), 3000);
   }
+
+  // Determina o status da thread
+  function getThreadStatus(q: any): "pending" | "answered" | "followup_pending" {
+    // Se a pergunta raiz não tem resposta → pending
+    if (!q.answer) return "pending";
+    // Se tem children, verifica a última child
+    if (q.children && q.children.length > 0) {
+      const lastChild = q.children[q.children.length - 1];
+      if (!lastChild.answer) return "followup_pending";
+    }
+    return "answered";
+  }
+
+  function getThreadPreview(q: any): string {
+    const children = q.children || [];
+    if (children.length > 0) {
+      const last = children[children.length - 1];
+      return last.content;
+    }
+    return q.content;
+  }
+
+  function getThreadTime(q: any): string {
+    const children = q.children || [];
+    if (children.length > 0) {
+      const last = children[children.length - 1];
+      return new Date(last.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    }
+    return new Date(q.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
   function getWeekDayName(day: number): string {
     const date = new Date(currentYear, currentMonth, day);
     const dayIndex = date.getDay();
@@ -222,6 +283,8 @@ export default function AlunoPage() {
   const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const unreadCount = notices.filter((n: any) => !n.readByStudent).length;
+  const pendingCount = questions.filter((q: any) => getThreadStatus(q) !== "answered").length;
+
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
   return (
     <div className="space-y-3">
@@ -335,35 +398,205 @@ export default function AlunoPage() {
                 <p className="text-[8px] text-[#D4A373] mt-1">Em breve...</p>
               )}
             </div>
+            {/* SEÇÃO DE DÚVIDAS - LADO DIREITO */}
             <div className="sm:w-[45%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
-              <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">Duvidas</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="font-semibold text-[#f5f5f5] text-xs">Duvidas</h2>
+                {pendingCount > 0 && (
+                  <span className="bg-green-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
+                    {pendingCount}
+                  </span>
+                )}
+              </div>
+
+              {/* Formulário de nova dúvida */}
               <textarea value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
                 placeholder="Pergunte aqui..."
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
               <div className="flex items-center gap-1 mb-1.5">
-                <span className="text-[9px] text-[#a1a1a1]"></span>
                 <input type="file" accept="image/*,video/*" onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
                   className="text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
                 {questionFile && <span className="text-[8px] text-[#D4A373]">1</span>}
               </div>
-              <button onClick={handleSendQuestion} disabled={sendingQuestion || !newQuestion.trim()}
+              <button onClick={() => handleSendQuestion()} disabled={sendingQuestion || !newQuestion.trim()}
                 className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
                 {sendingQuestion ? "..." : "Enviar"}
               </button>
+
+              {/* Lista de threads */}
               {questions.length > 0 && (
-                <div className="mt-1.5 space-y-1 max-h-16 overflow-y-auto">
-                  {questions.slice(0, 2).map((q: any) => (
-                    <div key={q.id} className="bg-[#1a1a1a] rounded p-1.5">
-                      <p className="text-[9px] text-[#e5e5e5]">{q.content}</p>
-                      {q.answer && <p className="text-[8px] text-[#D4A373] mt-px">R: {q.answer}</p>}
-                    </div>
-                  ))}
+                <div className="mt-2 space-y-1 max-h-60 overflow-y-auto">
+                  <p className="text-[9px] text-[#525252] mb-1">Suas duvidas:</p>
+                  {questions.map((q: any) => {
+                    const status = getThreadStatus(q);
+                    return (
+                      <div key={q.id}
+                        onClick={() => setSelectedQuestion(q)}
+                        className="bg-[#1a1a1a] rounded-lg p-2 cursor-pointer hover:bg-[#222] transition flex items-start gap-2">
+                        <div className={"w-2.5 h-2.5 rounded-full mt-1 shrink-0 " + (
+                          status === "pending" || status === "followup_pending"
+                            ? "bg-green-500"
+                            : "bg-blue-500"
+                        )} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-[#e5e5e5] font-medium truncate">
+                            {q.content.substring(0, 50)}{q.content.length > 50 ? "..." : ""}
+                          </p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <p className="text-[8px] text-[#6b6b6b]">{getThreadTime(q)}</p>
+                            <span className={"text-[8px] px-1 py-px rounded " + (
+                              status === "pending" ? "bg-green-500/10 text-green-400" :
+                              status === "followup_pending" ? "bg-yellow-500/10 text-yellow-400" :
+                              "bg-blue-500/10 text-blue-400"
+                            )}>
+                              {status === "pending" ? "Pendente" :
+                               status === "followup_pending" ? "Nova msg" :
+                               "Respondida"}
+                            </span>
+                            {(q.children?.length || 0) > 0 && (
+                              <span className="text-[7px] text-[#525252]">
+                                {q.children.length + 1} msgs
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* MODAL DA THREAD DE DÚVIDA */}
+      {selectedQuestion && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedQuestion(null)}>
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10] shrink-0">
+              <h2 className="text-sm font-bold text-[#f5f5f5]">Duvida</h2>
+              <button onClick={() => setSelectedQuestion(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
+            </div>
+
+            {/* Histórico da thread (scrollável) */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {(() => {
+                // Monta timeline: pergunta raiz + children
+                const messages: any[] = [selectedQuestion, ...(selectedQuestion.children || [])];
+                return messages.map((msg: any, idx: number) => (
+                  <div key={msg.id || idx}>
+                    {/* Pergunta do aluno */}
+                    <div className="flex items-start gap-2">
+                      <div className={"w-2 h-2 rounded-full mt-1.5 shrink-0 " + (msg.answer ? "bg-blue-500" : "bg-green-500")} />
+                      <div className="flex-1 bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[9px] font-semibold text-[#D4A373]">Voce</span>
+                          <span className="text-[8px] text-[#525252]">
+                            {new Date(msg.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#e5e5e5]">{msg.content}</p>
+                        {/* Anexos */}
+                        {(msg.imageUrl || msg.videoUrl) && (
+                          <div className="mt-1.5 flex gap-2">
+                            {msg.imageUrl && (
+                              <a href={msg.imageUrl} target="_blank" className="text-[9px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                Ver imagem
+                              </a>
+                            )}
+                            {msg.videoUrl && (
+                              <a href={msg.videoUrl} target="_blank" className="text-[9px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                Ver video
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Resposta do professor (se existir) */}
+                    {msg.answer && (
+                      <div className="flex items-start gap-2 ml-4 mt-2">
+                        <div className="w-2 h-2 rounded-full mt-1.5 bg-[#D4A373] shrink-0" />
+                        <div className="flex-1 bg-[#D4A373]/5 rounded-lg p-2.5 border border-[#D4A373]/15">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[9px] font-semibold text-[#D4A373]">
+                              {msg.answeredBy?.name || "Professor"}
+                            </span>
+                            <span className="text-[8px] text-[#525252]">
+                              {msg.answeredAt ? new Date(msg.answeredAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#e5e5e5]">{msg.answer}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Separador entre mensagens */}
+                    {idx < messages.length - 1 && (
+                      <div className="border-t border-[#ffffff05] my-2" />
+                    )}
+                  </div>
+                ));
+              })()}
+
+              {/* Indicador de aguardando resposta */}
+              {(() => {
+                const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
+                const last = msgs[msgs.length - 1];
+                if (!last.answer) {
+                  return (
+                    <div className="flex items-center gap-2 text-[10px] text-yellow-400 bg-yellow-500/10 rounded-lg p-2">
+                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Aguardando resposta do professor...
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+
+            {/* Área de continuar perguntando */}
+            <div className="border-t border-[#ffffff10] p-3 shrink-0">
+              <p className="text-[9px] text-[#D4A373] font-medium mb-1">
+                {(() => {
+                  const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
+                  const last = msgs[msgs.length - 1];
+                  return last.answer
+                    ? "Nao entendeu? Continue perguntando:"
+                    : "Enquanto isso, envie mais detalhes:";
+                })()}
+              </p>
+              <textarea value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}
+                placeholder="Digite aqui..."
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
+              <div className="flex items-center gap-1 mb-1.5">
+                <input type="file" accept="image/*,video/*" onChange={(e) => setFollowUpFile(e.target.files?.[0] || null)}
+                  className="text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
+                {followUpFile && <span className="text-[8px] text-[#D4A373]">1</span>}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => handleSendQuestion(selectedQuestion.id)}
+                  disabled={sendingFollowUp || !followUpText.trim()}
+                  className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
+                  {sendingFollowUp ? "..." : "Continuar perguntando"}
+                </button>
+                <button onClick={() => { setSelectedQuestion(null); setNewQuestion(""); }}
+                  className="text-[8px] text-[#6b6b6b] hover:text-white px-2 transition-colors">
+                  Nova duvida
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL DO AVISO */}
       {selectedNotice && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedNotice(null)}>
@@ -443,7 +676,6 @@ export default function AlunoPage() {
                 </div>
               </div>
             )}
-            {/* BOTAO CONCLUIR TREINO */}
             {selectedDay !== null && (
               <div className="px-3 pb-3">
                 <button
