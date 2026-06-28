@@ -444,10 +444,8 @@ export default function AlunoPage() {
                     const status = getThreadStatus(q);
                     return (
                       <div key={q.id}
-                        onClick={() => {
-                          if (status !== "resolved") setSelectedQuestion(q);
-                        }}
-                        className={"bg-[#1a1a1a] rounded-lg p-2 flex items-start gap-2 " + (status !== "resolved" ? "cursor-pointer hover:bg-[#222] transition" : "opacity-60")}>
+                        onClick={() => setSelectedQuestion(q)}
+                        className={"bg-[#1a1a1a] rounded-lg p-2 flex items-start gap-2 cursor-pointer " + (status === "resolved" ? "opacity-60" : "hover:bg-[#222] transition")}>
                         <div className={"w-2.5 h-2.5 rounded-full mt-1 shrink-0 " + (
                           status === "resolved" ? "bg-[#525252]" :
                           status === "new_reply" ? "bg-green-500" : "bg-blue-500"
