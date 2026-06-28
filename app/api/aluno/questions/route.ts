@@ -181,3 +181,48 @@ export async function PUT(req: NextRequest) {
     );
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as any)?.id as string | undefined;
+    if (!userId) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, action } = body;
+
+    if (!id || action !== "resolve") {
+      return NextResponse.json(
+        { error: "ID e action='resolve' são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    const question = await prisma.question.update({
+      where: { id },
+      data: {
+        resolvedAt: new Date(),
+      },
+      include: {
+        answeredBy: { select: { id: true, name: true } },
+        student: { select: { id: true, name: true } },
+        children: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            answeredBy: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(question);
+  } catch (error) {
+    console.error("Erro ao resolver dúvida:", error);
+    return NextResponse.json(
+      { error: "Erro ao resolver dúvida" },
+      { status: 500 }
+    );
+  }
+}
