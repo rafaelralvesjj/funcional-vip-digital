@@ -187,6 +187,7 @@ export default function AlunoPage() {
         if (parentId) {
           setFollowUpText("");
           setFollowUpFile(null);
+          setSelectedQuestion(null); // ← FECHA A MODAL
         } else {
           setNewQuestion("");
           setQuestionFile(null);
@@ -205,16 +206,12 @@ export default function AlunoPage() {
     setTimeout(() => setMessage(null), 3000);
   }
 
-  // Determina o status da thread
-  function getThreadStatus(q: any): "pending" | "answered" | "followup_pending" {
-    // Se a pergunta raiz não tem resposta → pending
-    if (!q.answer) return "pending";
-    // Se tem children, verifica a última child
-    if (q.children && q.children.length > 0) {
-      const lastChild = q.children[q.children.length - 1];
-      if (!lastChild.answer) return "followup_pending";
-    }
-    return "answered";
+  // 🟢 Verde = thread nova (só pergunta inicial, sem resposta)
+  // 🔵 Azul = já houve interação (respondeu, continuou, etc)
+  function getThreadStatus(q: any): "new" | "interacted" {
+    const children = q.children || [];
+    if (!q.answer && children.length === 0) return "new";
+    return "interacted";
   }
 
   function getThreadPreview(q: any): string {
@@ -283,7 +280,7 @@ export default function AlunoPage() {
   const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const unreadCount = notices.filter((n: any) => !n.readByStudent).length;
-  const pendingCount = questions.filter((q: any) => getThreadStatus(q) !== "answered").length;
+  const pendingCount = questions.filter((q: any) => getThreadStatus(q) === "new").length;
 
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
   return (
@@ -434,9 +431,7 @@ export default function AlunoPage() {
                         onClick={() => setSelectedQuestion(q)}
                         className="bg-[#1a1a1a] rounded-lg p-2 cursor-pointer hover:bg-[#222] transition flex items-start gap-2">
                         <div className={"w-2.5 h-2.5 rounded-full mt-1 shrink-0 " + (
-                          status === "pending" || status === "followup_pending"
-                            ? "bg-green-500"
-                            : "bg-blue-500"
+                          status === "new" ? "bg-green-500" : "bg-blue-500"
                         )} />
                         <div className="flex-1 min-w-0">
                           <p className="text-[10px] text-[#e5e5e5] font-medium truncate">
@@ -445,13 +440,9 @@ export default function AlunoPage() {
                           <div className="flex items-center gap-1 mt-0.5">
                             <p className="text-[8px] text-[#6b6b6b]">{getThreadTime(q)}</p>
                             <span className={"text-[8px] px-1 py-px rounded " + (
-                              status === "pending" ? "bg-green-500/10 text-green-400" :
-                              status === "followup_pending" ? "bg-yellow-500/10 text-yellow-400" :
-                              "bg-blue-500/10 text-blue-400"
+                              status === "new" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400"
                             )}>
-                              {status === "pending" ? "Pendente" :
-                               status === "followup_pending" ? "Nova msg" :
-                               "Respondida"}
+                              {status === "new" ? "Nova" : "Respondida"}
                             </span>
                             {(q.children?.length || 0) > 0 && (
                               <span className="text-[7px] text-[#525252]">
