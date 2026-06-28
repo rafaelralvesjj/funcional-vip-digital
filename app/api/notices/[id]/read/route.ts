@@ -26,7 +26,6 @@ export async function POST(
       );
     }
 
-    // Verifica se já existe registro
     const existing = await prisma.noticeRead.findUnique({
       where: {
         noticeId_studentId: {
@@ -36,7 +35,6 @@ export async function POST(
       },
     });
 
-    // Só cria se não existir
     if (!existing) {
       await prisma.noticeRead.create({
         data: {
