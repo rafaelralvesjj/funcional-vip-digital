@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
-
 interface LibraryExercise {
   id: string;
   name: string;
@@ -9,7 +8,6 @@ interface LibraryExercise {
   muscleGroup: string;
   imageUrl?: string;
 }
-
 export default function AlunoPage() {
   const [studentId, setStudentId] = useState<string>("");
   const [studentName, setStudentName] = useState("Aluno");
@@ -32,7 +30,6 @@ export default function AlunoPage() {
   const [imgError, setImgError] = useState(false);
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>({});
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
-
   const getImageUrl = (url?: string): string | null => {
     if (!url) return null;
     if (url.startsWith("/")) {
@@ -43,7 +40,6 @@ export default function AlunoPage() {
     }
     return url;
   };
-
   async function fetchExerciseLibrary() {
     try {
       const res = await fetch("/api/exercise-library");
@@ -60,12 +56,10 @@ export default function AlunoPage() {
       }
     } catch {}
   }
-
   function getExerciseImageUrl(exerciseName: string): string | null {
     const key = exerciseName.toLowerCase();
     return exerciseImages[key] || null;
   }
-
   useEffect(() => { fetchStudentInfo(); }, []);
   useEffect(() => {
     if (studentId) {
@@ -74,7 +68,6 @@ export default function AlunoPage() {
       fetchExerciseLibrary();
     }
   }, [studentId, currentMonth, currentYear]);
-
   async function fetchStudentInfo() {
     try {
       const res = await fetch("/api/auth/session");
@@ -93,7 +86,6 @@ export default function AlunoPage() {
     } catch {}
     setLoading(false);
   }
-
   async function fetchPlans(id: string) {
     try {
       const res = await fetch("/api/workout-plan?studentId=" + id);
@@ -103,7 +95,6 @@ export default function AlunoPage() {
       }
     } catch {}
   }
-
   async function fetchWorkouts(id: string) {
     try {
       const url = "/api/workout/mark-complete?studentId=" + id + "&month=" + (currentMonth + 1) + "&year=" + currentYear;
@@ -114,7 +105,6 @@ export default function AlunoPage() {
       }
     } catch {}
   }
-
   async function fetchNotices(id: string) {
     try {
       const res = await fetch("/api/notices/student/" + id);
@@ -124,7 +114,6 @@ export default function AlunoPage() {
       }
     } catch {}
   }
-
   async function fetchQuestions(id: string) {
     try {
       const res = await fetch("/api/aluno/questions?studentId=" + id);
@@ -134,7 +123,6 @@ export default function AlunoPage() {
       }
     } catch {}
   }
-
   async function markNoticeAsRead(noticeId: string) {
     try {
       await fetch("/api/notices/" + noticeId + "/read", {
@@ -147,7 +135,6 @@ export default function AlunoPage() {
       );
     } catch {}
   }
-
   async function markAsComplete() {
     if (!selectedPlan || !studentId) return;
     setCompleting(true); setMessage(null);
@@ -162,7 +149,6 @@ export default function AlunoPage() {
     setCompleting(false);
     setTimeout(() => setMessage(null), 3000);
   }
-
   async function handleSendQuestion() {
     if (!newQuestion.trim() || !studentId) return;
     setSendingQuestion(true);
@@ -178,7 +164,6 @@ export default function AlunoPage() {
     setSendingQuestion(false);
     setTimeout(() => setMessage(null), 3000);
   }
-
   function getWeekDayName(day: number): string {
     const date = new Date(currentYear, currentMonth, day);
     const dayIndex = date.getDay();
@@ -188,7 +173,6 @@ export default function AlunoPage() {
     };
     return reverseMap[dayIndex];
   }
-
   function getPlanForDay(day: number): any | null {
     const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
     return plans.find((p: any) => {
@@ -198,19 +182,16 @@ export default function AlunoPage() {
       return planStr === dateStr;
     }) || null;
   }
-
   function handleDayClick(day: number) {
     setSelectedDay(day);
     setSelectedExercise(null);
     const plan = getPlanForDay(day);
     setSelectedPlan(plan);
   }
-
   function isToday(day: number) {
     const d = new Date();
     return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
   }
-
   function isCompleted(day: number) {
     if (!selectedPlan) return false;
     const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
@@ -221,32 +202,26 @@ export default function AlunoPage() {
       return workoutStr === ds && w.status === "CONCLUIDO";
     });
   }
-
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
   }
-
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const unreadCount = notices.filter((n: any) => !n.readByStudent).length;
-
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
-
   return (
     <div className="space-y-3">
       <div>
         <h1 className="text-lg font-bold text-[#f5f5f5]">Ola, {studentName}!</h1>
         <p className="text-xs text-[#a1a1a1]">Bem-vindo a sua area do aluno</p>
       </div>
-
       {message && (
         <div className={"text-sm rounded-lg p-2.5 " + (message.type === "success" ? "bg-green-500/10 text-green-400" : message.type === "error" ? "bg-red-500/10 text-red-400" : "bg-blue-500/10 text-blue-400")}>
           {message.text}
         </div>
       )}
-
       <div className="flex flex-col lg:flex-row gap-3">
         {/* AVISOS E FEEDBACKS */}
         <div className="lg:w-[30%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
@@ -276,7 +251,6 @@ export default function AlunoPage() {
             </div>
           )}
         </div>
-
         {/* TREINOS E DUVIDAS */}
         <div className="lg:w-[70%] space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -349,7 +323,6 @@ export default function AlunoPage() {
                 <p className="text-[8px] text-[#D4A373] mt-1">Em breve...</p>
               )}
             </div>
-
             <div className="sm:w-[45%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
               <h2 className="font-semibold text-[#f5f5f5] text-xs mb-2">Duvidas</h2>
               <textarea value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
@@ -379,7 +352,6 @@ export default function AlunoPage() {
           </div>
         </div>
       </div>
-
       {/* MODAL DO AVISO */}
       {selectedNotice && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedNotice(null)}>
@@ -414,7 +386,6 @@ export default function AlunoPage() {
           </div>
         </div>
       )}
-
       {/* MODAL DO TREINO */}
       {showWorkoutModal && selectedPlan && !selectedExercise && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -460,13 +431,28 @@ export default function AlunoPage() {
                 </div>
               </div>
             )}
+            {/* BOTAO CONCLUIR TREINO */}
+            {selectedDay !== null && isToday(selectedDay) && (
+              <div className="px-3 pb-3">
+                <button
+                  onClick={markAsComplete}
+                  disabled={completing || isCompleted(selectedDay)}
+                  className={"w-full text-xs font-semibold py-2.5 rounded-lg transition " + (
+                    isCompleted(selectedDay)
+                      ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default"
+                      : "bg-green-500 text-white hover:bg-green-600"
+                  )}
+                >
+                  {completing ? "..." : isCompleted(selectedDay) ? "Treino Concluido ✓" : "Concluir Treino"}
+                </button>
+              </div>
+            )}
             <div className="p-2.5 border-t border-[#ffffff10]">
               <p className="text-[8px] text-[#525252] text-center">Clique em um exercicio para ver detalhes</p>
             </div>
           </div>
         </div>
       )}
-
       {/* MODAL DETALHE DO EXERCICIO */}
       {selectedExercise && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
