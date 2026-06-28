@@ -19,10 +19,12 @@ function PerfilContent() {
   const [editDescription, setEditDescription] = useState("");
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string>("");
-  const [answerText, setAnswerText] = useState("");
-  const [answeringId, setAnsweringId] = useState<string | null>(null);
-  const [sendingAnswer, setSendingAnswer] = useState(false);
+
+  // Estados do modal de dúvidas
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
+  const [answerText, setAnswerText] = useState("");
+  const [sendingAnswer, setSendingAnswer] = useState(false);
+
   const loadData = useCallback(async () => {
     if (!studentId) { setLoading(false); return; }
     try {
@@ -65,6 +67,7 @@ function PerfilContent() {
     setLoading(false);
   }, [studentId]);
   useEffect(() => { loadData(); }, [loadData]);
+
   function isPlanCompleted(planId: string): boolean {
     return workouts.some((w: any) => w.workoutPlanId === planId && w.status === "CONCLUIDO");
   }
@@ -107,7 +110,20 @@ function PerfilContent() {
       setEditNotice(null);
     }
   }
-  async function handleAnswer(questionId: string) {
+
+  // Lógica de status da thread para o professor
+  function getThreadStatus(q: any): "pending" | "answered" {
+    // 🟢 Verde = alguma pergunta sem resposta (professor precisa responder)
+    // 🔵 Azul = todas respondidas
+    if (!q.answer) return "pending";
+    const children = q.children || [];
+    for (const child of children) {
+      if (!child.answer) return "pending";
+    }
+    return "answered";
+  }
+
+  async function handleAnswerFromModal(questionId: string) {
     if (!answerText.trim()) return;
     setSendingAnswer(true);
     try {
@@ -120,12 +136,12 @@ function PerfilContent() {
         const updated = await res.json();
         setQuestions((prev) => prev.map((q) => (q.id === questionId ? updated : q)));
         setAnswerText("");
-        setAnsweringId(null);
         setSelectedQuestion(null);
       }
     } catch {}
     setSendingAnswer(false);
   }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
@@ -153,9 +169,9 @@ function PerfilContent() {
             Avisos
           </button>
           <button onClick={() => setActiveTab("duvidas")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "duvidas" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
-            Duvidas {questions.filter((q: any) => !q.answer).length > 0 && (
+            Duvidas {questions.filter((q: any) => getThreadStatus(q) === "pending").length > 0 && (
               <span className="ml-1 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                {questions.filter((q: any) => !q.answer).length}
+                {questions.filter((q: any) => getThreadStatus(q) === "pending").length}
               </span>
             )}
           </button>
@@ -261,99 +277,137 @@ function PerfilContent() {
               <p className="text-[#6b6b6b] text-sm">Nenhuma duvida enviada pelo aluno.</p>
             ) : (
               <div className="space-y-3">
-                {questions.map((q) => (
-                  <div key={q.id} className="bg-[#1a1a1a] rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (q.answer ? "bg-blue-500" : "bg-green-500")} />
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <p className="text-white text-sm">{q.content}</p>
-                            <p className="text-[10px] text-[#6b6b6b] mt-1">
-                              {new Date(q.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                            {/* ANEXOS */}
-                            {(q.imageUrl || q.videoUrl) && (
-                              <div className="mt-2 flex gap-2">
-                                {q.imageUrl && (
-                                  <a href={q.imageUrl} target="_blank" className="text-[10px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    Ver imagem
-                                  </a>
-                                )}
-                                {q.videoUrl && (
-                                  <a href={q.videoUrl} target="_blank" className="text-[10px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    Ver video
-                                  </a>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <span className={"text-[10px] px-2 py-0.5 rounded shrink-0 " + (q.answer ? "bg-blue-500/10 text-blue-400" : "bg-green-500/10 text-green-400")}>
-                            {q.answer ? "Respondida" : "Pendente"}
-                          </span>
-                        </div>
-                        {/* RESPOSTA */}
-                        {q.answer && (
-                          <div className="mt-2 ml-4 pl-3 border-l-2 border-[#D4A373]/30">
-                            <p className="text-xs text-[#D4A373] font-medium">Resposta:</p>
-                            <p className="text-xs text-[#e5e5e5] mt-0.5">{q.answer}</p>
-                            {q.answeredBy && (
-                              <p className="text-[9px] text-[#6b6b6b] mt-0.5">
-                                Respondido por: {q.answeredBy.name}
-                                {q.answeredAt && " em " + new Date(q.answeredAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                {questions.map((q) => {
+                  const status = getThreadStatus(q);
+                  return (
+                    <div key={q.id}
+                      onClick={() => setSelectedQuestion(q)}
+                      className="bg-[#1a1a1a] rounded-lg p-4 cursor-pointer hover:bg-[#222] transition">
+                      <div className="flex items-start gap-3">
+                        <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (status === "pending" ? "bg-green-500" : "bg-blue-500")} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm">{q.content}</p>
+                              <p className="text-[10px] text-[#6b6b6b] mt-1">
+                                {new Date(q.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </p>
-                            )}
+                            </div>
+                            <span className={"text-[10px] px-2 py-0.5 rounded shrink-0 " + (status === "pending" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400")}>
+                              {status === "pending" ? "Pendente" : "Respondida"}
+                            </span>
                           </div>
-                        )}
-                        {/* BOTAO RESPONDER */}
-                        {!q.answer && (
-                          <div className="mt-2">
-                            {answeringId === q.id ? (
-                              <div className="space-y-2">
-                                <textarea
-                                  value={answerText}
-                                  onChange={(e) => setAnswerText(e.target.value)}
-                                  placeholder="Digite sua resposta..."
-                                  rows={3}
-                                  className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373] resize-none"
-                                />
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => handleAnswer(q.id)}
-                                    disabled={sendingAnswer || !answerText.trim()}
-                                    className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50"
-                                  >
-                                    {sendingAnswer ? "Enviando..." : "Responder"}
-                                  </button>
-                                  <button
-                                    onClick={() => { setAnsweringId(null); setAnswerText(""); }}
-                                    className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors"
-                                  >
-                                    Cancelar
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => { setAnsweringId(q.id); setAnswerText(""); }}
-                                className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors"
-                              >
-                                Responder
-                              </button>
-                            )}
-                          </div>
-                        )}
+                          {(q.children?.length || 0) > 0 && (
+                            <p className="text-[9px] text-[#525252] mt-1">{q.children.length + 1} mensagens</p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* MODAL DA THREAD DE DÚVIDA (PROFESSOR) */}
+      {selectedQuestion && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedQuestion(null)}>
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10] shrink-0">
+              <h2 className="text-sm font-bold text-[#f5f5f5]">Duvida de {student?.name || "Aluno"}</h2>
+              <button onClick={() => setSelectedQuestion(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
+            </div>
+
+            {/* Histórico da thread */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {(() => {
+                const messages = [selectedQuestion, ...(selectedQuestion.children || [])];
+                return messages.map((msg: any, idx: number) => (
+                  <div key={msg.id || idx}>
+                    {/* Pergunta do aluno */}
+                    <div className="flex items-start gap-2">
+                      <div className="w-2 h-2 rounded-full mt-1.5 bg-green-500 shrink-0" />
+                      <div className="flex-1 bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[9px] font-semibold text-green-400">{student?.name || "Aluno"}</span>
+                          <span className="text-[8px] text-[#525252]">
+                            {new Date(msg.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#e5e5e5]">{msg.content}</p>
+                        {(msg.imageUrl || msg.videoUrl) && (
+                          <div className="mt-1.5 flex gap-2">
+                            {msg.imageUrl && (
+                              <a href={msg.imageUrl} target="_blank" className="text-[9px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                Ver imagem
+                              </a>
+                            )}
+                            {msg.videoUrl && (
+                              <a href={msg.videoUrl} target="_blank" className="text-[9px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                Ver video
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Resposta do professor */}
+                    {msg.answer && (
+                      <div className="flex items-start gap-2 ml-4 mt-2">
+                        <div className="w-2 h-2 rounded-full mt-1.5 bg-[#D4A373] shrink-0" />
+                        <div className="flex-1 bg-[#D4A373]/5 rounded-lg p-2.5 border border-[#D4A373]/15">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[9px] font-semibold text-[#D4A373]">
+                              {msg.answeredBy?.name || "Voce"}
+                            </span>
+                            <span className="text-[8px] text-[#525252]">
+                              {msg.answeredAt ? new Date(msg.answeredAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#e5e5e5]">{msg.answer}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {idx < messages.length - 1 && (
+                      <div className="border-t border-[#ffffff05] my-2" />
+                    )}
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* Área de resposta do professor */}
+            <div className="border-t border-[#ffffff10] p-3 shrink-0">
+              <p className="text-[9px] text-[#D4A373] font-medium mb-1">Sua resposta:</p>
+              <textarea value={answerText} onChange={(e) => setAnswerText(e.target.value)}
+                placeholder="Digite sua resposta..."
+                rows={3}
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none mb-1.5" />
+              <button onClick={() => handleAnswerFromModal(
+                // Responde sempre a última pergunta sem resposta
+                (() => {
+                  const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
+                  for (let i = msgs.length - 1; i >= 0; i--) {
+                    if (!msgs[i].answer) return msgs[i].id;
+                  }
+                  return selectedQuestion.id;
+                })()
+              )}
+                disabled={sendingAnswer || !answerText.trim()}
+                className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
+                {sendingAnswer ? "Enviando..." : "Responder"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
