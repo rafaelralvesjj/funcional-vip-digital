@@ -432,7 +432,7 @@ export default function AlunoPage() {
               </div>
             )}
             {/* BOTAO CONCLUIR TREINO */}
-            {selectedDay !== null && isToday(selectedDay) && (
+            {selectedDay !== null && (
               <div className="px-3 pb-3">
                 <button
                   onClick={markAsComplete}
