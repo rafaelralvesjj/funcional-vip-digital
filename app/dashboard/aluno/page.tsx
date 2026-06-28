@@ -1,31 +1,29 @@
 "use client";
 import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-
 function PerfilContent() {
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
-
   const [student, setStudent] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
+  const [workouts, setWorkouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"treinos" | "avisos">("treinos");
-
   const [editPlan, setEditPlan] = useState<any>(null);
   const [editNotice, setEditNotice] = useState<any>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
-
   const loadData = useCallback(async () => {
     if (!studentId) { setLoading(false); return; }
     try {
-      const [studentsRes, plansRes, noticesRes] = await Promise.all([
+      const [studentsRes, plansRes, noticesRes, workoutsRes] = await Promise.all([
         fetch("/api/students"),
         fetch("/api/workout-plan?studentId=" + studentId),
-        fetch("/api/notices?studentId=" + studentId)
+        fetch("/api/notices?studentId=" + studentId),
+        fetch("/api/workout/mark-complete?studentId=" + studentId)
       ]);
       if (studentsRes.ok) {
         const data = await studentsRes.json();
@@ -41,18 +39,22 @@ function PerfilContent() {
         const data = await noticesRes.json();
         setNotices(Array.isArray(data) ? data : []);
       }
+      if (workoutsRes.ok) {
+        const data = await workoutsRes.json();
+        setWorkouts(Array.isArray(data) ? data : []);
+      }
     } catch {}
     setLoading(false);
   }, [studentId]);
-
   useEffect(() => { loadData(); }, [loadData]);
-
+  function isPlanCompleted(planId: string): boolean {
+    return workouts.some((w: any) => w.workoutPlanId === planId && w.status === "CONCLUIDO");
+  }
   async function deletePlan(id: string) {
     if (!confirm("Excluir este plano de treino?")) return;
     const res = await fetch("/api/workout-plan?id=" + id, { method: "DELETE" });
     if (res.ok) setPlans((prev) => prev.filter((p) => p.id !== id));
   }
-
   async function savePlan() {
     if (!editPlan) return;
     const res = await fetch("/api/workout-plan", {
@@ -66,13 +68,11 @@ function PerfilContent() {
       setEditPlan(null);
     }
   }
-
   async function deleteNotice(id: string) {
     if (!confirm("Excluir este aviso?")) return;
     const res = await fetch("/api/notices?id=" + id, { method: "DELETE" });
     if (res.ok) setNotices((prev) => prev.filter((n) => n.id !== id));
   }
-
   async function saveNotice() {
     if (!editNotice) return;
     const res = await fetch("/api/notices", {
@@ -86,7 +86,6 @@ function PerfilContent() {
       setEditNotice(null);
     }
   }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
@@ -94,7 +93,6 @@ function PerfilContent() {
       </div>
     );
   }
-
   if (!studentId) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
@@ -102,94 +100,65 @@ function PerfilContent() {
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-6">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-xl font-bold text-[#D4A373]">{student?.name || "Aluno"}</h1>
         <p className="text-sm text-[#6b6b6b] mb-6">Bem vindo ao perfil do aluno!</p>
-
         <div className="flex gap-4 border-b border-[#2a2a2a] mb-6">
-          <button
-            onClick={() => setActiveTab("treinos")}
-            className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "treinos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}
-          >
+          <button onClick={() => setActiveTab("treinos")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "treinos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
             Planos de Treino
           </button>
-          <button
-            onClick={() => setActiveTab("avisos")}
-            className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "avisos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}
-          >
+          <button onClick={() => setActiveTab("avisos")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "avisos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
             Avisos
           </button>
         </div>
-
         {activeTab === "treinos" && (
           <div>
             {plans.length === 0 ? (
               <p className="text-[#6b6b6b] text-sm">Nenhum plano de treino encontrado.</p>
             ) : (
               <div className="space-y-3">
-                {plans.map((plan) => (
-                  <div key={plan.id} className="bg-[#1a1a1a] rounded-lg p-4 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-white font-medium">
-                        {plan.name}
-                        <span className="text-[#6b6b6b] text-xs font-normal ml-2">
-                          {plan.date ? new Date(plan.date).toLocaleDateString("pt-BR") : "Sem data"}
-                        </span>
-                      </h3>
-                      <p className="text-[#6b6b6b] text-xs mt-1">
-                        {plan.description || "Sem descricao"} - {plan.exercises?.length || 0} exercicios
-                      </p>
+                {plans.map((plan) => {
+                  const completed = isPlanCompleted(plan.id);
+                  return (
+                    <div key={plan.id} className="bg-[#1a1a1a] rounded-lg p-4 flex items-center justify-between">
+                      <div className="flex items-start gap-3">
+                        {/* BOLINHA DE CONCLUSÃO */}
+                        <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (completed ? "bg-green-500" : "bg-[#525252]")} />
+                        <div>
+                          <h3 className="text-white font-medium">
+                            {plan.name}
+                            {completed && <span className="text-green-400 text-[10px] ml-2">Concluido</span>}
+                            <span className="text-[#6b6b6b] text-xs font-normal ml-2">{plan.date ? new Date(plan.date).toLocaleDateString("pt-BR") : "Sem data"}</span>
+                          </h3>
+                          <p className="text-[#6b6b6b] text-xs mt-1">{plan.description || "Sem descricao"} - {plan.exercises?.length || 0} exercicios</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => { setEditPlan(plan); setEditName(plan.name); setEditDescription(plan.description || ""); }} className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors">Editar</button>
+                        <button onClick={() => deletePlan(plan.id)} className="text-xs bg-[#3a1a1a] hover:bg-[#4a2a2a] text-[#ff6b6b] px-3 py-1.5 rounded transition-colors">Excluir</button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { setEditPlan(plan); setEditName(plan.name); setEditDescription(plan.description || ""); }}
-                        className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors"
-                      >
-                        Editar
-                      </button>
-                      <button onClick={() => deletePlan(plan.id)} className="text-xs bg-[#3a1a1a] hover:bg-[#4a2a2a] text-[#ff6b6b] px-3 py-1.5 rounded transition-colors">
-                        Excluir
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
-
             {editPlan && (
               <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditPlan(null)}>
                 <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
                   <h2 className="text-white font-medium mb-4">Editar Plano de Treino</h2>
-                  <input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    placeholder="Nome do plano"
-                    className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
-                  />
-                  <textarea
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    placeholder="Descricao"
-                    rows={3}
-                    className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373] resize-none"
-                  />
+                  <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nome do plano" className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]" />
+                  <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} placeholder="Descricao" rows={3} className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373] resize-none" />
                   <div className="flex gap-2 justify-end">
-                    <button onClick={() => setEditPlan(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">
-                      Cancelar
-                    </button>
-                    <button onClick={savePlan} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors">
-                      Salvar
-                    </button>
+                    <button onClick={() => setEditPlan(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">Cancelar</button>
+                    <button onClick={savePlan} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors">Salvar</button>
                   </div>
                 </div>
               </div>
             )}
           </div>
         )}
-
         {activeTab === "avisos" && (
           <div>
             {notices.length === 0 ? (
@@ -198,58 +167,31 @@ function PerfilContent() {
               <div className="space-y-3">
                 {notices.map((notice) => (
                   <div key={notice.id} className="bg-[#1a1a1a] rounded-lg p-4 flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className={"w-2.5 h-2.5 rounded-full shrink-0 " + ((notice as any).readByStudent ? "bg-[#525252]" : "bg-green-500")} />
-                        <h3 className="text-white font-medium truncate">{notice.title || "Sem titulo"}</h3>
+                    <div className="flex items-start gap-3">
+                      {/* BOLINHA DE LEITURA DO AVISO */}
+                      <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (notice.readByStudent ? "bg-[#525252]" : "bg-green-500")} />
+                      <div>
+                        <h3 className="text-white font-medium">{notice.title || "Sem titulo"}</h3>
+                        <p className="text-[#6b6b6b] text-xs mt-1">{notice.content?.substring(0, 80)}{notice.content?.length > 80 ? "..." : ""} - {new Date(notice.createdAt).toLocaleDateString("pt-BR")}</p>
                       </div>
-                      <p className="text-[#6b6b6b] text-xs mt-1">
-                        {notice.content?.substring(0, 80)}{notice.content?.length > 80 ? "..." : ""} - {new Date(notice.createdAt).toLocaleDateString("pt-BR")}
-                      </p>
-                      <span className={"inline-block text-[10px] px-1.5 py-0.5 rounded-full mt-1.5 " + ((notice as any).readByStudent ? "bg-[#525252]/20 text-[#6b6b6b]" : "bg-green-500/20 text-green-400")}>
-                        {(notice as any).readByStudent ? "Lido" : "Nao lido"}
-                      </span>
                     </div>
-                    <div className="flex gap-2 ml-3 shrink-0">
-                      <button
-                        onClick={() => { setEditNotice(notice); setEditTitle(notice.title || ""); setEditContent(notice.content); }}
-                        className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors"
-                      >
-                        Editar
-                      </button>
-                      <button onClick={() => deleteNotice(notice.id)} className="text-xs bg-[#3a1a1a] hover:bg-[#4a2a2a] text-[#ff6b6b] px-3 py-1.5 rounded transition-colors">
-                        Excluir
-                      </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setEditNotice(notice); setEditTitle(notice.title || ""); setEditContent(notice.content); }} className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors">Editar</button>
+                      <button onClick={() => deleteNotice(notice.id)} className="text-xs bg-[#3a1a1a] hover:bg-[#4a2a2a] text-[#ff6b6b] px-3 py-1.5 rounded transition-colors">Excluir</button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-
             {editNotice && (
               <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditNotice(null)}>
                 <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
                   <h2 className="text-white font-medium mb-4">Editar Aviso</h2>
-                  <input
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    placeholder="Titulo"
-                    className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
-                  />
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    placeholder="Conteudo"
-                    rows={3}
-                    className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373] resize-none"
-                  />
+                  <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Titulo" className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]" />
+                  <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} placeholder="Conteudo" rows={3} className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373] resize-none" />
                   <div className="flex gap-2 justify-end">
-                    <button onClick={() => setEditNotice(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">
-                      Cancelar
-                    </button>
-                    <button onClick={saveNotice} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors">
-                      Salvar
-                    </button>
+                    <button onClick={() => setEditNotice(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">Cancelar</button>
+                    <button onClick={saveNotice} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors">Salvar</button>
                   </div>
                 </div>
               </div>
@@ -260,7 +202,6 @@ function PerfilContent() {
     </div>
   );
 }
-
 export default function PerfilAlunoPage() {
   return (
     <Suspense fallback={
