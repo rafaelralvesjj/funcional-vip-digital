@@ -3,15 +3,52 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { studentId, content, videoUrl, imageUrl } = await request.json();
+    // Detecta se é FormData ou JSON
+    const contentType = request.headers.get("content-type") || "";
+
+    let studentId: string | null = null;
+    let content: string | null = null;
+    let imageUrl: string | null = null;
+    let videoUrl: string | null = null;
+
+    if (contentType.includes("multipart/form-data")) {
+      // É FormData (vindo do frontend do aluno)
+      const form = await request.formData();
+      studentId = form.get("studentId") as string | null;
+      content = form.get("content") as string | null;
+      const file = form.get("file") as File | null;
+
+      // Se tiver arquivo, converte para base64
+      if (file) {
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        const base64 = buffer.toString("base64");
+        const mimeType = file.type;
+
+        if (mimeType.startsWith("video/")) {
+          videoUrl = `data:${mimeType};base64,${base64}`;
+        } else {
+          imageUrl = `data:${mimeType};base64,${base64}`;
+        }
+      }
+    } else {
+      // É JSON
+      const body = await request.json();
+      studentId = body.studentId;
+      content = body.content;
+      videoUrl = body.videoUrl || null;
+      imageUrl = body.imageUrl || null;
+    }
+
     if (!studentId || !content) {
       return NextResponse.json(
         { error: "studentId e content são obrigatórios." },
         { status: 400 }
       );
     }
+
     const question = await prisma.question.create({
       data: {
         studentId,
@@ -23,6 +60,7 @@ export async function POST(request: Request) {
         answeredBy: { select: { name: true } },
       },
     });
+
     return NextResponse.json({ question }, { status: 201 });
   } catch (error) {
     console.error("Erro ao criar dúvida:", error);
@@ -97,10 +135,10 @@ export async function PUT(req: NextRequest) {
       },
     });
 
-    // Tenta enviar e-mail de resposta (se falhar, não quebra o fluxo)
+    // Tenta enviar e-mail de resposta
     try {
       if (question.student?.email) {
-        await fetch(process.env.NEXTAUTH_URL + "/api/send-email", {
+        await fetch(new URL("/api/send-email", req.url).toString(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
