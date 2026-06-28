@@ -64,23 +64,21 @@ export async function GET(req: NextRequest) {
       ];
     }
     if (authorId) where.authorId = authorId;
+
     const notices = await prisma.notice.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      include: {
-        author: { select: { id: true, name: true, role: true } },
-        student: { select: { id: true, name: true } },
-        reads: studentId ? {
-          where: { studentId },
-          select: { id: true },
-        } : false,
-        _count: {
-          select: {
-            reads: true,
-          },
-        },
-      },
-    });
+  where,
+  orderBy: { createdAt: "desc" },
+  include: {
+    author: { select: { id: true, name: true, role: true } },
+    student: { select: { id: true, name: true } },
+    reads: studentId ? {
+      where: { studentId },
+      select: { id: true },
+    } : false,
+  },
+});
+
+    
     let noticesWithReadStatus = notices;
     if (studentId) {
       noticesWithReadStatus = notices.map((notice: any) => ({
