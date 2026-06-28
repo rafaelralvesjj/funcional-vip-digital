@@ -136,18 +136,24 @@ export default function AlunoPage() {
     } catch {}
   }
   async function markAsComplete() {
-    if (!selectedPlan || !studentId) return;
+    if (!selectedPlan || !studentId || selectedDay === null) return;
     setCompleting(true); setMessage(null);
     try {
+      // Envia a data do dia selecionado no calendário
+      const planDate = new Date(currentYear, currentMonth, selectedDay);
       const res = await fetch("/api/workout/mark-complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workoutPlanId: selectedPlan.id, studentId }),
+        body: JSON.stringify({
+          workoutPlanId: selectedPlan.id,
+          studentId,
+          date: planDate.toISOString(),
+        }),
       });
       if (res.ok) {
         setMessage({ type: "success", text: "Treino concluido!" });
         fetchWorkouts(studentId);
-        setShowWorkoutModal(false); // FECHA O MODAL
+        setShowWorkoutModal(false);
       }
     } catch {}
     setCompleting(false);
@@ -189,18 +195,17 @@ export default function AlunoPage() {
   function handleDayClick(day: number) {
     setSelectedDay(day);
     setSelectedExercise(null);
-    setSelectedPlan(null); // limpa antes pra garantir
+    setSelectedPlan(null);
     const plan = getPlanForDay(day);
     if (plan) {
       setSelectedPlan(plan);
-      setShowWorkoutModal(true); // JÁ ABRE O MODAL DIRETO
+      setShowWorkoutModal(true);
     }
   }
   function isToday(day: number) {
     const d = new Date();
     return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
   }
-  // CORRIGIDO: agora NAO depende de selectedPlan
   function isCompleted(day: number) {
     const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
     return workouts.some((w: any) => {
