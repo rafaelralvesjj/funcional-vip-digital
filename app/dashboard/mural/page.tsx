@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
+
 interface Student {
   id: string;
   name: string;
 }
+
 interface Notice {
   id: string;
   content: string;
@@ -16,6 +18,7 @@ interface Notice {
   authorId?: string;
   _count?: { reads: number };
 }
+
 export default function MuralPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -31,25 +34,25 @@ export default function MuralPage() {
   const [editNotice, setEditNotice] = useState<Notice | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
+
   useEffect(() => {
     fetchSession();
     fetchStudents();
     fetchNotices();
   }, []);
- 
-async function fetchSession() {
-  try {
-    const res = await fetch("/api/auth/session");
-    if (res.ok) {
-      const session = await res.json();
-      console.log("Sessão:", session);
-      setCurrentUserRole(session?.user?.role || "");
-      setCurrentUserId(session?.user?.id || "");
-    }
-  } catch {}
-}
 
-  
+  async function fetchSession() {
+    try {
+      const res = await fetch("/api/auth/session");
+      if (res.ok) {
+        const session = await res.json();
+        console.log("Sessão:", session);
+        setCurrentUserRole(session?.user?.role || "");
+        setCurrentUserId(session?.user?.id || "");
+      }
+    } catch {}
+  }
+
   async function fetchStudents() {
     try {
       const res = await fetch("/api/students");
@@ -59,6 +62,7 @@ async function fetchSession() {
       }
     } catch {}
   }
+
   async function fetchNotices() {
     try {
       const res = await fetch("/api/notices");
@@ -68,25 +72,30 @@ async function fetchSession() {
       }
     } catch {}
   }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!content.trim()) return;
     setSaving(true);
     setError("");
     setSuccess(false);
+
     try {
       const body: any = {
         content: content.trim(),
         studentId: selectedStudent || undefined,
         type: "AVISO",
+        authorId: currentUserId, // <-- CORREÇÃO: agora envia o authorId
       };
       if (title) body.title = title;
       if (expiresAt) body.expiresAt = expiresAt;
+
       const res = await fetch("/api/notices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
       if (res.ok) {
         setSuccess(true);
         setTitle("");
@@ -103,14 +112,17 @@ async function fetchSession() {
     }
     setSaving(false);
   }
+
   function canEditOrDelete(notice: Notice): boolean {
     return currentUserRole === "GESTOR" || notice.authorId === currentUserId;
   }
+
   async function deleteNotice(id: string) {
     if (!confirm("Excluir este aviso?")) return;
     const res = await fetch("/api/notices?id=" + id, { method: "DELETE" });
     if (res.ok) setNotices((prev) => prev.filter((n) => n.id !== id));
   }
+
   async function saveNotice() {
     if (!editNotice) return;
     const res = await fetch("/api/notices", {
@@ -124,6 +136,7 @@ async function fetchSession() {
       setEditNotice(null);
     }
   }
+
   function formatDate(dateStr: string) {
     const d = new Date(dateStr);
     return d.toLocaleDateString("pt-BR", {
@@ -134,16 +147,20 @@ async function fetchSession() {
       minute: "2-digit",
     });
   }
+
   function isExpired(expiresAt?: string) {
     if (!expiresAt) return false;
     return new Date(expiresAt) < new Date();
   }
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         <h1 className="text-xl font-bold text-[#D4A373]">Mural de Avisos</h1>
+
         <form onSubmit={handleSubmit} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-[#D4A373]">Publicar novo aviso</h2>
+
           <div>
             <label className="text-sm text-[#a1a1a1] block mb-1">Aluno (opcional)</label>
             <select
@@ -157,6 +174,7 @@ async function fetchSession() {
               ))}
             </select>
           </div>
+
           <div>
             <label className="text-sm text-[#a1a1a1] block mb-1">Tipo do aviso</label>
             <select
@@ -175,6 +193,7 @@ async function fetchSession() {
               <option value="Instrucoes">Instrucoes</option>
             </select>
           </div>
+
           <div>
             <label className="text-sm text-[#a1a1a1] block mb-1">Descricao do aviso *</label>
             <textarea
@@ -186,6 +205,7 @@ async function fetchSession() {
               className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none"
             />
           </div>
+
           <div>
             <label className="text-sm text-[#a1a1a1] block mb-1">
               Data de expiração <span className="text-[#6b6b6b]">(opcional)</span>
@@ -207,7 +227,9 @@ async function fetchSession() {
               </div>
             </div>
           </div>
+
           {error && <p className="text-sm text-red-400">{error}</p>}
+
           <button
             type="submit"
             disabled={saving || !content.trim()}
@@ -215,10 +237,12 @@ async function fetchSession() {
           >
             {saving ? "Publicando..." : "Publicar aviso"}
           </button>
+
           {success && (
             <p className="text-sm text-green-400 text-center">Aviso publicado com sucesso!</p>
           )}
         </form>
+
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
           <h2 className="text-lg font-semibold text-[#D4A373] mb-4">Avisos publicados</h2>
           {notices.length === 0 ? (
