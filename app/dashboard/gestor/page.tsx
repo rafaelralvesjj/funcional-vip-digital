@@ -77,13 +77,13 @@ export default async function GestorDashboardPage() {
     take: 100,
   });
 
-  // Buscar WorkoutLogs dos últimos 30 dias para verificar conclusão
+  // Buscar workouts dos últimos 30 dias para verificar conclusão
   const thirtyDaysAgo = new Date(today);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const todayEnd = new Date(today);
   todayEnd.setHours(23, 59, 59, 999);
 
-  const workoutLogs = await prisma.workoutLog.findMany({
+  const completedWorkouts = await prisma.workout.findMany({
     where: {
       date: { gte: thirtyDaysAgo, lte: todayEnd },
       status: "COMPLETED",
@@ -91,17 +91,24 @@ export default async function GestorDashboardPage() {
     select: { studentId: true, date: true, workoutPlanId: true },
   });
 
-  // Mapa de logs para consulta rápida
+  // Mapa de workouts concluídos para consulta rápida
   const logMap = new Map<string, boolean>();
-  for (const log of workoutLogs) {
+  for (const log of completedWorkouts) {
     const logDate = new Date(log.date);
     const key = `${log.studentId}_${logDate.getFullYear()}-${logDate.getMonth()}-${logDate.getDate()}`;
     logMap.set(key, true);
   }
 
-  // Buscar todos os registros de treino dos alunos (WorkoutLog geral, sem filtro de status)
-  // para cruzar com os WorkoutPlans
-  const allStudentWorkouts = await prisma.workoutLog.findMany({
+  // Mapa dos IDs de planos que já foram concluídos
+  const completedPlanIds = new Set<string>();
+  for (const log of completedWorkouts) {
+    if (log.workoutPlanId) {
+      completedPlanIds.add(log.workoutPlanId);
+    }
+  }
+
+  // Buscar todos os workouts do período (sem filtro de status) para cruzar
+  const allWorkouts = await prisma.workout.findMany({
     where: {
       date: { gte: thirtyDaysAgo, lte: todayEnd },
     },
@@ -111,44 +118,30 @@ export default async function GestorDashboardPage() {
       date: true,
       workoutPlanId: true,
       status: true,
-      student: {
-        select: { id: true, name: true, userId: true, user: { select: { name: true } } },
-      },
     },
   });
 
   // Agrupar workouts por studentId
-  const workoutsByStudent = new Map<string, typeof allStudentWorkouts>();
-  for (const w of allStudentWorkouts) {
+  const workoutsByStudent = new Map<string, typeof allWorkouts>();
+  for (const w of allWorkouts) {
     if (!workoutsByStudent.has(w.studentId)) {
       workoutsByStudent.set(w.studentId, []);
     }
     workoutsByStudent.get(w.studentId)!.push(w);
   }
 
-  // Mapa dos IDs de planos que já foram concluídos
-  const completedPlanIds = new Set<string>();
-  for (const log of workoutLogs) {
-    if (log.workoutPlanId) {
-      completedPlanIds.add(log.workoutPlanId);
-    }
-  }
-
-  // Agora, determinar treinos pendentes por aluno
-  // Um treino está pendente se: existe WorkoutPlan com data passada E o aluno não tem WorkoutLog COMPLETED para aquele plano/data
+  // Determinar treinos pendentes por aluno
   const pendingWorkoutsByStudent = new Map<string, any[]>();
 
   for (const plan of workoutPlans) {
     const planDate = plan.date ? new Date(plan.date) : null;
     if (!planDate) continue;
 
-    // Para cada aluno, verificar se há log de conclusão para este plano
     for (const student of allStudents) {
       const logKey = `${student.id}_${planDate.getFullYear()}-${planDate.getMonth()}-${planDate.getDate()}`;
       const isCompleted = logMap.has(logKey);
       const isCompletedByPlanId = completedPlanIds.has(plan.id);
 
-      // Verificar se o aluno tem algum workout log para este plano específico
       const studentLogs = workoutsByStudent.get(student.id) || [];
       const hasMatchingLog = studentLogs.some(
         (log) => log.workoutPlanId === plan.id && log.status === "COMPLETED"
@@ -206,7 +199,7 @@ export default async function GestorDashboardPage() {
             Gestor
           </span>
           <span className="text-[10px] md:text-xs text-[#525252]">
-            {totalTeachers} professor(es) • {totalStudents} aluno(s)
+            {totalTeachers} professor(es) | {totalStudents} aluno(s)
           </span>
         </div>
       </div>
