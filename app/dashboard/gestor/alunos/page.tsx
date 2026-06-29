@@ -18,6 +18,11 @@ export default function GerenciarAlunosPage() {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [addStudent, setAddStudent] = useState(false);
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentEmail, setNewStudentEmail] = useState("");
+  const [newStudentPassword, setNewStudentPassword] = useState("");
+  const [savingAdd, setSavingAdd] = useState(false);
 
   useEffect(() => {
     loadStudents();
@@ -93,12 +98,48 @@ export default function GerenciarAlunosPage() {
     }
   }
 
+  async function handleAddAluno() {
+    if (!newStudentName || !newStudentEmail || !newStudentPassword) {
+      setMessage({ type: "error", text: "Preencha todos os campos" });
+      return;
+    }
+    setSavingAdd(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newStudentName,
+          email: newStudentEmail,
+          password: newStudentPassword,
+          role: "ALUNO"
+        }),
+      });
+      if (res.ok) {
+        setMessage({ type: "success", text: "Aluno cadastrado com sucesso!" });
+        setAddStudent(false);
+        setNewStudentName("");
+        setNewStudentEmail("");
+        setNewStudentPassword("");
+        loadStudents();
+      } else {
+        const err = await res.json();
+        setMessage({ type: "error", text: "Erro: " + (err.error || "Erro ao cadastrar") });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao cadastrar aluno" });
+    } finally {
+      setSavingAdd(false);
+    }
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#D4A373]">Gerenciar Alunos</h1>
         <p className="text-[#a1a1a1] mt-1">
-          Visualize, edite e exclua alunos do sistema
+          Cadastre, edite e exclua alunos do sistema
         </p>
       </div>
 
@@ -107,6 +148,12 @@ export default function GerenciarAlunosPage() {
           {message.text}
         </div>
       )}
+
+      <div className="mb-4">
+        <button onClick={() => setAddStudent(true)} className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#c49563]">
+          + Cadastrar Aluno
+        </button>
+      </div>
 
       {loading ? (
         <div className="text-center py-12 text-[#525252]">Carregando...</div>
@@ -209,6 +256,43 @@ export default function GerenciarAlunosPage() {
               </button>
               <button onClick={salvarEdicao} disabled={saving} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50">
                 {saving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de cadastro */}
+      {addStudent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => { setAddStudent(false); setMessage(null); }}>
+          <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-white font-medium mb-4">Cadastrar Aluno</h2>
+            <input
+              value={newStudentName}
+              onChange={(e) => setNewStudentName(e.target.value)}
+              placeholder="Nome completo"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
+            />
+            <input
+              value={newStudentEmail}
+              onChange={(e) => setNewStudentEmail(e.target.value)}
+              placeholder="Email"
+              type="email"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
+            />
+            <input
+              value={newStudentPassword}
+              onChange={(e) => setNewStudentPassword(e.target.value)}
+              placeholder="Senha"
+              type="password"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373]"
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setAddStudent(false); setMessage(null); }} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={handleAddAluno} disabled={savingAdd} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50">
+                {savingAdd ? "Cadastrando..." : "Cadastrar"}
               </button>
             </div>
           </div>
