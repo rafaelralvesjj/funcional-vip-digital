@@ -2,6 +2,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
+import { useState } from "react";
 import type { JSX } from "react";
 
 export default function DashboardLayout({
@@ -12,12 +13,13 @@ export default function DashboardLayout({
   const { data: session } = useSession();
   const pathname = usePathname();
   const role = session?.user?.role;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Itens exclusivos do professor
   const professorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
-    { href: "/dashboard/exercicios", label: "Biblioteca de Exercícios", icon: "book" },
+    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
   ];
@@ -25,7 +27,7 @@ export default function DashboardLayout({
   // Itens exclusivos do gestor
   const gestorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
-    { href: "/dashboard/exercicios", label: "Biblioteca de Exercícios", icon: "book" },
+    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
@@ -85,16 +87,28 @@ export default function DashboardLayout({
 
   return (
     <div className="flex min-h-screen bg-[#0a0a0a]">
-      <aside className="w-64 lg:w-72 fixed left-0 top-0 h-screen bg-[#111111] border-r border-[#ffffff10] flex flex-col z-50">
-        <div className="p-6 border-b border-[#ffffff10]">
+      {/* Overlay escuro para mobile */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`w-64 lg:w-72 fixed left-0 top-0 h-screen bg-[#111111] border-r border-[#ffffff10] flex flex-col z-50 transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+        <div className="p-6 border-b border-[#ffffff10] flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">F</div>
             <span className="text-[#D4A373] font-bold text-base leading-tight">Funcional<br />Vip Digital</span>
           </Link>
+          {/* Botão fechar no mobile */}
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-[#a1a1a1] hover:text-white transition">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => (
-            <Link key={item.href} href={item.href}
+            <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition ${
                 isActive(item.href)
                   ? "bg-[#D4A373]/10 text-[#D4A373] border-l-2 border-[#D4A373]"
@@ -121,7 +135,26 @@ export default function DashboardLayout({
           </button>
         </div>
       </aside>
-      <main className="flex-1 ml-64 lg:ml-72">{children}</main>
+
+      {/* Área principal */}
+      <main className="flex-1 lg:ml-72 min-h-screen">
+        {/* Top bar com menu hamburguer (visível apenas em mobile) */}
+        <div className="lg:hidden sticky top-0 z-30 bg-[#0a0a0a] border-b border-[#ffffff10] px-4 py-3 flex items-center justify-between">
+          <button onClick={() => setSidebarOpen(true)} className="text-[#a1a1a1] hover:text-white transition">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <span className="text-[#D4A373] font-bold text-sm">Funcional Vip Digital</span>
+          <div className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-xs">
+            {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+          </div>
+        </div>
+
+        {children}
+      </main>
     </div>
   );
 }
