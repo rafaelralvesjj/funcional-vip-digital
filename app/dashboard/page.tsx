@@ -11,9 +11,6 @@ export default async function DashboardPage() {
   if (!session?.user?.id) redirect("/auth/signin");
   const userId = session.user.id;
 
-  // ==================== CONSULTAS ====================
-
-  // 1. ALUNOS DO PROFESSOR
   const myStudents = await prisma.student.findMany({
     where: { userId },
     select: { id: true, name: true },
@@ -22,42 +19,28 @@ export default async function DashboardPage() {
 
   const myStudentIds = myStudents.map((s) => s.id);
 
-  // 2. TREINOS PENDENTES (WorkoutPlan com data passada SEM Workout COMPLETED)
-  // Buscar WorkoutPlans que têm data (no calendário) para alunos do professor
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  
-  // Data inicial: 1º de junho de 2026 (início do mês atual)
-  const startDate = new Date(2026, 5, 1);
-
-  const workoutPlans = await prisma.workoutPlan.findMany({
+  // WORKOUTS PENDENTES - query direta e simples
+  const pendingWorkouts = await prisma.workout.findMany({
     where: {
       studentId: { in: myStudentIds },
-      date: { gte: startDate, lte: today },
+      status: "PENDENTE",
     },
     select: {
       id: true,
       studentId: true,
-      name: true,
       date: true,
-      workouts: {
-        where: { status: "COMPLETED" },
-        select: { id: true },
-      },
+      status: true,
+      workoutPlan: { select: { name: true } },
     },
     orderBy: { date: "desc" },
   });
 
-  // Filtrar apenas os WorkoutPlans que NÃO têm workout COMPLETED
-  const pendingPlans = workoutPlans.filter((wp) => wp.workouts.length === 0);
-
-  // Agrupar por aluno
-  const pendingByStudent = new Map<string, typeof pendingPlans>();
-  for (const wp of pendingPlans) {
-    if (!pendingByStudent.has(wp.studentId)) {
-      pendingByStudent.set(wp.studentId, []);
+  const pendingByStudent = new Map<string, typeof pendingWorkouts>();
+  for (const w of pendingWorkouts) {
+    if (!pendingByStudent.has(w.studentId)) {
+      pendingByStudent.set(w.studentId, []);
     }
-    pendingByStudent.get(wp.studentId)!.push(wp);
+    pendingByStudent.get(w.studentId)!.push(w);
   }
 
   const studentsWithPendingWorkouts = myStudents
@@ -71,7 +54,6 @@ export default async function DashboardPage() {
     (acc, s) => acc + s.workouts.length, 0
   );
 
-  // 3. AVISOS CRIADOS PELO PROFESSOR
   const allNotices = await prisma.notice.findMany({
     where: { authorId: userId },
     orderBy: { createdAt: "desc" },
@@ -84,7 +66,6 @@ export default async function DashboardPage() {
     },
   });
 
-  // Avisos não lidos
   const unreadNotices = allNotices.filter((n) => {
     if (n.studentId) {
       const hasRead = n.reads.some((r) => r.studentId === n.studentId);
@@ -96,7 +77,6 @@ export default async function DashboardPage() {
 
   const totalUnreadNotices = unreadNotices.length;
 
-  // 4. DÚVIDAS SEM RESPOSTA
   const unansweredQuestions = await prisma.question.findMany({
     where: { parentId: null, answer: null, answeredAt: null },
     include: {
@@ -112,13 +92,11 @@ export default async function DashboardPage() {
     return !hasAnswerInChildren;
   });
 
-  // Contagens
   const totalUnansweredQuestions = trulyUnanswered.length;
   const totalStudents = myStudents.length;
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0a]">
-      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-[#f5f5f5]">
@@ -143,7 +121,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* CARDS DE KPIS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <Link href="/dashboard/mural" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
@@ -219,7 +196,6 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* LISTAGENS DETALHADAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
@@ -245,11 +221,11 @@ export default async function DashboardPage() {
                     </span>
                   </div>
                   <div className="space-y-0.5">
-                    {s.workouts.slice(0, 5).map((wp, idx) => (
+                    {s.workouts.slice(0, 5).map((w, idx) => (
                       <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
                         <span className="w-1 h-1 rounded-full bg-red-500/50" />
-                        <span>{wp.name}</span>
-                        <span className="text-[#525252]">{wp.date ? new Date(wp.date).toLocaleDateString("pt-BR") : ""}</span>
+                        <span>{w.workoutPlan?.name || "Treino"}</span>
+                        <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
                       </div>
                     ))}
                     {s.workouts.length > 5 && (
@@ -298,7 +274,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* AVISOS COM LEITURA PENDENTE */}
       {unreadNotices.length > 0 && (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
