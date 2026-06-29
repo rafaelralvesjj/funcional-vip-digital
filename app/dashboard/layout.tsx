@@ -172,7 +172,7 @@ export default function DashboardLayout({
     return pathname.startsWith(href);
   };
 
-  return (
+    return (
     <div className="flex min-h-screen bg-[#0a0a0a]">
       {/* Overlay escuro para mobile */}
       {sidebarOpen && (
