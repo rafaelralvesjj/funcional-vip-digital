@@ -632,7 +632,7 @@ export default function AlunoPage() {
           </div>
         </div>
       )}
-      {/* MODAL DO TREINO */}
+           {/* MODAL DO TREINO */}
       {showWorkoutModal && selectedPlan && !selectedExercise && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[75vh] overflow-y-auto shadow-2xl">
@@ -655,4 +655,122 @@ export default function AlunoPage() {
                       <p className="text-sm font-medium text-[#f5f5f5]">{ex.name}</p>
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[9px] text-[#a1a1a1]">
                         <span>{ex.series || '-'} series x {ex.reps || '-'} reps</span>
-     
+                        {ex.weight && <span>Carga: {ex.weight}kg</span>}
+                        {ex.restTime && <span>Descanso: {ex.restTime}</span>}
+                      </div>
+                    </div>
+                    <svg className="w-3.5 h-3.5 text-[#525252] shrink-0 mt-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              ))}
+              {(!selectedPlan.exercises || selectedPlan.exercises.length === 0) && (
+                <p className="text-center text-[#6b6b6b] text-sm py-6">Nenhum exercicio cadastrado neste treino.</p>
+              )}
+            </div>
+            {selectedPlan.notes && (
+              <div className="px-3 pb-3">
+                <div className="bg-[#D4A373]/10 border border-[#D4A373]/20 rounded-xl p-2">
+                  <p className="text-[9px] text-[#D4A373] font-semibold mb-0.5">Observacoes</p>
+                  <p className="text-[11px] text-[#e5e5e5]">{selectedPlan.notes}</p>
+                </div>
+              </div>
+            )}
+            {selectedDay !== null && (
+              <div className="px-3 pb-3">
+                <button
+                  onClick={markAsComplete}
+                  disabled={completing || isCompleted(selectedDay)}
+                  className={"w-full text-xs font-semibold py-2.5 rounded-lg transition " + (
+                    isCompleted(selectedDay)
+                      ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default"
+                      : "bg-green-500 text-white hover:bg-green-600"
+                  )}
+                >
+                  {completing ? "..." : isCompleted(selectedDay) ? "Treino Concluido ✓" : "Concluir Treino"}
+                </button>
+              </div>
+            )}
+            <div className="p-2.5 border-t border-[#ffffff10]">
+              <p className="text-[8px] text-[#525252] text-center">Clique em um exercicio para ver detalhes</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL DETALHE DO EXERCICIO */}
+      {selectedExercise && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
+            {(() => {
+              const imgUrl = getImageUrl(selectedExercise.imageUrl) || getExerciseImageUrl(selectedExercise.name);
+              return imgUrl && !imgError ? (
+                <div className="w-full bg-[#1a1a1a] rounded-t-2xl overflow-hidden flex items-center justify-center" style={{ maxHeight: '280px' }}>
+                  <img src={imgUrl} alt={selectedExercise.name} className="w-full h-auto max-h-[280px] object-contain" onError={() => setImgError(true)} />
+                </div>
+              ) : (
+                <div className="w-full h-20 bg-gradient-to-br from-[#1a1a1a] to-[#222] rounded-t-2xl flex items-center justify-center gap-1">
+                  <svg className="w-6 h-6 text-[#333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-[9px] text-[#444]">Sem foto</p>
+                </div>
+              );
+            })()}
+            <div className="flex items-center justify-between p-3 border-b border-[#ffffff10]">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSelectedExercise(null)} className="text-[#a1a1a1] hover:text-white">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <h2 className="text-base font-bold text-[#f5f5f5]">{selectedExercise.name}</h2>
+              </div>
+              <button onClick={() => setSelectedExercise(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition">X</button>
+            </div>
+            <div className="p-3 space-y-2.5">
+              <div className="grid grid-cols-4 gap-1.5">
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.series || '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Series</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.reps || '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Repeticoes</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Carga</p>
+                </div>
+                <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
+                  <p className="text-base font-bold text-[#D4A373]">{selectedExercise.restTime || '-'}</p>
+                  <p className="text-[8px] text-[#6b6b6b]">Descanso</p>
+                </div>
+              </div>
+              {selectedExercise.description && (
+                <div>
+                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Descricao</h3>
+                  <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
+                    <p className="text-xs text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedExercise.description}</p>
+                  </div>
+                </div>
+              )}
+              {selectedExercise.notes && (
+                <div>
+                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Observacoes</h3>
+                  <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
+                    <p className="text-xs text-[#e5e5e5]">{selectedExercise.notes}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-3 border-t border-[#ffffff10] flex gap-2">
+              <button onClick={() => setSelectedExercise(null)} className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">Voltar</button>
+              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }} className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
