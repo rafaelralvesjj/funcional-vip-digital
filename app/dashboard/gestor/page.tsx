@@ -111,9 +111,7 @@ export default async function GestorDashboardPage() {
               <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                totalUnreadNotices > 0 ? "bg-amber-500/20 text-amber-400" : "bg-[#525252]/20 text-[#525252]"
-              }`}>{totalUnreadNotices} não lido(s)</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalUnreadNotices > 0 ? "bg-amber-500/20 text-amber-400" : "bg-[#525252]/20 text-[#525252]"}`}>{totalUnreadNotices} não lido(s)</span>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-white">{totalNotices}</p>
             <p className="text-xs text-[#a1a1a1] mt-1">Total de avisos no sistema</p>
@@ -127,9 +125,7 @@ export default async function GestorDashboardPage() {
               <div className="w-10 h-10 rounded-lg bg-green-500/10 text-green-400 flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
               </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                totalPendingWorkouts > 0 ? "bg-green-500/20 text-green-400" : "bg-[#525252]/20 text-[#525252]"
-              }`}>{totalPendingWorkouts} pendente(s)</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalPendingWorkouts > 0 ? "bg-green-500/20 text-green-400" : "bg-[#525252]/20 text-[#525252]"}`}>{totalPendingWorkouts} pendente(s)</span>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-white">{totalPendingWorkouts}</p>
             <p className="text-xs text-[#a1a1a1] mt-1">Treinos não concluídos</p>
@@ -143,9 +139,7 @@ export default async function GestorDashboardPage() {
               <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                totalUnansweredQuestions > 0 ? "bg-blue-500/20 text-blue-400" : "bg-[#525252]/20 text-[#525252]"
-              }`}>{totalUnansweredQuestions} sem resposta</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalUnansweredQuestions > 0 ? "bg-blue-500/20 text-blue-400" : "bg-[#525252]/20 text-[#525252]"}`}>{totalUnansweredQuestions} sem resposta</span>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-white">{totalUnansweredQuestions}</p>
             <p className="text-xs text-[#a1a1a1] mt-1">Dúvidas aguardando resposta</p>
@@ -155,7 +149,7 @@ export default async function GestorDashboardPage() {
 
       {/* LISTAGENS DETALHADAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* ALUNOS COM TREINOS PENDENTES (com professor responsável) */}
+        {/* ALUNOS COM TREINOS PENDENTES */}
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[#f5f5f5]">🏋️ Treinos pendentes por aluno</h2>
@@ -197,7 +191,7 @@ export default async function GestorDashboardPage() {
           )}
         </div>
 
-        {/* DÚVIDAS SEM RESPOSTA (com professor responsável) */}
+        {/* DÚVIDAS SEM RESPOSTA */}
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[#f5f5f5]">❓ Dúvidas sem resposta</h2>
@@ -237,4 +231,9 @@ export default async function GestorDashboardPage() {
       {/* PROFESSORES E SEUS ALUNOS */}
       <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
         <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-          <h2 
+          <h2 className="text-sm font-semibold text-[#f5f5f5]">👨‍🏫 Professores e seus alunos</h2>
+          <span className="text-xs text-[#a1a1a1]">{totalTeachers} professor(es)</span>
+        </div>
+        {allTeachers.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-xs text-[#6b6b6b]">Nenhum 
