@@ -16,12 +16,21 @@ export async function POST(req: NextRequest) {
     const workoutDate = date ? new Date(date) : new Date();
     workoutDate.setHours(0, 0, 0, 0);
 
-    // Verifica se já existe um registro de workout para este plano + data
+    // Define o fim do dia para buscar em intervalo
+    const endOfDay = new Date(workoutDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // CORREÇÃO: usar intervalo de data (gte/lte) em vez de data exata
+    // Isso resolve o problema de o Workout ter sido criado com T12:00:00 (meio-dia)
+    // enquanto a busca usava meia-noite, não encontrando o registro
     const existing = await prisma.workout.findFirst({
       where: {
         studentId,
         workoutPlanId,
-        date: workoutDate,
+        date: {
+          gte: workoutDate,
+          lte: endOfDay,
+        },
       },
     });
 
@@ -73,6 +82,7 @@ export async function GET(req: NextRequest) {
     if (month && year) {
       const startDate = new Date(Number(year), Number(month) - 1, 1);
       const endDate = new Date(Number(year), Number(month), 0);
+      endDate.setHours(23, 59, 59, 999);
       where.date = { gte: startDate, lte: endDate };
     }
 
