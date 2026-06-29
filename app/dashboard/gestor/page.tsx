@@ -75,7 +75,7 @@ export default async function GestorDashboardPage() {
   const totalTeachers = allTeachers.length;
   const totalStudents = allStudents.length;
 
-  return (
+   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0a]">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
@@ -104,7 +104,6 @@ export default async function GestorDashboardPage() {
 
       {/* CARDS DE KPIS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-        {/* Card Avisos */}
         <Link href="/dashboard/mural" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
@@ -118,7 +117,6 @@ export default async function GestorDashboardPage() {
           </div>
         </Link>
 
-        {/* Card Treinos */}
         <Link href="/dashboard/gestor/alunos" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
@@ -132,7 +130,6 @@ export default async function GestorDashboardPage() {
           </div>
         </Link>
 
-        {/* Card Dúvidas */}
         <Link href="/dashboard/gestor/alunos" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
@@ -149,7 +146,6 @@ export default async function GestorDashboardPage() {
 
       {/* LISTAGENS DETALHADAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* ALUNOS COM TREINOS PENDENTES */}
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[#f5f5f5]">🏋️ Treinos pendentes por aluno</h2>
@@ -165,16 +161,10 @@ export default async function GestorDashboardPage() {
                 <div key={s.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
                   <div className="flex items-center justify-between mb-1">
                     <div>
-                      <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#D4A373] transition">
-                        {s.name}
-                      </Link>
-                      <p className="text-[9px] text-[#D4A373] mt-0.5">
-                        Prof: {s.user?.name || "Sem professor"}
-                      </p>
+                      <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#D4A373] transition">{s.name}</Link>
+                      <p className="text-[9px] text-[#D4A373] mt-0.5">Prof: {s.user?.name || "Sem professor"}</p>
                     </div>
-                    <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
-                      {s.workouts.length} pendente(s)
-                    </span>
+                    <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">{s.workouts.length} pendente(s)</span>
                   </div>
                   <div className="space-y-0.5">
                     {s.workouts.map((w) => (
@@ -191,7 +181,6 @@ export default async function GestorDashboardPage() {
           )}
         </div>
 
-        {/* DÚVIDAS SEM RESPOSTA */}
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[#f5f5f5]">❓ Dúvidas sem resposta</h2>
@@ -208,18 +197,12 @@ export default async function GestorDashboardPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-xs font-medium text-[#D4A373] hover:text-[#c49563] transition">
-                          {q.student?.name || "Aluno"}
-                        </Link>
-                        <span className="text-[8px] text-[#525252] bg-[#ffffff08] px-1 py-0.5 rounded">
-                          Prof: {q.student?.user?.name || "N/I"}
-                        </span>
+                        <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-xs font-medium text-[#D4A373] hover:text-[#c49563] transition">{q.student?.name || "Aluno"}</Link>
+                        <span className="text-[8px] text-[#525252] bg-[#ffffff08] px-1 py-0.5 rounded">Prof: {q.student?.user?.name || "N/I"}</span>
                       </div>
                       <p className="text-xs text-[#e5e5e5] mt-0.5 line-clamp-2">{q.content}</p>
                     </div>
-                    <span className="text-[9px] text-[#525252] shrink-0">
-                      {new Date(q.createdAt).toLocaleDateString("pt-BR")}
-                    </span>
+                    <span className="text-[9px] text-[#525252] shrink-0">{new Date(q.createdAt).toLocaleDateString("pt-BR")}</span>
                   </div>
                 </div>
               ))}
@@ -236,4 +219,48 @@ export default async function GestorDashboardPage() {
         </div>
         {allTeachers.length === 0 ? (
           <div className="p-6 text-center">
-            <p className="text-xs text-[#6b6b6b]">Nenhum 
+            <p className="text-xs text-[#6b6b6b]">Nenhum professor cadastrado.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-[#ffffff05]">
+            {allTeachers.map((teacher) => {
+              const teacherStudents = allStudents.filter((s) => s.userId === teacher.id);
+              return (
+                <div key={teacher.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-xs">
+                        {teacher.name?.charAt(0).toUpperCase() || "?"}
+                      </div>
+                      <span className="text-sm font-medium text-[#f5f5f5]">{teacher.name}</span>
+                    </div>
+                    <span className="text-[10px] text-[#a1a1a1]">{teacherStudents.length} aluno(s)</span>
+                  </div>
+                  {teacherStudents.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5 ml-9">
+                      {teacherStudents.slice(0, 5).map((s) => (
+                        <Link key={s.id} href={`/dashboard/aluno?id=${s.id}`} className="text-[9px] text-[#6b6b6b] bg-[#ffffff08] px-1.5 py-0.5 rounded hover:text-[#D4A373] transition">
+                          {s.name}
+                        </Link>
+                      ))}
+                      {teacherStudents.length > 5 && (
+                        <span className="text-[8px] text-[#525252]">+{teacherStudents.length - 5}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* FOOTER */}
+      <div className="text-center py-4">
+        <p className="text-[10px] text-[#525252]">
+          Dashboard atualizado em tempo real • {new Date().toLocaleString("pt-BR")}
+        </p>
+      </div>
+    </div>
+  );
+}
