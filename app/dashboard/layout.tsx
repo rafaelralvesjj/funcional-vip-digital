@@ -30,8 +30,8 @@ export default function DashboardLayout({
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
-    { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
     { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
+    { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
     { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "user" },
     { href: "/dashboard/gestor/gestores", label: "Gerenciar Gestores", icon: "user" },
   ];
