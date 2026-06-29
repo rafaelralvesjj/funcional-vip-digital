@@ -23,14 +23,10 @@ export default async function DashboardPage() {
   const myStudentIds = myStudents.map((s) => s.id);
 
   // 2. WORKOUTS PENDENTES (status = "PENDENTE") dos alunos do professor
-  // Filtrar apenas do mês atual (Junho 2026) para frente
-  const june2026 = new Date(2026, 5, 1); // mês 5 = junho
-  const july2026 = new Date(2026, 6, 1);
-
+  // SEM filtro de data para garantir que pega todos os pendentes
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
       studentId: { in: myStudentIds },
-      date: { gte: june2026, lt: july2026 },
       status: "PENDENTE",
     },
     select: {
@@ -76,12 +72,10 @@ export default async function DashboardPage() {
     },
   });
 
-  // Contar avisos não lidos: para cada aviso, verificar se os alunos do professor leram
-  // Se aviso é individual (studentId set) → verificar se aquele aluno leu
-  // Se aviso é geral (studentId null) → verificar se pelo menos um aluno leu
+  // Avisos não lidos: considera não lido se o aluno alvo não leu
   const unreadNotices = allNotices.filter((n) => {
     if (n.studentId) {
-      // Aviso individual: só interessa se o aluno específico leu
+      // Aviso individual: verifica se aquele aluno específico leu
       const hasRead = n.reads.some((r) => r.studentId === n.studentId);
       return !hasRead;
     } else {
@@ -91,7 +85,6 @@ export default async function DashboardPage() {
   });
 
   const totalUnreadNotices = unreadNotices.length;
-  const totalNotices = allNotices.length;
 
   // 4. DÚVIDAS SEM RESPOSTA
   const unansweredQuestions = await prisma.question.findMany({
@@ -112,12 +105,6 @@ export default async function DashboardPage() {
   // Contagens
   const totalUnansweredQuestions = trulyUnanswered.length;
   const totalStudents = myStudents.length;
-
-  const noticeTypes = allNotices.reduce((acc: Record<string, number>, n) => {
-    const type = n.type || "AVISO";
-    acc[type] = (acc[type] || 0) + 1;
-    return acc;
-  }, {});
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0a]">
@@ -160,17 +147,10 @@ export default async function DashboardPage() {
                 {totalUnreadNotices} não lido(s)
               </span>
             </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{totalNotices}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Total de avisos enviados</p>
-            {Object.keys(noticeTypes).length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {Object.entries(noticeTypes).slice(0, 3).map(([type, count]) => (
-                  <span key={type} className="text-[9px] bg-[#ffffff08] text-[#6b6b6b] px-1.5 py-0.5 rounded">
-                    {type}: {count}
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* CORRIGIDO: agora mostra totalUnreadNotices em vez de allNotices.length */}
+            <p className="text-2xl md:text-3xl font-bold text-white">{totalUnreadNotices}</p>
+            {/* CORRIGIDO: título alterado para "Total de avisos pendentes" */}
+            <p className="text-xs text-[#a1a1a1] mt-1">Total de avisos pendentes</p>
           </div>
         </Link>
 
@@ -187,7 +167,7 @@ export default async function DashboardPage() {
               </span>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-white">{totalPendingWorkouts}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Treinos não concluídos</p>
+            <p className="text-xs text-[#a1a1a1] mt-1">Treinos pendentes</p>
             {studentsWithPendingWorkouts.length > 0 && (
               <div className="mt-2 space-y-0.5">
                 {studentsWithPendingWorkouts.slice(0, 3).map((s) => (
