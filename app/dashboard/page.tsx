@@ -6,30 +6,6 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-function IconAviso() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-  );
-}
-
-function IconTreino() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </svg>
-  );
-}
-
-function IconDuvida() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  );
-}
-
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
@@ -37,23 +13,7 @@ export default async function DashboardPage() {
 
   // ==================== CONSULTAS ====================
 
-  // 1. AVISOS DO PROFESSOR
-  const notices = await prisma.notice.findMany({
-    where: { authorId: userId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      reads: { select: { studentId: true } },
-      author: { select: { name: true } },
-      student: { select: { name: true } },
-    },
-  });
-
-  // CORREÇÃO: avisos não lidos = todo aviso que não tem read registrado
-  // Se for aviso geral (sem studentId), considera não lido se reads.length === 0
-  // Se for aviso individual (com studentId), considera não lido se não há read para aquele studentId
-  const noticesWithUnread = notices.filter((n) => n.reads.length === 0);
-
-  // 2. ALUNOS DO PROFESSOR
+  // 1. ALUNOS DO PROFESSOR
   const myStudents = await prisma.student.findMany({
     where: { userId },
     select: { id: true, name: true },
@@ -62,17 +22,16 @@ export default async function DashboardPage() {
 
   const myStudentIds = myStudents.map((s) => s.id);
 
-  // 3. WORKOUTS NÃO CONCLUÍDOS DOS ALUNOS DO PROFESSOR
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // 2. WORKOUTS PENDENTES (status = "PENDENTE") dos alunos do professor
+  // Filtrar apenas do mês atual (Junho 2026) para frente
+  const june2026 = new Date(2026, 5, 1); // mês 5 = junho
+  const july2026 = new Date(2026, 6, 1);
 
-  const sixtyDaysAgo = new Date(today);
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-
-  const allWorkouts = await prisma.workout.findMany({
+  const pendingWorkouts = await prisma.workout.findMany({
     where: {
       studentId: { in: myStudentIds },
-      date: { gte: sixtyDaysAgo },
+      date: { gte: june2026, lt: july2026 },
+      status: "PENDENTE",
     },
     select: {
       id: true,
@@ -82,12 +41,9 @@ export default async function DashboardPage() {
       workoutPlan: { select: { name: true } },
     },
     orderBy: { date: "desc" },
-    take: 200,
   });
 
-  // Filtra em código: pendente = tudo que NÃO está COMPLETED
-  const pendingWorkouts = allWorkouts.filter((w) => w.status !== "COMPLETED");
-
+  // Agrupar por aluno
   const pendingByStudent = new Map<string, typeof pendingWorkouts>();
   for (const w of pendingWorkouts) {
     if (!pendingByStudent.has(w.studentId)) {
@@ -107,6 +63,36 @@ export default async function DashboardPage() {
     (acc, s) => acc + s.workouts.length, 0
   );
 
+  // 3. AVISOS CRIADOS PELO PROFESSOR
+  const allNotices = await prisma.notice.findMany({
+    where: { authorId: userId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      student: { select: { id: true, name: true } },
+      reads: {
+        where: { studentId: { in: myStudentIds } },
+        select: { studentId: true },
+      },
+    },
+  });
+
+  // Contar avisos não lidos: para cada aviso, verificar se os alunos do professor leram
+  // Se aviso é individual (studentId set) → verificar se aquele aluno leu
+  // Se aviso é geral (studentId null) → verificar se pelo menos um aluno leu
+  const unreadNotices = allNotices.filter((n) => {
+    if (n.studentId) {
+      // Aviso individual: só interessa se o aluno específico leu
+      const hasRead = n.reads.some((r) => r.studentId === n.studentId);
+      return !hasRead;
+    } else {
+      // Aviso geral: não lido se nenhum aluno leu
+      return n.reads.length === 0;
+    }
+  });
+
+  const totalUnreadNotices = unreadNotices.length;
+  const totalNotices = allNotices.length;
+
   // 4. DÚVIDAS SEM RESPOSTA
   const unansweredQuestions = await prisma.question.findMany({
     where: { parentId: null, answer: null, answeredAt: null },
@@ -124,11 +110,10 @@ export default async function DashboardPage() {
   });
 
   // Contagens
-  const totalUnreadNotices = noticesWithUnread.length;
   const totalUnansweredQuestions = trulyUnanswered.length;
   const totalStudents = myStudents.length;
 
-  const noticeTypes = notices.reduce((acc: Record<string, number>, n) => {
+  const noticeTypes = allNotices.reduce((acc: Record<string, number>, n) => {
     const type = n.type || "AVISO";
     acc[type] = (acc[type] || 0) + 1;
     return acc;
@@ -167,15 +152,15 @@ export default async function DashboardPage() {
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
               <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                <IconAviso />
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
               </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                totalUnreadNotices > 0 ? "bg-amber-500/20 text-amber-400" : "bg-[#525252]/20 text-[#525252]"
-              }`}>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalUnreadNotices > 0 ? "bg-amber-500/20 text-amber-400" : "bg-[#525252]/20 text-[#525252]"}`}>
                 {totalUnreadNotices} não lido(s)
               </span>
             </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{notices.length}</p>
+            <p className="text-2xl md:text-3xl font-bold text-white">{totalNotices}</p>
             <p className="text-xs text-[#a1a1a1] mt-1">Total de avisos enviados</p>
             {Object.keys(noticeTypes).length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
@@ -193,11 +178,11 @@ export default async function DashboardPage() {
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
               <div className="w-10 h-10 rounded-lg bg-green-500/10 text-green-400 flex items-center justify-center">
-                <IconTreino />
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                </svg>
               </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                totalPendingWorkouts > 0 ? "bg-green-500/20 text-green-400" : "bg-[#525252]/20 text-[#525252]"
-              }`}>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalPendingWorkouts > 0 ? "bg-green-500/20 text-green-400" : "bg-[#525252]/20 text-[#525252]"}`}>
                 {totalPendingWorkouts} pendente(s)
               </span>
             </div>
@@ -221,11 +206,11 @@ export default async function DashboardPage() {
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
               <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                <IconDuvida />
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
               </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                totalUnansweredQuestions > 0 ? "bg-blue-500/20 text-blue-400" : "bg-[#525252]/20 text-[#525252]"
-              }`}>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalUnansweredQuestions > 0 ? "bg-blue-500/20 text-blue-400" : "bg-[#525252]/20 text-[#525252]"}`}>
                 {totalUnansweredQuestions} sem resposta
               </span>
             </div>
@@ -236,8 +221,8 @@ export default async function DashboardPage() {
                 {trulyUnanswered.slice(0, 3).map((q) => (
                   <div key={q.id} className="flex items-center gap-1.5 text-[9px] text-[#6b6b6b]">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50" />
-                    <span className="truncate max-w-[120px]">{q.student?.name || "Aluno"}</span>
-                    <span className="text-[#525252] truncate max-w-[100px]">"{q.content.substring(0, 30)}..."</span>
+                    <span>{q.student?.name || "Aluno"}</span>
+                    <span className="text-[#525252]">"{q.content.substring(0, 30)}..."</span>
                   </div>
                 ))}
               </div>
@@ -325,15 +310,15 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* AVISOS COM LEITURA PENDENTE - RESTAURADO */}
-      {noticesWithUnread.length > 0 && (
+      {/* AVISOS COM LEITURA PENDENTE */}
+      {unreadNotices.length > 0 && (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[#f5f5f5]">Avisos com leitura pendente</h2>
-            <span className="text-xs text-[#a1a1a1]">{noticesWithUnread.length} aviso(s)</span>
+            <span className="text-xs text-[#a1a1a1]">{unreadNotices.length} aviso(s)</span>
           </div>
           <div className="divide-y divide-[#ffffff05] max-h-60 overflow-y-auto">
-            {noticesWithUnread.slice(0, 10).map((notice) => (
+            {unreadNotices.slice(0, 10).map((notice) => (
               <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -344,13 +329,9 @@ export default async function DashboardPage() {
                         {notice.type || "Aviso"}
                       </span>
                     </div>
-                    <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">
-                      {notice.content}
-                    </p>
+                    <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">{notice.content}</p>
                     {notice.student && (
-                      <p className="text-[8px] text-[#525252] mt-0.5">
-                        Para: {notice.student.name}
-                      </p>
+                      <p className="text-[8px] text-[#525252] mt-0.5">Para: {notice.student.name}</p>
                     )}
                   </div>
                   <span className="text-[8px] text-[#525252] shrink-0">
