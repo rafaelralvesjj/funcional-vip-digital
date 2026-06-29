@@ -13,8 +13,8 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const role = session?.user?.role;
 
-  // Itens comuns a professor e gestor
-  const commonItems = [
+  // Itens exclusivos do professor
+  const professorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
@@ -24,6 +24,10 @@ export default function DashboardLayout({
 
   // Itens exclusivos do gestor
   const gestorItems = [
+    { href: "/dashboard", label: "Dashboard", icon: "grid" },
+    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
+    { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
+    { href: "/dashboard/mural", label: "Mural", icon: "message" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
     { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "user" },
     { href: "/dashboard/gestor/gestores", label: "Gerenciar Gestores", icon: "user" },
@@ -31,8 +35,8 @@ export default function DashboardLayout({
 
   // Seleciona os itens conforme o cargo
   const navItems = role === "GESTOR" 
-    ? [...commonItems, ...gestorItems]
-    : commonItems; // PROFESSOR ou qualquer outro
+    ? gestorItems
+    : professorItems; // PROFESSOR ou qualquer outro
 
   function NavIcon({ icon }: { icon: string }) {
     const icons: Record<string, JSX.Element> = {
