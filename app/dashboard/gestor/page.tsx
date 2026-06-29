@@ -10,14 +10,12 @@ export default async function GestorDashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "GESTOR") redirect("/auth/signin");
 
-  // ==================== CONSULTAS GLOBAIS ====================
-
   // 1. TODOS OS AVISOS
   const allNotices = await prisma.notice.findMany({
-    orderBy: { createdAt: "desc" },<br/>
-    include: {<br/>
-      author: { select: { id: true, name: true, role: true } },<br/>
-      reads: { select: { studentId: true } },<br/>
+    orderBy: { createdAt: "desc" },
+    include: {
+      author: { select: { id: true, name: true, role: true } },
+      reads: { select: { studentId: true } },
       student: { select: { name: true } },
     },
     take: 50,
@@ -25,17 +23,17 @@ export default async function GestorDashboardPage() {
 
   // 2. TODOS OS PROFESSORES
   const allTeachers = await prisma.user.findMany({
-    where: { role: "PROFESSOR" },<br/>
-    select: { id: true, name: true, email: true },<br/>
+    where: { role: "PROFESSOR" },
+    select: { id: true, name: true, email: true },
     orderBy: { name: "asc" },
   });
 
   // 3. ALUNOS COM SEUS PROFESSORES
   const allStudents = await prisma.student.findMany({
-    select: {<br/>
-      id: true,<br/>
-      name: true,<br/>
-      userId: true,<br/>
+    select: {
+      id: true,
+      name: true,
+      userId: true,
       user: { select: { name: true } },
     },
     orderBy: { name: "asc" },
@@ -43,14 +41,14 @@ export default async function GestorDashboardPage() {
 
   // 4. DÚVIDAS SEM RESPOSTA
   const allUnanswered = await prisma.question.findMany({
-    where: { parentId: null, answer: null, answeredAt: null },<br/>
-    include: {<br/>
-      student: {<br/>
+    where: { parentId: null, answer: null, answeredAt: null },
+    include: {
+      student: {
         select: { id: true, name: true, userId: true, user: { select: { name: true } } },
       },
       children: { select: { id: true, answer: true } },
     },
-    orderBy: { createdAt: "desc" },<br/>
+    orderBy: { createdAt: "desc" },
     take: 30,
   });
 
@@ -66,24 +64,24 @@ export default async function GestorDashboardPage() {
   today.setHours(0, 0, 0, 0);
 
   const workoutPlans = await prisma.workoutPlan.findMany({
-    where: {<br/>
+    where: {
       date: { not: null, lte: today },
     },
-    select: {<br/>
-      id: true,<br/>
-      name: true,<br/>
-      date: true,<br/>
-      studentWorkouts: {<br/>
-        select: {<br/>
-          id: true,<br/>
-          studentId: true,<br/>
-          student: {<br/>
+    select: {
+      id: true,
+      name: true,
+      date: true,
+      studentWorkouts: {
+        select: {
+          id: true,
+          studentId: true,
+          student: {
             select: { id: true, name: true, userId: true, user: { select: { name: true } } },
           },
         },
       },
     },
-    orderBy: { date: "desc" },<br/>
+    orderBy: { date: "desc" },
     take: 100,
   });
 
@@ -93,8 +91,8 @@ export default async function GestorDashboardPage() {
   todayEnd.setHours(23, 59, 59, 999);
 
   const workoutLogs = await prisma.workoutLog.findMany({
-    where: {<br/>
-      date: { gte: thirtyDaysAgo, lte: todayEnd },<br/>
+    where: {
+      date: { gte: thirtyDaysAgo, lte: todayEnd },
       status: "COMPLETED",
     },
     select: { studentId: true, date: true, workoutPlanId: true },
@@ -116,7 +114,6 @@ export default async function GestorDashboardPage() {
 
       const logKey = `${sw.studentId}_${planDate.getFullYear()}-${planDate.getMonth()}-${planDate.getDate()}`;
       const isCompleted = logMap.has(logKey);
-
       const isCompletedByPlan = workoutLogs.some(
         (log) => log.studentId === sw.studentId && log.workoutPlanId === plan.id
       );
@@ -126,10 +123,10 @@ export default async function GestorDashboardPage() {
           pendingWorkoutsByStudent.set(sw.studentId, []);
         }
         pendingWorkoutsByStudent.get(sw.studentId)!.push({
-          id: plan.id,<br/>
-          planName: plan.name,<br/>
-          date: planDate,<br/>
-          studentName: sw.student?.name || "Aluno",<br/>
+          id: plan.id,
+          planName: plan.name,
+          date: planDate,
+          studentName: sw.student?.name || "Aluno",
           professor: sw.student?.user?.name || "Sem professor",
         });
       }
@@ -154,6 +151,7 @@ export default async function GestorDashboardPage() {
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0a]">
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-[#f5f5f5]">
@@ -161,9 +159,9 @@ export default async function GestorDashboardPage() {
           </h1>
           <p className="text-xs md:text-sm text-[#a1a1a1]">
             {new Date().toLocaleDateString("pt-BR", {
-              weekday: "long",<br/>
-              day: "numeric",<br/>
-              month: "long",<br/>
+              weekday: "long",
+              day: "numeric",
+              month: "long",
               year: "numeric",
             })}
           </p>
@@ -178,6 +176,7 @@ export default async function GestorDashboardPage() {
         </div>
       </div>
 
+      {/* CARDS KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <Link href="/dashboard/mural" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
@@ -231,6 +230,7 @@ export default async function GestorDashboardPage() {
         </Link>
       </div>
 
+      {/* LISTAGENS DETALHADAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
@@ -310,6 +310,7 @@ export default async function GestorDashboardPage() {
         </div>
       </div>
 
+      {/* PROFESSORES E ALUNOS */}
       <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
         <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[#f5f5f5]">Professores e seus alunos</h2>
