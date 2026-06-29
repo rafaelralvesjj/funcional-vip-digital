@@ -22,30 +22,42 @@ export default async function DashboardPage() {
 
   const myStudentIds = myStudents.map((s) => s.id);
 
-  // 2. WORKOUTS PENDENTES (status = "PENDENTE") dos alunos do professor
-  // SEM filtro de data para garantir que pega todos os pendentes
-  const pendingWorkouts = await prisma.workout.findMany({
+  // 2. TREINOS PENDENTES (WorkoutPlan com data passada SEM Workout COMPLETED)
+  // Buscar WorkoutPlans que têm data (no calendário) para alunos do professor
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  
+  // Data inicial: 1º de junho de 2026 (início do mês atual)
+  const startDate = new Date(2026, 5, 1);
+
+  const workoutPlans = await prisma.workoutPlan.findMany({
     where: {
       studentId: { in: myStudentIds },
-      status: "PENDENTE",
+      date: { gte: startDate, lte: today },
     },
     select: {
       id: true,
       studentId: true,
+      name: true,
       date: true,
-      status: true,
-      workoutPlan: { select: { name: true } },
+      workouts: {
+        where: { status: "COMPLETED" },
+        select: { id: true },
+      },
     },
     orderBy: { date: "desc" },
   });
 
+  // Filtrar apenas os WorkoutPlans que NÃO têm workout COMPLETED
+  const pendingPlans = workoutPlans.filter((wp) => wp.workouts.length === 0);
+
   // Agrupar por aluno
-  const pendingByStudent = new Map<string, typeof pendingWorkouts>();
-  for (const w of pendingWorkouts) {
-    if (!pendingByStudent.has(w.studentId)) {
-      pendingByStudent.set(w.studentId, []);
+  const pendingByStudent = new Map<string, typeof pendingPlans>();
+  for (const wp of pendingPlans) {
+    if (!pendingByStudent.has(wp.studentId)) {
+      pendingByStudent.set(wp.studentId, []);
     }
-    pendingByStudent.get(w.studentId)!.push(w);
+    pendingByStudent.get(wp.studentId)!.push(wp);
   }
 
   const studentsWithPendingWorkouts = myStudents
@@ -72,14 +84,12 @@ export default async function DashboardPage() {
     },
   });
 
-  // Avisos não lidos: considera não lido se o aluno alvo não leu
+  // Avisos não lidos
   const unreadNotices = allNotices.filter((n) => {
     if (n.studentId) {
-      // Aviso individual: verifica se aquele aluno específico leu
       const hasRead = n.reads.some((r) => r.studentId === n.studentId);
       return !hasRead;
     } else {
-      // Aviso geral: não lido se nenhum aluno leu
       return n.reads.length === 0;
     }
   });
@@ -147,9 +157,7 @@ export default async function DashboardPage() {
                 {totalUnreadNotices} não lido(s)
               </span>
             </div>
-            {/* CORRIGIDO: agora mostra totalUnreadNotices em vez de allNotices.length */}
             <p className="text-2xl md:text-3xl font-bold text-white">{totalUnreadNotices}</p>
-            {/* CORRIGIDO: título alterado para "Total de avisos pendentes" */}
             <p className="text-xs text-[#a1a1a1] mt-1">Total de avisos pendentes</p>
           </div>
         </Link>
@@ -237,11 +245,11 @@ export default async function DashboardPage() {
                     </span>
                   </div>
                   <div className="space-y-0.5">
-                    {s.workouts.slice(0, 5).map((w, idx) => (
+                    {s.workouts.slice(0, 5).map((wp, idx) => (
                       <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
                         <span className="w-1 h-1 rounded-full bg-red-500/50" />
-                        <span>{w.workoutPlan?.name || "Treino"}</span>
-                        <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
+                        <span>{wp.name}</span>
+                        <span className="text-[#525252]">{wp.date ? new Date(wp.date).toLocaleDateString("pt-BR") : ""}</span>
                       </div>
                     ))}
                     {s.workouts.length > 5 && (
