@@ -29,7 +29,8 @@ export default function GerenciarAlunosPage() {
       const res = await fetch("/api/students");
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : data.students || data || [];
+        // Aceita tanto array direto quanto { students: [...] }
+        const list = Array.isArray(data) ? data : data.students || [];
         setStudents(list);
       }
     } catch {
