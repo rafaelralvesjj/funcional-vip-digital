@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      if (existing.status === "CONCLUIDO") {
+      if (existing.status === "COMPLETED") {
         return NextResponse.json(
           { message: "Treino já foi marcado como concluído hoje!", alreadyDone: true }
         );
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
       const updated = await prisma.workout.update({
         where: { id: existing.id },
-        data: { status: "CONCLUIDO" },
+        data: { status: "COMPLETED" },
       });
 
       return NextResponse.json({ success: true, workout: updated, message: "Treino concluído com sucesso!" });
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
         studentId,
         workoutPlanId,
         date: workoutDate,
-        status: "CONCLUIDO",
+        status: "COMPLETED",
       },
     });
 
