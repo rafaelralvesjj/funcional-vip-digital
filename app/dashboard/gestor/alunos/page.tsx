@@ -6,9 +6,6 @@ interface Student {
   name: string;
   email?: string;
   phone?: string;
-  image?: string;
-  active: boolean;
-  createdAt: string;
 }
 
 export default function GerenciarAlunosPage() {
@@ -20,7 +17,6 @@ export default function GerenciarAlunosPage() {
   const [editStudent, setEditStudent] = useState<Student | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
-  const [editPhone, setEditPhone] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -30,10 +26,11 @@ export default function GerenciarAlunosPage() {
   async function loadStudents() {
     setLoading(true);
     try {
-      const res = await fetch("/api/students/todos");
+      const res = await fetch("/api/students");
       if (res.ok) {
         const data = await res.json();
-        setStudents(Array.isArray(data) ? data : data.students || data || []);
+        const list = Array.isArray(data) ? data : data.students || data || [];
+        setStudents(list);
       }
     } catch {
       setMessage({ type: "error", text: "Erro ao carregar alunos" });
@@ -45,19 +42,17 @@ export default function GerenciarAlunosPage() {
   async function excluirAluno(studentId: string) {
     setDeleting(studentId);
     setMessage(null);
-
     try {
       const res = await fetch("/api/students/" + studentId, {
         method: "DELETE",
       });
-
       if (res.ok) {
-        setMessage({ type: "success", text: "Aluno excluido com sucesso!" });
+        setMessage({ type: "success", text: "Aluno excluído com sucesso!" });
         setStudents((prev) => prev.filter((s) => s.id !== studentId));
         setConfirmDelete(null);
       } else {
         const err = await res.json();
-        setMessage({ type: "error", text: "Erro: " + err.error });
+        setMessage({ type: "error", text: "Erro: " + (err.error || "Erro ao excluir") });
       }
     } catch {
       setMessage({ type: "error", text: "Erro ao excluir aluno" });
@@ -70,28 +65,25 @@ export default function GerenciarAlunosPage() {
     setEditStudent(student);
     setEditName(student.name);
     setEditEmail(student.email || "");
-    setEditPhone(student.phone || "");
   }
 
   async function salvarEdicao() {
     if (!editStudent) return;
     setSaving(true);
     setMessage(null);
-
     try {
       const res = await fetch("/api/students/" + editStudent.id, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName, email: editEmail, phone: editPhone }),
+        body: JSON.stringify({ name: editName, email: editEmail }),
       });
-
       if (res.ok) {
         setMessage({ type: "success", text: "Aluno atualizado com sucesso!" });
         setEditStudent(null);
         loadStudents();
       } else {
         const err = await res.json();
-        setMessage({ type: "error", text: "Erro: " + err.error });
+        setMessage({ type: "error", text: "Erro: " + (err.error || "Erro ao atualizar") });
       }
     } catch {
       setMessage({ type: "error", text: "Erro ao atualizar aluno" });
@@ -128,9 +120,9 @@ export default function GerenciarAlunosPage() {
               <thead>
                 <tr className="border-b border-[#ffffff10]">
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Aluno</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Contato</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Status</th>
-                  <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Acoes</th>
+                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Email</th>
+                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Telefone</th>
+                  <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -145,13 +137,10 @@ export default function GerenciarAlunosPage() {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-sm text-[#a1a1a1]">
-                      {student.email && <p>{student.email}</p>}
-                      {student.phone && <p className="text-xs text-[#525252]">{student.phone}</p>}
+                      {student.email || "-"}
                     </td>
-                    <td className="px-5 py-4">
-                      <span className={"text-xs font-medium px-2 py-1 rounded-full " + (student.active ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400")}>
-                        {student.active ? "Ativo" : "Inativo"}
-                      </span>
+                    <td className="px-5 py-4 text-sm text-[#a1a1a1]">
+                      {student.phone || "-"}
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -196,6 +185,7 @@ export default function GerenciarAlunosPage() {
         </div>
       )}
 
+      {/* Modal de edição */}
       {editStudent && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditStudent(null)}>
           <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
@@ -210,12 +200,6 @@ export default function GerenciarAlunosPage() {
               value={editEmail}
               onChange={(e) => setEditEmail(e.target.value)}
               placeholder="Email"
-              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
-            />
-            <input
-              value={editPhone}
-              onChange={(e) => setEditPhone(e.target.value)}
-              placeholder="Telefone"
               className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373]"
             />
             <div className="flex gap-2 justify-end">
