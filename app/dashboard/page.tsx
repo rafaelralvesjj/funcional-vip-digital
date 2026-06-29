@@ -1,330 +1,90 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "../api/auth/[...nextauth]/auth";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import Link from "next/link";
+-- ============================================
+-- SCRIPT 1: VINCULAR ALUNOS AOS PROFESSORES
+-- ============================================
+-- Antes de rodar, decida:
+-- aluno1 -> professor1? professor2?
+-- aluno2 -> professor1? professor2?
+-- ============================================
 
-export const dynamic = "force-dynamic";
+BEGIN;
 
-export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/auth/signin");
-  const userId = session.user.id;
+-- 1. Mostrar situação atual
+SELECT 'ANTES' AS momento, s.id AS student_id, s.name AS student_name, 
+       s.user_id AS current_user_id, u.name AS current_user_name
+FROM students s
+LEFT JOIN users u ON u.id = s.user_id
+ORDER BY s.name;
 
-  // 1. APENAS OS ALUNOS DESTE PROFESSOR
-  const myStudents = await prisma.student.findMany({
-    where: { userId },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+-- 2. ALUNO1 -> qual professor?
+-- Troque o UUID abaixo pelo ID do professor escolhido
+UPDATE students 
+SET user_id = '1d8ae0-bfa9-4960-9315-514d3b49af7d' -- COLOQUE AQUI O ID DO PROFESSOR
+WHERE id = 'ca15f331-ac78-417c-9630-6e0b6d427b53';
 
-  const myStudentIds = myStudents.map((s) => s.id);
-  const myStudentIdsSet = new Set(myStudentIds);
+-- 3. ALUNO2 -> qual professor?
+-- Troque o UUID abaixo pelo ID do professor escolhido
+UPDATE students 
+SET user_id = '1d8ae0-bfa9-4960-9315-514d3b49af7d' -- COLOQUE AQUI O ID DO PROFESSOR
+WHERE id = 'bc1fc0ab-4579-405b-ad92-b1f9b229784d';
 
-  // 2. WORKOUTS PENDENTES - apenas dos meus alunos
-  const pendingWorkouts = await prisma.workout.findMany({
-    where: {
-      studentId: { in: myStudentIds },
-      status: "PENDENTE",
-    },
-    select: {
-      id: true,
-      studentId: true,
-      date: true,
-      status: true,
-      workoutPlan: { select: { name: true } },
-    },
-    orderBy: { date: "desc" },
-  });
+-- 4. Mostrar resultado depois
+SELECT 'DEPOIS' AS momento, s.id AS student_id, s.name AS student_name, 
+       s.user_id AS new_user_id, u.name AS new_professor_name
+FROM students s
+LEFT JOIN users u ON u.id = s.user_id
+ORDER BY s.name;
 
-  const pendingByStudent = new Map<string, typeof pendingWorkouts>();
-  for (const w of pendingWorkouts) {
-    if (!pendingByStudent.has(w.studentId)) {
-      pendingByStudent.set(w.studentId, []);
-    }
-    pendingByStudent.get(w.studentId)!.push(w);
-  }
+COMMIT;
 
-  const studentsWithPendingWorkouts = myStudents
-    .map((s) => ({
-      ...s,
-      workouts: pendingByStudent.get(s.id) || [],
-    }))
-    .filter((s) => s.workouts.length > 0);
+-- ============================================
+-- SCRIPT 2: VIEW DO DASHBOARD DO PROFESSOR
+-- ============================================
+-- Cria uma view que retorna apenas os alunos
+-- vinculados ao professor logado.
+-- A aplicação deve passar o UUID do professor
+-- como parâmetro na consulta.
+-- ============================================
 
-  const totalPendingWorkouts = studentsWithPendingWorkouts.reduce(
-    (acc, s) => acc + s.workouts.length, 0
-  );
+-- IDs para referência:
+-- professor1: 1d8ae0-bfa9-4960-9315-514d3b49af7d
+-- professor2: 5dd89674-d35e-49d4-9fae-563129c76f05
+-- aluno1: ca15f331-ac78-417c-9630-6e0b6d427b53
+-- aluno2: bc1fc0ab-4579-405b-ad92-b1f9b229784d
 
-  // 3. AVISOS CRIADOS PELO PROFESSOR
-  const allNotices = await prisma.notice.findMany({
-    where: { authorId: userId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      student: { select: { id: true, name: true } },
-      reads: {
-        where: { studentId: { in: myStudentIds } },
-        select: { studentId: true },
-      },
-    },
-  });
+BEGIN;
 
-  const unreadNotices = allNotices.filter((n) => {
-    if (n.studentId) {
-      const hasRead = n.reads.some((r) => r.studentId === n.studentId);
-      return !hasRead;
-    } else {
-      return n.reads.length === 0;
-    }
-  });
+-- Remove a view se já existir para recriar
+DROP VIEW IF EXISTS vw_professor_students;
 
-  const totalUnreadNotices = unreadNotices.length;
+-- Cria view que lista alunos por professor
+CREATE VIEW vw_professor_students AS
+SELECT 
+    s.id AS student_id,
+    s.name AS student_name,
+    s.email AS student_email,
+    s.user_id AS professor_id,
+    u.name AS professor_name,
+    u.email AS professor_email
+FROM students s
+LEFT JOIN users u ON u.id = s.user_id
+WHERE s.user_id IS NOT NULL;
 
-  // 4. DÚVIDAS - APENAS DOS ALUNOS DESTE PROFESSOR (CORREÇÃO!)
-  const unansweredQuestions = await prisma.question.findMany({
-    where: {
-      parentId: null,
-      answer: null,
-      answeredAt: null,
-      studentId: { in: myStudentIds }, // FILTRO CRÍTICO: só do professor logado
-    },
-    include: {
-      student: { select: { id: true, name: true } },
-      children: { select: { id: true, answer: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
+COMMIT;
 
-  const trulyUnanswered = unansweredQuestions.filter((q) => {
-    const hasAnswerInChildren = q.children.some((c) => c.answer !== null);
-    return !hasAnswerInChildren;
-  });
+-- ============================================
+-- EXEMPLOS DE CONSULTA NO DASHBOARD
+-- ============================================
 
-  const totalUnansweredQuestions = trulyUnanswered.length;
-  const totalStudents = myStudents.length;
+-- Listar alunos do professor1
+-- SELECT * FROM vw_professor_students
+-- WHERE professor_id = '1d8ae0-bfa9-4960-9315-514d3b49af7d';
 
-  return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0a]">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-[#f5f5f5]">
-            Olá, {session.user.name ?? "Personal"} 👋
-          </h1>
-          <p className="text-xs md:text-sm text-[#a1a1a1]">
-            {new Date().toLocaleDateString("pt-BR", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] md:text-xs bg-[#D4A373]/10 text-[#D4A373] px-3 py-1 rounded-full border border-[#D4A373]/20">
-            Professor
-          </span>
-          <span className="text-[10px] md:text-xs text-[#525252]">
-            {totalStudents} aluno(s)
-          </span>
-        </div>
-      </div>
+-- Listar alunos do professor2
+-- SELECT * FROM vw_professor_students
+-- WHERE professor_id = '5dd89674-d35e-49d4-9fae-563129c76f05';
 
-      {/* CARDS DE KPIS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-        <Link href="/dashboard/mural" className="group">
-          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-              </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalUnreadNotices > 0 ? "bg-amber-500/20 text-amber-400" : "bg-[#525252]/20 text-[#525252]"}`}>
-                {totalUnreadNotices} não lido(s)
-              </span>
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{totalUnreadNotices}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Total de avisos pendentes</p>
-          </div>
-        </Link>
-
-        <Link href="/dashboard/montar-treino" className="group">
-          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-green-500/10 text-green-400 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                </svg>
-              </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalPendingWorkouts > 0 ? "bg-green-500/20 text-green-400" : "bg-[#525252]/20 text-[#525252]"}`}>
-                {totalPendingWorkouts} pendente(s)
-              </span>
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{totalPendingWorkouts}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Treinos pendentes</p>
-            {studentsWithPendingWorkouts.length > 0 && (
-              <div className="mt-2 space-y-0.5">
-                {studentsWithPendingWorkouts.slice(0, 3).map((s) => (
-                  <div key={s.id} className="flex items-center gap-1.5 text-[9px] text-[#6b6b6b]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500/50" />
-                    <span>{s.name}</span>
-                    <span className="text-[#525252]">({s.workouts.length} treinos)</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Link>
-
-        <Link href="/dashboard/students" className="group">
-          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
-              </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalUnansweredQuestions > 0 ? "bg-blue-500/20 text-blue-400" : "bg-[#525252]/20 text-[#525252]"}`}>
-                {totalUnansweredQuestions} sem resposta
-              </span>
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{totalUnansweredQuestions}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Dúvidas aguardando resposta</p>
-            {trulyUnanswered.length > 0 && (
-              <div className="mt-2 space-y-0.5">
-                {trulyUnanswered.slice(0, 3).map((q) => (
-                  <div key={q.id} className="flex items-center gap-1.5 text-[9px] text-[#6b6b6b]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500/50" />
-                    <span>{q.student?.name || "Aluno"}</span>
-                    <span className="text-[#525252]">"{q.content.substring(0, 30)}..."</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Link>
-      </div>
-
-      {/* LISTAGENS DETALHADAS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">Alunos com treinos pendentes</h2>
-            <span className="text-xs text-[#a1a1a1]">{studentsWithPendingWorkouts.length} aluno(s)</span>
-          </div>
-          {studentsWithPendingWorkouts.length === 0 ? (
-            <div className="p-6 text-center">
-              <p className="text-xs text-green-400">Todos os treinos estão em dia!</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-[#ffffff05] max-h-80 overflow-y-auto">
-              {studentsWithPendingWorkouts.map((s) => (
-                <div key={s.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                  <div className="flex items-center justify-between mb-1">
-                    <div>
-                      <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#D4A373] transition">
-                        {s.name}
-                      </Link>
-                    </div>
-                    <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
-                      {s.workouts.length} pendente(s)
-                    </span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {s.workouts.slice(0, 5).map((w, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
-                        <span className="w-1 h-1 rounded-full bg-red-500/50" />
-                        <span>{w.workoutPlan?.name || "Treino"}</span>
-                        <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
-                      </div>
-                    ))}
-                    {s.workouts.length > 5 && (
-                      <span className="text-[9px] text-[#525252]">+{s.workouts.length - 5} treino(s)</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">Dúvidas sem resposta</h2>
-            <span className="text-xs text-[#a1a1a1]">{trulyUnanswered.length} dúvida(s)</span>
-          </div>
-          {trulyUnanswered.length === 0 ? (
-            <div className="p-6 text-center">
-              <p className="text-xs text-green-400">Todas as dúvidas foram respondidas!</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-[#ffffff05]">
-              {trulyUnanswered.map((q) => (
-                <div key={q.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-xs font-medium text-[#D4A373] hover:text-[#c49563] transition">
-                        {q.student?.name || "Aluno"}
-                      </Link>
-                      <p className="text-xs text-[#e5e5e5] mt-0.5 line-clamp-2">{q.content}</p>
-                    </div>
-                    <span className="text-[9px] text-[#525252] shrink-0">
-                      {new Date(q.createdAt).toLocaleDateString("pt-BR")}
-                    </span>
-                  </div>
-                  <div className="mt-1.5">
-                    <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-[9px] text-blue-400 hover:text-blue-300 underline">
-                      Responder dúvida →
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* AVISOS COM LEITURA PENDENTE */}
-      {unreadNotices.length > 0 && (
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">Avisos com leitura pendente</h2>
-            <span className="text-xs text-[#a1a1a1]">{unreadNotices.length} aviso(s)</span>
-          </div>
-          <div className="divide-y divide-[#ffffff05] max-h-60 overflow-y-auto">
-            {unreadNotices.slice(0, 10).map((notice) => (
-              <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                      <span className="text-xs font-medium text-[#f5f5f5]">{notice.title || "Sem título"}</span>
-                      <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1 py-0.5 rounded-full">
-                        {notice.type || "Aviso"}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">{notice.content}</p>
-                    {notice.student && (
-                      <p className="text-[8px] text-[#525252] mt-0.5">Para: {notice.student.name}</p>
-                    )}
-                  </div>
-                  <span className="text-[8px] text-[#525252] shrink-0">
-                    {new Date(notice.createdAt).toLocaleDateString("pt-BR")}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="text-center py-4">
-        <p className="text-[10px] text-[#525252]">
-          Dashboard atualizado em tempo real | {new Date().toLocaleString("pt-BR")}
-        </p>
-      </div>
-    </div>
-  );
-}
+-- Contar alunos por professor
+-- SELECT professor_id, professor_name, COUNT(*) AS total_alunos
+-- FROM vw_professor_students
+-- GROUP BY professor_id, professor_name
+-- ORDER BY total_alunos DESC;
