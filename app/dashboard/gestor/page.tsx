@@ -10,25 +10,14 @@ export default async function GestorDashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "GESTOR") redirect("/auth/signin");
 
-  // 1. TODOS OS AVISOS
-  const allNotices = await prisma.notice.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      author: { select: { id: true, name: true, role: true } },
-      reads: { select: { studentId: true } },
-      student: { select: { name: true } },
-    },
-    take: 50,
-  });
-
-  // 2. TODOS OS PROFESSORES
+  // 1. TODOS OS PROFESSORES
   const allTeachers = await prisma.user.findMany({
     where: { role: "PROFESSOR" },
     select: { id: true, name: true, email: true },
     orderBy: { name: "asc" },
   });
 
-  // 3. TODOS OS ALUNOS
+  // 2. TODOS OS ALUNOS
   const allStudents = await prisma.student.findMany({
     select: {
       id: true,
@@ -39,7 +28,70 @@ export default async function GestorDashboardPage() {
     orderBy: { name: "asc" },
   });
 
-  // 4. DÚVIDAS SEM RESPOSTA
+  const allStudentIds = allStudents.map((s) => s.id);
+
+  // 3. WORKOUTS PENDENTES (status = "PENDENTE") de TODOS os alunos
+  const june2026 = new Date(2026, 5, 1);
+  const july2026 = new Date(2026, 6, 1);
+
+  const pendingWorkouts = await prisma.workout.findMany({
+    where: {
+      studentId: { in: allStudentIds },
+      date: { gte: june2026, lt: july2026 },
+      status: "PENDENTE",
+    },
+    select: {
+      id: true,
+      studentId: true,
+      date: true,
+      workoutPlan: { select: { name: true } },
+      student: {
+        select: { id: true, name: true, userId: true, user: { select: { name: true } } },
+      },
+    },
+    orderBy: { date: "desc" },
+  });
+
+  const pendingByStudent = new Map<string, typeof pendingWorkouts>();
+  for (const w of pendingWorkouts) {
+    if (!pendingByStudent.has(w.studentId)) {
+      pendingByStudent.set(w.studentId, []);
+    }
+    pendingByStudent.get(w.studentId)!.push(w);
+  }
+
+  const studentsWithPending = allStudents
+    .map((student) => ({
+      ...student,
+      workouts: pendingByStudent.get(student.id) || [],
+    }))
+    .filter((s) => s.workouts.length > 0);
+
+  // 4. TODOS OS AVISOS
+  const allNotices = await prisma.notice.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      author: { select: { id: true, name: true, role: true } },
+      student: { select: { id: true, name: true } },
+      reads: {
+        where: { studentId: { in: allStudentIds } },
+        select: { studentId: true },
+      },
+    },
+    take: 50,
+  });
+
+  // Avisos não lidos pelos alunos
+  const unreadNotices = allNotices.filter((n) => {
+    if (n.studentId) {
+      const hasRead = n.reads.some((r) => r.studentId === n.studentId);
+      return !hasRead;
+    } else {
+      return n.reads.length === 0;
+    }
+  });
+
+  // 5. DÚVIDAS SEM RESPOSTA
   const allUnanswered = await prisma.question.findMany({
     where: { parentId: null, answer: null, answeredAt: null },
     include: {
@@ -56,59 +108,9 @@ export default async function GestorDashboardPage() {
     return !q.children.some((c) => c.answer !== null);
   });
 
-  // 5. AVISOS NÃO LIDOS
-  // Considera não lido avisos que não têm NENHUM registro de leitura
-  const noticesWithUnread = allNotices.filter((n) => n.reads.length === 0);
-
-  // 6. BUSCAR TODOS OS WORKOUTS NÃO CONCLUÍDOS
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const sixtyDaysAgo = new Date(today);
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-
-  const allWorkoutsData = await prisma.workout.findMany({
-    where: {
-      date: { gte: sixtyDaysAgo },
-    },
-    select: {
-      id: true,
-      studentId: true,
-      date: true,
-      status: true,
-      workoutPlanId: true,
-      workoutPlan: {
-        select: { name: true, date: true },
-      },
-      student: {
-        select: { id: true, name: true, userId: true, user: { select: { name: true } } },
-      },
-    },
-    orderBy: { date: "desc" },
-    take: 200,
-  });
-
-  // Filtra em código: pendente = tudo que NÃO está COMPLETED
-  const pendingWorkouts = allWorkoutsData.filter((w) => w.status !== "COMPLETED");
-
-  const pendingWorkoutsByStudent = new Map<string, typeof pendingWorkouts>();
-  for (const w of pendingWorkouts) {
-    if (!pendingWorkoutsByStudent.has(w.studentId)) {
-      pendingWorkoutsByStudent.set(w.studentId, []);
-    }
-    pendingWorkoutsByStudent.get(w.studentId)!.push(w);
-  }
-
-  const studentsWithPending = allStudents
-    .map((student) => ({
-      ...student,
-      workouts: pendingWorkoutsByStudent.get(student.id) || [],
-    }))
-    .filter((s) => s.workouts.length > 0);
-
   // Contagens
   const totalNotices = allNotices.length;
-  const totalUnreadNotices = noticesWithUnread.length;
+  const totalUnreadNotices = unreadNotices.length;
   const totalPendingWorkouts = studentsWithPending.reduce(
     (acc, s) => acc + s.workouts.length, 0
   );
@@ -197,7 +199,7 @@ export default async function GestorDashboardPage() {
         </Link>
       </div>
 
-      {/* LISTAGENS DETALHADAS */}
+      {/* LISTAGENS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
@@ -337,15 +339,15 @@ export default async function GestorDashboardPage() {
         )}
       </div>
 
-      {/* AVISOS NÃO LIDOS - RESTAURADO */}
-      {noticesWithUnread.length > 0 && (
+      {/* AVISOS COM LEITURA PENDENTE */}
+      {unreadNotices.length > 0 && (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[#f5f5f5]">Avisos com leitura pendente</h2>
-            <span className="text-xs text-[#a1a1a1]">{noticesWithUnread.length} aviso(s)</span>
+            <span className="text-xs text-[#a1a1a1]">{unreadNotices.length} aviso(s)</span>
           </div>
           <div className="divide-y divide-[#ffffff05] max-h-60 overflow-y-auto">
-            {noticesWithUnread.slice(0, 10).map((notice) => (
+            {unreadNotices.slice(0, 10).map((notice) => (
               <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -356,10 +358,10 @@ export default async function GestorDashboardPage() {
                         {notice.type || "Aviso"}
                       </span>
                     </div>
-                    <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">
-                      Por: {notice.author?.name || "Sistema"}
-                      {notice.student ? ` - Para: ${notice.student.name}` : ""}
-                    </p>
+                    <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">{notice.content}</p>
+                    {notice.student && (
+                      <p className="text-[8px] text-[#525252] mt-0.5">Para: {notice.student.name}</p>
+                    )}
                   </div>
                   <span className="text-[8px] text-[#525252] shrink-0">
                     {new Date(notice.createdAt).toLocaleDateString("pt-BR")}
