@@ -11,6 +11,7 @@ export default async function DashboardPage() {
   if (!session?.user?.id) redirect("/auth/signin");
   const userId = session.user.id;
 
+  // 1. APENAS OS ALUNOS DESTE PROFESSOR
   const myStudents = await prisma.student.findMany({
     where: { userId },
     select: { id: true, name: true },
@@ -18,8 +19,9 @@ export default async function DashboardPage() {
   });
 
   const myStudentIds = myStudents.map((s) => s.id);
+  const myStudentIdsSet = new Set(myStudentIds);
 
-  // WORKOUTS PENDENTES - query direta e simples
+  // 2. WORKOUTS PENDENTES - apenas dos meus alunos
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
       studentId: { in: myStudentIds },
@@ -54,6 +56,7 @@ export default async function DashboardPage() {
     (acc, s) => acc + s.workouts.length, 0
   );
 
+  // 3. AVISOS CRIADOS PELO PROFESSOR
   const allNotices = await prisma.notice.findMany({
     where: { authorId: userId },
     orderBy: { createdAt: "desc" },
@@ -77,8 +80,14 @@ export default async function DashboardPage() {
 
   const totalUnreadNotices = unreadNotices.length;
 
+  // 4. DÚVIDAS - APENAS DOS ALUNOS DESTE PROFESSOR (CORREÇÃO!)
   const unansweredQuestions = await prisma.question.findMany({
-    where: { parentId: null, answer: null, answeredAt: null },
+    where: {
+      parentId: null,
+      answer: null,
+      answeredAt: null,
+      studentId: { in: myStudentIds }, // FILTRO CRÍTICO: só do professor logado
+    },
     include: {
       student: { select: { id: true, name: true } },
       children: { select: { id: true, answer: true } },
@@ -97,6 +106,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0a]">
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-[#f5f5f5]">
@@ -121,6 +131,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* CARDS DE KPIS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <Link href="/dashboard/mural" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
@@ -196,6 +207,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/* LISTAGENS DETALHADAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
@@ -274,6 +286,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* AVISOS COM LEITURA PENDENTE */}
       {unreadNotices.length > 0 && (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
