@@ -3,9 +3,9 @@ import { authOptions } from "../api/auth/[...nextauth]/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+
 export const dynamic = "force-dynamic";
 
-// Ícones inline para evitar dependências
 function IconAviso() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -13,6 +13,7 @@ function IconAviso() {
     </svg>
   );
 }
+
 function IconTreino() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -20,6 +21,7 @@ function IconTreino() {
     </svg>
   );
 }
+
 function IconDuvida() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -31,13 +33,11 @@ function IconDuvida() {
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
-
   const userId = session.user.id;
-  const userRole = session.user.role || "PROFESSOR";
 
   // ==================== CONSULTAS ====================
 
-  // 1. AVISOS NÃO LIDOS
+  // 1. AVISOS DO PROFESSOR
   const notices = await prisma.notice.findMany({
     where: { authorId: userId },
     orderBy: { createdAt: "desc" },
@@ -48,34 +48,106 @@ export default async function DashboardPage() {
     },
   });
 
-  // Calcula avisos com pelo menos 1 aluno que NÃO leu
   const noticesWithUnread = notices.filter((n) => {
     if (n.studentId) {
-      // Aviso direcionado a um aluno específico
       return n.reads.length === 0;
     }
-    // Aviso geral - verificar se há alunos que não leram
-    return false; // Simplificado - idealmente comparar com total de alunos
+    return false;
   });
 
-  // 2. TREINOS NÃO CONCLUÍDOS (Workouts com status PENDENTE)
-  const pendingWorkouts = await prisma.workout.findMany({
-    where: { status: "PENDENTE" },
-    include: {
-      student: { select: { id: true, name: true } },
-      workoutPlan: { select: { name: true } },
-    },
+  // 2. ALUNOS DO PROFESSOR
+  const myStudents = await prisma.student.findMany({
+    where: { userId },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
+  // 3. BUSCAR TREINOS PENDENTES (WorkoutPlan com data passada sem Workout COMPLETED)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const workoutPlans = await prisma.workoutPlan.findMany({
+    where: { date: { not: null, lte: today } },
+    select: { id: true, name: true, date: true },
     orderBy: { date: "desc" },
-    take: 20,
+    take: 100,
   });
 
-  // 3. DÚVIDAS SEM RESPOSTA
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const completedWorkouts = await prisma.workout.findMany({
+    where: { date: { gte: thirtyDaysAgo, lte: todayEnd }, status: "COMPLETED" },
+    select: { studentId: true, date: true, workoutPlanId: true },
+  });
+
+  const allWorkouts = await prisma.workout.findMany({
+    where: { date: { gte: thirtyDaysAgo, lte: todayEnd } },
+    select: { id: true, studentId: true, date: true, workoutPlanId: true, status: true },
+  });
+
+  const logMap = new Map<string, boolean>();
+  for (const log of completedWorkouts) {
+    const logDate = new Date(log.date);
+    const key = `${log.studentId}_${logDate.getFullYear()}-${logDate.getMonth()}-${logDate.getDate()}`;
+    logMap.set(key, true);
+  }
+
+  const completedPlanIds = new Set<string>();
+  for (const log of completedWorkouts) {
+    if (log.workoutPlanId) completedPlanIds.add(log.workoutPlanId);
+  }
+
+  const workoutsByStudent = new Map<string, typeof allWorkouts>();
+  for (const w of allWorkouts) {
+    if (!workoutsByStudent.has(w.studentId)) workoutsByStudent.set(w.studentId, []);
+    workoutsByStudent.get(w.studentId)!.push(w);
+  }
+
+  const pendingWorkoutsByStudent = new Map<string, any[]>();
+
+  for (const plan of workoutPlans) {
+    const planDate = plan.date ? new Date(plan.date) : null;
+    if (!planDate) continue;
+
+    for (const student of myStudents) {
+      const logKey = `${student.id}_${planDate.getFullYear()}-${planDate.getMonth()}-${planDate.getDate()}`;
+      const isCompleted = logMap.has(logKey);
+      const isCompletedByPlanId = completedPlanIds.has(plan.id);
+      const studentLogs = workoutsByStudent.get(student.id) || [];
+      const hasMatchingLog = studentLogs.some(
+        (l) => l.workoutPlanId === plan.id && l.status === "COMPLETED"
+      );
+
+      if (!isCompleted && !isCompletedByPlanId && !hasMatchingLog) {
+        if (!pendingWorkoutsByStudent.has(student.id)) {
+          pendingWorkoutsByStudent.set(student.id, []);
+        }
+        pendingWorkoutsByStudent.get(student.id)!.push({
+          id: plan.id,
+          planName: plan.name,
+          date: planDate,
+        });
+      }
+    }
+  }
+
+  const studentsWithPendingWorkouts = myStudents
+    .map((s) => ({
+      ...s,
+      workouts: pendingWorkoutsByStudent.get(s.id) || [],
+    }))
+    .filter((s) => s.workouts.length > 0);
+
+  const totalPendingWorkouts = studentsWithPendingWorkouts.reduce(
+    (acc, s) => acc + s.workouts.length, 0
+  );
+
+  // 4. DÚVIDAS SEM RESPOSTA
   const unansweredQuestions = await prisma.question.findMany({
-    where: {
-      parentId: null,
-      answer: null,
-      answeredAt: null,
-    },
+    where: { parentId: null, answer: null, answeredAt: null },
     include: {
       student: { select: { id: true, name: true } },
       children: { select: { id: true, answer: true } },
@@ -84,47 +156,16 @@ export default async function DashboardPage() {
     take: 20,
   });
 
-  // Filtra apenas as que realmente não têm resposta (nem nas children)
   const trulyUnanswered = unansweredQuestions.filter((q) => {
     const hasAnswerInChildren = q.children.some((c) => c.answer !== null);
     return !hasAnswerInChildren;
   });
 
-  // 4. ALUNOS DO PROFESSOR
-  const myStudents = await prisma.student.findMany({
-    where: { userId },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-
-  // 5. ALUNOS COM TRINO PENDENTE (que não marcaram como concluído)
-  const studentsWithPendingWorkouts = await prisma.student.findMany({
-    where: {
-      userId,
-      workouts: {
-        some: { status: "PENDENTE" },
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      workouts: {
-        where: { status: "PENDENTE" },
-        select: { id: true, date: true, workoutPlan: { select: { name: true } } },
-        orderBy: { date: "desc" },
-        take: 3,
-      },
-    },
-    orderBy: { name: "asc" },
-  });
-
   // Contagens
   const totalUnreadNotices = noticesWithUnread.length;
-  const totalPendingWorkouts = pendingWorkouts.length;
   const totalUnansweredQuestions = trulyUnanswered.length;
   const totalStudents = myStudents.length;
 
-  // Agrupa avisos por tipo
   const noticeTypes = notices.reduce((acc: Record<string, number>, n) => {
     const type = n.type || "AVISO";
     acc[type] = (acc[type] || 0) + 1;
@@ -160,7 +201,6 @@ export default async function DashboardPage() {
 
       {/* CARDS DE KPIS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-        {/* Card Avisos */}
         <Link href="/dashboard/mural" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
@@ -168,9 +208,7 @@ export default async function DashboardPage() {
                 <IconAviso />
               </div>
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                totalUnreadNotices > 0
-                  ? "bg-amber-500/20 text-amber-400"
-                  : "bg-[#525252]/20 text-[#525252]"
+                totalUnreadNotices > 0 ? "bg-amber-500/20 text-amber-400" : "bg-[#525252]/20 text-[#525252]"
               }`}>
                 {totalUnreadNotices} não lido(s)
               </span>
@@ -189,7 +227,6 @@ export default async function DashboardPage() {
           </div>
         </Link>
 
-        {/* Card Treinos */}
         <Link href="/dashboard/montar-treino" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
@@ -197,9 +234,7 @@ export default async function DashboardPage() {
                 <IconTreino />
               </div>
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                totalPendingWorkouts > 0
-                  ? "bg-green-500/20 text-green-400"
-                  : "bg-[#525252]/20 text-[#525252]"
+                totalPendingWorkouts > 0 ? "bg-green-500/20 text-green-400" : "bg-[#525252]/20 text-[#525252]"
               }`}>
                 {totalPendingWorkouts} pendente(s)
               </span>
@@ -225,7 +260,6 @@ export default async function DashboardPage() {
           </div>
         </Link>
 
-        {/* Card Dúvidas */}
         <Link href="/dashboard/students" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
@@ -233,9 +267,7 @@ export default async function DashboardPage() {
                 <IconDuvida />
               </div>
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                totalUnansweredQuestions > 0
-                  ? "bg-blue-500/20 text-blue-400"
-                  : "bg-[#525252]/20 text-[#525252]"
+                totalUnansweredQuestions > 0 ? "bg-blue-500/20 text-blue-400" : "bg-[#525252]/20 text-[#525252]"
               }`}>
                 {totalUnansweredQuestions} sem resposta
               </span>
@@ -264,38 +296,40 @@ export default async function DashboardPage() {
 
       {/* LISTAGENS DETALHADAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* ALUNOS COM TREINOS PENDENTES */}
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">🏋️ Alunos com treinos pendentes</h2>
+            <h2 className="text-sm font-semibold text-[#f5f5f5]">Alunos com treinos pendentes</h2>
             <span className="text-xs text-[#a1a1a1]">{studentsWithPendingWorkouts.length} aluno(s)</span>
           </div>
           {studentsWithPendingWorkouts.length === 0 ? (
             <div className="p-6 text-center">
-              <p className="text-xs text-green-400">✅ Todos os treinos estão em dia!</p>
+              <p className="text-xs text-green-400">Todos os treinos estão em dia!</p>
             </div>
           ) : (
-            <div className="divide-y divide-[#ffffff05]">
+            <div className="divide-y divide-[#ffffff05] max-h-80 overflow-y-auto">
               {studentsWithPendingWorkouts.map((s) => (
                 <div key={s.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
                   <div className="flex items-center justify-between mb-1">
-                    <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#D4A373] transition">
-                      {s.name}
-                    </Link>
+                    <div>
+                      <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#D4A373] transition">
+                        {s.name}
+                      </Link>
+                    </div>
                     <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
                       {s.workouts.length} pendente(s)
                     </span>
                   </div>
                   <div className="space-y-0.5">
-                    {s.workouts.map((w) => (
-                      <div key={w.id} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
+                    {s.workouts.slice(0, 5).map((w, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
                         <span className="w-1 h-1 rounded-full bg-red-500/50" />
-                        <span>{w.workoutPlan?.name || "Treino"}</span>
-                        <span className="text-[#525252]">
-                          {new Date(w.date).toLocaleDateString("pt-BR")}
-                        </span>
+                        <span>{w.planName}</span>
+                        <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
                       </div>
                     ))}
+                    {s.workouts.length > 5 && (
+                      <span className="text-[9px] text-[#525252]">+{s.workouts.length - 5} treino(s)</span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -303,15 +337,14 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        {/* DÚVIDAS SEM RESPOSTA */}
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">❓ Dúvidas sem resposta</h2>
+            <h2 className="text-sm font-semibold text-[#f5f5f5]">Dúvidas sem resposta</h2>
             <span className="text-xs text-[#a1a1a1]">{trulyUnanswered.length} dúvida(s)</span>
           </div>
           {trulyUnanswered.length === 0 ? (
             <div className="p-6 text-center">
-              <p className="text-xs text-green-400">✅ Todas as dúvidas foram respondidas!</p>
+              <p className="text-xs text-green-400">Todas as dúvidas foram respondidas!</p>
             </div>
           ) : (
             <div className="divide-y divide-[#ffffff05]">
@@ -347,7 +380,7 @@ export default async function DashboardPage() {
       {noticesWithUnread.length > 0 && (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">📢 Avisos com leitura pendente</h2>
+            <h2 className="text-sm font-semibold text-[#f5f5f5]">Avisos com leitura pendente</h2>
             <span className="text-xs text-[#a1a1a1]">{noticesWithUnread.length} aviso(s)</span>
           </div>
           <div className="divide-y divide-[#ffffff05]">
@@ -374,10 +407,9 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* FOOTER DO DASHBOARD */}
       <div className="text-center py-4">
         <p className="text-[10px] text-[#525252]">
-          Dashboard atualizado em tempo real • {new Date().toLocaleString("pt-BR")}
+          Dashboard atualizado em tempo real | {new Date().toLocaleString("pt-BR")}
         </p>
       </div>
     </div>
