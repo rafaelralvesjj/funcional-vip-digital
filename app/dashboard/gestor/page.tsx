@@ -57,19 +57,16 @@ export default async function GestorDashboardPage() {
   });
 
   // 5. AVISOS NÃO LIDOS
+  // Considera não lido avisos que não têm NENHUM registro de leitura
   const noticesWithUnread = allNotices.filter((n) => n.reads.length === 0);
 
   // 6. BUSCAR TODOS OS WORKOUTS NÃO CONCLUÍDOS
-  // CORREÇÃO: Busca TODOS os workouts independente do status
-  // e filtra em código os que NÃO estão COMPLETED
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Buscar últimos 60 dias de workouts
   const sixtyDaysAgo = new Date(today);
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-  // Buscar TODOS os workouts (sem filtro de status) para alunos do sistema
   const allWorkoutsData = await prisma.workout.findMany({
     where: {
       date: { gte: sixtyDaysAgo },
@@ -91,12 +88,9 @@ export default async function GestorDashboardPage() {
     take: 200,
   });
 
-  // Filtrar em código: considera pendente tudo que NÃO está COMPLETED
-  const pendingWorkouts = allWorkoutsData.filter((w) => {
-    return w.status !== "COMPLETED";
-  });
+  // Filtra em código: pendente = tudo que NÃO está COMPLETED
+  const pendingWorkouts = allWorkoutsData.filter((w) => w.status !== "COMPLETED");
 
-  // Agrupar workouts pendentes por studentId
   const pendingWorkoutsByStudent = new Map<string, typeof pendingWorkouts>();
   for (const w of pendingWorkouts) {
     if (!pendingWorkoutsByStudent.has(w.studentId)) {
@@ -105,7 +99,6 @@ export default async function GestorDashboardPage() {
     pendingWorkoutsByStudent.get(w.studentId)!.push(w);
   }
 
-  // Montar lista de alunos com treinos pendentes
   const studentsWithPending = allStudents
     .map((student) => ({
       ...student,
@@ -343,6 +336,40 @@ export default async function GestorDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* AVISOS NÃO LIDOS - RESTAURADO */}
+      {noticesWithUnread.length > 0 && (
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#f5f5f5]">Avisos com leitura pendente</h2>
+            <span className="text-xs text-[#a1a1a1]">{noticesWithUnread.length} aviso(s)</span>
+          </div>
+          <div className="divide-y divide-[#ffffff05] max-h-60 overflow-y-auto">
+            {noticesWithUnread.slice(0, 10).map((notice) => (
+              <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                      <span className="text-xs font-medium text-[#f5f5f5]">{notice.title}</span>
+                      <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1 py-0.5 rounded-full">
+                        {notice.type || "Aviso"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">
+                      Por: {notice.author?.name || "Sistema"}
+                      {notice.student ? ` - Para: ${notice.student.name}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-[8px] text-[#525252] shrink-0">
+                    {new Date(notice.createdAt).toLocaleDateString("pt-BR")}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="text-center py-4">
         <p className="text-[10px] text-[#525252]">
