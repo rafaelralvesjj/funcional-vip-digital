@@ -31,13 +31,10 @@ export default async function GestorDashboardPage() {
   const allStudentIds = allStudents.map((s) => s.id);
 
   // 3. WORKOUTS PENDENTES (status = "PENDENTE") de TODOS os alunos
-  const june2026 = new Date(2026, 5, 1);
-  const july2026 = new Date(2026, 6, 1);
-
+  // SEM filtro de data
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
       studentId: { in: allStudentIds },
-      date: { gte: june2026, lt: july2026 },
       status: "PENDENTE",
     },
     select: {
@@ -81,7 +78,6 @@ export default async function GestorDashboardPage() {
     take: 50,
   });
 
-  // Avisos não lidos pelos alunos
   const unreadNotices = allNotices.filter((n) => {
     if (n.studentId) {
       const hasRead = n.reads.some((r) => r.studentId === n.studentId);
@@ -159,8 +155,8 @@ export default async function GestorDashboardPage() {
                 {totalUnreadNotices} não lido(s)
               </span>
             </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{totalNotices}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Total de avisos</p>
+            <p className="text-2xl md:text-3xl font-bold text-white">{totalUnreadNotices}</p>
+            <p className="text-xs text-[#a1a1a1] mt-1">Total de avisos pendentes</p>
           </div>
         </Link>
 
@@ -177,7 +173,7 @@ export default async function GestorDashboardPage() {
               </span>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-white">{totalPendingWorkouts}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Treinos não concluídos</p>
+            <p className="text-xs text-[#a1a1a1] mt-1">Treinos pendentes</p>
           </div>
         </Link>
 
