@@ -30,31 +30,42 @@ export default async function GestorDashboardPage() {
 
   const allStudentIds = allStudents.map((s) => s.id);
 
-  // 3. WORKOUTS PENDENTES (status = "PENDENTE") de TODOS os alunos
-  // SEM filtro de data
-  const pendingWorkouts = await prisma.workout.findMany({
+  // 3. TREINOS PENDENTES (WorkoutPlan com data passada SEM Workout COMPLETED)
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const startDate = new Date(2026, 5, 1);
+
+  const workoutPlans = await prisma.workoutPlan.findMany({
     where: {
       studentId: { in: allStudentIds },
-      status: "PENDENTE",
+      date: { gte: startDate, lte: today },
     },
     select: {
       id: true,
       studentId: true,
+      name: true,
       date: true,
-      workoutPlan: { select: { name: true } },
       student: {
         select: { id: true, name: true, userId: true, user: { select: { name: true } } },
+      },
+      workouts: {
+        where: { status: "COMPLETED" },
+        select: { id: true },
       },
     },
     orderBy: { date: "desc" },
   });
 
-  const pendingByStudent = new Map<string, typeof pendingWorkouts>();
-  for (const w of pendingWorkouts) {
-    if (!pendingByStudent.has(w.studentId)) {
-      pendingByStudent.set(w.studentId, []);
+  // Filtrar apenas WorkoutPlans sem workout COMPLETED
+  const pendingPlans = workoutPlans.filter((wp) => wp.workouts.length === 0);
+
+  // Agrupar por aluno
+  const pendingByStudent = new Map<string, typeof pendingPlans>();
+  for (const wp of pendingPlans) {
+    if (!pendingByStudent.has(wp.studentId)) {
+      pendingByStudent.set(wp.studentId, []);
     }
-    pendingByStudent.get(w.studentId)!.push(w);
+    pendingByStudent.get(wp.studentId)!.push(wp);
   }
 
   const studentsWithPending = allStudents
@@ -104,7 +115,6 @@ export default async function GestorDashboardPage() {
     return !q.children.some((c) => c.answer !== null);
   });
 
-  // Contagens
   const totalNotices = allNotices.length;
   const totalUnreadNotices = unreadNotices.length;
   const totalPendingWorkouts = studentsWithPending.reduce(
@@ -222,11 +232,11 @@ export default async function GestorDashboardPage() {
                     </span>
                   </div>
                   <div className="space-y-0.5">
-                    {s.workouts.slice(0, 5).map((w, idx) => (
+                    {s.workouts.slice(0, 5).map((wp, idx) => (
                       <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
                         <span className="w-1 h-1 rounded-full bg-red-500/50" />
-                        <span>{w.workoutPlan?.name || "Treino"}</span>
-                        <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
+                        <span>{wp.name}</span>
+                        <span className="text-[#525252]">{wp.date ? new Date(wp.date).toLocaleDateString("pt-BR") : ""}</span>
                       </div>
                     ))}
                     {s.workouts.length > 5 && (
