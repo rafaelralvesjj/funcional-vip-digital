@@ -9,18 +9,30 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
-  const userId = session.user.id;
 
-  // 1. ALUNOS DESTE PROFESSOR
+  const userId = session.user.id;
+  const userRole = (session.user as any)?.role || "PROFESSOR";
+  const isGestor = userRole === "GESTOR";
+
+  // ==========================================
+  // 1. BUSCAR ALUNOS
+  // ==========================================
+  // GESTOR: todos os alunos | PROFESSOR: só os dele
   const myStudents = await prisma.student.findMany({
-    where: { userId },
-    select: { id: true, name: true },
+    where: isGestor ? undefined : { userId },
+    select: { 
+      id: true, 
+      name: true,
+      user: { select: { id: true, name: true } }
+    },
     orderBy: { name: "asc" },
   });
 
   const myStudentIds = myStudents.map((s) => s.id);
 
+  // ==========================================
   // 2. WORKOUTS PENDENTES
+  // ==========================================
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
       studentId: { in: myStudentIds },
@@ -36,6 +48,7 @@ export default async function DashboardPage() {
     orderBy: { date: "desc" },
   });
 
+  // Mapa de alunoId -> workouts
   const pendingByStudent = new Map<string, typeof pendingWorkouts>();
   for (const w of pendingWorkouts) {
     if (!pendingByStudent.has(w.studentId)) {
@@ -44,6 +57,7 @@ export default async function DashboardPage() {
     pendingByStudent.get(w.studentId)!.push(w);
   }
 
+  // Juntar alunos com workouts pendentes + info do professor
   const studentsWithPendingWorkouts = myStudents
     .map((s) => ({
       ...s,
@@ -55,20 +69,24 @@ export default async function DashboardPage() {
     (acc, s) => acc + s.workouts.length, 0
   );
 
-  // 3. AVISOS CRIADOS PELO PROFESSOR - COM VERIFICAÇÃO DE LEITURA
+  // ==========================================
+  // 3. AVISOS
+  // ==========================================
+  // GESTOR: todos os avisos | PROFESSOR: só os dele
   const allNotices = await prisma.notice.findMany({
-    where: { authorId: userId },
+    where: isGestor ? undefined : { authorId: userId },
     orderBy: { createdAt: "desc" },
     include: {
       student: { select: { id: true, name: true } },
+      author: { select: { id: true, name: true, role: true } },
       reads: {
         where: { studentId: { in: myStudentIds } },
-        select: { studentId: true, createdAt: true },
+        select: { studentId: true },
       },
     },
   });
 
-  // Filtrar avisos NÃO LIDOS
+  // Filtrar apenas avisos NÃO LIDOS
   const unreadNotices = allNotices.filter((n) => {
     if (n.studentId) {
       const hasRead = n.reads.some((r) => r.studentId === n.studentId);
@@ -81,7 +99,9 @@ export default async function DashboardPage() {
 
   const totalUnreadNotices = unreadNotices.length;
 
-  // 4. DUVIDAS SEM RESPOSTA
+  // ==========================================
+  // 4. DÚVIDAS SEM RESPOSTA
+  // ==========================================
   const unansweredQuestions = await prisma.question.findMany({
     where: {
       parentId: null,
@@ -90,7 +110,9 @@ export default async function DashboardPage() {
       studentId: { in: myStudentIds },
     },
     include: {
-      student: { select: { id: true, name: true } },
+      student: { 
+        select: { id: true, name: true, user: { select: { id: true, name: true } } } 
+      },
       children: { select: { id: true, answer: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -103,34 +125,23 @@ export default async function DashboardPage() {
   });
 
   const totalUnansweredQuestions = trulyUnanswered.length;
-
-  // 5. MAPEAR ALUNOS COM AVISOS NÃO LIDOS PARA A LISTA
-  const studentsWithUnreadNotices = myStudents
-    .map((s) => {
-      const studentNotices = unreadNotices.filter((n) => {
-        if (n.studentId) return n.studentId === s.id;
-        // Aviso geral: verificar se este aluno especificamente leu
-        const hasRead = n.reads.some((r) => r.studentId === s.id);
-        return !hasRead;
-      });
-      return { ...s, notices: studentNotices };
-    })
-    .filter((s) => s.notices.length > 0);
-
   const totalStudents = myStudents.length;
+  const displayName = session.user.name ?? "Personal";
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0a]">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-[#f5f5f5]">Olá, {session.user.name ?? "Personal"}</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-[#f5f5f5]">Olá, {displayName}</h1>
           <p className="text-xs md:text-sm text-[#a1a1a1]">
             {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] md:text-xs bg-[#D4A373]/10 text-[#D4A373] px-3 py-1 rounded-full border border-[#D4A373]/20">Professor</span>
+          <span className={`text-[10px] md:text-xs px-3 py-1 rounded-full border ${isGestor ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-[#D4A373]/10 text-[#D4A373] border-[#D4A373]/20"}`}>
+            {isGestor ? "Gestor" : "Professor"}
+          </span>
           <span className="text-[10px] md:text-xs text-[#525252]">{totalStudents} aluno(s)</span>
         </div>
       </div>
@@ -186,23 +197,32 @@ export default async function DashboardPage() {
             <span className="text-xs text-[#a1a1a1]">{studentsWithPendingWorkouts.length} aluno(s)</span>
           </div>
           <div className="divide-y divide-[#ffffff05] max-h-80 overflow-y-auto">
-            {studentsWithPendingWorkouts.map((s) => (
-              <div key={s.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                <div className="flex items-center justify-between mb-1">
-                  <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#D4A373] transition">{s.name}</Link>
-                  <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">{s.workouts.length} pendente(s)</span>
-                </div>
-                <div className="space-y-0.5">
-                  {s.workouts.slice(0, 5).map((w, idx) => (
-                    <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
-                      <span className="w-1 h-1 rounded-full bg-red-500/50" />
-                      <span>{w.workoutPlan?.name || "Treino"}</span>
-                      <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
+            {studentsWithPendingWorkouts.map((s) => {
+              const studentWithUser = myStudents.find((ms) => ms.id === s.id);
+              const teacherName = studentWithUser?.user?.name || "";
+              return (
+                <div key={s.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#D4A373] transition">{s.name}</Link>
+                      {isGestor && teacherName && (
+                        <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Prof: {teacherName}</span>
+                      )}
                     </div>
-                  ))}
+                    <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">{s.workouts.length} pendente(s)</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {s.workouts.slice(0, 5).map((w, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
+                        <span className="w-1 h-1 rounded-full bg-red-500/50" />
+                        <span>{w.workoutPlan?.name || "Treino"}</span>
+                        <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -215,17 +235,27 @@ export default async function DashboardPage() {
             <span className="text-xs text-[#a1a1a1]">{trulyUnanswered.length} dúvida(s)</span>
           </div>
           <div className="divide-y divide-[#ffffff05]">
-            {trulyUnanswered.map((q) => (
-              <div key={q.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-xs font-medium text-[#D4A373] hover:text-[#c49563] transition">{q.student?.name || "Aluno"}</Link>
-                    <p className="text-xs text-[#e5e5e5] mt-0.5 line-clamp-2">{q.content}</p>
+            {trulyUnanswered.map((q) => {
+              const teacherName = (q.student as any)?.user?.name || "";
+              return (
+                <div key={q.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-xs font-medium text-[#D4A373] hover:text-[#c49563] transition">
+                          {q.student?.name || "Aluno"}
+                        </Link>
+                        {isGestor && teacherName && (
+                          <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Prof: {teacherName}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[#e5e5e5] mt-0.5 line-clamp-2">{q.content}</p>
+                    </div>
+                    <span className="text-[9px] text-[#525252] shrink-0">{new Date(q.createdAt).toLocaleDateString("pt-BR")}</span>
                   </div>
-                  <span className="text-[9px] text-[#525252] shrink-0">{new Date(q.createdAt).toLocaleDateString("pt-BR")}</span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -242,10 +272,13 @@ export default async function DashboardPage() {
               <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                       <span className="text-xs font-medium text-[#f5f5f5]">{notice.title || "Sem título"}</span>
                       <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1 py-0.5 rounded-full">{notice.type || "Aviso"}</span>
+                      {isGestor && notice.author && (
+                        <span className="text-[8px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Por: {notice.author.name}</span>
+                      )}
                     </div>
                     <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">{notice.content}</p>
                     {notice.student ? (
