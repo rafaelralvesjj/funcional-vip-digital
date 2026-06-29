@@ -501,4 +501,158 @@ export default function AlunoPage() {
                         <div className="w-2 h-2 rounded-full mt-1.5 bg-[#D4A373] shrink-0" />
                         <div className="flex-1 bg-[#D4A373]/5 rounded-lg p-2.5 border border-[#D4A373]/15">
                           <div className="flex items-center gap-1.5 mb-1">
-         
+                            <span className="text-[9px] font-semibold text-[#D4A373]">
+                              {msg.answeredBy?.name || "Professor"}
+                            </span>
+                            <span className="text-[8px] text-[#525252]">
+                              {msg.answeredAt ? new Date(msg.answeredAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#e5e5e5]">{msg.answer}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {idx < messages.length - 1 && (
+                      <div className="border-t border-[#ffffff05] my-2" />
+                    )}
+                  </div>
+                ));
+              })()}
+
+              {(() => {
+                const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
+                const last = msgs[msgs.length - 1];
+                if (!last.answer && !selectedQuestion.resolvedAt) {
+                  return (
+                    <div className="flex items-center gap-2 text-[10px] text-yellow-400 bg-yellow-500/10 rounded-lg p-2">
+                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Aguardando resposta do professor...
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+
+            {/* Área inferior - varia conforme status */}
+            {selectedQuestion.resolvedAt ? (
+              <div className="border-t border-[#ffffff10] p-3 shrink-0">
+                <p className="text-[9px] text-[#525252] text-center italic">
+                  Duvida encerrada. Se precisar de ajuda, abra uma nova duvida.
+                </p>
+                <button onClick={() => { setSelectedQuestion(null); setNewQuestion(""); }}
+                  className="w-full mt-1 bg-[#2a2a2a] text-[#a1a1a1] text-xs font-semibold py-1.5 rounded-lg hover:bg-[#333] transition">
+                  Nova duvida
+                </button>
+              </div>
+            ) : (
+              <div className="border-t border-[#ffffff10] p-3 shrink-0">
+                {/* Botao "Marcar como resolvida" - aparece quando professor respondeu */}
+                {(() => {
+                  const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
+                  const last = msgs[msgs.length - 1];
+                  if (last.answer && !selectedQuestion.resolvedAt) {
+                    return (
+                      <button onClick={() => handleResolveDoubt(selectedQuestion.id)}
+                        className="w-full text-[9px] bg-transparent border border-[#525252] text-[#6b6b6b] py-1.5 rounded-lg hover:border-[#D4A373] hover:text-[#D4A373] transition mb-1">
+                        Marcar como resolvida
+                      </button>
+                    );
+                  }
+                })()}
+
+                <p className="text-[9px] text-[#D4A373] font-medium mb-1">
+                  {(() => {
+                    const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
+                    const last = msgs[msgs.length - 1];
+                    return last.answer
+                      ? "Nao entendeu? Continue perguntando:"
+                      : "Enquanto isso, envie mais detalhes:";
+                  })()}
+                </p>
+                <textarea value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}
+                  placeholder="Digite aqui..."
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
+                <div className="flex items-center gap-1 mb-1.5">
+                  <input type="file" accept="image/*,video/*" onChange={(e) => setFollowUpFile(e.target.files?.[0] || null)}
+                    className="text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
+                  {followUpFile && <span className="text-[8px] text-[#D4A373]">1</span>}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleSendQuestion(selectedQuestion.id)}
+                    disabled={sendingFollowUp || !followUpText.trim()}
+                    className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
+                    {sendingFollowUp ? "..." : "Continuar perguntando"}
+                  </button>
+                  <button onClick={() => { setSelectedQuestion(null); setNewQuestion(""); }}
+                    className="text-[8px] text-[#6b6b6b] hover:text-white px-2 transition-colors">
+                    Nova duvida
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DO AVISO */}
+      {selectedNotice && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedNotice(null)}>
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
+              <div>
+                <h2 className="text-sm font-bold text-[#f5f5f5]">{selectedNotice.title || selectedNotice.type || "Aviso"}</h2>
+                <p className="text-[10px] text-[#a1a1a1] mt-0.5">{new Date(selectedNotice.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+              </div>
+              <button onClick={() => setSelectedNotice(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
+            </div>
+            <div className="p-4">
+              <p className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedNotice.content}</p>
+              {selectedNotice.author && (
+                <div className="mt-4 pt-3 border-t border-[#ffffff10]">
+                  <p className="text-[10px] text-[#6b6b6b]">
+                    Enviado por: <span className="text-[#a1a1a1]">{selectedNotice.author.name}</span>
+                    {selectedNotice.author.role && (
+                      <span className={"ml-1 px-1.5 py-0.5 rounded text-[9px] " + (selectedNotice.author.role === "GESTOR" ? "bg-blue-500/10 text-blue-400" : "bg-green-500/10 text-green-400")}>
+                        {selectedNotice.author.role === "GESTOR" ? "Gestao" : "Professor"}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="p-3 border-t border-[#ffffff10]">
+              <button onClick={() => setSelectedNotice(null)} className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL DO TREINO */}
+      {showWorkoutModal && selectedPlan && !selectedExercise && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[75vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between p-3 border-b border-[#ffffff10] sticky top-0 bg-[#111] z-10">
+              <div>
+                <h2 className="text-sm font-bold text-[#f5f5f5]">{selectedPlan.name}</h2>
+                <p className="text-[10px] text-[#a1a1a1]">{getWeekDayName(selectedDay!)} - {selectedDay}/{currentMonth + 1}/{currentYear}</p>
+              </div>
+              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
+                className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
+            </div>
+            <div className="p-3 space-y-1.5">
+              {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
+                <div key={ex.id || idx}
+                  onClick={() => { setSelectedExercise(ex); setImgError(false); }}
+                  className="bg-[#1a1a1a] rounded-xl p-2.5 border border-[#ffffff08] cursor-pointer hover:border-[#D4A373]/40 transition active:scale-[0.98]">
+                  <div className="flex items-start gap-2">
+                    <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#f5f5f5]">{ex.name}</p>
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[9px] text-[#a1a1a1]">
+                        <span>{ex.series || '-'} series x {ex.reps || '-'} reps</span>
+     
