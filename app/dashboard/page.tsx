@@ -55,14 +55,35 @@ export default async function DashboardPage() {
     (acc, s) => acc + s.workouts.length, 0
   );
 
-  // 3. AVISOS CRIADOS PELO PROFESSOR
+  // 3. AVISOS CRIADOS PELO PROFESSOR - COM VERIFICAÇÃO DE LEITURA
   const allNotices = await prisma.notice.findMany({
     where: { authorId: userId },
     orderBy: { createdAt: "desc" },
     include: {
       student: { select: { id: true, name: true } },
+      reads: {
+        where: { studentId: { in: myStudentIds } },
+        select: { studentId: true },
+      },
     },
   });
+
+  // Filtrar apenas avisos NÃO LIDOS:
+  // - Se for para um aluno específico: verificar se ele leu
+  // - Se for geral (studentId null): verificar se pelo menos um aluno leu
+  const unreadNotices = allNotices.filter((n) => {
+    if (n.studentId) {
+      // Aviso para aluno específico: verificar se esse aluno leu
+      const hasRead = n.reads.some((r) => r.studentId === n.studentId);
+      return !hasRead;
+    }
+    // Aviso geral: só conta como lido se TODOS os alunos leram (considera não lido se ninguém leu)
+    if (myStudentIds.length === 0) return false;
+    const readByStudents = n.reads.filter((r) => myStudentIds.includes(r.studentId));
+    return readByStudents.length < myStudentIds.length;
+  });
+
+  const totalUnreadNotices = unreadNotices.length;
 
   // 4. DUVIDAS - APENAS DOS ALUNOS DESTE PROFESSOR
   const unansweredQuestions = await prisma.question.findMany({
@@ -112,9 +133,12 @@ export default async function DashboardPage() {
               <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               </div>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalUnreadNotices > 0 ? "bg-amber-500/20 text-amber-400" : "bg-[#525252]/20 text-[#525252]"}`}>
+                {totalUnreadNotices} não lido(s)
+              </span>
             </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{allNotices.length}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Avisos</p>
+            <p className="text-2xl md:text-3xl font-bold text-white">{totalUnreadNotices}</p>
+            <p className="text-xs text-[#a1a1a1] mt-1">Avisos pendentes</p>
           </div>
         </Link>
 
