@@ -24,7 +24,8 @@ export default function DashboardLayout({
 
   // Itens exclusivos do gestor
   const gestorItems = [
-    { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "users" },
+    { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
+    { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "user" },
     { href: "/dashboard/gestor/gestores", label: "Gerenciar Gestores", icon: "user" },
   ];
 
