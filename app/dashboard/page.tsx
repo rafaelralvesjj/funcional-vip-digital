@@ -62,82 +62,48 @@ export default async function DashboardPage() {
     orderBy: { name: "asc" },
   });
 
-  // 3. BUSCAR TREINOS PENDENTES (WorkoutPlan com data passada sem Workout COMPLETED)
+  const myStudentIds = myStudents.map((s) => s.id);
+
+  // 3. WORKOUTS NÃO CONCLUÍDOS DOS ALUNOS DO PROFESSOR
+  // CORREÇÃO: busca todos os workouts e filtra quem NÃO está COMPLETED
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const workoutPlans = await prisma.workoutPlan.findMany({
-    where: { date: { not: null, lte: today } },
-    select: { id: true, name: true, date: true },
-    orderBy: { date: "desc" },
-    take: 100,
-  });
-
-  const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const todayEnd = new Date(today);
-  todayEnd.setHours(23, 59, 59, 999);
-
-  const completedWorkouts = await prisma.workout.findMany({
-    where: { date: { gte: thirtyDaysAgo, lte: todayEnd }, status: "COMPLETED" },
-    select: { studentId: true, date: true, workoutPlanId: true },
-  });
+  const sixtyDaysAgo = new Date(today);
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
   const allWorkouts = await prisma.workout.findMany({
-    where: { date: { gte: thirtyDaysAgo, lte: todayEnd } },
-    select: { id: true, studentId: true, date: true, workoutPlanId: true, status: true },
+    where: {
+      studentId: { in: myStudentIds },
+      date: { gte: sixtyDaysAgo },
+    },
+    select: {
+      id: true,
+      studentId: true,
+      date: true,
+      status: true,
+      workoutPlan: { select: { name: true } },
+    },
+    orderBy: { date: "desc" },
+    take: 200,
   });
 
-  const logMap = new Map<string, boolean>();
-  for (const log of completedWorkouts) {
-    const logDate = new Date(log.date);
-    const key = `${log.studentId}_${logDate.getFullYear()}-${logDate.getMonth()}-${logDate.getDate()}`;
-    logMap.set(key, true);
-  }
+  // Filtra em código: pendente = tudo que NÃO está COMPLETED
+  const pendingWorkouts = allWorkouts.filter((w) => w.status !== "COMPLETED");
 
-  const completedPlanIds = new Set<string>();
-  for (const log of completedWorkouts) {
-    if (log.workoutPlanId) completedPlanIds.add(log.workoutPlanId);
-  }
-
-  const workoutsByStudent = new Map<string, typeof allWorkouts>();
-  for (const w of allWorkouts) {
-    if (!workoutsByStudent.has(w.studentId)) workoutsByStudent.set(w.studentId, []);
-    workoutsByStudent.get(w.studentId)!.push(w);
-  }
-
-  const pendingWorkoutsByStudent = new Map<string, any[]>();
-
-  for (const plan of workoutPlans) {
-    const planDate = plan.date ? new Date(plan.date) : null;
-    if (!planDate) continue;
-
-    for (const student of myStudents) {
-      const logKey = `${student.id}_${planDate.getFullYear()}-${planDate.getMonth()}-${planDate.getDate()}`;
-      const isCompleted = logMap.has(logKey);
-      const isCompletedByPlanId = completedPlanIds.has(plan.id);
-      const studentLogs = workoutsByStudent.get(student.id) || [];
-      const hasMatchingLog = studentLogs.some(
-        (l) => l.workoutPlanId === plan.id && l.status === "COMPLETED"
-      );
-
-      if (!isCompleted && !isCompletedByPlanId && !hasMatchingLog) {
-        if (!pendingWorkoutsByStudent.has(student.id)) {
-          pendingWorkoutsByStudent.set(student.id, []);
-        }
-        pendingWorkoutsByStudent.get(student.id)!.push({
-          id: plan.id,
-          planName: plan.name,
-          date: planDate,
-        });
-      }
+  // Agrupa por studentId
+  const pendingByStudent = new Map<string, typeof pendingWorkouts>();
+  for (const w of pendingWorkouts) {
+    if (!pendingByStudent.has(w.studentId)) {
+      pendingByStudent.set(w.studentId, []);
     }
+    pendingByStudent.get(w.studentId)!.push(w);
   }
 
   const studentsWithPendingWorkouts = myStudents
     .map((s) => ({
       ...s,
-      workouts: pendingWorkoutsByStudent.get(s.id) || [],
+      workouts: pendingByStudent.get(s.id) || [],
     }))
     .filter((s) => s.workouts.length > 0);
 
@@ -250,11 +216,6 @@ export default async function DashboardPage() {
                     <span className="text-[#525252]">({s.workouts.length} treinos)</span>
                   </div>
                 ))}
-                {studentsWithPendingWorkouts.length > 3 && (
-                  <p className="text-[8px] text-[#525252]">
-                    +{studentsWithPendingWorkouts.length - 3} alunos
-                  </p>
-                )}
               </div>
             )}
           </div>
@@ -283,18 +244,12 @@ export default async function DashboardPage() {
                     <span className="text-[#525252] truncate max-w-[100px]">"{q.content.substring(0, 30)}..."</span>
                   </div>
                 ))}
-                {trulyUnanswered.length > 3 && (
-                  <p className="text-[8px] text-[#525252]">
-                    +{trulyUnanswered.length - 3} dúvidas
-                  </p>
-                )}
               </div>
             )}
           </div>
         </Link>
       </div>
 
-      {/* LISTAGENS DETALHADAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
@@ -323,13 +278,10 @@ export default async function DashboardPage() {
                     {s.workouts.slice(0, 5).map((w, idx) => (
                       <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
                         <span className="w-1 h-1 rounded-full bg-red-500/50" />
-                        <span>{w.planName}</span>
+                        <span>{w.workoutPlan?.name || "Treino"}</span>
                         <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
                       </div>
                     ))}
-                    {s.workouts.length > 5 && (
-                      <span className="text-[9px] text-[#525252]">+{s.workouts.length - 5} treino(s)</span>
-                    )}
                   </div>
                 </div>
               ))}
@@ -362,10 +314,7 @@ export default async function DashboardPage() {
                     </span>
                   </div>
                   <div className="mt-1.5">
-                    <Link
-                      href={`/dashboard/aluno?id=${q.studentId}`}
-                      className="text-[9px] text-blue-400 hover:text-blue-300 underline"
-                    >
+                    <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-[9px] text-blue-400 hover:text-blue-300 underline">
                       Responder dúvida →
                     </Link>
                   </div>
@@ -375,37 +324,6 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
-
-      {/* AVISOS NÃO LIDOS */}
-      {noticesWithUnread.length > 0 && (
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">Avisos com leitura pendente</h2>
-            <span className="text-xs text-[#a1a1a1]">{noticesWithUnread.length} aviso(s)</span>
-          </div>
-          <div className="divide-y divide-[#ffffff05]">
-            {noticesWithUnread.slice(0, 5).map((n) => (
-              <div key={n.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
-                    {n.type || "AVISO"}
-                  </span>
-                  <span className="text-[10px] text-[#525252]">
-                    {new Date(n.createdAt).toLocaleDateString("pt-BR")}
-                  </span>
-                </div>
-                <p className="text-xs text-[#e5e5e5] font-medium">{n.title || "Sem título"}</p>
-                <p className="text-[10px] text-[#6b6b6b] mt-0.5 line-clamp-1">{n.content}</p>
-                {n.student && (
-                  <p className="text-[9px] text-[#525252] mt-1">
-                    Para: {n.student.name}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="text-center py-4">
         <p className="text-[10px] text-[#525252]">
