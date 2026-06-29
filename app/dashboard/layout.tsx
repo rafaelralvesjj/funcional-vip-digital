@@ -31,6 +31,7 @@ export default function DashboardLayout({
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
+    { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
     { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "user" },
     { href: "/dashboard/gestor/gestores", label: "Gerenciar Gestores", icon: "user" },
   ];
@@ -38,7 +39,7 @@ export default function DashboardLayout({
   // Seleciona os itens conforme o cargo
   const navItems = role === "GESTOR" 
     ? gestorItems
-    : professorItems; // PROFESSOR ou qualquer outro
+    : professorItems;
 
   function NavIcon({ icon }: { icon: string }) {
     const icons: Record<string, JSX.Element> = {
@@ -76,6 +77,12 @@ export default function DashboardLayout({
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
       ),
+      link: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      ),
     };
     return icons[icon] || null;
   }
@@ -99,7 +106,6 @@ export default function DashboardLayout({
             <div className="w-8 h-8 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">F</div>
             <span className="text-[#D4A373] font-bold text-base leading-tight">Funcional<br />Vip Digital</span>
           </Link>
-          {/* Botão fechar no mobile */}
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-[#a1a1a1] hover:text-white transition">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -140,21 +146,4 @@ export default function DashboardLayout({
       <main className="flex-1 lg:ml-72 min-h-screen">
         {/* Top bar com menu hamburguer (visível apenas em mobile) */}
         <div className="lg:hidden sticky top-0 z-30 bg-[#0a0a0a] border-b border-[#ffffff10] px-4 py-3 flex items-center justify-between">
-          <button onClick={() => setSidebarOpen(true)} className="text-[#a1a1a1] hover:text-white transition">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-          <span className="text-[#D4A373] font-bold text-sm">Funcional Vip Digital</span>
-          <div className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-xs">
-            {session?.user?.name?.charAt(0).toUpperCase() || "U"}
-          </div>
-        </div>
-
-        {children}
-      </main>
-    </div>
-  );
-}
+          <button onClick={() => setSidebarOpen(true)} className="text-[#a1a1a1] 
