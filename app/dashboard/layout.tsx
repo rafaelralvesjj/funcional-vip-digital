@@ -17,7 +17,7 @@ export default function DashboardLayout({
   const professorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
-    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
+    { href: "/dashboard/exercicios", label: "Biblioteca de Exercícios", icon: "book" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
   ];
@@ -25,7 +25,7 @@ export default function DashboardLayout({
   // Itens exclusivos do gestor
   const gestorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
-    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
+    { href: "/dashboard/exercicios", label: "Biblioteca de Exercícios", icon: "book" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
