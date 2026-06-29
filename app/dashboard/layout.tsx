@@ -7,7 +7,7 @@ import type { JSX } from "react";
 
 export default function DashboardLayout({
   children,
-}: {<br/>
+}: {
   children: React.ReactNode;
 }) {
   const { data: session } = useSession();
@@ -17,22 +17,22 @@ export default function DashboardLayout({
 
   // Itens exclusivos do professor
   const professorItems = [
-    { href: "/dashboard", label: "Dashboard", icon: "grid" },<br/>
-    { href: "/dashboard/students", label: "Alunos", icon: "users" },<br/>
-    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },<br/>
-    { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },<br/>
+    { href: "/dashboard", label: "Dashboard", icon: "grid" },
+    { href: "/dashboard/students", label: "Alunos", icon: "users" },
+    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
+    { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
   ];
 
   // Itens exclusivos do gestor
   const gestorItems = [
-    { href: "/dashboard", label: "Dashboard", icon: "grid" },<br/>
-    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },<br/>
-    { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },<br/>
-    { href: "/dashboard/mural", label: "Mural", icon: "message" },<br/>
-    { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },<br/>
-    { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },<br/>
-    { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "user" },<br/>
+    { href: "/dashboard", label: "Dashboard", icon: "grid" },
+    { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
+    { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
+    { href: "/dashboard/mural", label: "Mural", icon: "message" },
+    { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
+    { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
+    { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "user" },
     { href: "/dashboard/gestor/gestores", label: "Gerenciar Gestores", icon: "user" },
   ];
 
@@ -41,8 +41,8 @@ export default function DashboardLayout({
     ? gestorItems
     : professorItems;
 
-  function NavIcon({ icon }: { icon: string }) {<br/>
-    const icons: Record<string, JSX.Element> = {<br/>
+  function NavIcon({ icon }: { icon: string }) {
+    const icons: Record<string, JSX.Element> = {
       grid: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
@@ -102,7 +102,7 @@ export default function DashboardLayout({
         <div className="p-6 border-b border-[#ffffff10] flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">F</div>
-            <span className="text-[#D4A373] font-bold text-base leading-tight">Funcional<br />Vip Digital</span>
+            <span className="text-[#D4A373] font-bold text-base leading-tight">Funcional Vip Digital</span>
           </Link>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-[#a1a1a1] hover:text-white transition">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -146,7 +146,7 @@ export default function DashboardLayout({
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="3" y1="6" x2="21" y2="6" />
               <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="18" x2="21" x3="21" />
             </svg>
           </button>
           <span className="text-[#D4A373] font-bold text-sm">Funcional Vip Digital</span>
