@@ -28,7 +28,7 @@ export default async function GestorDashboardPage() {
     orderBy: { name: "asc" },
   });
 
-  // 3. ALUNOS COM SEUS PROFESSORES
+  // 3. TODOS OS ALUNOS
   const allStudents = await prisma.student.findMany({
     select: {
       id: true,
@@ -59,107 +59,53 @@ export default async function GestorDashboardPage() {
   // 5. AVISOS NÃO LIDOS
   const noticesWithUnread = allNotices.filter((n) => n.reads.length === 0);
 
-  // 6. BUSCAR TREINOS PENDENTES
+  // 6. BUSCAR TODOS OS WORKOUTS NÃO CONCLUÍDOS
+  // CORREÇÃO: Busca TODOS os workouts independente do status
+  // e filtra em código os que NÃO estão COMPLETED
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Buscar WorkoutPlans que têm data no calendário (até hoje)
-  const workoutPlans = await prisma.workoutPlan.findMany({
+  // Buscar últimos 60 dias de workouts
+  const sixtyDaysAgo = new Date(today);
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+  // Buscar TODOS os workouts (sem filtro de status) para alunos do sistema
+  const allWorkoutsData = await prisma.workout.findMany({
     where: {
-      date: { not: null, lte: today },
-    },
-    select: {
-      id: true,
-      name: true,
-      date: true,
-    },
-    orderBy: { date: "desc" },
-    take: 100,
-  });
-
-  // Buscar workouts dos últimos 30 dias para verificar conclusão
-  const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const todayEnd = new Date(today);
-  todayEnd.setHours(23, 59, 59, 999);
-
-  const completedWorkouts = await prisma.workout.findMany({
-    where: {
-      date: { gte: thirtyDaysAgo, lte: todayEnd },
-      status: "COMPLETED",
-    },
-    select: { studentId: true, date: true, workoutPlanId: true },
-  });
-
-  // Mapa de workouts concluídos para consulta rápida
-  const logMap = new Map<string, boolean>();
-  for (const log of completedWorkouts) {
-    const logDate = new Date(log.date);
-    const key = `${log.studentId}_${logDate.getFullYear()}-${logDate.getMonth()}-${logDate.getDate()}`;
-    logMap.set(key, true);
-  }
-
-  // Mapa dos IDs de planos que já foram concluídos
-  const completedPlanIds = new Set<string>();
-  for (const log of completedWorkouts) {
-    if (log.workoutPlanId) {
-      completedPlanIds.add(log.workoutPlanId);
-    }
-  }
-
-  // Buscar todos os workouts do período (sem filtro de status) para cruzar
-  const allWorkouts = await prisma.workout.findMany({
-    where: {
-      date: { gte: thirtyDaysAgo, lte: todayEnd },
+      date: { gte: sixtyDaysAgo },
     },
     select: {
       id: true,
       studentId: true,
       date: true,
-      workoutPlanId: true,
       status: true,
+      workoutPlanId: true,
+      workoutPlan: {
+        select: { name: true, date: true },
+      },
+      student: {
+        select: { id: true, name: true, userId: true, user: { select: { name: true } } },
+      },
     },
+    orderBy: { date: "desc" },
+    take: 200,
   });
 
-  // Agrupar workouts por studentId
-  const workoutsByStudent = new Map<string, typeof allWorkouts>();
-  for (const w of allWorkouts) {
-    if (!workoutsByStudent.has(w.studentId)) {
-      workoutsByStudent.set(w.studentId, []);
+  // Filtrar em código: considera pendente tudo que NÃO está COMPLETED
+  const pendingWorkouts = allWorkoutsData.filter((w) => {
+    return w.status !== "COMPLETED";
+  });
+
+  // Agrupar workouts pendentes por studentId
+  const pendingWorkoutsByStudent = new Map<string, typeof pendingWorkouts>();
+  for (const w of pendingWorkouts) {
+    if (!pendingWorkoutsByStudent.has(w.studentId)) {
+      pendingWorkoutsByStudent.set(w.studentId, []);
     }
-    workoutsByStudent.get(w.studentId)!.push(w);
+    pendingWorkoutsByStudent.get(w.studentId)!.push(w);
   }
 
-  // Determinar treinos pendentes por aluno
-  const pendingWorkoutsByStudent = new Map<string, any[]>();
-
-  for (const plan of workoutPlans) {
-    const planDate = plan.date ? new Date(plan.date) : null;
-    if (!planDate) continue;
-
-    for (const student of allStudents) {
-      const logKey = `${student.id}_${planDate.getFullYear()}-${planDate.getMonth()}-${planDate.getDate()}`;
-      const isCompleted = logMap.has(logKey);
-      const isCompletedByPlanId = completedPlanIds.has(plan.id);
-
-      const studentLogs = workoutsByStudent.get(student.id) || [];
-      const hasMatchingLog = studentLogs.some(
-        (log) => log.workoutPlanId === plan.id && log.status === "COMPLETED"
-      );
-
-      if (!isCompleted && !isCompletedByPlanId && !hasMatchingLog) {
-        if (!pendingWorkoutsByStudent.has(student.id)) {
-          pendingWorkoutsByStudent.set(student.id, []);
-        }
-        pendingWorkoutsByStudent.get(student.id)!.push({
-          id: plan.id,
-          planName: plan.name,
-          date: planDate,
-        });
-      }
-    }
-  }
-
+  // Montar lista de alunos com treinos pendentes
   const studentsWithPending = allStudents
     .map((student) => ({
       ...student,
@@ -288,7 +234,7 @@ export default async function GestorDashboardPage() {
                     {s.workouts.slice(0, 5).map((w, idx) => (
                       <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
                         <span className="w-1 h-1 rounded-full bg-red-500/50" />
-                        <span>{w.planName}</span>
+                        <span>{w.workoutPlan?.name || "Treino"}</span>
                         <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
                       </div>
                     ))}
