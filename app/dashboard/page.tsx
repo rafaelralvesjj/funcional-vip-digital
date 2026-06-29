@@ -11,7 +11,7 @@ export default async function DashboardPage() {
   if (!session?.user?.id) redirect("/auth/signin");
   const userId = session.user.id;
 
-  // 1. APENAS OS ALUNOS DESTE PROFESSOR
+  // 1. ALUNOS DESTE PROFESSOR
   const myStudents = await prisma.student.findMany({
     where: { userId },
     select: { id: true, name: true },
@@ -20,7 +20,7 @@ export default async function DashboardPage() {
 
   const myStudentIds = myStudents.map((s) => s.id);
 
-  // 2. WORKOUTS PENDENTES - apenas dos meus alunos
+  // 2. WORKOUTS PENDENTES
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
       studentId: { in: myStudentIds },
@@ -63,21 +63,17 @@ export default async function DashboardPage() {
       student: { select: { id: true, name: true } },
       reads: {
         where: { studentId: { in: myStudentIds } },
-        select: { studentId: true },
+        select: { studentId: true, createdAt: true },
       },
     },
   });
 
-  // Filtrar apenas avisos NÃO LIDOS:
-  // - Se for para um aluno específico: verificar se ele leu
-  // - Se for geral (studentId null): verificar se pelo menos um aluno leu
+  // Filtrar avisos NÃO LIDOS
   const unreadNotices = allNotices.filter((n) => {
     if (n.studentId) {
-      // Aviso para aluno específico: verificar se esse aluno leu
       const hasRead = n.reads.some((r) => r.studentId === n.studentId);
       return !hasRead;
     }
-    // Aviso geral: só conta como lido se TODOS os alunos leram (considera não lido se ninguém leu)
     if (myStudentIds.length === 0) return false;
     const readByStudents = n.reads.filter((r) => myStudentIds.includes(r.studentId));
     return readByStudents.length < myStudentIds.length;
@@ -85,7 +81,7 @@ export default async function DashboardPage() {
 
   const totalUnreadNotices = unreadNotices.length;
 
-  // 4. DUVIDAS - APENAS DOS ALUNOS DESTE PROFESSOR
+  // 4. DUVIDAS SEM RESPOSTA
   const unansweredQuestions = await prisma.question.findMany({
     where: {
       parentId: null,
@@ -107,15 +103,28 @@ export default async function DashboardPage() {
   });
 
   const totalUnansweredQuestions = trulyUnanswered.length;
+
+  // 5. MAPEAR ALUNOS COM AVISOS NÃO LIDOS PARA A LISTA
+  const studentsWithUnreadNotices = myStudents
+    .map((s) => {
+      const studentNotices = unreadNotices.filter((n) => {
+        if (n.studentId) return n.studentId === s.id;
+        // Aviso geral: verificar se este aluno especificamente leu
+        const hasRead = n.reads.some((r) => r.studentId === s.id);
+        return !hasRead;
+      });
+      return { ...s, notices: studentNotices };
+    })
+    .filter((s) => s.notices.length > 0);
+
   const totalStudents = myStudents.length;
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0a]">
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-[#f5f5f5]">
-            Olá, {session.user.name ?? "Personal"}
-          </h1>
+          <h1 className="text-xl md:text-2xl font-bold text-[#f5f5f5]">Olá, {session.user.name ?? "Personal"}</h1>
           <p className="text-xs md:text-sm text-[#a1a1a1]">
             {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </p>
@@ -126,6 +135,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <Link href="/dashboard/mural" className="group">
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
@@ -159,7 +169,7 @@ export default async function DashboardPage() {
           <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
             <div className="flex items-start justify-between mb-3">
               <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M09.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               </div>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-white">{totalUnansweredQuestions}</p>
@@ -168,6 +178,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/* LISTA 1: ALUNOS COM TREINOS PENDENTES */}
       {studentsWithPendingWorkouts.length > 0 && (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
@@ -196,6 +207,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* LISTA 2: DUVIDAS SEM RESPOSTA */}
       {trulyUnanswered.length > 0 && (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
@@ -218,6 +230,39 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* LISTA 3: AVISOS COM LEITURA PENDENTE */}
+      {unreadNotices.length > 0 && (
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#f5f5f5]">Avisos com leitura pendente</h2>
+            <span className="text-xs text-[#a1a1a1]">{unreadNotices.length} aviso(s)</span>
+          </div>
+          <div className="divide-y divide-[#ffffff05] max-h-80 overflow-y-auto">
+            {unreadNotices.slice(0, 15).map((notice) => (
+              <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                      <span className="text-xs font-medium text-[#f5f5f5]">{notice.title || "Sem título"}</span>
+                      <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1 py-0.5 rounded-full">{notice.type || "Aviso"}</span>
+                    </div>
+                    <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">{notice.content}</p>
+                    {notice.student ? (
+                      <p className="text-[8px] text-[#525252] mt-0.5">Para: {notice.student.name}</p>
+                    ) : (
+                      <p className="text-[8px] text-[#525252] mt-0.5">Para: Todos os alunos</p>
+                    )}
+                  </div>
+                  <span className="text-[8px] text-[#525252] shrink-0">{new Date(notice.createdAt).toLocaleDateString("pt-BR")}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* FOOTER */}
       <div className="text-center py-4">
         <p className="text-[10px] text-[#525252]">Dashboard atualizado em tempo real | {new Date().toLocaleString("pt-BR")}</p>
       </div>
