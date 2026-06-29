@@ -48,12 +48,10 @@ export default async function DashboardPage() {
     },
   });
 
-  const noticesWithUnread = notices.filter((n) => {
-    if (n.studentId) {
-      return n.reads.length === 0;
-    }
-    return false;
-  });
+  // CORREÇÃO: avisos não lidos = todo aviso que não tem read registrado
+  // Se for aviso geral (sem studentId), considera não lido se reads.length === 0
+  // Se for aviso individual (com studentId), considera não lido se não há read para aquele studentId
+  const noticesWithUnread = notices.filter((n) => n.reads.length === 0);
 
   // 2. ALUNOS DO PROFESSOR
   const myStudents = await prisma.student.findMany({
@@ -65,7 +63,6 @@ export default async function DashboardPage() {
   const myStudentIds = myStudents.map((s) => s.id);
 
   // 3. WORKOUTS NÃO CONCLUÍDOS DOS ALUNOS DO PROFESSOR
-  // CORREÇÃO: busca todos os workouts e filtra quem NÃO está COMPLETED
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -91,7 +88,6 @@ export default async function DashboardPage() {
   // Filtra em código: pendente = tudo que NÃO está COMPLETED
   const pendingWorkouts = allWorkouts.filter((w) => w.status !== "COMPLETED");
 
-  // Agrupa por studentId
   const pendingByStudent = new Map<string, typeof pendingWorkouts>();
   for (const w of pendingWorkouts) {
     if (!pendingByStudent.has(w.studentId)) {
@@ -250,6 +246,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/* LISTAGENS DETALHADAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
@@ -282,6 +279,9 @@ export default async function DashboardPage() {
                         <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
                       </div>
                     ))}
+                    {s.workouts.length > 5 && (
+                      <span className="text-[9px] text-[#525252]">+{s.workouts.length - 5} treino(s)</span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -324,6 +324,44 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* AVISOS COM LEITURA PENDENTE - RESTAURADO */}
+      {noticesWithUnread.length > 0 && (
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#f5f5f5]">Avisos com leitura pendente</h2>
+            <span className="text-xs text-[#a1a1a1]">{noticesWithUnread.length} aviso(s)</span>
+          </div>
+          <div className="divide-y divide-[#ffffff05] max-h-60 overflow-y-auto">
+            {noticesWithUnread.slice(0, 10).map((notice) => (
+              <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                      <span className="text-xs font-medium text-[#f5f5f5]">{notice.title || "Sem título"}</span>
+                      <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1 py-0.5 rounded-full">
+                        {notice.type || "Aviso"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">
+                      {notice.content}
+                    </p>
+                    {notice.student && (
+                      <p className="text-[8px] text-[#525252] mt-0.5">
+                        Para: {notice.student.name}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[8px] text-[#525252] shrink-0">
+                    {new Date(notice.createdAt).toLocaleDateString("pt-BR")}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="text-center py-4">
         <p className="text-[10px] text-[#525252]">
