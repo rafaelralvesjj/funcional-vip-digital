@@ -1,180 +1,125 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
+// GET /api/questions - Listar perguntas
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const studentId = searchParams.get("studentId");
-    const authorId = searchParams.get("authorId");
-    const targetRole = searchParams.get("targetRole");
-    const professorId = searchParams.get("professorId");
-    const unreadOnly = searchParams.get("unreadOnly") === "true";
+    const teacherId = searchParams.get("teacherId");
+    const senderRole = searchParams.get("senderRole");
+    const answeredById = searchParams.get("answeredById");
+    const parentId = searchParams.get("parentId");
 
-    const where: any = {};
+    const where: any = {
+      parentId: parentId || null, // Só perguntas raiz (não respostas)
+    };
 
-    // Filtro por targetRole (ALUNO ou PROFESSOR)
-    if (targetRole) {
-      where.targetRole = targetRole;
-    }
+    if (studentId) where.studentId = studentId;
+    if (teacherId) where.teacherId = teacherId;
+    if (senderRole) where.senderRole = senderRole;
+    if (answeredById) where.answeredById = answeredById;
 
-    // Se pediu de um aluno específico: avisos gerais (studentId null) OU específicos daquele aluno
-    if (studentId) {
-      where.OR = [
-        { studentId: null },
-        { studentId: studentId },
-      ];
-    }
-
-    // Se pediu de um autor específico (professor/gestor)
-    if (authorId) {
-      where.authorId = authorId;
-    }
-
-    // Se pediu avisos para um professor específico
-    if (professorId) {
-      where.OR = [
-        { professorId: null },
-        { professorId: professorId },
-      ];
-    }
-
-    const notices = await prisma.notice.findMany({
+    const questions = await prisma.question.findMany({
       where,
       orderBy: { createdAt: "desc" },
       include: {
-        author: {
+        student: {
+          select: { id: true, name: true, user: { select: { id: true, name: true } } },
+        },
+        answeredBy: {
           select: { id: true, name: true, role: true },
         },
-        student: {
+        teacher: {
           select: { id: true, name: true },
         },
-        professor: {
-          select: { id: true, name: true },
+        children: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            answeredBy: { select: { id: true, name: true, role: true } },
+          },
         },
-        reads: studentId
-          ? {
-              where: { studentId },
-              select: { studentId: true, createdAt: true },
-            }
-          : false,
       },
       take: 50,
     });
 
-    // Formatar resposta
-    const formatted = notices.map((notice: any) => {
-      const result: any = {
-        id: notice.id,
-        title: notice.title,
-        content: notice.content,
-        type: notice.type,
-        authorId: notice.authorId,
-        studentId: notice.studentId,
-        targetRole: notice.targetRole,
-        professorId: notice.professorId,
-        createdAt: notice.createdAt,
-        updatedAt: notice.updatedAt,
-        author: notice.author,
-        student: notice.student,
-        professor: notice.professor,
-      };
-
-      // Se tem reads e pediu studentId, adicionar readByStudent
-      if (notice.reads && Array.isArray(notice.reads)) {
-        result.readByStudent = notice.reads.length > 0;
-        result.readAt = notice.reads[0]?.createdAt || null;
-      }
-
-      return result;
-    });
-
-    return NextResponse.json(formatted);
+    return NextResponse.json(questions);
   } catch (error) {
-    console.error("GET /api/notices error:", error);
-    return NextResponse.json({ error: "Erro ao buscar avisos" }, { status: 500 });
+    console.error("GET /api/questions error:", error);
+    return NextResponse.json({ error: "Erro ao buscar perguntas" }, { status: 500 });
   }
 }
 
+// POST /api/questions - Criar pergunta
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, content, type, studentId, authorId, targetRole, professorId } = body;
+    const { studentId, teacherId, content, parentId, senderRole, answeredById } = body;
 
-    if (!content || !authorId) {
+    if (!content || !studentId) {
       return NextResponse.json(
-        { error: "content e authorId são obrigatórios" },
+        { error: "content e studentId são obrigatórios" },
         { status: 400 }
       );
     }
 
-    const notice = await prisma.notice.create({
+    const question = await prisma.question.create({
       data: {
-        title: title?.trim() || null,
+        studentId,
+        teacherId: teacherId || null,
         content: content.trim(),
-        type: type || "AVISO",
-        authorId,
-        studentId: studentId || null,
-        targetRole: targetRole || "ALUNO",
-        professorId: professorId || null,
+        parentId: parentId || null,
+        senderRole: senderRole || "STUDENT",
+        answeredById: answeredById || null,
+        answer: parentId ? null : undefined,
+        answeredAt: parentId ? null : undefined,
       },
       include: {
-        author: { select: { id: true, name: true, role: true } },
         student: { select: { id: true, name: true } },
-        professor: { select: { id: true, name: true } },
+        teacher: { select: { id: true, name: true } },
+        answeredBy: { select: { id: true, name: true, role: true } },
       },
     });
 
-    return NextResponse.json(notice, { status: 201 });
+    return NextResponse.json(question, { status: 201 });
   } catch (error) {
-    console.error("POST /api/notices error:", error);
-    return NextResponse.json({ error: "Erro ao criar aviso" }, { status: 500 });
+    console.error("POST /api/questions error:", error);
+    return NextResponse.json({ error: "Erro ao criar pergunta" }, { status: 500 });
   }
 }
 
-export async function PUT(req: NextRequest) {
+// PUT /api/questions/[id]/answer - Responder pergunta
+export async function PUT(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const body = await req.json();
-    const { id, title, content } = body;
+    const { answer, answeredById } = body;
 
-    if (!id) {
-      return NextResponse.json({ error: "id é obrigatório" }, { status: 400 });
+    if (!answer || !answeredById) {
+      return NextResponse.json(
+        { error: "answer e answeredById são obrigatórios" },
+        { status: 400 }
+      );
     }
 
-    const data: any = {};
-    if (title !== undefined) data.title = title;
-    if (content !== undefined) data.content = content;
-
-    const notice = await prisma.notice.update({
-      where: { id },
-      data,
+    const question = await prisma.question.update({
+      where: { id: params.id },
+      data: {
+        answer,
+        answeredById,
+        answeredAt: new Date(),
+      },
       include: {
-        author: { select: { id: true, name: true, role: true } },
-        student: { select: { id: true, name: true } },
-        professor: { select: { id: true, name: true } },
+        student: { select: { name: true } },
+        answeredBy: { select: { name: true } },
       },
     });
 
-    return NextResponse.json(notice);
+    return NextResponse.json(question);
   } catch (error) {
-    console.error("PUT /api/notices error:", error);
-    return NextResponse.json({ error: "Erro ao atualizar aviso" }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
-
-    if (!id) {
-      return NextResponse.json({ error: "id é obrigatório" }, { status: 400 });
-    }
-
-    await prisma.notice.delete({ where: { id } });
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("DELETE /api/notices error:", error);
-    return NextResponse.json({ error: "Erro ao deletar aviso" }, { status: 500 });
+    console.error("Erro ao responder dúvida:", error);
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
