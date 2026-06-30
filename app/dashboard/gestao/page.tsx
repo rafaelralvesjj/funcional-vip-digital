@@ -186,25 +186,13 @@ export default function GestaoPage() {
     setSavingNotice(false);
   }
 
-  // ⬇️ CORREÇÃO: handleSendChat com validação de destinatário
+  // ⬇️ CORRIGIDO: handleSendChat com studentId garantido
   async function handleSendChat() {
     if (!chatContent.trim() || !currentUserId) return;
 
-    // Valida se tem destinatário específico selecionado
-    if (targetType === "TODOS_ALUNOS" && !selectedStudentId) {
-      setChatError("Selecione um aluno específico para enviar mensagem");
-      return;
-    }
-    if (targetType === "TODOS_PROFESSORES" && !selectedTeacherId) {
-      setChatError("Selecione um professor específico para enviar mensagem");
-      return;
-    }
-    if (targetType === "ALUNO_ESPECIFICO" && !selectedStudentId) {
-      setChatError("Selecione um aluno");
-      return;
-    }
-    if (targetType === "PROFESSOR_ESPECIFICO" && !selectedTeacherId) {
-      setChatError("Selecione um professor");
+    // Valida destinatário
+    if (!selectedStudentId && !selectedTeacherId) {
+      setChatError("Selecione um destinatário (aluno ou professor)");
       return;
     }
 
@@ -218,16 +206,14 @@ export default function GestaoPage() {
         senderRole: "GESTOR",
       };
 
-      // Se for para aluno (específico ou todos), precisa de studentId
-      if (targetType === "ALUNO_ESPECIFICO" || targetType === "TODOS_ALUNOS") {
+      // SEMPRE envia studentId se tiver
+      if (selectedStudentId) {
         body.studentId = selectedStudentId;
       }
 
-      // Se for para professor (específico ou todos), precisa de teacherId + studentId
-      if (targetType === "PROFESSOR_ESPECIFICO" || targetType === "TODOS_PROFESSORES") {
+      // Se for para professor, envia teacherId também
+      if (selectedTeacherId) {
         body.teacherId = selectedTeacherId;
-        // Para mensagens para professor, precisa de um studentId também
-        body.studentId = selectedStudentId || students[0]?.id;
       }
 
       const res = await fetch("/api/questions", {
@@ -243,7 +229,7 @@ export default function GestaoPage() {
         setTimeout(() => setChatSuccess(false), 3000);
       } else {
         const errData = await res.json().catch(() => ({}));
-        setChatError(errData.error || `Erro ${res.status}: falha ao enviar mensagem`);
+        setChatError(errData.error || `Erro ${res.status}: falha ao enviar`);
       }
     } catch (err: any) {
       setChatError(err?.message || "Erro de conexão");
@@ -279,7 +265,7 @@ export default function GestaoPage() {
     }
   };
 
-  // ⬇️ CORREÇÃO: verifica se pode enviar chat
+  // ⬇️ Verifica se pode enviar chat
   const canSendChat = () => {
     if (!chatContent.trim()) return false;
     if (targetType === "ALUNO_ESPECIFICO" && !selectedStudentId) return false;
@@ -317,9 +303,7 @@ export default function GestaoPage() {
             </div>
             {(targetType === "ALUNO_ESPECIFICO" || targetType === "TODOS_ALUNOS") && (
               <div>
-                <label className="text-xs text-[#a1a1a1] block mb-1.5">
-                  {targetType === "TODOS_ALUNOS" ? "Selecione um aluno *" : "Selecione o aluno"}
-                </label>
+                <label className="text-xs text-[#a1a1a1] block mb-1.5">Selecione o aluno *</label>
                 <select
                   value={selectedStudentId}
                   onChange={(e) => setSelectedStudentId(e.target.value)}
@@ -334,9 +318,7 @@ export default function GestaoPage() {
             )}
             {(targetType === "PROFESSOR_ESPECIFICO" || targetType === "TODOS_PROFESSORES") && (
               <div>
-                <label className="text-xs text-[#a1a1a1] block mb-1.5">
-                  {targetType === "TODOS_PROFESSORES" ? "Selecione um professor *" : "Selecione o professor"}
-                </label>
+                <label className="text-xs text-[#a1a1a1] block mb-1.5">Selecione o professor *</label>
                 <select
                   value={selectedTeacherId}
                   onChange={(e) => setSelectedTeacherId(e.target.value)}
@@ -426,8 +408,7 @@ export default function GestaoPage() {
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
               <h2 className="text-sm font-semibold text-[#f5f5f5]">Enviar mensagem para <span className="text-[#D4A373]">{targetLabel()}</span></h2>
 
-              {/* ⬇️ AVISO quando não tem destinatário selecionado */}
-              {targetType !== "ALUNO_ESPECIFICO" && !selectedStudentId && targetType !== "PROFESSOR_ESPECIFICO" && !selectedTeacherId && (
+              {!selectedStudentId && !selectedTeacherId && (
                 <div className="bg-amber-500/10 text-amber-400 text-xs p-3 rounded-lg text-center">
                   Selecione um destinatário específico nas opções acima
                 </div>
@@ -490,7 +471,7 @@ export default function GestaoPage() {
                                 </div>
                               </div>
                             ) : (
-                              <button onClick={() => setExpandedQuestion(q.id)} className="text-xs text-[#D4A373] hover:text-[#c49563] transition mt-1">Respondir</button>
+                              <button onClick={() => setExpandedQuestion(q.id)} className="text-xs text-[#D4A373] hover:text-[#c49563] transition mt-1">Responder</button>
                             )}
                           </div>
                         )}
