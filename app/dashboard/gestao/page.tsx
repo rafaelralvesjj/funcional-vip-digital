@@ -136,10 +136,9 @@ export default function GestaoPage() {
   async function fetchQuestions() {
     try {
       const params = new URLSearchParams();
-      if (targetType === "PROFESSOR_ESPECIFICO" && selectedTeacherId) {
+      if (selectedTeacherId) {
         params.set("teacherId", selectedTeacherId);
-      }
-      if (targetType === "ALUNO_ESPECIFICO" && selectedStudentId) {
+      } else if (selectedStudentId) {
         params.set("studentId", selectedStudentId);
       }
       const res = await fetch(`/api/questions?${params}`);
@@ -186,42 +185,24 @@ export default function GestaoPage() {
     setSavingNotice(false);
   }
 
-  // ⬇️ CORRIGIDO: handleSendChat com studentId garantido
   async function handleSendChat() {
     if (!chatContent.trim() || !currentUserId) return;
-
-    // Valida destinatário
     if (!selectedStudentId && !selectedTeacherId) {
       setChatError("Selecione um destinatário (aluno ou professor)");
       return;
     }
-
     setSendingChat(true);
     setChatError("");
     setChatSuccess(false);
-
     try {
-      const body: any = {
-        content: chatContent.trim(),
-        senderRole: "GESTOR",
-      };
-
-      // SEMPRE envia studentId se tiver
-      if (selectedStudentId) {
-        body.studentId = selectedStudentId;
-      }
-
-      // Se for para professor, envia teacherId também
-      if (selectedTeacherId) {
-        body.teacherId = selectedTeacherId;
-      }
-
+      const body: any = { content: chatContent.trim(), senderRole: "GESTOR" };
+      if (selectedStudentId) body.studentId = selectedStudentId;
+      if (selectedTeacherId) body.teacherId = selectedTeacherId;
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
       if (res.ok) {
         setChatSuccess(true);
         setChatContent("");
@@ -265,13 +246,9 @@ export default function GestaoPage() {
     }
   };
 
-  // ⬇️ Verifica se pode enviar chat
   const canSendChat = () => {
     if (!chatContent.trim()) return false;
-    if (targetType === "ALUNO_ESPECIFICO" && !selectedStudentId) return false;
-    if (targetType === "PROFESSOR_ESPECIFICO" && !selectedTeacherId) return false;
-    if (targetType === "TODOS_ALUNOS" && !selectedStudentId) return false;
-    if (targetType === "TODOS_PROFESSORES" && !selectedTeacherId) return false;
+    if (!selectedStudentId && !selectedTeacherId) return false;
     return true;
   };
 
@@ -287,12 +264,7 @@ export default function GestaoPage() {
               <label className="text-xs text-[#a1a1a1] block mb-1.5">Para quem?</label>
               <select
                 value={targetType}
-                onChange={(e) => {
-                  setTargetType(e.target.value as TargetType);
-                  setSelectedStudentId("");
-                  setSelectedTeacherId("");
-                  setChatError("");
-                }}
+                onChange={(e) => { setTargetType(e.target.value as TargetType); setSelectedStudentId(""); setSelectedTeacherId(""); setChatError(""); }}
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
               >
                 <option value="ALUNO_ESPECIFICO">Aluno específico</option>
@@ -304,43 +276,29 @@ export default function GestaoPage() {
             {(targetType === "ALUNO_ESPECIFICO" || targetType === "TODOS_ALUNOS") && (
               <div>
                 <label className="text-xs text-[#a1a1a1] block mb-1.5">Selecione o aluno *</label>
-                <select
-                  value={selectedStudentId}
-                  onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-                >
+                <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)}
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]">
                   <option value="">Selecione...</option>
-                  {students.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
+                  {students.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
                 </select>
               </div>
             )}
             {(targetType === "PROFESSOR_ESPECIFICO" || targetType === "TODOS_PROFESSORES") && (
               <div>
                 <label className="text-xs text-[#a1a1a1] block mb-1.5">Selecione o professor *</label>
-                <select
-                  value={selectedTeacherId}
-                  onChange={(e) => setSelectedTeacherId(e.target.value)}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-                >
+                <select value={selectedTeacherId} onChange={(e) => setSelectedTeacherId(e.target.value)}
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]">
                   <option value="">Selecione...</option>
-                  {teachers.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} {t._count ? `(${t._count.students} alunos)` : ""}</option>
-                  ))}
+                  {teachers.map((t) => (<option key={t.id} value={t.id}>{t.name} {t._count ? `(${t._count.students} alunos)` : ""}</option>))}
                 </select>
               </div>
             )}
           </div>
           <div className="flex gap-1 bg-[#0a0a0a] rounded-lg p-1 border border-[#ffffff10]">
-            <button
-              onClick={() => setActiveTab("mural")}
-              className={`flex-1 py-2 text-xs font-medium rounded-md transition ${activeTab === "mural" ? "bg-[#D4A373] text-[#0a0a0a]" : "text-[#a1a1a1] hover:text-[#f5f5f5]"}`}
-            >📢 Mural</button>
-            <button
-              onClick={() => setActiveTab("chat")}
-              className={`flex-1 py-2 text-xs font-medium rounded-md transition ${activeTab === "chat" ? "bg-[#D4A373] text-[#0a0a0a]" : "text-[#a1a1a1] hover:text-[#f5f5f5]"}`}
-            >💬 Chat</button>
+            <button onClick={() => setActiveTab("mural")}
+              className={`flex-1 py-2 text-xs font-medium rounded-md transition ${activeTab === "mural" ? "bg-[#D4A373] text-[#0a0a0a]" : "text-[#a1a1a1] hover:text-[#f5f5f5]"}`}>📢 Mural</button>
+            <button onClick={() => setActiveTab("chat")}
+              className={`flex-1 py-2 text-xs font-medium rounded-md transition ${activeTab === "chat" ? "bg-[#D4A373] text-[#0a0a0a]" : "text-[#a1a1a1] hover:text-[#f5f5f5]"}`}>💬 Chat</button>
           </div>
         </div>
 
@@ -362,8 +320,7 @@ export default function GestaoPage() {
               {noticeError && <p className="text-xs text-red-400">{noticeError}</p>}
               <button type="submit" disabled={savingNotice || !noticeContent.trim()}
                 className="w-full bg-[#D4A373] text-[#0a0a0a] font-bold rounded-xl py-2.5 text-sm transition hover:bg-[#b88a5e] disabled:opacity-50 disabled:cursor-not-allowed">
-                {savingNotice ? "Publicando..." : "Publicar aviso"}
-              </button>
+                {savingNotice ? "Publicando..." : "Publicar aviso"}</button>
               {noticeSuccess && <p className="text-xs text-green-400 text-center">Aviso publicado com sucesso!</p>}
             </form>
 
@@ -382,11 +339,7 @@ export default function GestaoPage() {
                           <p className="text-xs text-[#e5e5e5]">{notice.content}</p>
                           <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-[#6b6b6b]">
                             <span>{formatDate(notice.createdAt)}</span>
-                            {notice.author && (
-                              <span className="bg-[#D4A373]/10 text-[#D4A373] px-1.5 py-0.5 rounded-full">
-                                {notice.author.role === "GESTOR" ? "Gestor" : "Prof"}: {notice.author.name}
-                              </span>
-                            )}
+                            {notice.author && (<span className="bg-[#D4A373]/10 text-[#D4A373] px-1.5 py-0.5 rounded-full">{notice.author.role === "GESTOR" ? "Gestor" : "Prof"}: {notice.author.name}</span>)}
                             {notice.targetRole === "PROFESSOR" && <span className="bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded-full">Para professores</span>}
                             {notice.targetRole === "ALUNO" && <span className="bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded-full">Para alunos</span>}
                             {notice.professor && <span className="text-[#D4A373]">Prof específico: {notice.professor.name}</span>}
@@ -407,13 +360,9 @@ export default function GestaoPage() {
           <>
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
               <h2 className="text-sm font-semibold text-[#f5f5f5]">Enviar mensagem para <span className="text-[#D4A373]">{targetLabel()}</span></h2>
-
               {!selectedStudentId && !selectedTeacherId && (
-                <div className="bg-amber-500/10 text-amber-400 text-xs p-3 rounded-lg text-center">
-                  Selecione um destinatário específico nas opções acima
-                </div>
+                <div className="bg-amber-500/10 text-amber-400 text-xs p-3 rounded-lg text-center">Selecione um destinatário específico nas opções acima</div>
               )}
-
               <div>
                 <label className="text-xs text-[#a1a1a1] block mb-1">Mensagem *</label>
                 <textarea value={chatContent} onChange={(e) => { setChatContent(e.target.value); if (chatError) setChatError(""); }} rows={3} placeholder="Digite sua mensagem..." required
@@ -422,62 +371,81 @@ export default function GestaoPage() {
               {chatError && <p className="text-xs text-red-400">{chatError}</p>}
               <button onClick={handleSendChat} disabled={sendingChat || !canSendChat()}
                 className="w-full bg-[#D4A373] text-[#0a0a0a] font-bold rounded-xl py-2.5 text-sm transition hover:bg-[#b88a5e] disabled:opacity-50 disabled:cursor-not-allowed">
-                {sendingChat ? "Enviando..." : "Enviar mensagem"}
-              </button>
+                {sendingChat ? "Enviando..." : "Enviar mensagem"}</button>
               {chatSuccess && <p className="text-xs text-green-400 text-center">Mensagem enviada!</p>}
             </div>
 
+            {/* HISTÓRICO DE CONVERSAS - MOSTRANDO RESPOSTAS DOS PROFESSORES */}
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
               <h2 className="text-sm font-semibold text-[#f5f5f5] mb-4">Histórico de conversas</h2>
               {questions.length === 0 ? (
                 <p className="text-[#525252] text-xs text-center py-6">Nenhuma conversa encontrada.</p>
               ) : (
                 <div className="space-y-3">
-                  {questions.map((q) => (
-                    <div key={q.id} className="bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-medium text-[#f5f5f5]">{q.student?.name || "Aluno"}</span>
-                          {q.teacher && <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Prof: {q.teacher.name}</span>}
-                          <span className="text-[9px] text-[#D4A373] bg-[#D4A373]/10 px-1.5 py-0.5 rounded-full">
-                            {q.senderRole === "GESTOR" ? "Gestor" : q.senderRole === "TEACHER" ? "Professor" : "Aluno"}
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#e5e5e5] mt-1">{q.content}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[9px] text-[#525252]">{formatDate(q.createdAt)}</span>
-                          {q.answer ? <span className="text-[9px] text-green-400">Respondida</span> : <span className="text-[9px] text-amber-400">Pendente</span>}
-                        </div>
-                        {q.answer && (
-                          <div className="mt-2 pl-3 border-l-2 border-[#D4A373]/30">
-                            <div className="flex items-center gap-1">
-                              <span className="text-[9px] text-[#D4A373]">Resposta:</span>
-                              {q.answeredBy && <span className="text-[9px] text-[#525252]">- {q.answeredBy.name}</span>}
-                            </div>
-                            <p className="text-xs text-[#a1a1a1] mt-0.5">{q.answer}</p>
+                  {questions.map((q) => {
+                    // Verificar se tem resposta via answer direto OU via children
+                    const hasDirectAnswer = !!q.answer;
+                    const hasChildAnswer = q.children?.some((c) => c.answer);
+                    const isAnswered = hasDirectAnswer || hasChildAnswer;
+                    // Pegar a última resposta (direct ou children)
+                    const lastChildReply = q.children?.filter((c) => c.answer).pop();
+                    const replyAnswer = hasDirectAnswer ? q.answer : lastChildReply?.answer;
+                    const replyAuthor = hasDirectAnswer ? q.answeredBy?.name : lastChildReply?.answeredBy?.name;
+                    
+                    return (
+                      <div key={q.id} className="bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-medium text-[#f5f5f5]">{q.student?.name || "Aluno"}</span>
+                            {q.teacher && <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Prof: {q.teacher.name}</span>}
+                            <span className="text-[9px] text-[#D4A373] bg-[#D4A373]/10 px-1.5 py-0.5 rounded-full">
+                              {q.senderRole === "GESTOR" ? "Gestor" : q.senderRole === "TEACHER" ? "Professor" : "Aluno"}
+                            </span>
                           </div>
-                        )}
-                        {!q.answer && (
-                          <div className="mt-3">
-                            {expandedQuestion === q.id ? (
-                              <div className="space-y-2">
-                                <textarea value={replyContent} onChange={(e) => setReplyContent(e.target.value)} rows={2} placeholder="Digite sua resposta..."
-                                  className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none" />
-                                <div className="flex gap-2">
-                                  <button onClick={() => handleReply(q.id)} disabled={!replyContent.trim()}
-                                    className="text-xs bg-[#D4A373] text-[#0a0a0a] px-4 py-1.5 rounded-lg font-medium disabled:opacity-50">Responder</button>
-                                  <button onClick={() => { setExpandedQuestion(null); setReplyContent(""); }}
-                                    className="text-xs text-[#6b6b6b] px-3 py-1.5">Cancelar</button>
-                                </div>
-                              </div>
+                          <p className="text-xs text-[#e5e5e5] mt-1">{q.content}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[9px] text-[#525252]">{formatDate(q.createdAt)}</span>
+                            {isAnswered ? (
+                              <span className="text-[9px] text-green-400">Respondida</span>
                             ) : (
-                              <button onClick={() => setExpandedQuestion(q.id)} className="text-xs text-[#D4A373] hover:text-[#c49563] transition mt-1">Responder</button>
+                              <span className="text-[9px] text-amber-400">Pendente</span>
                             )}
                           </div>
-                        )}
+
+                          {/* MOSTRAR A RESPOSTA */}
+                          {isAnswered && replyAnswer && (
+                            <div className="mt-2 pl-3 border-l-2 border-green-500/30">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] text-green-400">Resposta do professor:</span>
+                                {replyAuthor && <span className="text-[9px] text-[#525252]">- {replyAuthor}</span>}
+                              </div>
+                              <p className="text-xs text-[#a1a1a1] mt-0.5">{replyAnswer}</p>
+                            </div>
+                          )}
+
+                          {/* OPÇÃO DE RESPONDER (só se não tiver resposta) */}
+                          {!isAnswered && (
+                            <div className="mt-3">
+                              {expandedQuestion === q.id ? (
+                                <div className="space-y-2">
+                                  <textarea value={replyContent} onChange={(e) => setReplyContent(e.target.value)} rows={2} placeholder="Digite sua resposta..."
+                                    className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none" />
+                                  <div className="flex gap-2">
+                                    <button onClick={() => handleReply(q.id)} disabled={!replyContent.trim()}
+                                      className="text-xs bg-[#D4A373] text-[#0a0a0a] px-4 py-1.5 rounded-lg font-medium disabled:opacity-50">Responder</button>
+                                    <button onClick={() => { setExpandedQuestion(null); setReplyContent(""); }}
+                                      className="text-xs text-[#6b6b6b] px-3 py-1.5">Cancelar</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button onClick={() => setExpandedQuestion(q.id)} className="text-xs text-[#D4A373] hover:text-[#c49563] transition mt-1">Responder</button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
