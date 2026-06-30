@@ -76,13 +76,19 @@ export async function POST(req: NextRequest) {
 }
 
 // PUT /api/questions/[id]/answer - Responder pergunta
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const body = await req.json();
     const { answer, answeredById } = body;
 
     if (!answer || !answeredById) {
-      return NextResponse.json({ error: "answer e answeredById são obrigatórios" }, { status: 400 });
+      return NextResponse.json(
+        { error: "answer e answeredById são obrigatórios" },
+        { status: 400 }
+      );
     }
 
     const question = await prisma.question.update({
