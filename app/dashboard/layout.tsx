@@ -24,12 +24,13 @@ export default function DashboardLayout({
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
   ];
 
-  // Itens exclusivos do gestor
+  // Itens exclusivos do gestor (COM GESTÃO ADICIONADO)
   const gestorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/mural", label: "Mural", icon: "message" },
+    { href: "/dashboard/gestao", label: "Gestão", icon: "message" },
     { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
     { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "user" },
@@ -110,6 +111,7 @@ export default function DashboardLayout({
             </svg>
           </button>
         </div>
+
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)}
@@ -124,6 +126,7 @@ export default function DashboardLayout({
             </Link>
           ))}
         </nav>
+
         <div className="p-4 border-t border-[#ffffff10] space-y-3">
           <div className="px-4 py-2">
             <p className="text-sm font-medium text-[#f5f5f5] truncate">{session?.user?.name || "Usuário"}</p>
@@ -154,7 +157,6 @@ export default function DashboardLayout({
             {session?.user?.name?.charAt(0).toUpperCase() || "U"}
           </div>
         </div>
-
         {children}
       </main>
     </div>
