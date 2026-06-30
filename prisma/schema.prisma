@@ -18,12 +18,15 @@ model User {
   role          String    @default("GESTOR")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
+
   accounts      Account[]
   sessions      Session[]
   students      Student[]
   notices       Notice[]
   questions     Question[]
   studentAuths  Student[] @relation("StudentAuth")
+  noticeProfessors Notice[] @relation("NoticeProfessor")
+  questionTeachers Question[] @relation("QuestionTeacher")
 
   @@map("users")
 }
@@ -206,7 +209,6 @@ model Notice {
   professorId String?  @map("professorId")
   expiresAt   DateTime? @map("expires_at")
   createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
 
   author    User        @relation(fields: [authorId], references: [id])
   student   Student?    @relation(fields: [studentId], references: [id])
