@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const parentId = searchParams.get("parentId");
 
     const where: any = {
-      parentId: parentId || null, // Só perguntas raiz (não respostas)
+      parentId: parentId || null,
     };
 
     if (studentId) where.studentId = studentId;
@@ -24,20 +24,12 @@ export async function GET(req: NextRequest) {
       where,
       orderBy: { createdAt: "desc" },
       include: {
-        student: {
-          select: { id: true, name: true, user: { select: { id: true, name: true } } },
-        },
-        answeredBy: {
-          select: { id: true, name: true, role: true },
-        },
-        teacher: {
-          select: { id: true, name: true },
-        },
+        student: { select: { id: true, name: true } },
+        answeredBy: { select: { id: true, name: true, role: true } },
+        teacher: { select: { id: true, name: true } },
         children: {
           orderBy: { createdAt: "asc" },
-          include: {
-            answeredBy: { select: { id: true, name: true, role: true } },
-          },
+          include: { answeredBy: { select: { id: true, name: true, role: true } } },
         },
       },
       take: 50,
@@ -57,10 +49,7 @@ export async function POST(req: NextRequest) {
     const { studentId, teacherId, content, parentId, senderRole, answeredById } = body;
 
     if (!content || !studentId) {
-      return NextResponse.json(
-        { error: "content e studentId são obrigatórios" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "content e studentId são obrigatórios" }, { status: 400 });
     }
 
     const question = await prisma.question.create({
@@ -71,8 +60,6 @@ export async function POST(req: NextRequest) {
         parentId: parentId || null,
         senderRole: senderRole || "STUDENT",
         answeredById: answeredById || null,
-        answer: parentId ? null : undefined,
-        answeredAt: parentId ? null : undefined,
       },
       include: {
         student: { select: { id: true, name: true } },
@@ -89,28 +76,18 @@ export async function POST(req: NextRequest) {
 }
 
 // PUT /api/questions/[id]/answer - Responder pergunta
-export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     const body = await req.json();
     const { answer, answeredById } = body;
 
     if (!answer || !answeredById) {
-      return NextResponse.json(
-        { error: "answer e answeredById são obrigatórios" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "answer e answeredById são obrigatórios" }, { status: 400 });
     }
 
     const question = await prisma.question.update({
       where: { id: params.id },
-      data: {
-        answer,
-        answeredById,
-        answeredAt: new Date(),
-      },
+      data: { answer, answeredById, answeredAt: new Date() },
       include: {
         student: { select: { name: true } },
         answeredBy: { select: { name: true } },
