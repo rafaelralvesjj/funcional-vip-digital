@@ -11,9 +11,15 @@ export async function GET(req: NextRequest) {
     const answeredById = searchParams.get("answeredById");
     const parentId = searchParams.get("parentId");
 
-    const where: any = {
-      parentId: parentId || null,
-    };
+    const where: any = {};
+
+    // Se parentId foi passado explicitamente, usa ele
+    // Se não, busca apenas perguntas raiz (parentId null)
+    if (parentId !== null) {
+      where.parentId = parentId || null;
+    } else {
+      where.parentId = null;
+    }
 
     if (studentId) where.studentId = studentId;
     if (teacherId) where.teacherId = teacherId;
@@ -42,25 +48,64 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/questions - Criar pergunta
+// POST /api/questions - Criar pergunta/mensagem
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { studentId, teacherId, content, parentId, senderRole, answeredById } = body;
 
-    if (!content || !studentId) {
-      return NextResponse.json({ error: "content e studentId são obrigatórios" }, { status: 400 });
+    if (!content) {
+      return NextResponse.json({ error: "content é obrigatório" }, { status: 400 });
     }
 
+    // Monta os dados para criar a pergunta
+    const questionData: any = {
+      content: content.trim(),
+      senderRole: senderRole || "STUDENT",
+    };
+
+    // studentId: obrigatório para STUDENT, opcional para GESTOR/TEACHER
+    if (studentId) {
+      questionData.studentId = studentId;
+    } else {
+      // Se não veio studentId e é GESTOR/TEACHER, busca um aluno automaticamente
+      if (senderRole === "GESTOR" || senderRole === "TEACHER") {
+        // Tenta pegar um aluno vinculado ao teacherId
+        if (teacherId) {
+          const student = await prisma.student.findFirst({
+            where: { userId: teacherId },
+            orderBy: { name: "asc" },
+            select: { id: true },
+          });
+          if (student) {
+            questionData.studentId = student.id;
+          }
+        }
+        
+        // Se ainda não achou, pega o primeiro aluno do sistema
+        if (!questionData.studentId) {
+          const firstStudent = await prisma.student.findFirst({
+            orderBy: { name: "asc" },
+            select: { id: true },
+          });
+          if (firstStudent) {
+            questionData.studentId = firstStudent.id;
+          }
+        }
+      }
+
+      // Se ainda não tem studentId e o sender não é GESTOR/TEACHER, erro
+      if (!questionData.studentId && (!senderRole || senderRole === "STUDENT")) {
+        return NextResponse.json({ error: "studentId é obrigatório" }, { status: 400 });
+      }
+    }
+
+    if (teacherId) questionData.teacherId = teacherId;
+    if (parentId) questionData.parentId = parentId;
+    if (answeredById) questionData.answeredById = answeredById;
+
     const question = await prisma.question.create({
-      data: {
-        studentId,
-        teacherId: teacherId || null,
-        content: content.trim(),
-        parentId: parentId || null,
-        senderRole: senderRole || "STUDENT",
-        answeredById: answeredById || null,
-      },
+      data: questionData,
       include: {
         student: { select: { id: true, name: true } },
         teacher: { select: { id: true, name: true } },
