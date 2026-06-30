@@ -8,23 +8,22 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(uuid())
-  name      String?
-  email     String?   @unique
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
   emailVerified DateTime? @map("email_verified")
-  image     String?
-  password  String?   @map("password")
-  phone     String?   @map("phone")
-  role      String    @default("GESTOR")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-
-  accounts    Account[]
-  sessions    Session[]
-  students    Student[]
-  notices     Notice[]
-  questions   Question[]
-  studentAuths Student[] @relation("StudentAuth")
+  image         String?
+  password      String?   @map("password")
+  phone         String?   @map("phone")
+  role          String    @default("GESTOR")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  accounts      Account[]
+  sessions      Session[]
+  students      Student[]
+  notices       Notice[]
+  questions     Question[]
+  studentAuths  Student[] @relation("StudentAuth")
 
   @@map("users")
 }
@@ -61,55 +60,55 @@ model Session {
 }
 
 model Student {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  name      String
-  email     String?
-  phone     String?
-  notes     String?
-  image     String?
-  active    Boolean  @default(true)
-  userAuthId String? @unique @map("user_auth_id")
-  onboardingCompleto Boolean @default(false) @map("onboarding_completo")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(uuid())
+  userId             String   @map("user_id")
+  name               String
+  email              String?
+  phone              String?
+  notes              String?
+  image              String?
+  active             Boolean  @default(true)
+  userAuthId         String?  @unique @map("user_auth_id")
+  onboardingCompleto Boolean  @default(false) @map("onboarding_completo")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userAuth  User?     @relation("StudentAuth", fields: [userAuthId], references: [id])
-  workoutPlans   WorkoutPlan[]
-  checkIns       CheckIn[]
-  weeklyFeedbacks WeeklyFeedback[]
-  notices        Notice[]
-  questions      Question[]
-  workouts       Workout[]
-  avaliacoes     Avaliacao[]
-  noticeReads    NoticeRead[]
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAuth         User?             @relation("StudentAuth", fields: [userAuthId], references: [id])
+  workoutPlans     WorkoutPlan[]
+  checkIns         CheckIn[]
+  weeklyFeedbacks  WeeklyFeedback[]
+  notices          Notice[]
+  questions        Question[]
+  workouts         Workout[]
+  avaliacoes       Avaliacao[]
+  noticeReads      NoticeRead[]
 
   @@map("students")
 }
 
 model Avaliacao {
-  id            String   @id @default(uuid())
-  alunoId       String   @map("aluno_id")
-  tipo          String
-  mesReferencia Int      @map("mes_referencia")
-  objetivo      String
-  metaEspecifica String? @map("meta_especifica")
-  peso          Float?
-  altura        Float?
-  abdomen       Float?
-  quadril       Float?
-  braco         Float?
-  coxa          Float?
-  gluteo        Float?
-  preferencia   String?
-  equipamentos  String?
-  frequencia    Int?
-  nivelAtividade String? @map("nivel_atividade")
-  lesoes        String?
-  fotoUrl       String? @map("foto_url")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  alunoId        String   @map("aluno_id")
+  tipo           String
+  mesReferencia  Int      @map("mes_referencia")
+  objetivo       String
+  metaEspecifica String?  @map("meta_especifica")
+  peso           Float?
+  altura         Float?
+  abdomen        Float?
+  quadril        Float?
+  braco          Float?
+  coxa           Float?
+  gluteo         Float?
+  preferencia    String?
+  equipamentos   String?
+  frequencia     Int?
+  nivelAtividade String?  @map("nivel_atividade")
+  lesoes         String?
+  fotoUrl        String?  @map("foto_url")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   student Student @relation(fields: [alunoId], references: [id], onDelete: Cascade)
 
@@ -127,7 +126,7 @@ model WorkoutPlan {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   exercises Exercise[]
   workouts  Workout[]
 
@@ -164,7 +163,7 @@ model Workout {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   workoutPlan WorkoutPlan? @relation(fields: [workoutPlanId], references: [id])
 
   @@map("workouts")
@@ -197,18 +196,22 @@ model WeeklyFeedback {
 }
 
 model Notice {
-  id        String   @id @default(uuid())
-  title     String?
-  content   String
-  type      String   @default("AVISO")
-  authorId  String   @map("author_id")
-  studentId String?  @map("student_id")
-  expiresAt DateTime? @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  title       String?
+  content     String
+  type        String   @default("AVISO")
+  authorId    String   @map("author_id")
+  studentId   String?  @map("student_id")
+  targetRole  String   @default("ALUNO") @map("targetRole")
+  professorId String?  @map("professorId")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  author  User      @relation(fields: [authorId], references: [id])
-  student Student?  @relation(fields: [studentId], references: [id])
-  reads   NoticeRead[]
+  author    User        @relation(fields: [authorId], references: [id])
+  student   Student?    @relation(fields: [studentId], references: [id])
+  reads     NoticeRead[]
+  professor User?       @relation("NoticeProfessor", fields: [professorId], references: [id])
 
   @@map("notices")
 }
@@ -227,23 +230,26 @@ model NoticeRead {
 }
 
 model Question {
-  id            String    @id @default(uuid())
-  studentId     String    @map("student_id")
-  parentId      String?   @map("parent_id")
-  content       String
-  videoUrl      String?   @map("video_url")
-  imageUrl      String?   @map("image_url")
-  answer        String?
-  answeredAt    DateTime? @map("answered_at")
-  answeredById  String?   @map("answered_by_id")
-  resolvedAt    DateTime? @map("resolved_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id           String    @id @default(uuid())
+  studentId    String    @map("student_id")
+  parentId     String?   @map("parent_id")
+  content      String
+  videoUrl     String?   @map("video_url")
+  imageUrl     String?   @map("image_url")
+  answer       String?
+  answeredAt   DateTime? @map("answered_at")
+  answeredById String?   @map("answered_by_id")
+  resolvedAt   DateTime? @map("resolved_at")
+  teacherId    String?   @map("teacherId")
+  senderRole   String    @default("STUDENT") @map("senderRole")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  student    Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  parent     Question? @relation("QuestionThread", fields: [parentId], references: [id])
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent     Question?  @relation("QuestionThread", fields: [parentId], references: [id])
   children   Question[] @relation("QuestionThread")
-  answeredBy User?     @relation(fields: [answeredById], references: [id])
+  answeredBy User?      @relation(fields: [answeredById], references: [id])
+  teacher    User?       @relation("QuestionTeacher", fields: [teacherId], references: [id])
 
   @@map("questions")
 }
