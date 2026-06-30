@@ -10,7 +10,6 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/auth/signin");
-
   const userId = session.user.id;
   const userRole = (session.user as any)?.role || "PROFESSOR";
   const isGestor = userRole === "GESTOR";
@@ -26,7 +25,7 @@ export default async function DashboardPage() {
   // 2. WORKOUTS PENDENTES
   const pendingWorkouts = await prisma.workout.findMany({
     where: { studentId: { in: myStudentIds }, status: "PENDENTE" },
-    select: { id: true, studentId: true, date: true, status: true, workoutPlan: { select: { name: true } } },
+    select: { id: true, studentId: true, date: true, workoutPlan: { select: { name: true } } },
     orderBy: { date: "desc" },
   });
   const pendingByStudent = new Map<string, typeof pendingWorkouts>();
@@ -37,9 +36,9 @@ export default async function DashboardPage() {
   const studentsWithPendingWorkouts = myStudents.map((s) => ({ ...s, workouts: pendingByStudent.get(s.id) || [] })).filter((s) => s.workouts.length > 0);
   const totalPendingWorkouts = studentsWithPendingWorkouts.reduce((acc, s) => acc + s.workouts.length, 0);
 
-  // 3. AVISOS (leitura pendente)
+  // 3. AVISOS (leitura pendente) - do professor para alunos OU do gestor para alunos
   const allNotices = await prisma.notice.findMany({
-    where: isGestor ? undefined : { authorId: userId },
+    where: isGestor ? { targetRole: "ALUNO" } : { authorId: userId },
     orderBy: { createdAt: "desc" },
     include: { student: { select: { id: true, name: true } }, author: { select: { id: true, name: true, role: true } }, reads: { where: { studentId: { in: myStudentIds } }, select: { studentId: true } } },
   });
@@ -52,14 +51,14 @@ export default async function DashboardPage() {
 
   // 4. DUVIDAS SEM RESPOSTA
   const unansweredQuestions = await prisma.question.findMany({
-    where: { parentId: null, answer: null, answeredAt: null, studentId: { in: myStudentIds } },
+    where: { parentId: null, answer: null, answeredAt: null, studentId: { in: myStudentIds }, senderRole: "STUDENT" },
     include: { student: { select: { id: true, name: true, user: { select: { id: true, name: true } } } }, children: { select: { id: true, answer: true } } },
     orderBy: { createdAt: "desc" }, take: 20,
   });
   const trulyUnanswered = unansweredQuestions.filter((q) => !q.children.some((c) => c.answer !== null));
   const totalUnansweredQuestions = trulyUnanswered.length;
 
-  // 5. AVISOS DA GESTÃO (só professor)
+  // 5. AVISOS DA GESTÃO (só professor - recebidos do gestor)
   let gestaoNotices: any[] = [];
   if (!isGestor) {
     gestaoNotices = await prisma.notice.findMany({
@@ -69,7 +68,7 @@ export default async function DashboardPage() {
     });
   }
 
-  // 6. MENSAGENS DA GESTÃO (só professor)
+  // 6. MENSAGENS DA GESTÃO (só professor - recebidas do gestor)
   let gestaoMessages: any[] = [];
   if (!isGestor) {
     gestaoMessages = await prisma.question.findMany({
@@ -79,6 +78,32 @@ export default async function DashboardPage() {
         student: { select: { id: true, name: true } },
         answeredBy: { select: { id: true, name: true } },
         children: { orderBy: { createdAt: "asc" }, select: { id: true, answer: true, content: true, answeredBy: { select: { name: true } } } },
+      },
+    });
+  }
+
+  // 7. (NOVO) GESTOR: AVISOS ENVIADOS PARA PROFESSORES
+  let gestorNoticesToTeachers: any[] = [];
+  let totalGestorUnreadNotices = 0;
+  if (isGestor) {
+    gestorNoticesToTeachers = await prisma.notice.findMany({
+      where: { authorId: userId, targetRole: "PROFESSOR" },
+      orderBy: { createdAt: "desc" }, take: 20,
+      include: { author: { select: { id: true, name: true } }, professor: { select: { id: true, name: true } } },
+    });
+    totalGestorUnreadNotices = gestorNoticesToTeachers.length;
+  }
+
+  // 8. (NOVO) GESTOR: MENSAGENS ENVIADAS PARA PROFESSORES (com status de resposta)
+  let gestorSentMessages: any[] = [];
+  if (isGestor) {
+    gestorSentMessages = await prisma.question.findMany({
+      where: { senderRole: "GESTOR" },
+      orderBy: { createdAt: "desc" }, take: 20,
+      include: {
+        student: { select: { id: true, name: true } },
+        teacher: { select: { id: true, name: true } },
+        children: { orderBy: { createdAt: "asc" }, select: { id: true, answer: true, answeredBy: { select: { name: true } } } },
       },
     });
   }
@@ -234,7 +259,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* LISTA 4: AVISOS DA GESTÃO (só professor) */}
+      {/* LISTA 4: AVISOS DA GESTÃO (só professor - ou avisos enviados para professores se for gestor) */}
       {!isGestor && gestaoNotices.length > 0 && (
         <div className="bg-[#111111] border border-[#D4A373]/20 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between bg-[#D4A373]/5">
@@ -261,8 +286,34 @@ export default async function DashboardPage() {
           </div>
         </div>
       )}
+      {isGestor && gestorNoticesToTeachers.length > 0 && (
+        <div className="bg-[#111111] border border-[#D4A373]/20 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between bg-[#D4A373]/5">
+            <h2 className="text-sm font-semibold text-[#f5f5f5]">📢 Avisos enviados para professores</h2>
+            <span className="text-xs text-[#a1a1a1]">{gestorNoticesToTeachers.length} aviso(s)</span>
+          </div>
+          <div className="divide-y divide-[#ffffff05]">
+            {gestorNoticesToTeachers.map((notice) => (
+              <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#D4A373] shrink-0" />
+                    <span className="text-xs font-medium text-[#f5f5f5]">{notice.title || "Comunicado"}</span>
+                    <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1.5 py-0.5 rounded-full">Gestão</span>
+                  </div>
+                  <p className="text-xs text-[#e5e5e5] mt-1">{notice.content}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-[8px] text-[#525252]">{new Date(notice.createdAt).toLocaleDateString("pt-BR")}</span>
+                    {notice.professor && <span className="text-[8px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Prof: {notice.professor.name}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* LISTA 5: MENSAGENS DA GESTÃO (só professor) */}
+      {/* LISTA 5: MENSAGENS DA GESTÃO (só professor - ou mensagens enviadas se for gestor) */}
       {!isGestor && gestaoMessages.length > 0 && (
         <div className="bg-[#111111] border border-blue-500/20 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between bg-blue-500/5">
@@ -289,6 +340,42 @@ export default async function DashboardPage() {
                     ) : (
                       <div className="mt-2">
                         <GestaoMessageReply questionId={msg.id} studentId={msg.studentId} teacherId={userId} currentUserId={userId} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {isGestor && gestorSentMessages.length > 0 && (
+        <div className="bg-[#111111] border border-blue-500/20 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between bg-blue-500/5">
+            <h2 className="text-sm font-semibold text-[#f5f5f5]">💬 Mensagens enviadas para professores</h2>
+            <span className="text-xs text-[#a1a1a1]">{gestorSentMessages.length} mensagem(ns)</span>
+          </div>
+          <div className="divide-y divide-[#ffffff05]">
+            {gestorSentMessages.map((msg) => {
+              const hasReply = msg.children?.some((c: any) => c.answer);
+              const lastReply = msg.children?.filter((c: any) => c.answer).pop();
+              return (
+                <div key={msg.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Gestão</span>
+                      {msg.teacher && <span className="text-[9px] text-[#D4A373] bg-[#D4A373]/10 px-1.5 py-0.5 rounded-full">Para: {msg.teacher.name}</span>}
+                      {hasReply ? <span className="text-[9px] text-green-400">Respondida ✅</span> : <span className="text-[9px] text-amber-400">Aguardando</span>}
+                    </div>
+                    <p className="text-xs text-[#e5e5e5] mt-1">{msg.content}</p>
+                    <div className="text-[9px] text-[#525252] mt-0.5">{new Date(msg.createdAt).toLocaleDateString("pt-BR")}</div>
+                    {lastReply && (
+                      <div className="mt-2 pl-3 border-l-2 border-green-500/30">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-green-400">Resposta do professor:</span>
+                          {lastReply.answeredBy && <span className="text-[9px] text-[#525252]">- {lastReply.answeredBy.name}</span>}
+                        </div>
+                        <p className="text-xs text-[#a1a1a1] mt-0.5">{lastReply.answer}</p>
                       </div>
                     )}
                   </div>
