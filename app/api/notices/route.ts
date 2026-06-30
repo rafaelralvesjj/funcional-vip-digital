@@ -6,9 +6,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const studentId = searchParams.get("studentId");
     const authorId = searchParams.get("authorId");
+    const targetRole = searchParams.get("targetRole");
+    const professorId = searchParams.get("professorId");
     const unreadOnly = searchParams.get("unreadOnly") === "true";
 
     const where: any = {};
+
+    // Filtro por targetRole (ALUNO ou PROFESSOR)
+    if (targetRole) {
+      where.targetRole = targetRole;
+    }
 
     // Se pediu de um aluno específico: avisos gerais (studentId null) OU específicos daquele aluno
     if (studentId) {
@@ -23,6 +30,14 @@ export async function GET(req: NextRequest) {
       where.authorId = authorId;
     }
 
+    // Se pediu avisos para um professor específico
+    if (professorId) {
+      where.OR = [
+        { professorId: null },
+        { professorId: professorId },
+      ];
+    }
+
     const notices = await prisma.notice.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -31,6 +46,9 @@ export async function GET(req: NextRequest) {
           select: { id: true, name: true, role: true },
         },
         student: {
+          select: { id: true, name: true },
+        },
+        professor: {
           select: { id: true, name: true },
         },
         reads: studentId
@@ -43,7 +61,7 @@ export async function GET(req: NextRequest) {
       take: 50,
     });
 
-    // Formatar resposta - se veio com studentId, incluir readByStudent
+    // Formatar resposta
     const formatted = notices.map((notice: any) => {
       const result: any = {
         id: notice.id,
@@ -52,10 +70,13 @@ export async function GET(req: NextRequest) {
         type: notice.type,
         authorId: notice.authorId,
         studentId: notice.studentId,
+        targetRole: notice.targetRole,
+        professorId: notice.professorId,
         createdAt: notice.createdAt,
         updatedAt: notice.updatedAt,
         author: notice.author,
         student: notice.student,
+        professor: notice.professor,
       };
 
       // Se tem reads e pediu studentId, adicionar readByStudent
@@ -77,7 +98,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, content, type, studentId, authorId } = body;
+    const { title, content, type, studentId, authorId, targetRole, professorId } = body;
 
     if (!content || !authorId) {
       return NextResponse.json(
@@ -93,10 +114,13 @@ export async function POST(req: NextRequest) {
         type: type || "AVISO",
         authorId,
         studentId: studentId || null,
+        targetRole: targetRole || "ALUNO",
+        professorId: professorId || null,
       },
       include: {
         author: { select: { id: true, name: true, role: true } },
         student: { select: { id: true, name: true } },
+        professor: { select: { id: true, name: true } },
       },
     });
 
@@ -126,6 +150,7 @@ export async function PUT(req: NextRequest) {
       include: {
         author: { select: { id: true, name: true, role: true } },
         student: { select: { id: true, name: true } },
+        professor: { select: { id: true, name: true } },
       },
     });
 
