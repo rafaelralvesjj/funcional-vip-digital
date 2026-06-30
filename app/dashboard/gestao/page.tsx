@@ -269,6 +269,7 @@ export default function GestaoPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         <h1 className="text-xl font-bold text-[#D4A373]">Gestão</h1>
 
+        {/* SELETOR DE DESTINATÁRIO + ABAS */}
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
           <h2 className="text-sm font-semibold text-[#f5f5f5]">Comunicação</h2>
 
@@ -320,6 +321,7 @@ export default function GestaoPage() {
             )}
           </div>
 
+          {/* ABAS */}
           <div className="flex gap-1 bg-[#0a0a0a] rounded-lg p-1 border border-[#ffffff10]">
             <button
               onClick={() => setActiveTab("mural")}
@@ -336,13 +338,13 @@ export default function GestaoPage() {
           </div>
         </div>
 
+        {/* CONTEÚDO DA ABA MURAL */}
         {activeTab === "mural" && (
           <>
             <form onSubmit={handlePublishNotice} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
               <h2 className="text-sm font-semibold text-[#f5f5f5]">
                 Publicar aviso para <span className="text-[#D4A373]">{targetLabel()}</span>
               </h2>
-
               <div>
                 <label className="text-xs text-[#a1a1a1] block mb-1">Título (opcional)</label>
                 <input
@@ -353,7 +355,6 @@ export default function GestaoPage() {
                   className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
                 />
               </div>
-
               <div>
                 <label className="text-xs text-[#a1a1a1] block mb-1">Descrição *</label>
                 <textarea
@@ -365,9 +366,7 @@ export default function GestaoPage() {
                   className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none"
                 />
               </div>
-
               {noticeError && <p className="text-xs text-red-400">{noticeError}</p>}
-
               <button
                 type="submit"
                 disabled={savingNotice || !noticeContent.trim()}
@@ -375,7 +374,6 @@ export default function GestaoPage() {
               >
                 {savingNotice ? "Publicando..." : "Publicar aviso"}
               </button>
-
               {noticeSuccess && (
                 <p className="text-xs text-green-400 text-center">Aviso publicado com sucesso!</p>
               )}
@@ -392,9 +390,7 @@ export default function GestaoPage() {
                       <div className="flex items-start gap-2">
                         <div className="w-2 h-2 rounded-full bg-[#D4A373] mt-1.5 shrink-0" />
                         <div className="flex-1 min-w-0">
-                          {notice.title && (
-                            <h3 className="text-sm font-semibold text-[#f5f5f5] mb-0.5">{notice.title}</h3>
-                          )}
+                          {notice.title && <h3 className="text-sm font-semibold text-[#f5f5f5] mb-0.5">{notice.title}</h3>}
                           <p className="text-xs text-[#e5e5e5]">{notice.content}</p>
                           <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-[#6b6b6b]">
                             <span>{formatDate(notice.createdAt)}</span>
@@ -426,13 +422,13 @@ export default function GestaoPage() {
           </>
         )}
 
+        {/* CONTEÚDO DA ABA CHAT */}
         {activeTab === "chat" && (
           <>
             <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
               <h2 className="text-sm font-semibold text-[#f5f5f5]">
                 Enviar mensagem para <span className="text-[#D4A373]">{targetLabel()}</span>
               </h2>
-
               <div>
                 <label className="text-xs text-[#a1a1a1] block mb-1">Mensagem *</label>
                 <textarea
@@ -444,9 +440,7 @@ export default function GestaoPage() {
                   className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none"
                 />
               </div>
-
               {chatError && <p className="text-xs text-red-400">{chatError}</p>}
-
               <button
                 onClick={handleSendChat}
                 disabled={sendingChat || !chatContent.trim()}
@@ -454,7 +448,6 @@ export default function GestaoPage() {
               >
                 {sendingChat ? "Enviando..." : "Enviar mensagem"}
               </button>
-
               {chatSuccess && (
                 <p className="text-xs text-green-400 text-center">Mensagem enviada!</p>
               )}
@@ -471,13 +464,9 @@ export default function GestaoPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-medium text-[#f5f5f5]">
-                              {q.student?.name || "Aluno"}
-                            </span>
+                            <span className="text-xs font-medium text-[#f5f5f5]">{q.student?.name || "Aluno"}</span>
                             {q.teacher && (
-                              <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
-                                Prof: {q.teacher.name}
-                              </span>
+                              <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">Prof: {q.teacher.name}</span>
                             )}
                             <span className="text-[9px] text-[#D4A373] bg-[#D4A373]/10 px-1.5 py-0.5 rounded">
                               {q.senderRole === "GESTOR" ? "Gestor" : q.senderRole === "TEACHER" ? "Professor" : "Aluno"}
@@ -497,9 +486,7 @@ export default function GestaoPage() {
                             <div className="mt-2 pl-3 border-l-2 border-[#D4A373]/30">
                               <div className="flex items-center gap-1">
                                 <span className="text-[9px] text-[#D4A373]">Resposta:</span>
-                                {q.answeredBy && (
-                                  <span className="text-[9px] text-[#525252]">- {q.answeredBy.name}</span>
-                                )}
+                                {q.answeredBy && <span className="text-[9px] text-[#525252]">- {q.answeredBy.name}</span>}
                               </div>
                               <p className="text-xs text-[#a1a1a1] mt-0.5">{q.answer}</p>
                             </div>
@@ -554,8 +541,4 @@ export default function GestaoPage() {
       </div>
     </div>
   );
-}
-",
-  "fileName": "page.tsx",
-  "language": "typescript"
 }
