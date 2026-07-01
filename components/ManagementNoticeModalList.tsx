@@ -13,6 +13,9 @@ type ManagementNoticeItem = {
   authorRole?: string | null;
   targetLabel: string;
   readByCurrentUser?: boolean;
+  readStatusLabel?: string;
+  readStatusVariant?: "read" | "pending" | "neutral";
+  readStatusDescription?: string;
 };
 
 type Props = {
@@ -49,6 +52,36 @@ export default function ManagementNoticeModalList({
 
   function isRead(notice: ManagementNoticeItem): boolean {
     return readNoticeIds.has(notice.id) || Boolean(notice.readByCurrentUser);
+  }
+
+  function getStatusLabel(notice: ManagementNoticeItem): string {
+    if (markAsReadOnClose) {
+      return isRead(notice) ? "Lido" : "Pendente";
+    }
+
+    return notice.readStatusLabel || (isRead(notice) ? "Lido" : "Pendente");
+  }
+
+  function getStatusVariant(notice: ManagementNoticeItem): "read" | "pending" | "neutral" {
+    if (markAsReadOnClose) {
+      return isRead(notice) ? "read" : "pending";
+    }
+
+    return notice.readStatusVariant || (isRead(notice) ? "read" : "pending");
+  }
+
+  function getStatusClass(notice: ManagementNoticeItem): string {
+    const variant = getStatusVariant(notice);
+
+    if (variant === "read") {
+      return "bg-emerald-500/10 text-emerald-400";
+    }
+
+    if (variant === "neutral") {
+      return "bg-zinc-500/10 text-zinc-400";
+    }
+
+    return "bg-amber-500/10 text-amber-400";
   }
 
   async function closeModal() {
@@ -105,14 +138,9 @@ export default function ManagementNoticeModalList({
 
                   {showReadStatus && (
                     <span
-                      className={
-                        "inline-flex mt-2 px-2 py-0.5 rounded text-[10px] " +
-                        (read
-                          ? "bg-emerald-500/10 text-emerald-400"
-                          : "bg-amber-500/10 text-amber-400")
-                      }
+                      className={"inline-flex mt-2 px-2 py-0.5 rounded text-[10px] " + getStatusClass(notice)}
                     >
-                      {read ? "Lido" : "Pendente"}
+                      {getStatusLabel(notice)}
                     </span>
                   )}
                 </div>
@@ -147,16 +175,13 @@ export default function ManagementNoticeModalList({
 
                 {showReadStatus && (
                   <span
-                    className={
-                      "inline-flex mt-2 px-2 py-0.5 rounded text-[10px] " +
-                      (isRead(selectedNotice)
-                        ? "bg-emerald-500/10 text-emerald-400"
-                        : "bg-amber-500/10 text-amber-400")
-                    }
+                    className={"inline-flex mt-2 px-2 py-0.5 rounded text-[10px] " + getStatusClass(selectedNotice)}
                   >
-                    {isRead(selectedNotice) ? "Lido" : "Pendente"}
+                    {getStatusLabel(selectedNotice)}
                   </span>
                 )}
+
+
               </div>
 
               <button
