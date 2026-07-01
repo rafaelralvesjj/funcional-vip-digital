@@ -3,91 +3,72 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/auth';
 
+type SenderRole = 'GESTOR' | 'TEACHER' | 'STUDENT';
+
 function deriveSenderRole(role: unknown): 'GESTOR' | 'TEACHER' | 'STUDENT' | null {
-  const normalized = String(role || '').toUpperCase();
-  if (normalized === 'GESTOR' || normalized === 'ADMIN' || normalized === 'ADMINISTRADOR') {
-    return 'GESTOR';
-  }
-  if (normalized === 'TEACHER' || normalized === 'PROFESSOR' || normalized === 'INSTRUCTOR') {
-    return 'TEACHER';
-  }
-  if (normalized === 'STUDENT' || normalized === 'ALUNO') {
-    return 'STUDENT';
-  }
+  if (typeof role !== 'string') return null;
+  const upper = role.toUpperCase();
+  if (upper === 'GESTOR') return 'GESTOR';
+  if (upper === 'TEACHER' || upper === 'PROFESSOR') return 'TEACHER';
+  if (upper === 'STUDENT' || upper === 'ALUNO') return 'STUDENT';
   return null;
 }
 
 const includePayload = {
-  student: { select: { id: true, name: true } },
-  teacher: { select: { id: true, name: true } },
-  answeredBy: { select: { id: true, name: true, role: true } },
-  children: {
-    orderBy: { createdAt: 'asc' as const },
+  student: true,
+  teacher: true,
+  answeredBy: true,
+  parent: {
     include: {
-      answeredBy: { select: { id: true, name: true, role: true } },
-      student: { select: { id: true, name: true } },
-      teacher: { select: { id: true, name: true } },
+      student: true,
+      teacher: true,
+      answeredBy: true,
     },
   },
-};
+  children: {
+    include: {
+      student: true,
+      teacher: true,
+      answeredBy: true,
+      children: {
+        include: {
+          student: true,
+          teacher: true,
+          answeredBy: true,
+        },
+      },
+    },
+  },
+} as const;
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
-    }
-    const userId = session.user.id as string;
-    const role = (session.user as any)?.role;
-    const senderRole = deriveSenderRole(role);
-    if (!senderRole) {
-      return NextResponse.json({ message: 'Perfil inválido' }, { status: 403 });
+    if (!session?.user) {
+      return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
-    const studentIdParam = searchParams.get('studentId');
-    const teacherIdParam = searchParams.get('teacherId');
-    const senderRoleParam = searchParams.get('senderRole');
-    const answeredByIdParam = searchParams.get('answeredById');
-    // direction é aceito via query string, mas ignorado no where do Prisma
+    const studentId = searchParams.get('studentId') || undefined;
+    const teacherId = searchParams.get('teacherId') || undefined;
+    const parentId = searchParams.get('parentId') || undefined;
+    const senderRole = searchParams.get('senderRole') || undefined;
 
-    const baseWhere: any = { parentId: null };
-
-    if (answeredByIdParam) {
-      baseWhere.answeredById = answeredByIdParam;
-    }
-
-    if (senderRole === 'GESTOR') {
-      baseWhere.senderRole = senderRoleParam || 'GESTOR';
-      if (studentIdParam) baseWhere.studentId = studentIdParam;
-      if (teacherIdParam) baseWhere.teacherId = teacherIdParam;
-    } else if (senderRole === 'TEACHER') {
-      baseWhere.teacherId = userId;
-      if (studentIdParam) baseWhere.studentId = studentIdParam;
-      if (senderRoleParam) baseWhere.senderRole = senderRoleParam;
-    } else if (senderRole === 'STUDENT') {
-      const student = await prisma.student.findFirst({
-        where: { userId },
-        select: { id: true },
-      });
-      if (!student) {
-        return NextResponse.json({ message: 'Aluno não encontrado' }, { status: 404 });
-      }
-      baseWhere.studentId = student.id;
-      if (teacherIdParam) baseWhere.teacherId = teacherIdParam;
-      if (senderRoleParam) baseWhere.senderRole = senderRoleParam;
-    }
+    const where: Record<string, unknown> = {};
+    if (studentId) where.studentId = studentId;
+    if (teacherId) where.teacherId = teacherId;
+    if (parentId) where.parentId = parentId;
+    if (senderRole) where.senderRole = senderRole;
 
     const questions = await prisma.question.findMany({
-      where: baseWhere,
+      where,
       include: includePayload,
-      orderBy: { createdAt: 'desc' as const },
-      take: 100,
+      orderBy: { createdAt: 'desc' },
     });
 
     return NextResponse.json(questions);
   } catch (error) {
-    console.error('[GET /api/questions]', error);
+    console.error('GET /api/questions error:', error);
     return NextResponse.json({ message: 'Erro ao buscar mensagens' }, { status: 500 });
   }
 }
@@ -95,97 +76,96 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
-    }
-    const userId = session.user.id as string;
-    const role = (session.user as any)?.role;
-    const senderRole = deriveSenderRole(role);
-    if (!senderRole) {
-      return NextResponse.json({ message: 'Perfil inválido' }, { status: 403 });
+    if (!session?.user) {
+      return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
     }
 
-    const body = await req.json();
-    const { studentId, teacherId, recipientId, content, parentId } = body;
+    const userId = session.user.id;
+    const body = await req.json().catch(() => ({}));
 
-    const text = typeof content === 'string' ? content.trim() : '';
+    const text: string = typeof body.content === 'string' ? body.content.trim() : '';
     if (!text) {
-      return NextResponse.json({ message: 'Conteúdo obrigatório' }, { status: 400 });
+      return NextResponse.json({ message: 'Conteúdo da mensagem é obrigatório' }, { status: 400 });
     }
 
-    let finalTeacherId: string | undefined = teacherId;
-    if (!finalTeacherId && recipientId) {
-      finalTeacherId = recipientId;
+    const senderRole = deriveSenderRole(body.senderRole);
+    if (!senderRole) {
+      return NextResponse.json({ message: 'Papel do remetente inválido' }, { status: 400 });
     }
 
-    if (parentId) {
-      const parent = await prisma.question.findUnique({ where: { id: parentId } });
-      if (!parent) {
-        return NextResponse.json({ message: 'Mensagem pai não encontrada' }, { status: 404 });
-      }
+    const finalStudentId: string | null =
+      typeof body.studentId === 'string' && body.studentId.trim() !== '' ? body.studentId.trim() : null;
+    const finalTeacherId: string | null =
+      typeof body.teacherId === 'string' && body.teacherId.trim() !== '' ? body.teacherId.trim() : null;
 
-      const rootId = parent.parentId || parent.id;
-      const root = await prisma.question.findUnique({ where: { id: rootId } });
-      if (!root) {
-        return NextResponse.json({ message: 'Thread não encontrada' }, { status: 404 });
-      }
+    const parentId: string | null =
+      typeof body.parentId === 'string' && body.parentId.trim() !== '' ? body.parentId.trim() : null;
 
+    if (senderRole === 'GESTOR') {
+      if (!finalStudentId && !finalTeacherId) {
+        return NextResponse.json(
+          { message: 'Informe um aluno ou professor destinatário' },
+          { status: 400 }
+        );
+      }
       const created = await prisma.question.create({
         data: {
-          parentId: root.id,
-          studentId: root.studentId,
-          teacherId: root.teacherId,
+          studentId: finalStudentId || null,
+          teacherId: finalTeacherId || null,
           content: text,
           senderRole: senderRole as any,
           answeredById: userId,
+          ...(parentId ? { parentId } : {}),
         },
         include: includePayload,
       });
-
       return NextResponse.json(created, { status: 201 });
     }
 
-    let finalStudentId: string | undefined = studentId;
-
     if (senderRole === 'STUDENT') {
-      if (!finalStudentId) {
-        const student = await prisma.student.findFirst({
-          where: { userId },
-          select: { id: true },
-        });
-        if (!student) {
-          return NextResponse.json({ message: 'Aluno não encontrado' }, { status: 404 });
-        }
-        finalStudentId = student.id;
-      }
       if (!finalTeacherId) {
-        return NextResponse.json({ message: 'Professor destinatário obrigatório' }, { status: 400 });
+        return NextResponse.json(
+          { message: 'Professor é obrigatório' },
+          { status: 400 }
+        );
       }
-    } else if (senderRole === 'TEACHER') {
-      finalTeacherId = finalTeacherId || userId;
-      if (!finalStudentId) {
-        return NextResponse.json({ message: 'Aluno destinatário obrigatório' }, { status: 400 });
-      }
-    } else if (senderRole === 'GESTOR') {
-      if (!finalTeacherId || !finalStudentId) {
-        return NextResponse.json({ message: 'Professor e aluno obrigatórios' }, { status: 400 });
-      }
+      const created = await prisma.question.create({
+        data: {
+          studentId: finalStudentId,
+          teacherId: finalTeacherId,
+          content: text,
+          senderRole: senderRole as any,
+          ...(parentId ? { parentId } : {}),
+        },
+        include: includePayload,
+      });
+      return NextResponse.json(created, { status: 201 });
     }
 
-    const created = await prisma.question.create({
-      data: {
-        studentId: finalStudentId!,
-        teacherId: finalTeacherId!,
-        content: text,
-        senderRole: senderRole as any,
-        answeredById: userId,
-      },
-      include: includePayload,
-    });
+    if (senderRole === 'TEACHER') {
+      if (!finalStudentId) {
+        return NextResponse.json(
+          { message: 'Aluno é obrigatório' },
+          { status: 400 }
+        );
+      }
+      const created = await prisma.question.create({
+        data: {
+          studentId: finalStudentId,
+          teacherId: finalTeacherId,
+          content: text,
+          senderRole: senderRole as any,
+          answeredById: userId,
+          ...(parentId ? { parentId } : {}),
+        },
+        include: includePayload,
+      });
+      return NextResponse.json(created, { status: 201 });
+    }
 
-    return NextResponse.json(created, { status: 201 });
+    return NextResponse.json({ message: 'Papel do remetente não suportado' }, { status: 400 });
   } catch (error) {
-    console.error('[POST /api/questions]', error);
+    console.error('POST /api/questions error:', error);
     return NextResponse.json({ message: 'Erro ao criar mensagem' }, { status: 500 });
   }
 }
@@ -193,50 +173,39 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
-    }
-    const userId = session.user.id as string;
-    const role = (session.user as any)?.role;
-    const senderRole = deriveSenderRole(role);
-    if (!senderRole) {
-      return NextResponse.json({ message: 'Perfil inválido' }, { status: 403 });
+    if (!session?.user) {
+      return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
     }
 
-    const body = await req.json();
-    const { id, answer, content } = body;
-
-    const text = String(answer || content || '').trim();
-    if (!id || !text) {
-      return NextResponse.json({ message: 'ID e conteúdo obrigatórios' }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const id: string = typeof body.id === 'string' ? body.id.trim() : '';
+    if (!id) {
+      return NextResponse.json({ message: 'ID da mensagem é obrigatório' }, { status: 400 });
     }
 
-    const target = await prisma.question.findUnique({ where: { id } });
-    if (!target) {
-      return NextResponse.json({ message: 'Mensagem não encontrada' }, { status: 404 });
+    const data: Record<string, unknown> = {};
+    if (typeof body.content === 'string' && body.content.trim() !== '') {
+      data.content = body.content.trim();
+    }
+    if (typeof body.studentId === 'string') {
+      data.studentId = body.studentId.trim() || null;
+    }
+    if (typeof body.teacherId === 'string') {
+      data.teacherId = body.teacherId.trim() || null;
+    }
+    if (typeof body.answeredById === 'string' && body.answeredById.trim() !== '') {
+      data.answeredById = body.answeredById.trim();
     }
 
-    const rootId = target.parentId || target.id;
-    const root = await prisma.question.findUnique({ where: { id: rootId } });
-    if (!root) {
-      return NextResponse.json({ message: 'Thread não encontrada' }, { status: 404 });
-    }
-
-    const created = await prisma.question.create({
-      data: {
-        parentId: root.id,
-        studentId: root.studentId,
-        teacherId: root.teacherId,
-        content: text,
-        senderRole: senderRole as any,
-        answeredById: userId,
-      },
+    const updated = await prisma.question.update({
+      where: { id },
+      data,
       include: includePayload,
     });
 
-    return NextResponse.json(created, { status: 201 });
+    return NextResponse.json(updated);
   } catch (error) {
-    console.error('[PUT /api/questions]', error);
-    return NextResponse.json({ message: 'Erro ao responder mensagem' }, { status: 500 });
+    console.error('PUT /api/questions error:', error);
+    return NextResponse.json({ message: 'Erro ao atualizar mensagem' }, { status: 500 });
   }
 }
