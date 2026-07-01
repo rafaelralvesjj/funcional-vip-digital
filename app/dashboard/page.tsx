@@ -704,7 +704,7 @@ export default async function DashboardPage() {
               Nenhum aviso pendente de leitura.
             </p>
           ) : (
-            <div className="divide-y divide-[#ffffff10]">
+            <div className="divide-y divide-[#ffffff10] max-h-[520px] overflow-y-auto pr-2">
               {pendingNoticeItems.map((item) => (
                 <div key={`${item.notice.id}-${item.student.id}`} className="py-4">
                   <div className="flex items-center justify-between gap-4">
