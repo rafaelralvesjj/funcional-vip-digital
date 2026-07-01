@@ -47,6 +47,7 @@ interface ThreadMessage {
 }
 
 type TargetType = "ALUNO_ESPECIFICO" | "TODOS_ALUNOS" | "PROFESSOR_ESPECIFICO" | "TODOS_PROFESSORES";
+type ChatTargetType = "ALUNO_ESPECIFICO" | "PROFESSOR_ESPECIFICO";
 type ActiveTab = "mural" | "chat";
 
 // --- HELPERS ---
@@ -197,12 +198,12 @@ export default function GestaoPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("mural");
   const [currentUserId, setCurrentUserId] = useState("");
   const [targetType, setTargetType] = useState<TargetType>("TODOS_ALUNOS");
-  const [chatTargetType, setChatTargetType] = useState<TargetType>("TODOS_ALUNOS");
+  const [chatTargetType, setChatTargetType] = useState<ChatTargetType>("ALUNO_ESPECIFICO");
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const [chatSelectedStudentId, setChatSelectedStudentId] = useState("");
   const [chatSelectedTeacherId, setChatSelectedTeacherId] = useState("");
-  
+
   const [students, setStudents] = useState<Student[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -296,7 +297,7 @@ export default function GestaoPage() {
     setNoticeTitle("");
     setNoticeContent("");
     setSavingNotice(false);
-    
+
     const nRes = await fetch('/api/notices', { cache: 'no-store' });
     const nData = await safeJson(nRes);
     setNotices(extractArray(nData, ["notices"]).map(normalizeNotice));
@@ -311,8 +312,23 @@ export default function GestaoPage() {
     let studentId = null;
     let teacherId = null;
 
-    if (chatTargetType === "ALUNO_ESPECIFICO") { studentId = chatSelectedStudentId; }
-    else if (chatTargetType === "PROFESSOR_ESPECIFICO") { teacherId = chatSelectedTeacherId; }
+    if (chatTargetType === "ALUNO_ESPECIFICO") {
+      if (!chatSelectedStudentId) {
+        setChatError("Selecione um aluno para iniciar a conversa.");
+        setSendingChat(false);
+        return;
+      }
+
+      studentId = chatSelectedStudentId;
+    } else if (chatTargetType === "PROFESSOR_ESPECIFICO") {
+      if (!chatSelectedTeacherId) {
+        setChatError("Selecione um professor para iniciar a conversa.");
+        setSendingChat(false);
+        return;
+      }
+
+      teacherId = chatSelectedTeacherId;
+    }
 
     const res = await fetch('/api/questions', {
       method: 'POST',
@@ -334,6 +350,8 @@ export default function GestaoPage() {
 
     setChatSuccess("Mensagem enviada com sucesso!");
     setChatContent("");
+    setChatSelectedStudentId("");
+    setChatSelectedTeacherId("");
     setSendingChat(false);
 
     const qRes = await fetch('/api/questions', { cache: 'no-store' });
@@ -400,7 +418,7 @@ export default function GestaoPage() {
             <div className="lg:col-span-1">
               <form onSubmit={handlePublishNotice} className="bg-[#111111] border border-[#ffffff10] p-6 rounded-xl space-y-4">
                 <h2 className="text-lg font-semibold mb-4">Novo Aviso</h2>
-                
+
                 <div>
                   <label className="block text-xs text-[#a1a1a1] mb-1">Destinatário</label>
                   <select
@@ -521,12 +539,15 @@ export default function GestaoPage() {
                   <label className="block text-xs text-[#a1a1a1] mb-1">Destinatário</label>
                   <select
                     value={chatTargetType}
-                    onChange={(e) => setChatTargetType(e.target.value as TargetType)}
+                    onChange={(e) => {
+                      const value = e.target.value as ChatTargetType;
+                      setChatTargetType(value);
+                      setChatSelectedStudentId("");
+                      setChatSelectedTeacherId("");
+                    }}
                     className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373]"
                   >
-                    <option value="TODOS_ALUNOS">Todos os alunos</option>
                     <option value="ALUNO_ESPECIFICO">Aluno específico</option>
-                    <option value="TODOS_PROFESSORES">Todos os professores</option>
                     <option value="PROFESSOR_ESPECIFICO">Professor específico</option>
                   </select>
                 </div>
@@ -607,7 +628,7 @@ export default function GestaoPage() {
                         <span className="text-[10px] text-[#a1a1a1]">{formatDateTime(q.createdAt)}</span>
                       </div>
                       <p className="text-sm text-[#f5f5f5] mb-3">{q.content}</p>
-                      
+
                       <div className="flex justify-between items-center">
                         <span className={`text-[10px] ${q.children && q.children.length > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
                           {getThreadStatus(q)}
