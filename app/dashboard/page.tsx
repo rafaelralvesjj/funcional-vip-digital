@@ -716,8 +716,6 @@ export default async function DashboardPage() {
             <div className="divide-y divide-[#ffffff10]">
               {managementMessages.map((message) => {
                 const replies = message.children || [];
-                const lastReply = replies[replies.length - 1];
-
                 return (
                   <div key={message.id} className="py-4">
                     <div className="flex items-center justify-between gap-4">
@@ -734,17 +732,32 @@ export default async function DashboardPage() {
                       {message.content}
                     </p>
 
-                    {lastReply ? (
-                      <div className="mt-3 p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]">
-                        <p className="text-[#a1a1a1] text-sm">
-                          Última resposta de {lastReply.answeredBy?.name || 'Professor'}:
-                        </p>
+                    {replies.length > 0 && (
+                      <div className="mt-3 space-y-3">
+                        {replies.map((reply) => (
+                          <div
+                            key={reply.id}
+                            className="p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]"
+                          >
+                            <div className="flex items-center justify-between gap-3 mb-1">
+                              <p className="text-[#a1a1a1] text-sm">
+                                Resposta de {reply.answeredBy?.name || reply.teacher?.name || reply.student?.name || 'Usuário'}
+                              </p>
 
-                        <p className="text-[#f5f5f5] mt-1">
-                          {lastReply.content}
-                        </p>
+                              <p className="text-[#a1a1a1] text-xs">
+                                {formatDate(reply.createdAt)}
+                              </p>
+                            </div>
+
+                            <p className="text-[#f5f5f5] mt-1">
+                              {reply.content}
+                            </p>
+                          </div>
+                        ))}
                       </div>
-                    ) : !isGestor ? (
+                    )}
+
+                    {!isGestor && (
                       <div className="mt-3">
                         <GestaoMessageReply
                           questionId={message.id}
@@ -753,7 +766,7 @@ export default async function DashboardPage() {
                           currentUserId={userId}
                         />
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 );
               })}
