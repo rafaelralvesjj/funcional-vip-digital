@@ -12,22 +12,28 @@ type ManagementNoticeItem = {
   authorName: string;
   authorRole?: string | null;
   targetLabel: string;
+  readByCurrentUser?: boolean;
 };
 
 type Props = {
   notices: ManagementNoticeItem[];
   emptyMessage?: string;
   markAsReadOnClose?: boolean;
+  showReadStatus?: boolean;
 };
 
 export default function ManagementNoticeModalList({
   notices,
   emptyMessage = "Nenhum aviso da gestão.",
   markAsReadOnClose = false,
+  showReadStatus = false,
 }: Props) {
   const router = useRouter();
   const [selectedNotice, setSelectedNotice] = useState<ManagementNoticeItem | null>(null);
   const [closing, setClosing] = useState(false);
+  const [readNoticeIds, setReadNoticeIds] = useState<Set<string>>(
+    () => new Set(notices.filter((notice) => notice.readByCurrentUser).map((notice) => notice.id))
+  );
 
   function formatDate(dateStr: string): string {
     if (!dateStr) return "--/--/----";
@@ -41,17 +47,27 @@ export default function ManagementNoticeModalList({
     });
   }
 
+  function isRead(notice: ManagementNoticeItem): boolean {
+    return readNoticeIds.has(notice.id) || Boolean(notice.readByCurrentUser);
+  }
+
   async function closeModal() {
     if (!selectedNotice || closing) return;
 
     setClosing(true);
 
     try {
-      if (markAsReadOnClose) {
+      if (markAsReadOnClose && !isRead(selectedNotice)) {
         await fetch("/api/notices/read", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ noticeId: selectedNotice.id }),
+        });
+
+        setReadNoticeIds((current) => {
+          const updated = new Set(current);
+          updated.add(selectedNotice.id);
+          return updated;
         });
       }
     } finally {
@@ -71,24 +87,43 @@ export default function ManagementNoticeModalList({
   return (
     <>
       <div className="divide-y divide-[#ffffff10]">
-        {notices.map((notice) => (
-          <button
-            key={notice.id}
-            type="button"
-            onClick={() => setSelectedNotice(notice)}
-            className="w-full py-4 text-left hover:bg-[#0a0a0a] transition-colors rounded-lg px-2"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <p className="text-[#f5f5f5] font-medium">
-                {notice.title || "Aviso da gestão"}
-              </p>
+        {notices.map((notice) => {
+          const read = isRead(notice);
 
-              <p className="text-[#a1a1a1] text-sm shrink-0">
-                {formatDate(notice.createdAt)}
-              </p>
-            </div>
-          </button>
-        ))}
+          return (
+            <button
+              key={notice.id}
+              type="button"
+              onClick={() => setSelectedNotice(notice)}
+              className="w-full py-4 text-left hover:bg-[#0a0a0a] transition-colors rounded-lg px-2"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-[#f5f5f5] font-medium truncate">
+                    {notice.title || "Aviso da gestão"}
+                  </p>
+
+                  {showReadStatus && (
+                    <span
+                      className={
+                        "inline-flex mt-2 px-2 py-0.5 rounded text-[10px] " +
+                        (read
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : "bg-amber-500/10 text-amber-400")
+                      }
+                    >
+                      {read ? "Lido" : "Pendente"}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-[#a1a1a1] text-sm shrink-0">
+                  {formatDate(notice.createdAt)}
+                </p>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {selectedNotice && (
@@ -109,6 +144,19 @@ export default function ManagementNoticeModalList({
                 <p className="text-xs text-[#a1a1a1] mt-1">
                   {formatDate(selectedNotice.createdAt)}
                 </p>
+
+                {showReadStatus && (
+                  <span
+                    className={
+                      "inline-flex mt-2 px-2 py-0.5 rounded text-[10px] " +
+                      (isRead(selectedNotice)
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : "bg-amber-500/10 text-amber-400")
+                    }
+                  >
+                    {isRead(selectedNotice) ? "Lido" : "Pendente"}
+                  </span>
+                )}
               </div>
 
               <button
