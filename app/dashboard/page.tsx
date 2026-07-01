@@ -126,6 +126,7 @@ export default async function DashboardPage() {
         },
         include: {
           student: { include: { user: { select: { name: true } } } },
+          teacher: { select: { name: true } },
           answeredBy: { select: { name: true } },
           children: {
             orderBy: { createdAt: 'asc' },
@@ -316,7 +317,7 @@ export default async function DashboardPage() {
             ) : (
               <ul className="space-y-3">
                 {(isGestor ? sentGestaoMessages : gestaoMessages).map((msg) => {
-                  const replies = msg.children.filter(
+                  const replies = (msg.children || []).filter(
                     (c) => c.senderRole === 'TEACHER'
                   );
                   const lastReply = replies[replies.length - 1];
