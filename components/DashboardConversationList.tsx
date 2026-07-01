@@ -9,7 +9,7 @@ type ConversationReply = {
   id: string;
   studentId?: string | null;
   teacherId?: string | null;
-  content: string; a
+  content: string;
   senderRole: string;
   createdAt: string;
   resolvedAt?: string | null;
@@ -82,11 +82,13 @@ function getRoleBadgeClass(role: string): string {
 
 function getThreadStatus(conversation: ConversationItem): string {
   if (conversation.resolvedAt) return "Encerrada";
+
   return conversation.children.length > 0 ? "Respondido" : "Aguardando resposta";
 }
 
 function getThreadStatusClass(conversation: ConversationItem): string {
   if (conversation.resolvedAt) return "text-zinc-400";
+
   return conversation.children.length > 0 ? "text-emerald-400" : "text-amber-400";
 }
 
@@ -117,6 +119,7 @@ export default function DashboardConversationList({
   emptyMessage = "Nenhuma conversa encontrada.",
 }: Props) {
   const router = useRouter();
+
   const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
   const [replyContentById, setReplyContentById] = useState<Record<string, string>>({});
   const [sendingConversationId, setSendingConversationId] = useState<string | null>(null);
@@ -182,6 +185,7 @@ export default function DashboardConversationList({
       router.refresh();
     } catch (error) {
       console.error("DashboardConversationList reply error:", error);
+
       setErrorById((current) => ({
         ...current,
         [conversation.id]: "Erro ao enviar resposta.",
@@ -233,6 +237,7 @@ export default function DashboardConversationList({
       router.refresh();
     } catch (error) {
       console.error("DashboardConversationList close error:", error);
+
       setErrorById((current) => ({
         ...current,
         [conversation.id]: "Erro ao encerrar conversa.",
