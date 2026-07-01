@@ -483,6 +483,10 @@ export default async function DashboardPage() {
     })),
   }));
 
+  const activeManagementMessagesCount = managementMessages.filter(
+    (message) => !message.resolvedAt
+  ).length;
+
   function getManagementNoticeReadStatus(notice: (typeof notices)[number]): {
     readByCurrentUser: boolean;
     readStatusLabel: string;
@@ -581,7 +585,7 @@ export default async function DashboardPage() {
     },
     {
       label: labels.managementMessagesCard,
-      value: managementMessages.length,
+      value: activeManagementMessagesCount,
     },
   ];
 
