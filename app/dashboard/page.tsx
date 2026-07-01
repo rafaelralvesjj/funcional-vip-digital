@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../api/auth/[...nextauth]/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import DashboardMessageReply from '@/components/DashboardMessageReply';
+import DashboardConversationList from '@/components/DashboardConversationList';
 import ManagementNoticeModalList from '@/components/ManagementNoticeModalList';
 import DashboardAutoRefresh from '@/components/DashboardAutoRefresh';
 
@@ -441,6 +441,48 @@ export default async function DashboardPage() {
     return 'Todos os alunos e professores';
   }
 
+  function getMessageAuthorName(message: (typeof managementMessages)[number]): string {
+    if (message.senderRole === 'GESTOR') {
+      return message.answeredBy?.name || 'Gestor';
+    }
+
+    if (message.senderRole === 'STUDENT') {
+      return message.student?.name || 'Aluno';
+    }
+
+    if (message.senderRole === 'TEACHER' || message.senderRole === 'PROFESSOR') {
+      return message.teacher?.name || message.answeredBy?.name || 'Professor';
+    }
+
+    return message.answeredBy?.name || 'Usuário';
+  }
+
+  const managementConversationItems = managementMessages.map((message) => ({
+    id: message.id,
+    studentId: message.studentId || null,
+    teacherId: message.teacherId || null,
+    content: message.content,
+    senderRole: message.senderRole || 'GESTOR',
+    createdAt: message.createdAt.toISOString(),
+    resolvedAt: message.resolvedAt ? message.resolvedAt.toISOString() : null,
+    authorName: getMessageAuthorName(message),
+    targetLabel: getManagementMessageTargetLabel(message),
+    children: (message.children || []).map((reply) => ({
+      id: reply.id,
+      studentId: reply.studentId || null,
+      teacherId: reply.teacherId || null,
+      content: reply.content,
+      senderRole: reply.senderRole || 'GESTOR',
+      createdAt: reply.createdAt.toISOString(),
+      resolvedAt: reply.resolvedAt ? reply.resolvedAt.toISOString() : null,
+      authorName:
+        reply.answeredBy?.name ||
+        reply.teacher?.name ||
+        reply.student?.name ||
+        'Usuário',
+    })),
+  }));
+
   function getManagementNoticeReadStatus(notice: (typeof notices)[number]): {
     readByCurrentUser: boolean;
     readStatusLabel: string;
@@ -708,69 +750,12 @@ export default async function DashboardPage() {
             {labels.managementMessagesList}
           </h2>
 
-          {managementMessages.length === 0 ? (
-            <p className="text-[#a1a1a1]">
-              Nenhuma mensagem da gestão.
-            </p>
-          ) : (
-            <div className="divide-y divide-[#ffffff10]">
-              {managementMessages.map((message) => {
-                const replies = message.children || [];
-                return (
-                  <div key={message.id} className="py-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <p className="text-[#f5f5f5] font-medium">
-                        {getManagementMessageTargetLabel(message)}
-                      </p>
-
-                      <p className="text-[#a1a1a1] text-sm">
-                        {formatDate(message.createdAt)}
-                      </p>
-                    </div>
-
-                    <p className="text-[#a1a1a1] mt-2">
-                      {message.content}
-                    </p>
-
-                    {replies.length > 0 && (
-                      <div className="mt-3 space-y-3">
-                        {replies.map((reply) => (
-                          <div
-                            key={reply.id}
-                            className="p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]"
-                          >
-                            <div className="flex items-center justify-between gap-3 mb-1">
-                              <p className="text-[#a1a1a1] text-sm">
-                                Resposta de {reply.answeredBy?.name || reply.teacher?.name || reply.student?.name || 'Usuário'}
-                              </p>
-
-                              <p className="text-[#a1a1a1] text-xs">
-                                {formatDate(reply.createdAt)}
-                              </p>
-                            </div>
-
-                            <p className="text-[#f5f5f5] mt-1">
-                              {reply.content}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="mt-3">
-                      <DashboardMessageReply
-                        questionId={message.id}
-                        studentId={String(message.studentId ?? '')}
-                        teacherId={isTeacher ? userId : String(message.teacherId ?? '')}
-                        currentUserId={userId}
-                        senderRole={isGestor ? 'GESTOR' : 'TEACHER'}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <DashboardConversationList
+            conversations={managementConversationItems}
+            currentUserId={userId}
+            currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
+            emptyMessage="Nenhuma mensagem da gestão."
+          />
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
