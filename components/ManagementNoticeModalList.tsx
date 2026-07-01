@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+type ReadStatusVariant = "read" | "pending" | "neutral";
+
 type ManagementNoticeItem = {
   id: string;
   title: string;
@@ -14,7 +16,7 @@ type ManagementNoticeItem = {
   targetLabel: string;
   readByCurrentUser?: boolean;
   readStatusLabel?: string;
-  readStatusVariant?: "read" | "pending" | "neutral";
+  readStatusVariant?: ReadStatusVariant;
   readStatusDescription?: string;
 };
 
@@ -24,6 +26,50 @@ type Props = {
   markAsReadOnClose?: boolean;
   showReadStatus?: boolean;
 };
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "--/--/----";
+
+  try {
+    return new Date(dateStr).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function getRoleLabel(role?: string | null): string {
+  const normalizedRole = String(role || "").toUpperCase();
+
+  if (normalizedRole === "GESTOR" || normalizedRole === "ADMIN") {
+    return "GESTOR";
+  }
+
+  if (normalizedRole === "PROFESSOR" || normalizedRole === "TEACHER") {
+    return "PROFESSOR";
+  }
+
+  return normalizedRole || "GESTOR";
+}
+
+function getRoleBadgeClass(role?: string | null): string {
+  const normalizedRole = String(role || "").toUpperCase();
+
+  if (normalizedRole === "GESTOR" || normalizedRole === "ADMIN") {
+    return "bg-amber-900/30 text-amber-400 border border-amber-500/20";
+  }
+
+  if (normalizedRole === "PROFESSOR" || normalizedRole === "TEACHER") {
+    return "bg-emerald-900/30 text-emerald-400 border border-emerald-500/20";
+  }
+
+  return "bg-zinc-800 text-zinc-400 border border-zinc-700";
+}
 
 export default function ManagementNoticeModalList({
   notices,
@@ -38,18 +84,6 @@ export default function ManagementNoticeModalList({
     () => new Set(notices.filter((notice) => notice.readByCurrentUser).map((notice) => notice.id))
   );
 
-  function formatDate(dateStr: string): string {
-    if (!dateStr) return "--/--/----";
-
-    return new Date(dateStr).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
   function isRead(notice: ManagementNoticeItem): boolean {
     return readNoticeIds.has(notice.id) || Boolean(notice.readByCurrentUser);
   }
@@ -62,7 +96,7 @@ export default function ManagementNoticeModalList({
     return notice.readStatusLabel || (isRead(notice) ? "Lido" : "Pendente");
   }
 
-  function getStatusVariant(notice: ManagementNoticeItem): "read" | "pending" | "neutral" {
+  function getStatusVariant(notice: ManagementNoticeItem): ReadStatusVariant {
     if (markAsReadOnClose) {
       return isRead(notice) ? "read" : "pending";
     }
@@ -119,55 +153,62 @@ export default function ManagementNoticeModalList({
 
   return (
     <>
-      <div className="divide-y divide-[#ffffff10] max-h-[520px] overflow-y-auto pr-2">
-        {notices.map((notice) => {
-          const read = isRead(notice);
-
-          return (
+      <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
+        {notices.map((notice) => (
+          <div
+            key={notice.id}
+            className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
+          >
             <button
-              key={notice.id}
               type="button"
               onClick={() => setSelectedNotice(notice)}
-              className="w-full py-4 text-left hover:bg-[#0a0a0a] transition-colors rounded-lg px-2"
+              className="w-full p-4 text-left hover:bg-[#0a0a0a] transition-colors"
             >
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[#f5f5f5] font-medium truncate">
-                    {notice.title || "Aviso da gestão"}
-                  </p>
+              <div className="flex justify-between items-start gap-4 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getRoleBadgeClass(notice.authorRole)}`}>
+                    {getRoleLabel(notice.authorRole)}
+                  </span>
 
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-[#a1a1a1]">
-                      De:{" "}
-                      <span className="text-[#f5f5f5]">
-                        {notice.authorName || "Gestão"}
-                      </span>
-                    </p>
-
-                    <p className="text-xs text-[#a1a1a1]">
-                      Para:{" "}
-                      <span className="text-[#D4A373]">
-                        {notice.targetLabel || "Não informado"}
-                      </span>
-                    </p>
-                  </div>
-
-                  {showReadStatus && (
-                    <span
-                      className={"inline-flex mt-2 px-2 py-0.5 rounded text-[10px] " + getStatusClass(notice)}
-                    >
-                      {getStatusLabel(notice)}
-                    </span>
-                  )}
+                  <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                    {notice.authorName || "Gestão"}
+                  </span>
                 </div>
 
-                <p className="text-[#a1a1a1] text-sm shrink-0">
+                <span className="text-[10px] text-[#a1a1a1] shrink-0">
                   {formatDate(notice.createdAt)}
-                </p>
+                </span>
+              </div>
+
+              <p className="text-sm text-[#f5f5f5] mb-3 whitespace-pre-wrap">
+                {notice.title || "Aviso da gestão"}
+              </p>
+
+              <p className="text-xs text-[#a1a1a1] mb-3">
+                Para:{" "}
+                <span className="text-[#D4A373]">
+                  {notice.targetLabel || "Não informado"}
+                </span>
+              </p>
+
+              <div className="flex justify-between items-center gap-4">
+                {showReadStatus ? (
+                  <span className={`text-[10px] px-2 py-0.5 rounded ${getStatusClass(notice)}`}>
+                    {getStatusLabel(notice)}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-[#a1a1a1]">
+                    Aviso
+                  </span>
+                )}
+
+                <span className="text-xs text-[#D4A373]">
+                  Abrir aviso
+                </span>
               </div>
             </button>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       {selectedNotice && (
@@ -181,6 +222,16 @@ export default function ManagementNoticeModalList({
           >
             <div className="flex items-start justify-between gap-4 border-b border-[#ffffff10] p-5">
               <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getRoleBadgeClass(selectedNotice.authorRole)}`}>
+                    {getRoleLabel(selectedNotice.authorRole)}
+                  </span>
+
+                  <span className="text-sm font-bold text-[#f5f5f5]">
+                    {selectedNotice.authorName || "Gestão"}
+                  </span>
+                </div>
+
                 <h3 className="text-lg font-semibold text-[#f5f5f5]">
                   {selectedNotice.title || "Aviso da gestão"}
                 </h3>
@@ -189,15 +240,24 @@ export default function ManagementNoticeModalList({
                   {formatDate(selectedNotice.createdAt)}
                 </p>
 
+                <p className="text-xs text-[#a1a1a1] mt-2">
+                  Para:{" "}
+                  <span className="text-[#D4A373]">
+                    {selectedNotice.targetLabel || "Não informado"}
+                  </span>
+                </p>
+
                 {showReadStatus && (
-                  <span
-                    className={"inline-flex mt-2 px-2 py-0.5 rounded text-[10px] " + getStatusClass(selectedNotice)}
-                  >
+                  <span className={`inline-flex mt-2 px-2 py-0.5 rounded text-[10px] ${getStatusClass(selectedNotice)}`}>
                     {getStatusLabel(selectedNotice)}
                   </span>
                 )}
 
-
+                {showReadStatus && selectedNotice.readStatusDescription && (
+                  <p className="text-[11px] text-[#a1a1a1] mt-2">
+                    {selectedNotice.readStatusDescription}
+                  </p>
+                )}
               </div>
 
               <button
@@ -215,28 +275,6 @@ export default function ManagementNoticeModalList({
               <p className="text-sm text-[#f5f5f5] whitespace-pre-wrap">
                 {selectedNotice.content}
               </p>
-
-              <div className="border-t border-[#ffffff10] pt-4 space-y-2">
-                <p className="text-xs text-[#a1a1a1]">
-                  Enviado por:{" "}
-                  <span className="text-[#f5f5f5]">
-                    {selectedNotice.authorName || "Gestão"}
-                  </span>
-
-                  {selectedNotice.authorRole && (
-                    <span className="ml-2 bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded text-[10px]">
-                      {selectedNotice.authorRole === "GESTOR" ? "Gestão" : selectedNotice.authorRole}
-                    </span>
-                  )}
-                </p>
-
-                <p className="text-xs text-[#a1a1a1]">
-                  Para:{" "}
-                  <span className="text-[#D4A373]">
-                    {selectedNotice.targetLabel}
-                  </span>
-                </p>
-              </div>
             </div>
 
             <div className="p-4 border-t border-[#ffffff10]">
