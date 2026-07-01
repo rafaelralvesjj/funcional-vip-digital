@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../api/auth/[...nextauth]/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import GestaoMessageReply from '@/components/GestaoMessageReply';
+import DashboardMessageReply from '@/components/DashboardMessageReply';
 import ManagementNoticeModalList from '@/components/ManagementNoticeModalList';
 import DashboardAutoRefresh from '@/components/DashboardAutoRefresh';
 
@@ -757,16 +757,15 @@ export default async function DashboardPage() {
                       </div>
                     )}
 
-                    {!isGestor && (
-                      <div className="mt-3">
-                        <GestaoMessageReply
-                          questionId={message.id}
-                          studentId={String(message.studentId ?? '')}
-                          teacherId={userId}
-                          currentUserId={userId}
-                        />
-                      </div>
-                    )}
+                    <div className="mt-3">
+                      <DashboardMessageReply
+                        questionId={message.id}
+                        studentId={String(message.studentId ?? '')}
+                        teacherId={isTeacher ? userId : String(message.teacherId ?? '')}
+                        currentUserId={userId}
+                        senderRole={isGestor ? 'GESTOR' : 'TEACHER'}
+                      />
+                    </div>
                   </div>
                 );
               })}
