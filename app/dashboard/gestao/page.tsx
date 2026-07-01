@@ -45,305 +45,431 @@ interface ThreadMessage {
   children?: ThreadMessage[];
 }
 
-type TargetType =
-  | "ALUNO_ESPECIFICO"
-  | "TODOS_ALUNOS"
-  | "PROFESSOR_ESPECIFICO"
-  | "TODOS_PROFESSORES";
-
+type TargetType = "ALUNO_ESPECIFICO" | "TODOS_ALUNOS" | "PROFESSOR_ESPECIFICO" | "TODOS_PROFESSORES";
 type ActiveTab = "mural" | "chat";
 
-export default function GestaoPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("mural");
-  const [currentUserId, setCurrentUserId] = useState<string>("");
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-  const [targetType, setTargetType] = useState<TargetType>("ALUNO_ESPECIFICO");
-  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>("");
+function getString(value: unknown, key: string): string | null {
+  if (!isRecord(value)) return null;
+  const v = value[key];
+  return typeof v === "string" && v.trim().length > 0 ? v : null;
+}
 
-  const [students, setStudents] = useState<Student[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const [questions, setQuestions] = useState<ThreadMessage[]>([]);
+function getNestedRecord(value: unknown, key: string): Record<string, unknown> | null {
+  if (!isRecord(value)) return null;
+  const v = value[key];
+  return isRecord(v) ? v : null;
+}
 
-  const [noticeTitle, setNoticeTitle] = useState<string>("");
-  const [noticeContent, setNoticeContent] = useState<string>("");
-  const [savingNotice, setSavingNotice] = useState<boolean>(false);
-  const [noticeSuccess, setNoticeSuccess] = useState<string>("");
-  const [noticeError, setNoticeError] = useState<string>("");
+async function safeJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
-  const [chatContent, setChatContent] = useState<string>("");
-  const [sendingChat, setSendingChat] = useState<boolean>(false);
-  const [chatSuccess, setChatSuccess] = useState<string>("");
-  const [chatError, setChatError] = useState<string>("");
-
-  const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
-  const [replyContent, setReplyContent] = useState<string>("");
-
-  // Helpers
-  const safeJson = async (response: Response) => {
-    const text = await response.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { message: text || response.statusText };
-    }
-  };
-
-  const extractArray = (data: unknown, candidateKeys: string[]): unknown[] => {
-    if (Array.isArray(data)) return data;
-    if (data && typeof data === "object") {
-      const obj = data as Record<string, unknown>;
-      for (const key of candidateKeys) {
-        const value = obj[key];
-        if (Array.isArray(value)) return value;
+function extractArray(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  if (!isRecord(data)) return [];
+  const directKeys = ["students", "items", "results", "data", "notices", "questions", "threads"];
+  for (const key of directKeys) {
+    const v = data[key];
+    if (Array.isArray(v)) return v;
+  }
+  const nestedKeys = ["data", "result", "payload"];
+  for (const key of nestedKeys) {
+    const v = data[key];
+    if (Array.isArray(v)) return v;
+    if (isRecord(v)) {
+      for (const innerKey of directKeys) {
+        const iv = v[innerKey];
+        if (Array.isArray(iv)) return iv;
       }
-      const nestedKeys = ["data", "result", "payload"];
-      for (const nested of nestedKeys) {
-        const inner = obj[nested];
-        if (inner && typeof inner === "object") {
-          const innerObj = inner as Record<string, unknown>;
-          for (const key of [...candidateKeys, "items", "results", "data"]) {
-            const value = innerObj[key];
-            if (Array.isArray(value)) return value;
-          }
+    }
+  }
+  return [];
+}
+
+function normalizeStudent(item: unknown): Student | null {
+  if (!isRecord(item)) return null;
+
+  const studentNested = getNestedRecord(item, "student");
+  const userNested = getNestedRecord(item, "user");
+
+  const id =
+    getString(item, "id") ||
+    (studentNested ? getString(studentNested, "id") : null) ||
+    getString(item, "studentId") ||
+    getString(item, "userId") ||
+    (userNested ? getString(userNested, "id") : null);
+
+  const name =
+    getString(item, "name") ||
+    (studentNested ? getString(studentNested, "name") : null) ||
+    getString(item, "studentName") ||
+    (userNested ? getString(userNested, "name") : null);
+
+  if (!id || !name) return null;
+
+  const userId = getString(item, "userId") || (userNested ? getString(userNested, "id") : null);
+
+  return {
+    id,
+    name,
+    userId: userId ?? null,
+    user: userNested
+      ? { id: userNested.id as string, name: typeof userNested.name === "string" ? userNested.name : null }
+      : null,
+  };
+}
+
+function normalizeTeacher(item: unknown): Teacher | null {
+  if (!isRecord(item)) return null;
+
+  const userNested = getNestedRecord(item, "user");
+  const teacherNested = getNestedRecord(item, "teacher");
+
+  const id =
+    getString(item, "userId") ||
+    (userNested ? getString(userNested, "id") : null) ||
+    getString(item, "id");
+
+  const name =
+    getString(item, "name") ||
+    (userNested ? getString(userNested, "name") : null) ||
+    getString(item, "teacherName") ||
+    (teacherNested ? getString(teacherNested, "name") : null);
+
+  if (!id || !name) return null;
+
+  const email =
+    getString(item, "email") || (userNested ? getString(userNested, "email") : null) || null;
+
+  const countNested = getNestedRecord(item, "_count");
+  const studentsCount = countNested && typeof countNested.students === "number" ? countNested.students : undefined;
+
+  return {
+    id,
+    name,
+    email,
+    userId: getString(item, "userId") ?? null,
+    user: userNested
+      ? {
+          id: userNested.id as string,
+          name: typeof userNested.name === "string" ? userNested.name : null,
+          email: typeof userNested.email === "string" ? userNested.email : null,
         }
-      }
-    }
-    return [];
+      : null,
+    _count: studentsCount !== undefined ? { students: studentsCount } : undefined,
   };
+}
 
-  const normalizeStudent = (item: unknown): Student | null => {
-    if (!item || typeof item !== "object") return null;
-    const i = item as Record<string, unknown>;
+function normalizeNotice(item: unknown): Notice | null {
+  if (!isRecord(item)) return null;
+  const id = getString(item, "id");
+  const content = getString(item, "content");
+  if (!id || !content) return null;
 
-    const id =
-      (i.id as string) ||
-      (i.student?.id as string) ||
-      (i.studentId as string) ||
-      (i.userId as string) ||
-      (i.user?.id as string);
+  const authorNested = getNestedRecord(item, "author");
+  const studentNested = getNestedRecord(item, "student");
+  const professorNested = getNestedRecord(item, "professor");
 
-    const name =
-      (i.name as string) ||
-      (i.student?.name as string) ||
-      (i.studentName as string) ||
-      (i.user?.name as string);
+  const createdAt = getString(item, "createdAt") ?? new Date().toISOString();
 
-    if (!id || !name) return null;
-    return { id, name };
+  return {
+    id,
+    title: getString(item, "title"),
+    content,
+    type: getString(item, "type"),
+    authorId: getString(item, "authorId"),
+    studentId: getString(item, "studentId"),
+    targetRole: getString(item, "targetRole"),
+    professorId: getString(item, "professorId"),
+    createdAt,
+    author: authorNested
+      ? {
+          id: authorNested.id as string,
+          name: typeof authorNested.name === "string" ? authorNested.name : null,
+          role: typeof authorNested.role === "string" ? authorNested.role : null,
+        }
+      : null,
+    student: studentNested
+      ? { id: studentNested.id as string, name: (studentNested.name as string) ?? "" }
+      : null,
+    professor: professorNested
+      ? { id: professorNested.id as string, name: typeof professorNested.name === "string" ? professorNested.name : null }
+      : null,
   };
+}
 
-  const normalizeTeacher = (item: unknown): Teacher | null => {
-    if (!item || typeof item !== "object") return null;
-    const i = item as Record<string, unknown>;
+function normalizeThreadMessage(item: unknown): ThreadMessage | null {
+  if (!isRecord(item)) return null;
+  const id = getString(item, "id");
+  const content = getString(item, "content");
+  const studentId = getString(item, "studentId");
+  if (!id || !content || !studentId) return null;
 
-    const id =
-      (i.userId as string) ||
-      (i.user?.id as string) ||
-      (i.id as string);
+  const senderRole = getString(item, "senderRole") ?? "ALUNO";
+  const createdAt = getString(item, "createdAt") ?? new Date().toISOString();
 
-    const name =
-      (i.name as string) ||
-      (i.user?.name as string) ||
-      (i.teacherName as string) ||
-      (i.teacher?.name as string);
+  const answeredByNested = getNestedRecord(item, "answeredBy");
+  const studentNested = getNestedRecord(item, "student");
+  const teacherNested = getNestedRecord(item, "teacher");
 
-    if (!id || !name) return null;
-    return { id, name };
+  const childrenRaw = item.children;
+  const children: ThreadMessage[] = Array.isArray(childrenRaw)
+    ? childrenRaw.map(normalizeThreadMessage).filter((m): m is ThreadMessage => m !== null)
+    : [];
+
+  return {
+    id,
+    studentId,
+    teacherId: getString(item, "teacherId"),
+    content,
+    senderRole,
+    createdAt,
+    answeredBy: answeredByNested
+      ? {
+          id: answeredByNested.id as string,
+          name: typeof answeredByNested.name === "string" ? answeredByNested.name : null,
+          role: typeof answeredByNested.role === "string" ? answeredByNested.role : null,
+        }
+      : null,
+    student: studentNested
+      ? { id: studentNested.id as string, name: (studentNested.name as string) ?? "" }
+      : null,
+    teacher: teacherNested
+      ? { id: teacherNested.id as string, name: typeof teacherNested.name === "string" ? teacherNested.name : null }
+      : null,
+    children,
   };
+}
 
-  const formatDateTime = (dateStr: string) => {
-    if (!dateStr) return "";
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleString("pt-BR", {
+function formatDateTime(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
+  } catch {
+    return dateStr;
+  }
+}
 
-  const getThreadStatus = (thread: ThreadMessage[]) => {
-    if (!thread.length) return "";
-    const last = thread[thread.length - 1];
-    const role = last.senderRole;
-    if (role === "TEACHER") return "Respondida / aguardando gestão";
-    if (role === "GESTOR") return "Aguardando professor";
-    if (role === "STUDENT") return "Aguardando resposta";
-    return "";
-  };
+function getThreadStatus(thread: ThreadMessage): { label: string; className: string } {
+  const hasAnswer = (thread.children ?? []).some((c) => c.senderRole !== "ALUNO");
+  if (hasAnswer) {
+    return { label: "Respondido", className: "bg-[#D4A37320] text-[#D4A373] border-[#D4A37340]" };
+  }
+  return { label: "Aberto", className: "bg-[#ffffff10] text-[#a1a1a1] border-[#ffffff20]" };
+}
 
-  const getAuthorName = (msg: ThreadMessage) => {
-    const role = msg.senderRole;
-    if (role === "TEACHER") {
-      return msg.answeredBy?.name || msg.teacher?.name || "Professor";
-    }
-    if (role === "STUDENT") {
-      return msg.student?.name || "Aluno";
-    }
-    if (role === "GESTOR") {
-      return "Gestão";
-    }
-    return "Desconhecido";
-  };
+function getAuthorName(msg: ThreadMessage): string {
+  if (msg.senderRole === "ALUNO") return msg.student?.name ?? "Aluno";
+  if (msg.senderRole === "PROFESSOR") return msg.teacher?.name ?? "Professor";
+  if (msg.answeredBy?.name) return msg.answeredBy.name;
+  return "Gestão";
+}
 
-  const getRoleBadgeClass = (role: string) => {
-    if (role === "TEACHER") return "bg-blue-600/20 text-blue-300 border-blue-500/30";
-    if (role === "STUDENT") return "bg-emerald-600/20 text-emerald-300 border-emerald-500/30";
-    if (role === "GESTOR") return "bg-[#D4A373]/20 text-[#D4A373] border-[#D4A373]/30";
-    return "bg-gray-600/20 text-gray-300 border-gray-500/30";
-  };
+function getRoleBadgeClass(role: string | null | undefined): string {
+  if (!role) return "bg-[#ffffff10] text-[#a1a1a1] border-[#ffffff20]";
+  switch (role) {
+    case "GESTOR":
+    case "ADMIN":
+      return "bg-[#D4A37320] text-[#D4A373] border-[#D4A37340]";
+    case "PROFESSOR":
+      return "bg-[#3a5a4020] text-[#a3b18a] border-[#a3b18a40]";
+    case "ALUNO":
+      return "bg-[#ffffff10] text-[#f5f5f5] border-[#ffffff20]";
+    default:
+      return "bg-[#ffffff10] text-[#a1a1a1] border-[#ffffff20]";
+  }
+}
 
-  // Fetches
-  const fetchSession = async () => {
-    try {
-      const res = await fetch("/api/auth/session", { cache: "no-store" });
-      const data = await safeJson(res);
-      if (data?.user?.id) {
-        setCurrentUserId(data.user.id);
-      }
-    } catch (err) {
-      console.error("Erro ao carregar sessão:", err);
-    }
-  };
+async function fetchSession(): Promise<{ userId: string | null; role: string | null }> {
+  try {
+    const res = await fetch("/api/auth/session", { cache: "no-store" });
+    if (!res.ok) return { userId: null, role: null };
+    const data = await safeJson(res);
+    if (!isRecord(data)) return { userId: null, role: null };
+    const user = getNestedRecord(data, "user");
+    const userId = (user ? getString(user, "id") : null) ?? getString(data, "userId");
+    const role = (user ? getString(user, "role") : null) ?? getString(data, "role");
+    return { userId, role };
+  } catch {
+    return { userId: null, role: null };
+  }
+}
 
-  const fetchStudents = async () => {
-    try {
-      const res = await fetch("/api/students", { cache: "no-store" });
-      const data = await safeJson(res);
-      const raw = extractArray(data, ["students", "items", "results", "data"]);
-      const normalized = raw
-        .map(normalizeStudent)
-        .filter((s): s is Student => s !== null);
-      setStudents(normalized);
-    } catch (err) {
-      console.error("Erro ao carregar alunos:", err);
-      setStudents([]);
-    }
-  };
+async function fetchStudents(): Promise<Student[]> {
+  try {
+    const res = await fetch("/api/students", { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await safeJson(res);
+    return extractArray(data)
+      .map(normalizeStudent)
+      .filter((s): s is Student => s !== null);
+  } catch {
+    return [];
+  }
+}
 
-  const fetchTeachers = async () => {
-    try {
-      const res = await fetch("/api/teachers", { cache: "no-store" });
-      const data = await safeJson(res);
-      const raw = extractArray(data, ["teachers", "items", "results", "data"]);
-      const normalized = raw
-        .map(normalizeTeacher)
-        .filter((t): t is Teacher => t !== null);
-      setTeachers(normalized);
-    } catch (err) {
-      console.error("Erro ao carregar professores:", err);
-      setTeachers([]);
-    }
-  };
+async function fetchTeachers(): Promise<Teacher[]> {
+  try {
+    const res = await fetch("/api/teachers", { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await safeJson(res);
+    return extractArray(data)
+      .map(normalizeTeacher)
+      .filter((t): t is Teacher => t !== null);
+  } catch {
+    return [];
+  }
+}
 
-  const fetchNotices = async () => {
-    try {
-      const res = await fetch("/api/notices", { cache: "no-store" });
-      const data = await safeJson(res);
-      const raw = Array.isArray(data) ? data : extractArray(data, ["notices", "items", "results", "data"]);
-      setNotices(raw as Notice[]);
-    } catch (err) {
-      console.error("Erro ao carregar avisos:", err);
-      setNotices([]);
-    }
-  };
+async function fetchNotices(): Promise<Notice[]> {
+  try {
+    const res = await fetch("/api/notices", { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await safeJson(res);
+    return extractArray(data)
+      .map(normalizeNotice)
+      .filter((n): n is Notice => n !== null)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  } catch {
+    return [];
+  }
+}
 
-  const fetchQuestions = async () => {
-    try {
-      const params = new URLSearchParams();
-      params.set("senderRole", "GESTOR");
-      if (selectedTeacherId) params.set("teacherId", selectedTeacherId);
-      if (selectedStudentId) params.set("studentId", selectedStudentId);
-      const res = await fetch(`/api/questions?${params.toString()}`, {
-        cache: "no-store",
-      });
-      const data = await safeJson(res);
-      const raw = Array.isArray(data) ? data : extractArray(data, ["questions", "items", "results", "data"]);
-      setQuestions(raw as ThreadMessage[]);
-    } catch (err) {
-      console.error("Erro ao carregar mensagens:", err);
-      setQuestions([]);
-    }
-  };
+async function fetchQuestions(): Promise<ThreadMessage[]> {
+  try {
+    const res = await fetch("/api/questions", { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await safeJson(res);
+    return extractArray(data)
+      .map(normalizeThreadMessage)
+      .filter((m): m is ThreadMessage => m !== null)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  } catch {
+    return [];
+  }
+}
+
+export default function GestaoPage() {
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("mural");
+
+  const [students, setStudents] = useState<Student[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [threads, setThreads] = useState<ThreadMessage[]>([]);
+
+  const [targetType, setTargetType] = useState<TargetType>("TODOS_ALUNOS");
+  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>("");
+  const [noticeTitle, setNoticeTitle] = useState<string>("");
+  const [noticeContent, setNoticeContent] = useState<string>("");
+
+  const [chatContent, setChatContent] = useState<string>("");
+  const [replyContent, setReplyContent] = useState<Record<string, string>>({});
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchSession();
-    fetchStudents();
-    fetchTeachers();
-    fetchNotices();
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      const session = await fetchSession();
+      const [s, t, n, q] = await Promise.all([
+        fetchStudents(),
+        fetchTeachers(),
+        fetchNotices(),
+        fetchQuestions(),
+      ]);
+      if (!mounted) return;
+      setCurrentUserId(session.userId);
+      setStudents(s);
+      setTeachers(t);
+      setNotices(n);
+      setThreads(q);
+      setLoading(false);
+    })();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  useEffect(() => {
-    fetchQuestions();
-  }, [selectedStudentId, selectedTeacherId]);
+  const studentsOptions = useMemo(
+    () =>
+      [...students]
+        .map((s) => ({ value: s.id, label: s.name }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [students]
+  );
 
-  useEffect(() => {
-    if (targetType === "ALUNO_ESPECIFICO" && selectedTeacherId) {
-      setSelectedTeacherId("");
-    }
-    if (targetType === "PROFESSOR_ESPECIFICO" && selectedStudentId) {
-      setSelectedStudentId("");
-    }
-    if (targetType === "TODOS_ALUNOS") {
-      setSelectedStudentId("");
-      setSelectedTeacherId("");
-    }
-    if (targetType === "TODOS_PROFESSORES") {
-      setSelectedStudentId("");
-      setSelectedTeacherId("");
-    }
-  }, [targetType]);
+  const teachersOptions = useMemo(
+    () =>
+      [...teachers]
+        .map((t) => ({ value: t.id, label: t.name }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [teachers]
+  );
 
-  // Options
-  const studentsOptions = useMemo(() => {
-    return [...students].sort((a, b) => a.name.localeCompare(b.name));
-  }, [students]);
+  function resetNoticesForm() {
+    setNoticeTitle("");
+    setNoticeContent("");
+    setSelectedStudentId("");
+    setSelectedTeacherId("");
+  }
 
-  const teachersOptions = useMemo(() => {
-    return [...teachers].sort((a, b) => a.name.localeCompare(b.name));
-  }, [teachers]);
-
-  // Handlers
-  const handlePublishNotice = async (e: FormEvent) => {
+  async function handlePublishNotice(e: FormEvent) {
     e.preventDefault();
-    setNoticeError("");
-    setNoticeSuccess("");
+    setError(null);
+    setSuccess(null);
 
     const content = noticeContent.trim();
     if (!content) {
-      setNoticeError("Preencha o conteúdo do aviso.");
+      setError("Conteúdo do aviso é obrigatório.");
       return;
     }
 
-    let targetRole = "";
-    let studentId: string | undefined;
-    let professorId: string | undefined;
+    let targetRole: string | null = null;
+    let studentId: string | null = null;
+    let professorId: string | null = null;
 
     if (targetType === "ALUNO_ESPECIFICO") {
       if (!selectedStudentId) {
-        setNoticeError("Selecione um aluno específico.");
+        setError("Selecione um aluno.");
         return;
       }
-      targetRole = "STUDENT";
       studentId = selectedStudentId;
+      targetRole = "ALUNO";
     } else if (targetType === "TODOS_ALUNOS") {
-      targetRole = "STUDENT";
+      targetRole = "ALUNO";
     } else if (targetType === "PROFESSOR_ESPECIFICO") {
       if (!selectedTeacherId) {
-        setNoticeError("Selecione um professor específico.");
+        setError("Selecione um professor.");
         return;
       }
-      targetRole = "TEACHER";
       professorId = selectedTeacherId;
+      targetRole = "PROFESSOR";
     } else if (targetType === "TODOS_PROFESSORES") {
-      targetRole = "TEACHER";
+      targetRole = "PROFESSOR";
     }
 
-    setSavingNotice(true);
+    setSubmitting(true);
     try {
       const res = await fetch("/api/notices", {
         method: "POST",
@@ -357,38 +483,37 @@ export default function GestaoPage() {
           professorId,
         }),
       });
-      const data = await safeJson(res);
       if (!res.ok) {
-        setNoticeError(data?.message || data?.error || "Erro ao publicar aviso.");
+        const data = await safeJson(res);
+        const msg = (isRecord(data) && getString(data, "message")) || "Erro ao publicar aviso.";
+        setError(msg);
         return;
       }
-      setNoticeSuccess("Aviso publicado com sucesso!");
-      setNoticeTitle("");
-      setNoticeContent("");
-      await fetchNotices();
-    } catch (err) {
-      setNoticeError("Erro ao publicar aviso.");
+      setSuccess("Aviso publicado com sucesso.");
+      resetNoticesForm();
+      const updated = await fetchNotices();
+      setNotices(updated);
+    } catch {
+      setError("Erro de conexão ao publicar aviso.");
     } finally {
-      setSavingNotice(false);
+      setSubmitting(false);
     }
-  };
+  }
 
-  const handleSendChat = async (e: FormEvent) => {
+  async function handleSendChat(e: FormEvent) {
     e.preventDefault();
-    setChatError("");
-    setChatSuccess("");
-
+    setError(null);
+    setSuccess(null);
     const content = chatContent.trim();
     if (!content) {
-      setChatError("Digite uma mensagem.");
+      setError("Conteúdo da mensagem é obrigatório.");
       return;
     }
-    if (!selectedStudentId || !selectedTeacherId) {
-      setChatError("Selecione o aluno e o professor.");
+    if (!selectedStudentId) {
+      setError("Selecione um aluno para enviar a mensagem.");
       return;
     }
-
-    setSendingChat(true);
+    setSubmitting(true);
     try {
       const res = await fetch("/api/questions", {
         method: "POST",
@@ -397,28 +522,38 @@ export default function GestaoPage() {
           content,
           senderRole: "GESTOR",
           studentId: selectedStudentId,
-          teacherId: selectedTeacherId,
+          teacherId: selectedTeacherId || null,
         }),
       });
-      const data = await safeJson(res);
       if (!res.ok) {
-        setChatError(data?.message || data?.error || "Erro ao enviar mensagem.");
+        const data = await safeJson(res);
+        const msg = (isRecord(data) && getString(data, "message")) || "Erro ao enviar mensagem.";
+        setError(msg);
         return;
       }
-      setChatSuccess("Mensagem enviada com sucesso!");
+      setSuccess("Mensagem enviada com sucesso.");
       setChatContent("");
-      await fetchQuestions();
-    } catch (err) {
-      setChatError("Erro ao enviar mensagem.");
+      const updated = await fetchQuestions();
+      setThreads(updated);
+    } catch {
+      setError("Erro de conexão ao enviar mensagem.");
     } finally {
-      setSendingChat(false);
+      setSubmitting(false);
     }
-  };
+  }
 
-  const handleReply = async (question: ThreadMessage) => {
-    const replyText = replyContent.trim();
-    if (!replyText) return;
-
+  async function handleReply(question: ThreadMessage, e: FormEvent) {
+    e.preventDefault();
+    const replyText = (replyContent[question.id] ?? "").trim();
+    if (!replyText) {
+      setError("Conteúdo da resposta é obrigatório.");
+      return;
+    }
+    if (!currentUserId) {
+      setError("Sessão não carregada.");
+      return;
+    }
+    setSubmitting(true);
     try {
       const res = await fetch("/api/questions", {
         method: "POST",
@@ -427,382 +562,339 @@ export default function GestaoPage() {
           content: replyText,
           parentId: question.id,
           studentId: question.studentId,
-          teacherId: question.teacherId,
+          teacherId: question.teacherId ?? null,
           senderRole: "GESTOR",
           answeredById: currentUserId,
         }),
       });
-      const data = await safeJson(res);
       if (!res.ok) {
-        console.error("Erro ao responder:", data);
+        const data = await safeJson(res);
+        const msg = (isRecord(data) && getString(data, "message")) || "Erro ao responder.";
+        setError(msg);
         return;
       }
-      setReplyContent("");
-      await fetchQuestions();
-    } catch (err) {
-      console.error("Erro ao responder:", err);
+      setReplyContent((prev) => ({ ...prev, [question.id]: "" }));
+      const updated = await fetchQuestions();
+      setThreads(updated);
+    } catch {
+      setError("Erro de conexão ao responder.");
+    } finally {
+      setSubmitting(false);
     }
-  };
+  }
 
-  const toggleExpand = (id: string) => {
-    if (expandedQuestion === id) {
-      setExpandedQuestion(null);
-      setReplyContent("");
-    } else {
-      setExpandedQuestion(id);
-      setReplyContent("");
-    }
-  };
+  function renderThread(thread: ThreadMessage, depth = 0) {
+    const status = getThreadStatus(thread);
+    return (
+      <div
+        key={thread.id}
+        className={`rounded-lg border border-[#ffffff10] bg-[#111111] p-4 ${depth > 0 ? "ml-6 mt-3" : ""}`}
+      >
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-[#f5f5f5]">{getAuthorName(thread)}</span>
+          <span
+            className={`rounded border px-2 py-0.5 text-xs ${getRoleBadgeClass(thread.senderRole)}`}
+          >
+            {thread.senderRole}
+          </span>
+          {depth === 0 && (
+            <span className={`rounded border px-2 py-0.5 text-xs ${status.className}`}>
+              {status.label}
+            </span>
+          )}
+          <span className="text-xs text-[#a1a1a1]">{formatDateTime(thread.createdAt)}</span>
+        </div>
+        <p className="whitespace-pre-wrap text-sm text-[#f5f5f5]">{thread.content}</p>
 
-  const targetOptions: { value: TargetType; label: string }[] = [
-    { value: "ALUNO_ESPECIFICO", label: "Aluno específico" },
-    { value: "TODOS_ALUNOS", label: "Todos os alunos" },
-    { value: "PROFESSOR_ESPECIFICO", label: "Professor específico" },
-    { value: "TODOS_PROFESSORES", label: "Todos os professores" },
-  ];
+        {depth === 0 && (
+          <form onSubmit={(e) => handleReply(thread, e)} className="mt-3 space-y-2">
+            <textarea
+              value={replyContent[thread.id] ?? ""}
+              onChange={(e) =>
+                setReplyContent((prev) => ({ ...prev, [thread.id]: e.target.value }))
+              }
+              placeholder="Responder nesta thread..."
+              className="w-full rounded-md border border-[#ffffff10] bg-[#0a0a0a] p-2 text-sm text-[#f5f5f5] placeholder:text-[#a1a1a1] focus:border-[#D4A373] focus:outline-none"
+              rows={2}
+            />
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-md bg-[#D4A373] px-3 py-1.5 text-sm font-semibold text-[#0a0a0a] disabled:opacity-50"
+            >
+              Responder
+            </button>
+          </form>
+        )}
+
+        {(thread.children ?? []).length > 0 && (
+          <div className="mt-3">
+            {(thread.children ?? []).map((child) => renderThread(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6">
-      <div className="max-w-5xl mx-auto">
-        <h1 className="text-3xl font-semibold mb-6 text-[#f5f5f5]">Gestão</h1>
+    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
+      <div className="mx-auto max-w-5xl px-4 py-8">
+        <h1 className="mb-6 text-2xl font-bold text-[#f5f5f5]">Gestão</h1>
 
-        <div className="flex items-center gap-2 mb-6">
+        <div className="mb-4 text-sm text-[#a1a1a1]">
+          {loading
+            ? "Carregando dados..."
+            : `${notices.length} avisos carregados · ${threads.length} threads carregadas · ${students.length} alunos · ${teachers.length} professores`}
+        </div>
+
+        <div className="mb-6 flex gap-2 border-b border-[#ffffff10]">
           <button
+            type="button"
             onClick={() => setActiveTab("mural")}
-            className={`px-4 py-2 rounded-lg border transition ${
+            className={`px-4 py-2 text-sm font-semibold transition-colors ${
               activeTab === "mural"
-                ? "bg-[#D4A373] text-[#0a0a0a] border-[#D4A373] font-medium"
-                : "bg-[#111111] text-[#a1a1a1] border-[#ffffff10] hover:border-[#ffffff20]"
+                ? "border-b-2 border-[#D4A373] text-[#D4A373]"
+                : "text-[#a1a1a1] hover:text-[#f5f5f5]"
             }`}
           >
             Mural
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("chat")}
-            className={`px-4 py-2 rounded-lg border transition ${
+            className={`px-4 py-2 text-sm font-semibold transition-colors ${
               activeTab === "chat"
-                ? "bg-[#D4A373] text-[#0a0a0a] border-[#D4A373] font-medium"
-                : "bg-[#111111] text-[#a1a1a1] border-[#ffffff10] hover:border-[#ffffff20]"
+                ? "border-b-2 border-[#D4A373] text-[#D4A373]"
+                : "text-[#a1a1a1] hover:text-[#f5f5f5]"
             }`}
           >
             Chat
           </button>
         </div>
 
-        <p className="text-sm text-[#a1a1a1] mb-6">
-          {students.length} aluno(s) e {teachers.length} professor(es) carregados.
-        </p>
+        {error && (
+          <div className="mb-4 rounded-md border border-[#D4A37340] bg-[#D4A37320] p-3 text-sm text-[#D4A373]">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mb-4 rounded-md border border-[#a3b18a40] bg-[#3a5a4020] p-3 text-sm text-[#a3b18a]">
+            {success}
+          </div>
+        )}
 
         {activeTab === "mural" && (
-          <section>
-            <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 mb-6">
-              <h2 className="text-xl font-medium mb-4 text-[#f5f5f5]">Novo aviso</h2>
-              <form onSubmit={handlePublishNotice} className="space-y-4">
-                <div>
-                  <label className="block text-sm text-[#a1a1a1] mb-1">Destinatário</label>
-                  <select
-                    value={targetType}
-                    onChange={(e) => setTargetType(e.target.value as TargetType)}
-                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-[#f5f5f5] focus:outline-none focus:border-[#D4A373]"
-                  >
-                    {targetOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+          <div className="space-y-6">
+            <form
+              onSubmit={handlePublishNotice}
+              className="space-y-4 rounded-lg border border-[#ffffff10] bg-[#111111] p-5"
+            >
+              <h2 className="text-lg font-semibold text-[#f5f5f5]">Novo aviso</h2>
 
-                {targetType === "ALUNO_ESPECIFICO" && (
-                  <div>
-                    <label className="block text-sm text-[#a1a1a1] mb-1">Aluno</label>
+              <div className="space-y-2">
+                <label className="text-sm text-[#a1a1a1]">Destinatário</label>
+                <select
+                  value={targetType}
+                  onChange={(e) => setTargetType(e.target.value as TargetType)}
+                  className="w-full rounded-md border border-[#ffffff10] bg-[#0a0a0a] p-2 text-sm text-[#f5f5f5] focus:border-[#D4A373] focus:outline-none"
+                >
+                  <option value="TODOS_ALUNOS">Todos os alunos</option>
+                  <option value="ALUNO_ESPECIFICO">Aluno específico</option>
+                  <option value="TODOS_PROFESSORES">Todos os professores</option>
+                  <option value="PROFESSOR_ESPECIFICO">Professor específico</option>
+                </select>
+              </div>
+
+              {targetType === "ALUNO_ESPECIFICO" && (
+                <div className="space-y-2">
+                  <label className="text-sm text-[#a1a1a1]">Aluno</label>
+                  {studentsOptions.length === 0 ? (
+                    <p className="text-sm text-[#a1a1a1]">Nenhum aluno carregado.</p>
+                  ) : (
                     <select
                       value={selectedStudentId}
                       onChange={(e) => setSelectedStudentId(e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-[#f5f5f5] focus:outline-none focus:border-[#D4A373]"
+                      className="w-full rounded-md border border-[#ffffff10] bg-[#0a0a0a] p-2 text-sm text-[#f5f5f5] focus:border-[#D4A373] focus:outline-none"
                     >
                       <option value="">Selecione um aluno</option>
-                      {studentsOptions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
+                      {studentsOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
                         </option>
                       ))}
                     </select>
-                    {studentsOptions.length === 0 && (
-                      <p className="text-sm text-red-400 mt-2">Nenhum aluno carregado.</p>
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
+              )}
 
-                {targetType === "PROFESSOR_ESPECIFICO" && (
-                  <div>
-                    <label className="block text-sm text-[#a1a1a1] mb-1">Professor</label>
+              {targetType === "PROFESSOR_ESPECIFICO" && (
+                <div className="space-y-2">
+                  <label className="text-sm text-[#a1a1a1]">Professor</label>
+                  {teachersOptions.length === 0 ? (
+                    <p className="text-sm text-[#a1a1a1]">Nenhum professor carregado.</p>
+                  ) : (
                     <select
                       value={selectedTeacherId}
                       onChange={(e) => setSelectedTeacherId(e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-[#f5f5f5] focus:outline-none focus:border-[#D4A373]"
+                      className="w-full rounded-md border border-[#ffffff10] bg-[#0a0a0a] p-2 text-sm text-[#f5f5f5] focus:border-[#D4A373] focus:outline-none"
                     >
                       <option value="">Selecione um professor</option>
-                      {teachersOptions.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
+                      {teachersOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
                         </option>
                       ))}
                     </select>
-                    {teachersOptions.length === 0 && (
-                      <p className="text-sm text-red-400 mt-2">Nenhum professor carregado.</p>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm text-[#a1a1a1] mb-1">Título</label>
-                  <input
-                    type="text"
-                    value={noticeTitle}
-                    onChange={(e) => setNoticeTitle(e.target.value)}
-                    placeholder="Aviso da Gestão"
-                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-[#f5f5f5] placeholder-[#a1a1a1] focus:outline-none focus:border-[#D4A373]"
-                  />
+                  )}
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-sm text-[#a1a1a1] mb-1">Conteúdo</label>
-                  <textarea
-                    value={noticeContent}
-                    onChange={(e) => setNoticeContent(e.target.value)}
-                    rows={4}
-                    placeholder="Digite o conteúdo do aviso..."
-                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-[#f5f5f5] placeholder-[#a1a1a1] focus:outline-none focus:border-[#D4A373] resize-none"
-                  />
-                </div>
+              <div className="space-y-2">
+                <label className="text-sm text-[#a1a1a1]">Título</label>
+                <input
+                  type="text"
+                  value={noticeTitle}
+                  onChange={(e) => setNoticeTitle(e.target.value)}
+                  placeholder="Título do aviso"
+                  className="w-full rounded-md border border-[#ffffff10] bg-[#0a0a0a] p-2 text-sm text-[#f5f5f5] placeholder:text-[#a1a1a1] focus:border-[#D4A373] focus:outline-none"
+                />
+              </div>
 
-                <button
-                  type="submit"
-                  disabled={savingNotice}
-                  className="px-5 py-2.5 rounded-lg bg-[#D4A373] text-[#0a0a0a] font-medium hover:bg-[#c29365] transition disabled:opacity-50"
-                >
-                  {savingNotice ? "Publicando..." : "Publicar"}
-                </button>
+              <div className="space-y-2">
+                <label className="text-sm text-[#a1a1a1]">Conteúdo</label>
+                <textarea
+                  value={noticeContent}
+                  onChange={(e) => setNoticeContent(e.target.value)}
+                  placeholder="Conteúdo do aviso"
+                  rows={4}
+                  className="w-full rounded-md border border-[#ffffff10] bg-[#0a0a0a] p-2 text-sm text-[#f5f5f5] placeholder:text-[#a1a1a1] focus:border-[#D4A373] focus:outline-none"
+                />
+              </div>
 
-                {noticeSuccess && (
-                  <p className="text-sm text-emerald-400">{noticeSuccess}</p>
-                )}
-                {noticeError && (
-                  <p className="text-sm text-red-400">{noticeError}</p>
-                )}
-              </form>
-            </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-md bg-[#D4A373] px-4 py-2 text-sm font-semibold text-[#0a0a0a] disabled:opacity-50"
+              >
+                Publicar
+              </button>
+            </form>
 
-            <div className="space-y-4">
-              <h2 className="text-xl font-medium text-[#f5f5f5]">Avisos publicados</h2>
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold text-[#f5f5f5]">Avisos publicados</h2>
               {notices.length === 0 ? (
-                <p className="text-[#a1a1a1]">Nenhum aviso publicado.</p>
+                <p className="text-sm text-[#a1a1a1]">Nenhum aviso publicado.</p>
               ) : (
-                notices.map((notice) => (
+                notices.map((n) => (
                   <div
-                    key={notice.id}
-                    className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5"
+                    key={n.id}
+                    className="rounded-lg border border-[#ffffff10] bg-[#111111] p-4"
                   >
-                    <div className="flex items-start justify-between gap-4 mb-2">
-                      <h3 className="font-medium text-[#f5f5f5]">
-                        {notice.title || "Aviso"}
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-semibold text-[#f5f5f5]">
+                        {n.title ?? "Sem título"}
                       </h3>
-                      <span className="text-xs text-[#a1a1a1] whitespace-nowrap">
-                        {formatDateTime(notice.createdAt)}
-                      </span>
+                      {n.targetRole && (
+                        <span
+                          className={`rounded border px-2 py-0.5 text-xs ${getRoleBadgeClass(n.targetRole)}`}
+                        >
+                          {n.targetRole}
+                        </span>
+                      )}
+                      <span className="text-xs text-[#a1a1a1]">{formatDateTime(n.createdAt)}</span>
                     </div>
-                    <p className="text-[#f5f5f5] whitespace-pre-wrap mb-3">
-                      {notice.content}
-                    </p>
-                    <div className="text-xs text-[#a1a1a1] flex flex-wrap gap-2">
-                      <span className="px-2 py-1 rounded bg-[#ffffff08] border border-[#ffffff10]">
-                        Para: {notice.targetRole === "STUDENT" ? "Alunos" : "Professores"}
-                      </span>
-                      {notice.student && (
-                        <span className="px-2 py-1 rounded bg-[#ffffff08] border border-[#ffffff10]">
-                          Aluno: {notice.student.name}
-                        </span>
-                      )}
-                      {notice.professor && (
-                        <span className="px-2 py-1 rounded bg-[#ffffff08] border border-[#ffffff10]">
-                          Professor: {notice.professor.name}
-                        </span>
-                      )}
+                    <p className="whitespace-pre-wrap text-sm text-[#f5f5f5]">{n.content}</p>
+                    <div className="mt-2 text-xs text-[#a1a1a1]">
+                      {n.author?.name ?? "Autor desconhecido"}
+                      {n.student?.name ? ` · Aluno: ${n.student.name}` : ""}
+                      {n.professor?.name ? ` · Professor: ${n.professor.name}` : ""}
                     </div>
                   </div>
                 ))
               )}
             </div>
-          </section>
+          </div>
         )}
 
         {activeTab === "chat" && (
-          <section>
-            <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 mb-6">
-              <h2 className="text-xl font-medium mb-4 text-[#f5f5f5]">Nova mensagem</h2>
-              <form onSubmit={handleSendChat} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-[#a1a1a1] mb-1">Aluno</label>
-                    <select
-                      value={selectedStudentId}
-                      onChange={(e) => setSelectedStudentId(e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-[#f5f5f5] focus:outline-none focus:border-[#D4A373]"
-                    >
-                      <option value="">Selecione um aluno</option>
-                      {studentsOptions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-[#a1a1a1] mb-1">Professor</label>
-                    <select
-                      value={selectedTeacherId}
-                      onChange={(e) => setSelectedTeacherId(e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-[#f5f5f5] focus:outline-none focus:border-[#D4A373]"
-                    >
-                      <option value="">Selecione um professor</option>
-                      {teachersOptions.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+          <div className="space-y-6">
+            <form
+              onSubmit={handleSendChat}
+              className="space-y-4 rounded-lg border border-[#ffffff10] bg-[#111111] p-5"
+            >
+              <h2 className="text-lg font-semibold text-[#f5f5f5]">Nova mensagem</h2>
 
-                <div>
-                  <label className="block text-sm text-[#a1a1a1] mb-1">Mensagem</label>
-                  <textarea
-                    value={chatContent}
-                    onChange={(e) => setChatContent(e.target.value)}
-                    rows={3}
-                    placeholder="Digite sua mensagem..."
-                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-[#f5f5f5] placeholder-[#a1a1a1] focus:outline-none focus:border-[#D4A373] resize-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={sendingChat}
-                  className="px-5 py-2.5 rounded-lg bg-[#D4A373] text-[#0a0a0a] font-medium hover:bg-[#c29365] transition disabled:opacity-50"
-                >
-                  {sendingChat ? "Enviando..." : "Enviar"}
-                </button>
-
-                {chatSuccess && (
-                  <p className="text-sm text-emerald-400">{chatSuccess}</p>
+              <div className="space-y-2">
+                <label className="text-sm text-[#a1a1a1]">Aluno</label>
+                {studentsOptions.length === 0 ? (
+                  <p className="text-sm text-[#a1a1a1]">Nenhum aluno carregado.</p>
+                ) : (
+                  <select
+                    value={selectedStudentId}
+                    onChange={(e) => setSelectedStudentId(e.target.value)}
+                    className="w-full rounded-md border border-[#ffffff10] bg-[#0a0a0a] p-2 text-sm text-[#f5f5f5] focus:border-[#D4A373] focus:outline-none"
+                  >
+                    <option value="">Selecione um aluno</option>
+                    {studentsOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 )}
-                {chatError && (
-                  <p className="text-sm text-red-400">{chatError}</p>
-                )}
-              </form>
-            </div>
+              </div>
 
-            <div className="space-y-4">
-              <h2 className="text-xl font-medium text-[#f5f5f5]">Histórico</h2>
-              {questions.length === 0 ? (
-                <p className="text-[#a1a1a1]">Nenhuma mensagem encontrada.</p>
+              <div className="space-y-2">
+                <label className="text-sm text-[#a1a1a1]">Professor (opcional)</label>
+                {teachersOptions.length === 0 ? (
+                  <p className="text-sm text-[#a1a1a1]">Nenhum professor carregado.</p>
+                ) : (
+                  <select
+                    value={selectedTeacherId}
+                    onChange={(e) => setSelectedTeacherId(e.target.value)}
+                    className="w-full rounded-md border border-[#ffffff10] bg-[#0a0a0a] p-2 text-sm text-[#f5f5f5] focus:border-[#D4A373] focus:outline-none"
+                  >
+                    <option value="">Selecione um professor</option>
+                    {teachersOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-[#a1a1a1]">Conteúdo</label>
+                <textarea
+                  value={chatContent}
+                  onChange={(e) => setChatContent(e.target.value)}
+                  placeholder="Conteúdo da mensagem"
+                  rows={3}
+                  className="w-full rounded-md border border-[#ffffff10] bg-[#0a0a0a] p-2 text-sm text-[#f5f5f5] placeholder:text-[#a1a1a1] focus:border-[#D4A373] focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-md bg-[#D4A373] px-4 py-2 text-sm font-semibold text-[#0a0a0a] disabled:opacity-50"
+              >
+                Enviar
+              </button>
+            </form>
+
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold text-[#f5f5f5]">Threads</h2>
+              {threads.length === 0 ? (
+                <p className="text-sm text-[#a1a1a1]">Nenhuma thread encontrada.</p>
               ) : (
-                questions.map((q) => {
-                  const thread = [q, ...(q.children || [])].sort(
-                    (a, b) =>
-                      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-                  );
-                  const isExpanded = expandedQuestion === q.id;
-
-                  return (
-                    <div
-                      key={q.id}
-                      className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-[#a1a1a1]">
-                            Aluno: {q.student?.name || "—"}
-                          </span>
-                          <span className="text-sm text-[#a1a1a1]">
-                            • Professor: {q.teacher?.name || "—"}
-                          </span>
-                        </div>
-                        <span className="text-xs text-[#a1a1a1]">
-                          {getThreadStatus(thread)}
-                        </span>
-                      </div>
-
-                      <div className="space-y-3 mb-4">
-                        {thread.map((msg) => (
-                          <div
-                            key={msg.id}
-                            className="flex flex-col gap-1 p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff08]"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-medium text-[#f5f5f5]">
-                                {getAuthorName(msg)}
-                              </span>
-                              <span
-                                className={`text-xs px-2 py-0.5 rounded border ${getRoleBadgeClass(
-                                  msg.senderRole
-                                )}`}
-                              >
-                                {msg.senderRole}
-                              </span>
-                            </div>
-                            <p className="text-sm text-[#f5f5f5]">{msg.content}</p>
-                            <span className="text-xs text-[#a1a1a1]">
-                              {formatDateTime(msg.createdAt)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {!isExpanded && (
-                        <button
-                          onClick={() => toggleExpand(q.id)}
-                          className="text-sm text-[#D4A373] hover:underline"
-                        >
-                          Continuar conversa
-                        </button>
-                      )}
-
-                      {isExpanded && (
-                        <div className="mt-3 space-y-3">
-                          <textarea
-                            value={replyContent}
-                            onChange={(e) => setReplyContent(e.target.value)}
-                            rows={3}
-                            placeholder="Digite sua resposta..."
-                            className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-[#f5f5f5] placeholder-[#a1a1a1] focus:outline-none focus:border-[#D4A373] resize-none"
-                          />
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => handleReply(q)}
-                              disabled={!replyContent.trim()}
-                              className="px-4 py-2 rounded-lg bg-[#D4A373] text-[#0a0a0a] text-sm font-medium hover:bg-[#c29365] transition disabled:opacity-50"
-                            >
-                              Responder
-                            </button>
-                            <button
-                              onClick={() => toggleExpand(q.id)}
-                              className="px-4 py-2 rounded-lg border border-[#ffffff10] text-sm text-[#a1a1a1] hover:border-[#ffffff20] transition"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
+                threads.map((t) => renderThread(t, 0))
               )}
             </div>
-          </section>
+          </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
