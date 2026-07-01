@@ -44,6 +44,7 @@ interface ThreadMessage {
   teacher?: { id: string; name: string | null } | null;
   children?: ThreadMessage[];
   parentId?: string | null;
+  resolvedAt?: string | null;
 }
 
 type TargetType = "ALUNO_ESPECIFICO" | "TODOS_ALUNOS" | "PROFESSOR_ESPECIFICO" | "TODOS_PROFESSORES";
@@ -137,6 +138,7 @@ function normalizeThreadMessage(item: any): ThreadMessage {
     senderRole: getString(item.senderRole),
     createdAt: getString(item.createdAt),
     parentId: getString(item.parentId),
+    resolvedAt: getString(item.resolvedAt),
     answeredBy: isRecord(item.answeredBy) ? { id: getString(item.answeredBy.id), name: getString(item.answeredBy.name), role: getString(item.answeredBy.role) } : null,
     student: isRecord(item.student) ? { id: getString(item.student.id), name: getString(item.student.name) } : null,
     teacher: isRecord(item.teacher) ? { id: getString(item.teacher.id), name: getString(item.teacher.name) } : null,
@@ -163,7 +165,13 @@ function formatDateTime(dateStr: string): string {
 }
 
 function getThreadStatus(thread: ThreadMessage): string {
+  if (thread.resolvedAt) return "Encerrada";
   return (thread.children && thread.children.length > 0) ? "Respondido" : "Aguardando resposta";
+}
+
+function getThreadStatusClass(thread: ThreadMessage): string {
+  if (thread.resolvedAt) return "text-zinc-400";
+  return (thread.children && thread.children.length > 0) ? "text-emerald-400" : "text-amber-400";
 }
 
 function getAuthorName(msg: ThreadMessage): string {
@@ -222,9 +230,17 @@ export default function GestaoPage() {
 
   const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState("");
+  const [closingQuestionId, setClosingQuestionId] = useState<string | null>(null);
 
   const studentsOptions = useMemo(() => students.filter(s => !!s.id && !!s.name), [students]);
   const teachersOptions = useMemo(() => teachers.filter(t => !!t.id && !!t.name), [teachers]);
+
+
+  const reloadQuestions = async () => {
+    const qRes = await fetch('/api/questions', { cache: 'no-store' });
+    const qData = await safeJson(qRes);
+    setQuestions(extractArray(qData, ["questions", "items", "data"]).map(normalizeThreadMessage).filter(q => !q.parentId));
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -354,13 +370,11 @@ export default function GestaoPage() {
     setChatSelectedTeacherId("");
     setSendingChat(false);
 
-    const qRes = await fetch('/api/questions', { cache: 'no-store' });
-    const qData = await safeJson(qRes);
-    setQuestions(extractArray(qData, ["questions"]).map(normalizeThreadMessage).filter(q => !q.parentId));
+    await reloadQuestions();
   };
 
   const handleReply = async (q: ThreadMessage) => {
-    if (!replyContent.trim()) return;
+    if (!replyContent.trim() || q.resolvedAt) return;
 
     const res = await fetch('/api/questions', {
       method: 'POST',
@@ -382,11 +396,36 @@ export default function GestaoPage() {
     }
 
     setReplyContent("");
-    setExpandedQuestion(null);
-    const qRes = await fetch('/api/questions', { cache: 'no-store' });
-    const qData = await safeJson(qRes);
-    setQuestions(extractArray(qData, ["questions"]).map(normalizeThreadMessage).filter(q => !q.parentId));
+    await reloadQuestions();
   };
+
+
+  const handleCloseConversation = async (q: ThreadMessage) => {
+    if (q.resolvedAt) return;
+
+    const confirmClose = window.confirm("Deseja encerrar esta conversa? Depois de encerrada, ela ficará apenas para consulta.");
+    if (!confirmClose) return;
+
+    setClosingQuestionId(q.id);
+
+    const res = await fetch('/api/questions/close', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questionId: q.id })
+    });
+
+    const data = await safeJson(res);
+
+    if (!res.ok) {
+      alert(getErrorMessage(data, "Erro ao encerrar conversa."));
+      setClosingQuestionId(null);
+      return;
+    }
+
+    setClosingQuestionId(null);
+    await reloadQuestions();
+  };
+
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6">
@@ -630,14 +669,14 @@ export default function GestaoPage() {
                       <p className="text-sm text-[#f5f5f5] mb-3">{q.content}</p>
 
                       <div className="flex justify-between items-center">
-                        <span className={`text-[10px] ${q.children && q.children.length > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        <span className={`text-[10px] ${getThreadStatusClass(q)}`}>
                           {getThreadStatus(q)}
                         </span>
                         <button
                           onClick={() => setExpandedQuestion(expandedQuestion === q.id ? null : q.id)}
                           className="text-xs text-[#D4A373] hover:underline"
                         >
-                          {expandedQuestion === q.id ? "Fechar conversa" : "Continuar conversa"}
+                          {expandedQuestion === q.id ? "Recolher conversa" : "Abrir conversa"}
                         </button>
                       </div>
                     </div>
@@ -657,20 +696,40 @@ export default function GestaoPage() {
                           </div>
                         ))}
 
-                        <div className="pt-2">
-                          <textarea
-                            value={replyContent}
-                            onChange={(e) => setReplyContent(e.target.value)}
-                            className="w-full bg-[#111111] border border-[#ffffff10] rounded-lg p-2 text-xs focus:outline-none focus:border-[#D4A373] h-20 resize-none mb-2"
-                            placeholder="Escreva sua resposta..."
-                          />
-                          <button
-                            onClick={() => handleReply(q)}
-                            className="bg-[#D4A373] text-black text-xs font-bold px-4 py-1.5 rounded hover:bg-[#b88b5d] transition-colors"
-                          >
-                            Responder
-                          </button>
-                        </div>
+                        {q.resolvedAt ? (
+                          <div className="pt-2">
+                            <p className="text-xs text-zinc-400">
+                              Conversa encerrada em {formatDateTime(q.resolvedAt)}. Ela fica disponível apenas para consulta.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="pt-2 space-y-2">
+                            <textarea
+                              value={replyContent}
+                              onChange={(e) => setReplyContent(e.target.value)}
+                              className="w-full bg-[#111111] border border-[#ffffff10] rounded-lg p-2 text-xs focus:outline-none focus:border-[#D4A373] h-20 resize-none"
+                              placeholder="Escreva sua resposta..."
+                            />
+
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => handleReply(q)}
+                                className="bg-[#D4A373] text-black text-xs font-bold px-4 py-1.5 rounded hover:bg-[#b88b5d] transition-colors"
+                              >
+                                Responder
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleCloseConversation(q)}
+                                disabled={closingQuestionId === q.id}
+                                className="border border-red-500/30 text-red-400 text-xs font-bold px-4 py-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                              >
+                                {closingQuestionId === q.id ? "Encerrando..." : "Encerrar conversa"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
