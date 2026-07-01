@@ -119,7 +119,7 @@ export default function ManagementNoticeModalList({
 
   return (
     <>
-      <div className="divide-y divide-[#ffffff10]">
+      <div className="divide-y divide-[#ffffff10] max-h-[520px] overflow-y-auto pr-2">
         {notices.map((notice) => {
           const read = isRead(notice);
 
