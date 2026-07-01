@@ -110,8 +110,8 @@ export async function POST(req: NextRequest) {
       }
       const created = await prisma.question.create({
         data: {
-          studentId: finalStudentId || undefined,
-          teacherId: finalTeacherId || undefined,
+          studentId: finalStudentId || "",
+          teacherId: finalTeacherId || "",
           content: text,
           senderRole: senderRole as any,
           answeredById: userId,
@@ -131,8 +131,8 @@ export async function POST(req: NextRequest) {
       }
       const created = await prisma.question.create({
         data: {
-          studentId: finalStudentId || undefined,
-          teacherId: finalTeacherId || undefined,
+          studentId: finalStudentId || "",
+          teacherId: finalTeacherId || "",
           content: text,
           senderRole: senderRole as any,
           ...(parentId ? { parentId } : {}),
@@ -151,8 +151,8 @@ export async function POST(req: NextRequest) {
       }
       const created = await prisma.question.create({
         data: {
-          studentId: finalStudentId || undefined,
-          teacherId: finalTeacherId || undefined,
+          studentId: finalStudentId || "",
+          teacherId: finalTeacherId || "",
           content: text,
           senderRole: senderRole as any,
           answeredById: userId,
@@ -188,10 +188,10 @@ export async function PUT(req: NextRequest) {
       data.content = body.content.trim();
     }
     if (typeof body.studentId === 'string') {
-      data.studentId = body.studentId.trim() || undefined;
+      data.studentId = body.studentId.trim() || "";
     }
     if (typeof body.teacherId === 'string') {
-      data.teacherId = body.teacherId.trim() || undefined;
+      data.teacherId = body.teacherId.trim() || "";
     }
     if (typeof body.answeredById === 'string' && body.answeredById.trim() !== '') {
       data.answeredById = body.answeredById.trim();
