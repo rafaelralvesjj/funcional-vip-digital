@@ -9,7 +9,7 @@ type ConversationReply = {
   id: string;
   studentId?: string | null;
   teacherId?: string | null;
-  content: string;
+  content: string; a
   senderRole: string;
   createdAt: string;
   resolvedAt?: string | null;
@@ -120,6 +120,7 @@ export default function DashboardConversationList({
   const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
   const [replyContentById, setReplyContentById] = useState<Record<string, string>>({});
   const [sendingConversationId, setSendingConversationId] = useState<string | null>(null);
+  const [closingConversationId, setClosingConversationId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
   const [successById, setSuccessById] = useState<Record<string, string>>({});
 
@@ -187,6 +188,57 @@ export default function DashboardConversationList({
       }));
     } finally {
       setSendingConversationId(null);
+    }
+  }
+
+  async function handleCloseConversation(conversation: ConversationItem) {
+    if (conversation.resolvedAt || closingConversationId) return;
+
+    const confirmClose = window.confirm(
+      "Deseja encerrar esta conversa? Depois de encerrada, ela ficará apenas para consulta."
+    );
+
+    if (!confirmClose) return;
+
+    setClosingConversationId(conversation.id);
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+    setSuccessById((current) => ({ ...current, [conversation.id]: "" }));
+
+    try {
+      const response = await fetch("/api/questions/close", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          questionId: conversation.id,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setErrorById((current) => ({
+          ...current,
+          [conversation.id]: getErrorMessage(data, "Erro ao encerrar conversa."),
+        }));
+        return;
+      }
+
+      setSuccessById((current) => ({
+        ...current,
+        [conversation.id]: "Conversa encerrada.",
+      }));
+
+      router.refresh();
+    } catch (error) {
+      console.error("DashboardConversationList close error:", error);
+      setErrorById((current) => ({
+        ...current,
+        [conversation.id]: "Erro ao encerrar conversa.",
+      }));
+    } finally {
+      setClosingConversationId(null);
     }
   }
 
@@ -280,6 +332,18 @@ export default function DashboardConversationList({
                   </p>
                 )}
 
+                {error && (
+                  <p className="text-xs text-red-400">
+                    {error}
+                  </p>
+                )}
+
+                {success && (
+                  <p className="text-xs text-emerald-400">
+                    {success}
+                  </p>
+                )}
+
                 {isClosed ? (
                   <div className="pt-2">
                     <p className="text-xs text-zinc-400">
@@ -300,25 +364,24 @@ export default function DashboardConversationList({
                       placeholder="Escreva sua resposta..."
                     />
 
-                    {error && (
-                      <p className="text-xs text-red-400">
-                        {error}
-                      </p>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        disabled={sendingConversationId === conversation.id}
+                        className="bg-[#D4A373] text-black text-xs font-bold px-4 py-1.5 rounded hover:bg-[#b88b5d] transition-colors disabled:opacity-50"
+                      >
+                        {sendingConversationId === conversation.id ? "Enviando..." : "Responder"}
+                      </button>
 
-                    {success && (
-                      <p className="text-xs text-emerald-400">
-                        {success}
-                      </p>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={sendingConversationId === conversation.id}
-                      className="bg-[#D4A373] text-black text-xs font-bold px-4 py-1.5 rounded hover:bg-[#b88b5d] transition-colors disabled:opacity-50"
-                    >
-                      {sendingConversationId === conversation.id ? "Enviando..." : "Responder"}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCloseConversation(conversation)}
+                        disabled={closingConversationId === conversation.id}
+                        className="border border-red-500/30 text-red-400 text-xs font-bold px-4 py-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {closingConversationId === conversation.id ? "Encerrando..." : "Encerrar conversa"}
+                      </button>
+                    </div>
                   </form>
                 )}
               </div>
