@@ -6,16 +6,63 @@ import GestaoMessageReply from '@/components/GestaoMessageReply';
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
+  const sessionUser = session?.user as any;
 
-  if (!session?.user?.id) {
+  if (!sessionUser?.id) {
     redirect('/login');
   }
 
-  const userId = session.user.id;
-  const role = (session.user as any)?.role?.toUpperCase?.() || '';
+  const userId = String(sessionUser.id);
+  const role = String(sessionUser?.role || '').toUpperCase();
   const isTeacher = role === 'TEACHER' || role === 'PROFESSOR';
   const isGestor = role === 'GESTOR' || role === 'ADMIN';
-  const userName = (session.user as any)?.name || 'Usuário';
+  const userName = sessionUser?.name || 'Usuário';
+
+  const labels = {
+    studentsCard: isGestor ? 'Todos os alunos' : 'Meus alunos',
+
+    pendingWorkoutsCard: isGestor
+      ? 'Treinos pendentes de todos os alunos'
+      : 'Treinos pendentes dos meus alunos',
+
+    unansweredQuestionsCard: isGestor
+      ? 'Dúvidas sem resposta de todos os alunos'
+      : 'Dúvidas sem resposta dos meus alunos',
+
+    pendingNoticesCard: isGestor
+      ? 'Avisos pendentes de todos os alunos'
+      : 'Avisos pendentes dos meus alunos',
+
+    managementNoticesCard: isGestor
+      ? 'Avisos da gestão de todos os alunos e professores'
+      : 'Avisos da gestão direcionado a mim',
+
+    managementMessagesCard: isGestor
+      ? 'Mensagens da gestão todos os alunos e professores'
+      : 'Mensagens da gestão direcionado a mim',
+
+    pendingWorkoutsList: isGestor
+      ? 'Treinos Pendentes de todos os alunos'
+      : 'Treinos Pendentes dos meus alunos',
+
+    pendingNoticesList: isGestor
+      ? 'Avisos com leitura pendente de todos os alunos'
+      : 'Avisos com leitura pendente dos meus alunos',
+
+    unansweredQuestionsList: isGestor
+      ? 'Dúvidas sem resposta de todos os alunos'
+      : 'Dúvidas sem resposta dos meus alunos',
+
+    managementNoticesList: isGestor
+      ? 'Avisos da gestão de todos os alunos e professores'
+      : 'Avisos da gestão direcionado para mim',
+
+    managementMessagesList: isGestor
+      ? 'Mensagens da gestão todos os alunos e professores'
+      : 'Mensagens da gestão direcionado para mim',
+
+    studentsList: isGestor ? 'Todos os alunos' : 'Meus alunos',
+  };
 
   function formatDate(date: Date): string {
     return new Date(date).toLocaleDateString('pt-BR', {
@@ -25,6 +72,15 @@ export default async function DashboardPage() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  }
+
+  function normalizeRole(value?: string | null): string {
+    const roleValue = String(value || '').toUpperCase();
+
+    if (roleValue === 'ALUNO') return 'STUDENT';
+    if (roleValue === 'PROFESSOR') return 'TEACHER';
+
+    return roleValue;
   }
 
   const students = await prisma.student.findMany({
@@ -40,6 +96,9 @@ export default async function DashboardPage() {
         },
       },
     },
+    orderBy: {
+      name: 'asc',
+    },
   });
 
   const myStudentIds = students.map((s) => s.id);
@@ -47,9 +106,7 @@ export default async function DashboardPage() {
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
       status: 'PENDENTE',
-      ...(isTeacher && myStudentIds.length > 0
-        ? { studentId: { in: myStudentIds } }
-        : {}),
+      ...(isTeacher ? { studentId: { in: myStudentIds } } : {}),
     },
     select: {
       id: true,
@@ -70,9 +127,7 @@ export default async function DashboardPage() {
     where: {
       parentId: null,
       senderRole: 'STUDENT',
-      ...(isTeacher && myStudentIds.length > 0
-        ? { studentId: { in: myStudentIds } }
-        : {}),
+      ...(isTeacher ? { studentId: { in: myStudentIds } } : {}),
     },
     select: {
       id: true,
@@ -105,6 +160,9 @@ export default async function DashboardPage() {
           },
         },
       },
+    },
+    orderBy: {
+      createdAt: 'desc',
     },
   });
 
@@ -149,29 +207,46 @@ export default async function DashboardPage() {
     },
   });
 
-  const pendingNotices = notices.filter((n) => {
-    if (!n.targetRole) return false;
-    const target = n.targetRole.toUpperCase();
-    if (target === 'STUDENT') {
-      if (isTeacher || isGestor) return false;
-      if (n.studentId) return n.studentId !== userId && !n.reads.some((r) => r.studentId === userId);
-      return !n.reads.some((r) => r.studentId === userId);
+  const pendingNotices = notices.filter((notice) => {
+    const targetRole = normalizeRole(notice.targetRole);
+
+    if (targetRole !== 'STUDENT') {
+      return false;
     }
-    if (target === 'TEACHER') {
-      if (!isTeacher) return false;
-      if (n.professorId) return n.professorId !== userId;
-      return true;
+
+    const targetStudentIds = notice.studentId ? [notice.studentId] : myStudentIds;
+
+    if (targetStudentIds.length === 0) {
+      return false;
     }
-    if (target === 'GESTOR' || target === 'ADMIN') {
-      return isGestor;
-    }
-    return false;
+
+    const readStudentIds = new Set(notice.reads.map((read) => read.studentId));
+
+    return targetStudentIds.some((studentId) => !readStudentIds.has(studentId));
   });
 
-  const managementNotices = notices.filter((n) => {
-    const authorRole = (n.author?.role || '').toUpperCase();
-    const type = (n.type || '').toUpperCase();
-    return authorRole === 'GESTOR' || authorRole === 'ADMIN' || type === 'MANAGEMENT';
+  const managementNotices = notices.filter((notice) => {
+    const authorRole = normalizeRole(notice.author?.role);
+    const noticeType = String(notice.type || '').toUpperCase();
+    const targetRole = normalizeRole(notice.targetRole);
+
+    const isManagementNotice =
+      authorRole === 'GESTOR' ||
+      authorRole === 'ADMIN' ||
+      noticeType === 'MANAGEMENT';
+
+    if (!isManagementNotice) {
+      return false;
+    }
+
+    if (isTeacher) {
+      return (
+        targetRole === 'TEACHER' &&
+        (!notice.professorId || notice.professorId === userId)
+      );
+    }
+
+    return true;
   });
 
   const managementMessages = await prisma.question.findMany({
@@ -232,9 +307,80 @@ export default async function DashboardPage() {
     },
   });
 
-  const questionsWithoutAnswer = unansweredQuestions.filter((q) => {
-    return !q.children.some((c) => c.senderRole === 'TEACHER');
+  const questionsWithoutAnswer = unansweredQuestions.filter((question) => {
+    const answerRoles = ['TEACHER', 'PROFESSOR', 'GESTOR', 'ADMIN'];
+
+    return !question.children.some((child) =>
+      answerRoles.includes(normalizeRole(child.senderRole))
+    );
   });
+
+  function getNoticeTargetLabel(notice: (typeof notices)[number]): string {
+    const targetRole = normalizeRole(notice.targetRole);
+
+    if (targetRole === 'TEACHER') {
+      if (notice.professor?.name) {
+        return `Professor: ${notice.professor.name}`;
+      }
+
+      return 'Todos os professores';
+    }
+
+    if (targetRole === 'STUDENT') {
+      if (notice.student?.name) {
+        return `Aluno: ${notice.student.name}`;
+      }
+
+      return 'Todos os alunos';
+    }
+
+    return 'Público não informado';
+  }
+
+  function getManagementMessageTargetLabel(
+    message: (typeof managementMessages)[number]
+  ): string {
+    if (message.student?.name && message.teacher?.name) {
+      return `${message.student.name} → ${message.teacher.name}`;
+    }
+
+    if (message.teacher?.name) {
+      return `Professor: ${message.teacher.name}`;
+    }
+
+    if (message.student?.name) {
+      return `Aluno: ${message.student.name}`;
+    }
+
+    return 'Todos os alunos e professores';
+  }
+
+  const summaryCards = [
+    {
+      label: labels.studentsCard,
+      value: students.length,
+    },
+    {
+      label: labels.pendingWorkoutsCard,
+      value: pendingWorkouts.length,
+    },
+    {
+      label: labels.unansweredQuestionsCard,
+      value: questionsWithoutAnswer.length,
+    },
+    {
+      label: labels.pendingNoticesCard,
+      value: pendingNotices.length,
+    },
+    {
+      label: labels.managementNoticesCard,
+      value: managementNotices.length,
+    },
+    {
+      label: labels.managementMessagesCard,
+      value: managementMessages.length,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6 md:p-8">
@@ -243,42 +389,55 @@ export default async function DashboardPage() {
           <h1 className="text-2xl md:text-3xl font-semibold text-[#f5f5f5]">
             Olá, {userName}
           </h1>
+
           <p className="mt-2 text-[#a1a1a1]">
             Bem-vindo ao painel administrativo. Aqui está o resumo das atividades pendentes.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-            <p className="text-[#a1a1a1] text-sm">Meus alunos</p>
-            <p className="text-3xl font-semibold text-[#D4A373] mt-2">{students.length}</p>
-          </div>
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-            <p className="text-[#a1a1a1] text-sm">Treinos pendentes</p>
-            <p className="text-3xl font-semibold text-[#D4A373] mt-2">{pendingWorkouts.length}</p>
-          </div>
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-            <p className="text-[#a1a1a1] text-sm">Dúvidas sem resposta</p>
-            <p className="text-3xl font-semibold text-[#D4A373] mt-2">{questionsWithoutAnswer.length}</p>
-          </div>
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-            <p className="text-[#a1a1a1] text-sm">Avisos pendentes</p>
-            <p className="text-3xl font-semibold text-[#D4A373] mt-2">{pendingNotices.length}</p>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {summaryCards.map((card) => (
+            <div
+              key={card.label}
+              className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6"
+            >
+              <p className="text-[#a1a1a1] text-sm min-h-[40px]">
+                {card.label}
+              </p>
+
+              <p className="text-3xl font-semibold text-[#D4A373] mt-2">
+                {card.value}
+              </p>
+            </div>
+          ))}
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Alunos com treinos pendentes</h2>
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+            {labels.pendingWorkoutsList}
+          </h2>
+
           {pendingWorkouts.length === 0 ? (
-            <p className="text-[#a1a1a1]">Nenhum treino pendente no momento.</p>
+            <p className="text-[#a1a1a1]">
+              Nenhum treino pendente no momento.
+            </p>
           ) : (
             <div className="divide-y divide-[#ffffff10]">
-              {pendingWorkouts.map((w) => (
-                <div key={w.id} className="py-4 flex items-center justify-between">
+              {pendingWorkouts.map((workout) => (
+                <div
+                  key={workout.id}
+                  className="py-4 flex items-center justify-between gap-4"
+                >
                   <div>
-                    <p className="text-[#f5f5f5] font-medium">{w.student?.name || 'Aluno'}</p>
-                    <p className="text-[#a1a1a1] text-sm">{formatDate(w.createdAt)}</p>
+                    <p className="text-[#f5f5f5] font-medium">
+                      {workout.student?.name || 'Aluno'}
+                    </p>
+
+                    <p className="text-[#a1a1a1] text-sm">
+                      {formatDate(workout.createdAt)}
+                    </p>
                   </div>
+
                   <span className="px-3 py-1 rounded-full text-xs bg-[#D4A373]/10 text-[#D4A373]">
                     Pendente
                   </span>
@@ -289,60 +448,30 @@ export default async function DashboardPage() {
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Dúvidas sem resposta</h2>
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+            {labels.unansweredQuestionsList}
+          </h2>
+
           {questionsWithoutAnswer.length === 0 ? (
-            <p className="text-[#a1a1a1]">Nenhuma dúvida aguardando resposta.</p>
+            <p className="text-[#a1a1a1]">
+              Nenhuma dúvida aguardando resposta.
+            </p>
           ) : (
             <div className="divide-y divide-[#ffffff10]">
-              {questionsWithoutAnswer.map((q) => (
-                <div key={q.id} className="py-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[#f5f5f5] font-medium">{q.student?.name || 'Aluno'}</p>
-                    <p className="text-[#a1a1a1] text-sm">{formatDate(q.createdAt)}</p>
-                  </div>
-                  <p className="text-[#a1a1a1] mt-2 line-clamp-2">{q.content}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Avisos com leitura pendente</h2>
-          {pendingNotices.length === 0 ? (
-            <p className="text-[#a1a1a1]">Nenhum aviso pendente de leitura.</p>
-          ) : (
-            <div className="divide-y divide-[#ffffff10]">
-              {pendingNotices.map((n) => (
-                <div key={n.id} className="py-4">
-                  <div className="flex items-center justify-between">
+              {questionsWithoutAnswer.map((question) => (
+                <div key={question.id} className="py-4">
+                  <div className="flex items-center justify-between gap-4">
                     <p className="text-[#f5f5f5] font-medium">
-                      {n.title || 'Aviso'}
+                      {question.student?.name || 'Aluno'}
                     </p>
-                    <p className="text-[#a1a1a1] text-sm">{formatDate(n.createdAt)}</p>
-                  </div>
-                  <p className="text-[#a1a1a1] mt-2">{n.content}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Avisos da gestão</h2>
-          {managementNotices.length === 0 ? (
-            <p className="text-[#a1a1a1]">Nenhum aviso da gestão.</p>
-          ) : (
-            <div className="divide-y divide-[#ffffff10]">
-              {managementNotices.map((n) => (
-                <div key={n.id} className="py-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[#f5f5f5] font-medium">{n.title || 'Aviso da Gestão'}</p>
-                    <p className="text-[#a1a1a1] text-sm">{formatDate(n.createdAt)}</p>
+                    <p className="text-[#a1a1a1] text-sm">
+                      {formatDate(question.createdAt)}
+                    </p>
                   </div>
-                  <p className="text-[#a1a1a1] mt-2">{n.content}</p>
-                  <p className="text-[#D4A373] text-sm mt-2">
-                    Por: {n.author?.name || 'Gestão'} {n.author?.role ? `(${n.author.role})` : ''}
+
+                  <p className="text-[#a1a1a1] mt-2 line-clamp-2">
+                    {question.content}
                   </p>
                 </div>
               ))}
@@ -351,35 +480,130 @@ export default async function DashboardPage() {
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Mensagens da gestão</h2>
-          {managementMessages.length === 0 ? (
-            <p className="text-[#a1a1a1]">Nenhuma mensagem da gestão.</p>
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+            {labels.pendingNoticesList}
+          </h2>
+
+          {pendingNotices.length === 0 ? (
+            <p className="text-[#a1a1a1]">
+              Nenhum aviso pendente de leitura.
+            </p>
           ) : (
             <div className="divide-y divide-[#ffffff10]">
-              {managementMessages.map((msg) => {
-                const replies = (msg.children || []).filter((c) => c.senderRole === 'TEACHER');
+              {pendingNotices.map((notice) => (
+                <div key={notice.id} className="py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-[#f5f5f5] font-medium">
+                      {notice.title || 'Aviso'}
+                    </p>
+
+                    <p className="text-[#a1a1a1] text-sm">
+                      {formatDate(notice.createdAt)}
+                    </p>
+                  </div>
+
+                  <p className="text-[#a1a1a1] mt-2">
+                    {notice.content}
+                  </p>
+
+                  <p className="text-[#D4A373] text-sm mt-2">
+                    {getNoticeTargetLabel(notice)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+            {labels.managementNoticesList}
+          </h2>
+
+          {managementNotices.length === 0 ? (
+            <p className="text-[#a1a1a1]">
+              Nenhum aviso da gestão.
+            </p>
+          ) : (
+            <div className="divide-y divide-[#ffffff10]">
+              {managementNotices.map((notice) => (
+                <div key={notice.id} className="py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-[#f5f5f5] font-medium">
+                      {notice.title || 'Aviso da gestão'}
+                    </p>
+
+                    <p className="text-[#a1a1a1] text-sm">
+                      {formatDate(notice.createdAt)}
+                    </p>
+                  </div>
+
+                  <p className="text-[#a1a1a1] mt-2">
+                    {notice.content}
+                  </p>
+
+                  <div className="flex flex-wrap gap-3 mt-2 text-sm">
+                    <span className="text-[#D4A373]">
+                      Por: {notice.author?.name || 'Gestão'}
+                      {notice.author?.role ? ` (${notice.author.role})` : ''}
+                    </span>
+
+                    <span className="text-[#a1a1a1]">
+                      {getNoticeTargetLabel(notice)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+            {labels.managementMessagesList}
+          </h2>
+
+          {managementMessages.length === 0 ? (
+            <p className="text-[#a1a1a1]">
+              Nenhuma mensagem da gestão.
+            </p>
+          ) : (
+            <div className="divide-y divide-[#ffffff10]">
+              {managementMessages.map((message) => {
+                const replies = message.children || [];
                 const lastReply = replies[replies.length - 1];
+
                 return (
-                  <div key={msg.id} className="py-4">
-                    <div className="flex items-center justify-between">
+                  <div key={message.id} className="py-4">
+                    <div className="flex items-center justify-between gap-4">
                       <p className="text-[#f5f5f5] font-medium">
-                        {msg.student?.name || 'Aluno'} {msg.teacher?.name ? `→ ${msg.teacher.name}` : ''}
+                        {getManagementMessageTargetLabel(message)}
                       </p>
-                      <p className="text-[#a1a1a1] text-sm">{formatDate(msg.createdAt)}</p>
+
+                      <p className="text-[#a1a1a1] text-sm">
+                        {formatDate(message.createdAt)}
+                      </p>
                     </div>
-                    <p className="text-[#a1a1a1] mt-2">{msg.content}</p>
+
+                    <p className="text-[#a1a1a1] mt-2">
+                      {message.content}
+                    </p>
+
                     {lastReply ? (
                       <div className="mt-3 p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]">
                         <p className="text-[#a1a1a1] text-sm">
                           Última resposta de {lastReply.answeredBy?.name || 'Professor'}:
                         </p>
-                        <p className="text-[#f5f5f5] mt-1">{lastReply.content}</p>
+
+                        <p className="text-[#f5f5f5] mt-1">
+                          {lastReply.content}
+                        </p>
                       </div>
                     ) : !isGestor ? (
                       <div className="mt-3">
                         <GestaoMessageReply
-                          questionId={msg.id}
-                          studentId={String(msg.studentId ?? '')}
+                          questionId={message.id}
+                          studentId={String(message.studentId ?? '')}
                           teacherId={userId}
                           currentUserId={userId}
                         />
@@ -393,19 +617,27 @@ export default async function DashboardPage() {
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Meus alunos</h2>
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+            {labels.studentsList}
+          </h2>
+
           {students.length === 0 ? (
-            <p className="text-[#a1a1a1]">Nenhum aluno vinculado.</p>
+            <p className="text-[#a1a1a1]">
+              Nenhum aluno vinculado.
+            </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {students.map((s) => (
+              {students.map((student) => (
                 <div
-                  key={s.id}
+                  key={student.id}
                   className="p-4 rounded-xl bg-[#0a0a0a] border border-[#ffffff10]"
                 >
-                  <p className="text-[#f5f5f5] font-medium">{s.name}</p>
+                  <p className="text-[#f5f5f5] font-medium">
+                    {student.name}
+                  </p>
+
                   <p className="text-[#a1a1a1] text-sm">
-                    Usuário: {s.user?.name || 'Não vinculado'}
+                    Professor: {student.user?.name || 'Não vinculado'}
                   </p>
                 </div>
               ))}
