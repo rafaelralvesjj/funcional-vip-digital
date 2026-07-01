@@ -912,7 +912,7 @@ export default function GestaoPage() {
                           {isExpanded && (
                             <div className="flex flex-col gap-2">
                               <textarea
-n                                value={replyContent[q.id] ?? ""}
+                                value={replyContent[q.id] ?? ""}
                                 onChange={(e) =>
                                   setReplyContent((prev) => ({
                                     ...prev,
