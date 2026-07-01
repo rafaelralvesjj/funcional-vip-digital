@@ -2,301 +2,279 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../api/auth/[...nextauth]/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import Link from 'next/link';
 import GestaoMessageReply from '@/components/GestaoMessageReply';
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect('/auth/signin');
+
+  if (!session?.user?.id) {
+    redirect('/auth/signin');
+  }
 
   const userId = session.user.id;
-  const isGestor = session.user.role === 'GESTOR';
+  const role = (session.user as any)?.role;
+  const isGestor = role === 'GESTOR';
 
-  const alunos = await prisma.student.findMany({
-    where: isGestor ? {} : { userId },
+  const students = await prisma.student.findMany({
+    where: isGestor ? undefined : { userId },
     select: {
       id: true,
       name: true,
-      user: { select: { id: true, name: true } },
-    },
-  });
-  const myStudentIds = alunos.map((a) => a.id);
-
-  const pendingWorkouts = await prisma.workout.findMany({
-    where: { status: 'PENDENTE', studentId: { in: myStudentIds } },
-    include: {
-      student: { include: { user: { select: { name: true } } } },
-    },
-  });
-  const totalPendingWorkouts = pendingWorkouts.length;
-
-  const rawQuestions = await prisma.question.findMany({
-    where: {
-      parentId: null,
-      senderRole: 'STUDENT',
-      studentId: { in: myStudentIds },
-    },
-    include: {
-      student: { include: { user: { select: { name: true } } } },
-      children: { select: { senderRole: true } },
-    },
-  });
-  const unansweredQuestions = rawQuestions.filter(
-    (q) => !q.children.some((c) => c.senderRole === 'TEACHER')
-  );
-  const totalUnansweredQuestions = unansweredQuestions.length;
-
-  const notices = await prisma.notice.findMany({
-    where: isGestor
-      ? { targetRole: 'ALUNO' }
-      : { targetRole: 'ALUNO', authorId: userId },
-    include: {
-      author: { select: { name: true } },
-      student: { include: { user: { select: { name: true } } } },
-      reads: { select: { studentId: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 
-  type StudentItem = typeof alunos[number];
-  type NoticeItem = typeof notices[number];
+  const myStudentIds = students.map((s) => s.id);
 
-  const pendingNoticesByStudent = new Map<
-    string,
-    { student: StudentItem; notices: NoticeItem[] }
-  >();
+  const pendingWorkouts =
+    myStudentIds.length > 0
+      ? await prisma.workout.findMany({
+          where: {
+            status: 'PENDENTE',
+            studentId: { in: myStudentIds },
+          },
+          select: {
+            id: true,
+            name: true,
+            student: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        })
+      : [];
 
-  function addPending(student: StudentItem, notice: NoticeItem) {
-    const entry = pendingNoticesByStudent.get(student.id);
-    if (entry) {
-      entry.notices.push(notice);
-    } else {
-      pendingNoticesByStudent.set(student.id, { student, notices: [notice] });
+  const pendingQuestions =
+    myStudentIds.length > 0
+      ? await prisma.message.findMany({
+          where: {
+            parentId: null,
+            senderRole: 'STUDENT',
+            studentId: { in: myStudentIds },
+            children: {
+              none: {
+                senderRole: 'TEACHER',
+              },
+            },
+          },
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            student: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        })
+      : [];
+
+  const noticesWhere = isGestor
+    ? { targetRole: 'ALUNO' }
+    : { targetRole: 'ALUNO', authorId: userId };
+
+  const noticesWithReads = await prisma.notice.findMany({
+    where: noticesWhere,
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      createdAt: true,
+      reads: {
+        select: {
+          studentId: true,
+        },
+      },
+    },
+  });
+
+  const pendingReads: { student: (typeof students)[number]; notice: (typeof noticesWithReads)[number] }[] = [];
+
+  for (const notice of noticesWithReads) {
+    const readIds = new Set(notice.reads.map((r) => r.studentId));
+    for (const student of students) {
+      if (!readIds.has(student.id)) {
+        pendingReads.push({ student, notice });
+      }
     }
   }
 
-  for (const notice of notices) {
-    const readStudentIds = notice.reads.map((r) => r.studentId);
-    if (notice.studentId) {
-      if (
-        myStudentIds.includes(notice.studentId) &&
-        !readStudentIds.includes(notice.studentId)
-      ) {
-        const aluno = alunos.find((a) => a.id === notice.studentId);
-        if (aluno) addPending(aluno, notice);
-      }
-    } else {
-      for (const aluno of alunos) {
-        if (!readStudentIds.includes(aluno.id)) {
-          addPending(aluno, notice);
-        }
-      }
-    }
-  }
-
-  let totalPendingNotices = 0;
-  pendingNoticesByStudent.forEach((entry) => {
-    totalPendingNotices += entry.notices.length;
-  });
-
-  const managementNotices = !isGestor
+  const gestaoNotices = isGestor
     ? await prisma.notice.findMany({
+        where: {
+          authorId: userId,
+          targetRole: 'PROFESSOR',
+        },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+        },
+      })
+    : await prisma.notice.findMany({
         where: {
           targetRole: 'PROFESSOR',
           OR: [{ professorId: userId }, { professorId: null }],
         },
-        include: { author: { select: { name: true } } },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+        },
+      });
 
-  const sentNotices = isGestor
-    ? await prisma.notice.findMany({
-        where: { authorId: userId, targetRole: 'PROFESSOR' },
-        include: { author: { select: { name: true } } },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
+  const gestaoMessagesWhere = isGestor
+    ? {
+        senderRole: 'GESTOR' as const,
+        parentId: null,
+      }
+    : {
+        teacherId: userId,
+        senderRole: 'GESTOR' as const,
+        parentId: null,
+      };
 
-  const gestaoMessages = !isGestor
-    ? await prisma.question.findMany({
-        where: {
-          teacherId: userId,
-          senderRole: 'GESTOR',
-          parentId: null,
+  const gestaoMessages = await prisma.message.findMany({
+    where: gestaoMessagesWhere,
+    orderBy: {
+      createdAt: 'desc',
+    },
+    include: {
+      student: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      teacher: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      answeredBy: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      children: {
+        orderBy: {
+          createdAt: 'asc',
         },
         include: {
-          student: { include: { user: { select: { name: true } } } },
-          teacher: { select: { name: true } },
-          answeredBy: { select: { name: true } },
-          children: {
-            orderBy: { createdAt: 'asc' },
-            include: { answeredBy: { select: { name: true } } },
+          answeredBy: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
+      },
+    },
+  });
 
-  const sentGestaoMessages = isGestor
-    ? await prisma.question.findMany({
-        where: {
-          senderRole: 'GESTOR',
-          parentId: null,
-        },
-        include: {
-          student: { include: { user: { select: { name: true } } } },
-          teacher: { select: { name: true } },
-          answeredBy: { select: { name: true } },
-          children: {
-            orderBy: { createdAt: 'asc' },
-            include: { answeredBy: { select: { name: true } } },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      })
-    : [];
-
-  const pendingNoticesList = Array.from(pendingNoticesByStudent.entries());
+  const formatDate = (date: Date) =>
+    new Date(date).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold text-[#f5f5f5] mb-2">Dashboard</h1>
-        <p className="text-[#a1a1a1] mb-8">
-          {isGestor ? 'Visão geral da gestão' : 'Visão geral do professor'}
-        </p>
+    <main
+      className="min-h-screen p-6 md:p-10"
+      style={{ backgroundColor: '#0a0a0a' }}
+    >
+      <div className="mx-auto max-w-6xl space-y-8">
+        <div className="space-y-1">
+          <h1
+            className="text-2xl font-semibold md:text-3xl"
+            style={{ color: '#f5f5f5' }}
+          >
+            Dashboard
+          </h1>
+          <p style={{ color: '#a1a1a1' }}>
+            Olá, {session.user.name || userId}
+          </p>
+        </div>
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6">
-            <p className="text-sm text-[#a1a1a1] mb-1">Avisos pendentes</p>
-            <p className="text-3xl font-bold text-[#D4A373]">{totalPendingNotices}</p>
-          </div>
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6">
-            <p className="text-sm text-[#a1a1a1] mb-1">Treinos pendentes</p>
-            <p className="text-3xl font-bold text-[#D4A373]">{totalPendingWorkouts}</p>
-          </div>
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6">
-            <p className="text-sm text-[#a1a1a1] mb-1">Dúvidas sem resposta</p>
-            <p className="text-3xl font-bold text-[#D4A373]">{totalUnansweredQuestions}</p>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">
-              Alunos com avisos pendentes
-            </h2>
-            {pendingNoticesList.length === 0 ? (
-              <p className="text-sm text-[#a1a1a1]">Nenhum aviso pendente.</p>
-            ) : (
-              <ul className="space-y-3">
-                {pendingNoticesList.map(([studentId, { student, notices }]) => (
-                  <li
-                    key={studentId}
-                    className="p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-[#f5f5f5]">{student.name}</span>
-                      {isGestor && (
-                        <span className="text-xs text-[#D4A373] bg-[rgba(212,163,115,0.1)] px-2 py-1 rounded">
-                          Prof: {student.user?.name ?? 'Desconhecido'}
-                        </span>
-                      )}
-                    </div>
-                    <ul className="space-y-1">
-                      {notices.map((notice) => (
-                        <li
-                          key={notice.id}
-                          className="flex items-center justify-between text-sm text-[#a1a1a1]"
-                        >
-                          <span>{notice.title}</span>
-                          <span>
-                            {new Date(notice.createdAt).toLocaleDateString('pt-BR')}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            )}
+        <div className="grid gap-4 md:grid-cols-3">
+          <div
+            className="rounded-lg border p-4"
+            style={{ backgroundColor: '#111111', borderColor: '#ffffff10' }}
+          >
+            <p style={{ color: '#a1a1a1' }}>Treinos pendentes</p>
+            <p
+              className="mt-2 text-3xl font-semibold"
+              style={{ color: '#D4A373' }}
+            >
+              {pendingWorkouts.length}
+            </p>
           </div>
 
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">
-              Alunos com treinos pendentes
+          <div
+            className="rounded-lg border p-4"
+            style={{ backgroundColor: '#111111', borderColor: '#ffffff10' }}
+          >
+            <p style={{ color: '#a1a1a1' }}>Dúvidas sem resposta</p>
+            <p
+              className="mt-2 text-3xl font-semibold"
+              style={{ color: '#D4A373' }}
+            >
+              {pendingQuestions.length}
+            </p>
+          </div>
+
+          <div
+            className="rounded-lg border p-4"
+            style={{ backgroundColor: '#111111', borderColor: '#ffffff10' }}
+          >
+            <p style={{ color: '#a1a1a1' }}>Avisos com leitura pendente</p>
+            <p
+              className="mt-2 text-3xl font-semibold"
+              style={{ color: '#D4A373' }}
+            >
+              {pendingReads.length}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <div
+            className="rounded-lg border p-5"
+            style={{ backgroundColor: '#111111', borderColor: '#ffffff10' }}
+          >
+            <h2
+              className="mb-4 text-lg font-medium"
+              style={{ color: '#f5f5f5' }}
+            >
+              Treinos pendentes
             </h2>
             {pendingWorkouts.length === 0 ? (
-              <p className="text-sm text-[#a1a1a1]">Nenhum treino pendente.</p>
+              <p style={{ color: '#a1a1a1' }}>Nenhum treino pendente.</p>
             ) : (
               <ul className="space-y-3">
-                {pendingWorkouts.map((workout) => (
+                {pendingWorkouts.map((w) => (
                   <li
-                    key={workout.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]"
+                    key={w.id}
+                    className="rounded border p-3"
+                    style={{ borderColor: '#ffffff10' }}
                   >
-                    <span className="text-[#f5f5f5]">{workout.student.name}</span>
-                    {isGestor && (
-                      <span className="text-xs text-[#D4A373] bg-[rgba(212,163,115,0.1)] px-2 py-1 rounded">
-                        Prof: {workout.student.user?.name ?? 'Desconhecido'}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">
-              Dúvidas sem resposta
-            </h2>
-            {unansweredQuestions.length === 0 ? (
-              <p className="text-sm text-[#a1a1a1]">
-                Nenhuma dúvida sem resposta.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {unansweredQuestions.map((question) => (
-                  <li
-                    key={question.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]"
-                  >
-                    <span className="text-[#f5f5f5]">{question.student.name}</span>
-                    {isGestor && (
-                      <span className="text-xs text-[#D4A373] bg-[rgba(212,163,115,0.1)] px-2 py-1 rounded">
-                        Prof: {question.student.user?.name ?? 'Desconhecido'}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">
-              {isGestor ? 'Avisos enviados para professores' : 'Avisos da Gestão'}
-            </h2>
-            {(isGestor ? sentNotices : managementNotices).length === 0 ? (
-              <p className="text-sm text-[#a1a1a1]">Nenhum aviso encontrado.</p>
-            ) : (
-              <ul className="space-y-3">
-                {(isGestor ? sentNotices : managementNotices).map((notice) => (
-                  <li
-                    key={notice.id}
-                    className="p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-[#f5f5f5]">
-                        {notice.title}
-                      </span>
-                      <span className="text-xs text-[#a1a1a1]">
-                        {new Date(notice.createdAt).toLocaleDateString('pt-BR')}
-                      </span>
-                    </div>
-                    <p className="text-sm text-[#a1a1a1]">
-                      Por: {notice.author?.name ?? 'Desconhecido'}
+                    <p style={{ color: '#f5f5f5' }}>{w.name}</p>
+                    <p className="text-sm" style={{ color: '#a1a1a1' }}>
+                      {w.student?.name}
                     </p>
                   </li>
                 ))}
@@ -304,70 +282,190 @@ export default async function DashboardPage() {
             )}
           </div>
 
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6 lg:col-span-2">
-            <h2 className="text-lg font-semibold text-[#f5f5f5] mb-4">
-              {isGestor
-                ? 'Mensagens enviadas para professores'
-                : 'Mensagens da Gestão'}
+          <div
+            className="rounded-lg border p-5"
+            style={{ backgroundColor: '#111111', borderColor: '#ffffff10' }}
+          >
+            <h2
+              className="mb-4 text-lg font-medium"
+              style={{ color: '#f5f5f5' }}
+            >
+              Dúvidas sem resposta
             </h2>
-            {(isGestor ? sentGestaoMessages : gestaoMessages).length === 0 ? (
-              <p className="text-sm text-[#a1a1a1]">
-                Nenhuma mensagem encontrada.
-              </p>
+            {pendingQuestions.length === 0 ? (
+              <p style={{ color: '#a1a1a1' }}>Nenhuma dúvida pendente.</p>
             ) : (
               <ul className="space-y-3">
-                {(isGestor ? sentGestaoMessages : gestaoMessages).map((msg) => {
-                  const replies = (msg.children || []).filter(
-                    (c) => c.senderRole === 'TEACHER'
-                  );
-                  const lastReply = replies[replies.length - 1];
-                  return (
-                    <li
-                      key={msg.id}
-                      className="p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-[#f5f5f5]">
-                          {msg.student.name}
-                          {isGestor && msg.teacher
-                            ? ` - Prof: ${msg.teacher.name}`
-                            : ''}
-                        </span>
-                        <span className="text-xs text-[#a1a1a1]">
-                          {new Date(msg.createdAt).toLocaleDateString('pt-BR')}
-                        </span>
+                {pendingQuestions.map((q) => (
+                  <li
+                    key={q.id}
+                    className="rounded border p-3"
+                    style={{ borderColor: '#ffffff10' }}
+                  >
+                    <p style={{ color: '#f5f5f5' }}>{q.content}</p>
+                    <p className="text-sm" style={{ color: '#a1a1a1' }}>
+                      {q.student?.name} • {formatDate(q.createdAt)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        <div
+          className="rounded-lg border p-5"
+          style={{ backgroundColor: '#111111', borderColor: '#ffffff10' }}
+        >
+          <h2 className="mb-4 text-lg font-medium" style={{ color: '#f5f5f5' }}>
+            Avisos com leitura pendente por aluno
+          </h2>
+          {pendingReads.length === 0 ? (
+            <p style={{ color: '#a1a1a1' }}>
+              Nenhum aviso pendente de leitura.
+            </p>
+          ) : (
+            <ul className="grid gap-3 md:grid-cols-2">
+              {pendingReads.map(({ student, notice }) => (
+                <li
+                  key={`${student.id}-${notice.id}`}
+                  className="rounded border p-3"
+                  style={{ borderColor: '#ffffff10' }}
+                >
+                  <p style={{ color: '#f5f5f5' }}>{student.name}</p>
+                  <p className="text-sm" style={{ color: '#a1a1a1' }}>
+                    {notice.title} • {formatDate(notice.createdAt)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div
+          className="rounded-lg border p-5"
+          style={{ backgroundColor: '#111111', borderColor: '#ffffff10' }}
+        >
+          <h2 className="mb-4 text-lg font-medium" style={{ color: '#f5f5f5' }}>
+            Avisos da gestão / enviados
+          </h2>
+          {gestaoNotices.length === 0 ? (
+            <p style={{ color: '#a1a1a1' }}>Nenhum aviso da gestão.</p>
+          ) : (
+            <ul className="space-y-3">
+              {gestaoNotices.map((n) => (
+                <li
+                  key={n.id}
+                  className="rounded border p-3"
+                  style={{ borderColor: '#ffffff10' }}
+                >
+                  <p style={{ color: '#f5f5f5' }}>{n.title}</p>
+                  <p className="text-sm" style={{ color: '#a1a1a1' }}>
+                    {formatDate(n.createdAt)}
+                  </p>
+                  {n.content && (
+                    <p className="mt-1 text-sm" style={{ color: '#a1a1a1' }}>
+                      {n.content}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div
+          className="rounded-lg border p-5"
+          style={{ backgroundColor: '#111111', borderColor: '#ffffff10' }}
+        >
+          <h2 className="mb-4 text-lg font-medium" style={{ color: '#f5f5f5' }}>
+            Mensagens da gestão / enviadas
+          </h2>
+          {gestaoMessages.length === 0 ? (
+            <p style={{ color: '#a1a1a1' }}>Nenhuma mensagem da gestão.</p>
+          ) : (
+            <ul className="space-y-4">
+              {gestaoMessages.map((msg) => {
+                const replies = (msg.children || []).filter(
+                  (c) => c.senderRole === 'TEACHER'
+                );
+                const lastReply = replies[replies.length - 1];
+                const hasTeacherReply = !!lastReply;
+
+                return (
+                  <li
+                    key={msg.id}
+                    className="rounded border p-4"
+                    style={{ borderColor: '#ffffff10' }}
+                  >
+                    <div className="mb-2">
+                      <p style={{ color: '#f5f5f5' }}>{msg.content}</p>
+                      <p className="text-sm" style={{ color: '#a1a1a1' }}>
+                        Aluno: {msg.student?.name}
+                        {msg.teacher?.name && ` • Professor: ${msg.teacher.name}`}
+                        {' • '}
+                        {formatDate(msg.createdAt)}
+                      </p>
+                    </div>
+
+                    {hasTeacherReply ? (
+                      <div
+                        className="rounded border p-3"
+                        style={{ borderColor: '#ffffff10' }}
+                      >
+                        <p
+                          className="text-sm font-medium"
+                          style={{ color: '#D4A373' }}
+                        >
+                          Resposta de {lastReply.answeredBy?.name || 'Professor'}
+                        </p>
+                        <p className="mt-1 text-sm" style={{ color: '#f5f5f5' }}>
+                          {lastReply.content}
+                        </p>
                       </div>
-                      <p className="text-sm text-[#f5f5f5] mb-2">{msg.content}</p>
-                      {lastReply ? (
-                        <div className="text-sm text-[#a1a1a1] border-l-2 border-[#D4A373] pl-3">
-                          <p className="text-[#D4A373] mb-1">
-                            {!isGestor
-                              ? 'Resposta enviada ✓'
-                              : `Resposta de ${
-                                  lastReply.answeredBy?.name ?? 'Professor'
-                                }`}
-                          </p>
-                          <p>{lastReply.content}</p>
-                        </div>
-                      ) : !isGestor ? (
+                    ) : (
+                      !isGestor && (
                         <GestaoMessageReply
                           questionId={msg.id}
                           studentId={msg.studentId}
                           teacherId={userId}
                           currentUserId={userId}
                         />
-                      ) : (
-                        <p className="text-sm text-[#a1a1a1]">
-                          Aguardando resposta do professor.
-                        </p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </section>
+                      )
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div
+          className="rounded-lg border p-5"
+          style={{ backgroundColor: '#111111', borderColor: '#ffffff10' }}
+        >
+          <h2 className="mb-4 text-lg font-medium" style={{ color: '#f5f5f5' }}>
+            Meus alunos
+          </h2>
+          {students.length === 0 ? (
+            <p style={{ color: '#a1a1a1' }}>Nenhum aluno encontrado.</p>
+          ) : (
+            <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {students.map((s) => (
+                <li
+                  key={s.id}
+                  className="rounded border p-3"
+                  style={{ borderColor: '#ffffff10' }}
+                >
+                  <p style={{ color: '#f5f5f5' }}>{s.name}</p>
+                  <p className="text-sm" style={{ color: '#a1a1a1' }}>
+                    {s.user?.name || s.user?.id}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </main>
   );
