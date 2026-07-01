@@ -631,31 +631,46 @@ export default async function DashboardPage() {
               Nenhum treino pendente no momento.
             </p>
           ) : (
-            <div className="divide-y divide-[#ffffff10]">
+            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
               {pendingWorkouts.map((workout) => (
                 <div
                   key={workout.id}
-                  className="py-4 flex items-center justify-between gap-4"
+                  className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
                 >
-                  <div>
-                    <p className="text-[#f5f5f5] font-medium">
-                      {workout.student?.name || 'Aluno'}
+                  <div className="p-4">
+                    <div className="flex justify-between items-start gap-4 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
+                          TREINO
+                        </span>
+
+                        <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                          {workout.student?.name || 'Aluno'}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] text-[#a1a1a1] shrink-0">
+                        {formatDate(workout.createdAt)}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-[#f5f5f5] mb-3">
+                      Treino pendente de análise.
                     </p>
 
-                    {isGestor && (
-                      <p className="text-[#D4A373] text-sm font-medium">
-                        Professor: {workout.student?.user?.name || 'Não vinculado'}
-                      </p>
-                    )}
-
-                    <p className="text-[#a1a1a1] text-sm">
-                      {formatDate(workout.createdAt)}
+                    <p className="text-xs text-[#a1a1a1] mb-3">
+                      Professor:{' '}
+                      <span className="text-[#D4A373]">
+                        {workout.student?.user?.name || 'Não vinculado'}
+                      </span>
                     </p>
+
+                    <div className="flex justify-between items-center gap-4">
+                      <span className="text-[10px] text-amber-400">
+                        Pendente
+                      </span>
+                    </div>
                   </div>
-
-                  <span className="px-3 py-1 rounded-full text-xs bg-[#D4A373]/10 text-[#D4A373]">
-                    Pendente
-                  </span>
                 </div>
               ))}
             </div>
@@ -672,22 +687,46 @@ export default async function DashboardPage() {
               Nenhuma dúvida aguardando resposta.
             </p>
           ) : (
-            <div className="divide-y divide-[#ffffff10]">
+            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
               {questionsWithoutAnswer.map((question) => (
-                <div key={question.id} className="py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-[#f5f5f5] font-medium">
-                      {question.student?.name || 'Aluno'}
+                <div
+                  key={question.id}
+                  className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
+                >
+                  <div className="p-4">
+                    <div className="flex justify-between items-start gap-4 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/30 text-blue-400 border border-blue-500/20">
+                          STUDENT
+                        </span>
+
+                        <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                          {question.student?.name || 'Aluno'}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] text-[#a1a1a1] shrink-0">
+                        {formatDate(question.createdAt)}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-[#f5f5f5] mb-3 whitespace-pre-wrap">
+                      {question.content}
                     </p>
 
-                    <p className="text-[#a1a1a1] text-sm">
-                      {formatDate(question.createdAt)}
+                    <p className="text-xs text-[#a1a1a1] mb-3">
+                      Para:{' '}
+                      <span className="text-[#D4A373]">
+                        {question.teacher?.name ? `Professor: ${question.teacher.name}` : 'Professor'}
+                      </span>
                     </p>
+
+                    <div className="flex justify-between items-center gap-4">
+                      <span className="text-[10px] text-amber-400">
+                        Aguardando resposta
+                      </span>
+                    </div>
                   </div>
-
-                  <p className="text-[#a1a1a1] mt-2 line-clamp-2">
-                    {question.content}
-                  </p>
                 </div>
               ))}
             </div>
@@ -704,31 +743,52 @@ export default async function DashboardPage() {
               Nenhum aviso pendente de leitura.
             </p>
           ) : (
-            <div className="divide-y divide-[#ffffff10] max-h-[520px] overflow-y-auto pr-2">
+            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
               {pendingNoticeItems.map((item) => (
-                <div key={`${item.notice.id}-${item.student.id}`} className="py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-[#f5f5f5] font-medium">
+                <div
+                  key={`${item.notice.id}-${item.student.id}`}
+                  className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
+                >
+                  <div className="p-4">
+                    <div className="flex justify-between items-start gap-4 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
+                          AVISO
+                        </span>
+
+                        <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                          {item.notice.author?.name || 'Gestão'}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] text-[#a1a1a1] shrink-0">
+                        {formatDate(item.notice.createdAt)}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-[#f5f5f5] mb-3 whitespace-pre-wrap">
                       {item.notice.title || 'Aviso'}
                     </p>
 
-                    <p className="text-[#a1a1a1] text-sm">
-                      {formatDate(item.notice.createdAt)}
+                    <p className="text-xs text-[#a1a1a1] mb-2">
+                      Para:{' '}
+                      <span className="text-[#D4A373]">
+                        Aluno: {item.student.name}
+                      </span>
                     </p>
-                  </div>
 
-                  <p className="text-[#a1a1a1] mt-2">
-                    {item.notice.content}
-                  </p>
+                    <p className="text-xs text-[#a1a1a1] mb-3">
+                      Destino original:{' '}
+                      <span className="text-[#D4A373]">
+                        {getNoticeTargetLabel(item.notice)}
+                      </span>
+                    </p>
 
-                  <div className="flex flex-wrap gap-3 mt-2 text-sm">
-                    <span className="text-[#D4A373]">
-                      Aluno pendente: {item.student.name}
-                    </span>
-
-                    <span className="text-[#a1a1a1]">
-                      {getNoticeTargetLabel(item.notice)}
-                    </span>
+                    <div className="flex justify-between items-center gap-4">
+                      <span className="text-[10px] text-amber-400">
+                        Pendente
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -772,19 +832,38 @@ export default async function DashboardPage() {
               Nenhum aluno vinculado.
             </p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
               {students.map((student) => (
                 <div
                   key={student.id}
-                  className="p-4 rounded-xl bg-[#0a0a0a] border border-[#ffffff10]"
+                  className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
                 >
-                  <p className="text-[#f5f5f5] font-medium">
-                    {student.name}
-                  </p>
+                  <div className="p-4">
+                    <div className="flex justify-between items-start gap-4 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/30 text-blue-400 border border-blue-500/20">
+                          ALUNO
+                        </span>
 
-                  <p className="text-[#a1a1a1] text-sm">
-                    Professor: {student.user?.name || 'Não vinculado'}
-                  </p>
+                        <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                          {student.name}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-[#a1a1a1] mb-3">
+                      Professor:{' '}
+                      <span className="text-[#D4A373]">
+                        {student.user?.name || 'Não vinculado'}
+                      </span>
+                    </p>
+
+                    <div className="flex justify-between items-center gap-4">
+                      <span className="text-[10px] text-emerald-400">
+                        Vinculado
+                      </span>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
