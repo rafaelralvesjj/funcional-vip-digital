@@ -277,17 +277,17 @@ export default async function DashboardPage() {
     }
 
     if (isTeacher) {
-      const wasReadByTeacher = notice.reads.some((read) => read.professorId === userId);
-
-      if (wasReadByTeacher) {
-        return false;
-      }
-
       return !notice.professorId || notice.professorId === userId;
     }
 
     return true;
   });
+
+  const unreadManagementNoticesCount = isTeacher
+    ? managementNotices.filter(
+        (notice) => !notice.reads.some((read) => read.professorId === userId)
+      ).length
+    : managementNotices.length;
 
   const managementMessages = await prisma.question.findMany({
     where: {
@@ -404,6 +404,9 @@ export default async function DashboardPage() {
     authorName: notice.author?.name || 'Gestão',
     authorRole: notice.author?.role || null,
     targetLabel: getNoticeTargetLabel(notice),
+    readByCurrentUser: isTeacher
+      ? notice.reads.some((read) => read.professorId === userId)
+      : false,
   }));
 
   const summaryCards = [
@@ -425,7 +428,7 @@ export default async function DashboardPage() {
     },
     {
       label: labels.managementNoticesCard,
-      value: managementNotices.length,
+      value: unreadManagementNoticesCount,
     },
     {
       label: labels.managementMessagesCard,
@@ -581,6 +584,7 @@ export default async function DashboardPage() {
             notices={managementNoticeItems}
             emptyMessage="Nenhum aviso da gestão."
             markAsReadOnClose={isTeacher}
+            showReadStatus={isTeacher}
           />
         </div>
 
