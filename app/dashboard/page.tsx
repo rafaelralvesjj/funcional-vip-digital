@@ -300,11 +300,29 @@ export default async function DashboardPage() {
     return true;
   });
 
-  const unreadManagementNoticesCount = isTeacher
-    ? managementNotices.filter(
-        (notice) => !notice.reads.some((read) => read.professorId === userId)
-      ).length
-    : managementNotices.length;
+  const unreadManagementNoticesCount = managementNotices.filter((notice) => {
+    const readProfessorIds = new Set(
+      notice.reads
+        .map((read) => read.professorId)
+        .filter((professorId): professorId is string => Boolean(professorId))
+    );
+
+    if (isTeacher) {
+      return !readProfessorIds.has(userId);
+    }
+
+    if (isGestor) {
+      const targetProfessorIds = notice.professorId ? [notice.professorId] : professorIds;
+
+      if (targetProfessorIds.length === 0) {
+        return false;
+      }
+
+      return targetProfessorIds.some((professorId) => !readProfessorIds.has(professorId));
+    }
+
+    return false;
+  }).length;
 
   const managementMessages = await prisma.question.findMany({
     where: {
