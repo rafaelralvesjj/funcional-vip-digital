@@ -597,7 +597,7 @@ export default async function DashboardPage() {
                     </p>
 
                     {isGestor && (
-                      <p className="text-[#a1a1a1] text-sm">
+                      <p className="text-[#D4A373] text-sm font-medium">
                         Professor: {workout.student?.user?.name || 'Não vinculado'}
                       </p>
                     )}
