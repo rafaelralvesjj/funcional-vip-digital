@@ -4,6 +4,11 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import GestaoMessageReply from '@/components/GestaoMessageReply';
 import ManagementNoticeModalList from '@/components/ManagementNoticeModalList';
+import DashboardAutoRefresh from '@/components/DashboardAutoRefresh';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -534,6 +539,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6 md:p-8">
+      <DashboardAutoRefresh />
+
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
           <h1 className="text-2xl md:text-3xl font-semibold text-[#f5f5f5]">
