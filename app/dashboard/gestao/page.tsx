@@ -58,6 +58,13 @@ function getString(value: unknown): string {
   return "";
 }
 
+function getStringFromRecord(record: Record<string, unknown>, key: string): string {
+  const v = record[key];
+  if (typeof v === "string") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  return "";
+}
+
 function getNestedRecord(value: unknown, key: string): Record<string, unknown> | null {
   if (!isRecord(value)) return null;
   const nested = value[key];
@@ -66,7 +73,9 @@ function getNestedRecord(value: unknown, key: string): Record<string, unknown> |
 
 async function safeJson(response: Response): Promise<unknown> {
   try {
-    return await response.json();
+    const text = await response.text();
+    if (!text) return null;
+    return JSON.parse(text) as unknown;
   } catch {
     return null;
   }
@@ -74,10 +83,12 @@ async function safeJson(response: Response): Promise<unknown> {
 
 function findFirstArray(value: unknown, depth = 0): unknown[] | null {
   if (Array.isArray(value)) return value;
-  if (depth > 4 || !isRecord(value)) return null;
-  for (const key of Object.keys(value)) {
-    const found = findFirstArray(value[key], depth + 1);
-    if (found) return found;
+  if (depth > 4) return null;
+  if (isRecord(value)) {
+    for (const key of Object.keys(value)) {
+      const found = findFirstArray(value[key], depth + 1);
+      if (found) return found;
+    }
   }
   return null;
 }
@@ -86,16 +97,20 @@ function extractArray(data: unknown, candidateKeys: string[]): unknown[] {
   if (Array.isArray(data)) return data;
   if (!isRecord(data)) return [];
   for (const key of candidateKeys) {
-    if (Array.isArray(data[key])) return data[key] as unknown[];
+    const v = data[key];
+    if (Array.isArray(v)) return v;
   }
   const nestedKeys = ["data", "result", "payload", "response"];
-  for (const nestedKey of nestedKeys) {
-    const nested = data[nestedKey];
-    if (Array.isArray(nested)) return nested as unknown[];
+  for (const key of nestedKeys) {
+    const nested = data[key];
+    if (Array.isArray(nested)) return nested;
     if (isRecord(nested)) {
-      for (const key of candidateKeys) {
-        if (Array.isArray(nested[key])) return nested[key] as unknown[];
+      for (const ck of candidateKeys) {
+        const v = nested[ck];
+        if (Array.isArray(v)) return v;
       }
+      const deeper = findFirstArray(nested, 0);
+      if (deeper) return deeper;
     }
   }
   const found = findFirstArray(data, 0);
@@ -107,26 +122,35 @@ function normalizeStudent(item: unknown): Student | null {
   const studentRec = getNestedRecord(item, "student");
   const userRec = getNestedRecord(item, "user");
 
-  const id =
-    getString(item.id) ||
-    (studentRec ? getString(studentRec.id) : "") ||
-    getString(item.studentId) ||
-    getString(item.userId) ||
-    (userRec ? getString(userRec.id) : "");
+  const idCandidates = [
+    getStringFromRecord(item, "id"),
+    studentRec ? getStringFromRecord(studentRec, "id") : "",
+    getStringFromRecord(item, "studentId"),
+    getStringFromRecord(item, "userId"),
+    userRec ? getStringFromRecord(userRec, "id") : "",
+  ];
+  const id = idCandidates.find((v) => v.length > 0) || "";
 
-  const name =
-    getString(item.name) ||
-    (studentRec ? getString(studentRec.name) : "") ||
-    getString(item.studentName) ||
-    (userRec ? getString(userRec.name) : "") ||
-    getString(item.nome);
+  const nameCandidates = [
+    getStringFromRecord(item, "name"),
+    studentRec ? getStringFromRecord(studentRec, "name") : "",
+    getStringFromRecord(item, "studentName"),
+    userRec ? getStringFromRecord(userRec, "name") : "",
+    getStringFromRecord(item, "nome"),
+  ];
+  const name = nameCandidates.find((v) => v.length > 0) || "Sem nome";
 
   if (!id) return null;
+
+  const userId = getStringFromRecord(item, "userId") || (userRec ? getStringFromRecord(userRec, "id") : "") || null;
+
   return {
     id,
-    name: name || "Aluno sem nome",
-    userId: getString(item.userId) || (userRec ? getString(userRec.id) : "") || null,
-    user: userRec ? { id: getString(userRec.id), name: userRec.name } : null,
+    name,
+    userId: userId || null,
+    user: userRec
+      ? { id: getStringFromRecord(userRec, "id"), name: getStringFromRecord(userRec, "name") || null }
+      : null,
   };
 }
 
@@ -135,90 +159,138 @@ function normalizeTeacher(item: unknown): Teacher | null {
   const userRec = getNestedRecord(item, "user");
   const teacherRec = getNestedRecord(item, "teacher");
 
-  const id =
-    getString(item.userId) ||
-    (userRec ? getString(userRec.id) : "") ||
-    getString(item.id);
+  const idCandidates = [
+    getStringFromRecord(item, "userId"),
+    userRec ? getStringFromRecord(userRec, "id") : "",
+    getStringFromRecord(item, "id"),
+  ];
+  const id = idCandidates.find((v) => v.length > 0) || "";
 
-  const name =
-    getString(item.name) ||
-    (userRec ? getString(userRec.name) : "") ||
-    getString(item.teacherName) ||
-    (teacherRec ? getString(teacherRec.name) : "") ||
-    getString(item.nome);
+  const nameCandidates = [
+    getStringFromRecord(item, "name"),
+    userRec ? getStringFromRecord(userRec, "name") : "",
+    getStringFromRecord(item, "teacherName"),
+    teacherRec ? getStringFromRecord(teacherRec, "name") : "",
+    getStringFromRecord(item, "nome"),
+  ];
+  const name = nameCandidates.find((v) => v.length > 0) || "Sem nome";
 
   if (!id) return null;
+
+  const email =
+    getStringFromRecord(item, "email") ||
+    (userRec ? getStringFromRecord(userRec, "email") : "") ||
+    null;
+
+  const countRec = getNestedRecord(item, "_count");
+  const studentsCount = countRec ? Number(countRec["students"] ?? 0) : undefined;
+
   return {
     id,
-    name: name || "Professor sem nome",
-    email: getString(item.email) || (userRec ? getString(userRec.email) : "") || null,
-    userId: getString(item.userId) || (userRec ? getString(userRec.id) : "") || null,
-    user: userRec ? { id: getString(userRec.id), name: userRec.name, email: userRec.email } : null,
-    _count: isRecord(item._count) ? { students: Number(item._count.students) || 0 } : undefined,
+    name,
+    email: email || null,
+    userId: getStringFromRecord(item, "userId") || (userRec ? getStringFromRecord(userRec, "id") : "") || null,
+    user: userRec
+      ? {
+          id: getStringFromRecord(userRec, "id"),
+          name: getStringFromRecord(userRec, "name") || null,
+          email: getStringFromRecord(userRec, "email") || null,
+        }
+      : null,
+    _count: typeof studentsCount === "number" ? { students: studentsCount } : undefined,
   };
 }
 
 function normalizeNotice(item: unknown): Notice | null {
   if (!isRecord(item)) return null;
-  const id = getString(item.id);
+  const id = getStringFromRecord(item, "id");
   if (!id) return null;
+
   const authorRec = getNestedRecord(item, "author");
   const studentRec = getNestedRecord(item, "student");
   const professorRec = getNestedRecord(item, "professor");
+
   return {
     id,
-    title: getString(item.title) || null,
-    content: getString(item.content),
-    type: getString(item.type) || null,
-    authorId: getString(item.authorId) || null,
-    studentId: getString(item.studentId) || null,
-    targetRole: getString(item.targetRole) || null,
-    professorId: getString(item.professorId) || null,
-    createdAt: getString(item.createdAt) || new Date().toISOString(),
-    author: authorRec ? { id: getString(authorRec.id), name: authorRec.name, role: authorRec.role } : null,
-    student: studentRec ? { id: getString(studentRec.id), name: getString(studentRec.name) } : null,
-    professor: professorRec ? { id: getString(professorRec.id), name: professorRec.name } : null,
+    title: getStringFromRecord(item, "title") || null,
+    content: getStringFromRecord(item, "content"),
+    type: getStringFromRecord(item, "type") || null,
+    authorId: getStringFromRecord(item, "authorId") || null,
+    studentId: getStringFromRecord(item, "studentId") || null,
+    targetRole: getStringFromRecord(item, "targetRole") || null,
+    professorId: getStringFromRecord(item, "professorId") || null,
+    createdAt: getStringFromRecord(item, "createdAt"),
+    author: authorRec
+      ? {
+          id: getStringFromRecord(authorRec, "id"),
+          name: getStringFromRecord(authorRec, "name") || null,
+          role: getStringFromRecord(authorRec, "role") || null,
+        }
+      : null,
+    student: studentRec
+      ? { id: getStringFromRecord(studentRec, "id"), name: getStringFromRecord(studentRec, "name") || "Sem nome" }
+      : null,
+    professor: professorRec
+      ? { id: getStringFromRecord(professorRec, "id"), name: getStringFromRecord(professorRec, "name") || null }
+      : null,
   };
 }
 
 function normalizeThreadMessage(item: unknown): ThreadMessage | null {
   if (!isRecord(item)) return null;
-  const id = getString(item.id);
+  const id = getStringFromRecord(item, "id");
   if (!id) return null;
+
   const answeredByRec = getNestedRecord(item, "answeredBy");
   const studentRec = getNestedRecord(item, "student");
   const teacherRec = getNestedRecord(item, "teacher");
-  const childrenRaw = item.children;
-  const children = Array.isArray(childrenRaw)
+
+  const childrenRaw = item["children"];
+  const children: ThreadMessage[] = Array.isArray(childrenRaw)
     ? childrenRaw.map(normalizeThreadMessage).filter((m): m is ThreadMessage => m !== null)
     : [];
+
   return {
     id,
-    studentId: getString(item.studentId) || null,
-    teacherId: getString(item.teacherId) || null,
-    content: getString(item.content),
-    senderRole: getString(item.senderRole) || "GESTOR",
-    createdAt: getString(item.createdAt) || new Date().toISOString(),
-    answeredBy: answeredByRec ? { id: getString(answeredByRec.id), name: answeredByRec.name, role: answeredByRec.role } : null,
-    student: studentRec ? { id: getString(studentRec.id), name: getString(studentRec.name) } : null,
-    teacher: teacherRec ? { id: getString(teacherRec.id), name: teacherRec.name } : null,
+    studentId: getStringFromRecord(item, "studentId") || null,
+    teacherId: getStringFromRecord(item, "teacherId") || null,
+    content: getStringFromRecord(item, "content"),
+    senderRole: getStringFromRecord(item, "senderRole") || "GESTOR",
+    createdAt: getStringFromRecord(item, "createdAt"),
+    answeredBy: answeredByRec
+      ? {
+          id: getStringFromRecord(answeredByRec, "id"),
+          name: getStringFromRecord(answeredByRec, "name") || null,
+          role: getStringFromRecord(answeredByRec, "role") || null,
+        }
+      : null,
+    student: studentRec
+      ? { id: getStringFromRecord(studentRec, "id"), name: getStringFromRecord(studentRec, "name") || "Sem nome" }
+      : null,
+    teacher: teacherRec
+      ? { id: getStringFromRecord(teacherRec, "id"), name: getStringFromRecord(teacherRec, "name") || null }
+      : null,
     children,
   };
 }
 
 function dedupeById<T extends { id: string }>(list: T[]): T[] {
-  const map = new Map<string, T>();
+  const seen = new Set<string>();
+  const out: T[] = [];
   for (const item of list) {
-    if (item && item.id && !map.has(item.id)) map.set(item.id, item);
+    if (!item || !item.id) continue;
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
   }
-  return Array.from(map.values());
+  return out;
 }
 
 function formatDateTime(dateStr: string): string {
   if (!dateStr) return "";
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return dateStr;
-  return date.toLocaleString("pt-BR", {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -227,28 +299,24 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
-function getThreadStatus(question: ThreadMessage): string {
-  const hasGestorReply = (msgs: ThreadMessage[]): boolean => {
-    for (const m of msgs) {
-      if (m.senderRole === "GESTOR") return true;
-      if (m.children && m.children.length > 0 && hasGestorReply(m.children)) return true;
-    }
-    return false;
-  };
-  if (hasGestorReply(question.children || [])) return "Respondido";
-  return "Aguardando";
+function getThreadStatus(thread: ThreadMessage[]): { answered: boolean; total: number } {
+  const total = thread.length;
+  const answered = thread.some((m) => m.senderRole !== "GESTOR" && m.senderRole !== "STUDENT" ? true : false);
+  return { answered, total };
 }
 
 function getAuthorName(msg: ThreadMessage): string {
   if (msg.answeredBy?.name) return msg.answeredBy.name;
   if (msg.senderRole === "GESTOR") return "Gestão";
-  if (msg.senderRole === "PROFESSOR") return msg.teacher?.name || "Professor";
-  return msg.student?.name || "Aluno";
+  if (msg.senderRole === "TEACHER") return msg.teacher?.name || "Professor";
+  if (msg.senderRole === "STUDENT") return msg.student?.name || "Aluno";
+  return "Usuário";
 }
 
 function getRoleBadgeClass(role: string): string {
-  if (role === "GESTOR") return "bg-[#D4A373]/20 text-[#D4A373] border-[#D4A373]/30";
-  if (role === "PROFESSOR") return "bg-[#3a5a40]/20 text-[#a3b18a] border-[#a3b18a]/30";
+  if (role === "GESTOR") return "bg-[#D4A37320] text-[#D4A373] border-[#D4A37340]";
+  if (role === "TEACHER") return "bg-[#3a87f520] text-[#7bb6ff] border-[#3a87f540]";
+  if (role === "STUDENT") return "bg-[#34d39920] text-[#6ee7b7] border-[#34d39940]";
   return "bg-[#ffffff10] text-[#a1a1a1] border-[#ffffff20]";
 }
 
@@ -260,6 +328,8 @@ export default function GestaoPage() {
   const [chatTargetType, setChatTargetType] = useState<TargetType>("TODOS_ALUNOS");
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>("");
+  const [chatSelectedStudentId, setChatSelectedStudentId] = useState<string>("");
+  const [chatSelectedTeacherId, setChatSelectedTeacherId] = useState<string>("");
 
   const [students, setStudents] = useState<Student[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -287,10 +357,13 @@ export default function GestaoPage() {
     try {
       const res = await fetch("/api/auth/session", { cache: "no-store" });
       const data = await safeJson(res);
-      if (isRecord(data)) {
-        const id = getString(data.id) || getString(data.userId) || (data.user ? getString((data.user as Record<string, unknown>).id) : "");
-        if (id) setCurrentUserId(id);
-      }
+      if (!isRecord(data)) return;
+      const userRec = getNestedRecord(data, "user");
+      const id =
+        getStringFromRecord(data, "id") ||
+        (userRec ? getStringFromRecord(userRec, "id") : "") ||
+        getStringFromRecord(data, "userId");
+      if (id) setCurrentUserId(id);
     } catch {
       /* ignore */
     }
@@ -300,8 +373,8 @@ export default function GestaoPage() {
     try {
       const res = await fetch("/api/students", { cache: "no-store" });
       const data = await safeJson(res);
-      const list = extractArray(data, ["students", "items", "results", "data", "rows", "records", "alunos"]);
-      const normalized = list.map(normalizeStudent).filter((s): s is Student => s !== null);
+      const arr = extractArray(data, ["students", "items", "results", "data", "rows", "records", "alunos"]);
+      const normalized = arr.map(normalizeStudent).filter((s): s is Student => s !== null);
       setStudents(dedupeById(normalized));
     } catch {
       setStudents([]);
@@ -312,8 +385,8 @@ export default function GestaoPage() {
     try {
       const res = await fetch("/api/teachers", { cache: "no-store" });
       const data = await safeJson(res);
-      const list = extractArray(data, ["teachers", "items", "results", "data", "rows", "records", "professores"]);
-      const normalized = list.map(normalizeTeacher).filter((t): t is Teacher => t !== null);
+      const arr = extractArray(data, ["teachers", "items", "results", "data", "rows", "records", "professores"]);
+      const normalized = arr.map(normalizeTeacher).filter((t): t is Teacher => t !== null);
       setTeachers(dedupeById(normalized));
     } catch {
       setTeachers([]);
@@ -324,8 +397,8 @@ export default function GestaoPage() {
     try {
       const res = await fetch("/api/notices", { cache: "no-store" });
       const data = await safeJson(res);
-      const list = extractArray(data, ["notices", "items", "results", "data", "rows", "records"]);
-      const normalized = list.map(normalizeNotice).filter((n): n is Notice => n !== null);
+      const arr = extractArray(data, ["notices", "items", "results", "data", "rows", "records"]);
+      const normalized = arr.map(normalizeNotice).filter((n): n is Notice => n !== null);
       setNotices(normalized);
     } catch {
       setNotices([]);
@@ -336,8 +409,8 @@ export default function GestaoPage() {
     try {
       const res = await fetch("/api/questions", { cache: "no-store" });
       const data = await safeJson(res);
-      const list = extractArray(data, ["questions", "items", "results", "data", "rows", "records"]);
-      const normalized = list.map(normalizeThreadMessage).filter((q): q is ThreadMessage => q !== null);
+      const arr = extractArray(data, ["questions", "items", "results", "data", "rows", "records"]);
+      const normalized = arr.map(normalizeThreadMessage).filter((q): q is ThreadMessage => q !== null);
       setQuestions(normalized);
     } catch {
       setQuestions([]);
@@ -352,70 +425,77 @@ export default function GestaoPage() {
     fetchQuestions();
   }, []);
 
+  function resolveTargetRole(tt: TargetType): string {
+    if (tt === "ALUNO_ESPECIFICO" || tt === "TODOS_ALUNOS") return "STUDENT";
+    return "TEACHER";
+  }
+
   async function handlePublishNotice(e: FormEvent) {
     e.preventDefault();
     setNoticeSuccess("");
     setNoticeError("");
 
     if (!noticeContent.trim()) {
-      setNoticeError("O conteúdo é obrigatório.");
+      setNoticeError("O conteúdo do aviso é obrigatório.");
       return;
     }
-    if (!currentUserId) {
-      setNoticeError("Sessão não carregada. Recarregue a página.");
+
+    if (targetType === "ALUNO_ESPECIFICO" && !selectedStudentId) {
+      setNoticeError("Selecione um aluno.");
+      return;
+    }
+    if (targetType === "PROFESSOR_ESPECIFICO" && !selectedTeacherId) {
+      setNoticeError("Selecione um professor.");
       return;
     }
 
     setSavingNotice(true);
     try {
-      const body: Record<string, unknown> = {
-        title: noticeTitle.trim(),
+      const body = {
+        title: noticeTitle.trim() || "Aviso da Gestão",
         content: noticeContent.trim(),
+        type: "MANAGEMENT",
+        targetRole: resolveTargetRole(targetType),
+        studentId: targetType === "ALUNO_ESPECIFICO" ? selectedStudentId : null,
+        professorId: targetType === "PROFESSOR_ESPECIFICO" ? selectedTeacherId : null,
         authorId: currentUserId,
-        type: "AVISO",
       };
-
-      if (targetType === "ALUNO_ESPECIFICO") {
-        if (!selectedStudentId) {
-          setNoticeError("Selecione um aluno.");
-          setSavingNotice(false);
-          return;
-        }
-        body.studentId = selectedStudentId;
-        body.targetRole = "ALUNO";
-      } else if (targetType === "TODOS_ALUNOS") {
-        body.targetRole = "ALUNO";
-      } else if (targetType === "PROFESSOR_ESPECIFICO") {
-        if (!selectedTeacherId) {
-          setNoticeError("Selecione um professor.");
-          setSavingNotice(false);
-          return;
-        }
-        body.professorId = selectedTeacherId;
-        body.targetRole = "PROFESSOR";
-      } else if (targetType === "TODOS_PROFESSORES") {
-        body.targetRole = "PROFESSOR";
-      }
-
       const res = await fetch("/api/notices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await safeJson(res);
       if (!res.ok) {
-        const msg = isRecord(data) ? getString(data.error) : "";
-        setNoticeError(msg || `Erro ao publicar aviso (${res.status}).`);
-        return;
+        const data = await safeJson(res);
+        const msg = isRecord(data) ? getStringFromRecord(data, "error") || getStringFromRecord(data, "message") : "";
+        throw new Error(msg || "Falha ao publicar aviso.");
       }
       setNoticeSuccess("Aviso publicado com sucesso.");
       setNoticeTitle("");
       setNoticeContent("");
       await fetchNotices();
-    } catch {
-      setNoticeError("Falha ao publicar aviso.");
+    } catch (err) {
+      setNoticeError(err instanceof Error ? err.message : "Erro ao publicar aviso.");
     } finally {
       setSavingNotice(false);
+    }
+  }
+
+  async function sendOneChatMessage(payload: {
+    content: string;
+    senderRole: string;
+    studentId: string | null;
+    teacherId: string | null;
+  }): Promise<boolean> {
+    try {
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 
@@ -425,36 +505,17 @@ export default function GestaoPage() {
     setChatError("");
 
     if (!chatContent.trim()) {
-      setChatError("O conteúdo é obrigatório.");
+      setChatError("O conteúdo da mensagem é obrigatório.");
       return;
     }
 
-    let targets: { studentId: string | null; teacherId: string | null }[] = [];
-
-    if (chatTargetType === "TODOS_ALUNOS") {
-      if (students.length === 0) {
-        setChatError("Nenhum aluno carregado.");
-        return;
-      }
-      targets = students.map((s) => ({ studentId: s.id, teacherId: null }));
-    } else if (chatTargetType === "ALUNO_ESPECIFICO") {
-      if (!selectedStudentId) {
-        setChatError("Selecione um aluno.");
-        return;
-      }
-      targets = [{ studentId: selectedStudentId, teacherId: null }];
-    } else if (chatTargetType === "TODOS_PROFESSORES") {
-      if (teachers.length === 0) {
-        setChatError("Nenhum professor carregado.");
-        return;
-      }
-      targets = teachers.map((t) => ({ studentId: null, teacherId: t.id }));
-    } else if (chatTargetType === "PROFESSOR_ESPECIFICO") {
-      if (!selectedTeacherId) {
-        setChatError("Selecione um professor.");
-        return;
-      }
-      targets = [{ studentId: null, teacherId: selectedTeacherId }];
+    if (chatTargetType === "ALUNO_ESPECIFICO" && !chatSelectedStudentId) {
+      setChatError("Selecione um aluno.");
+      return;
+    }
+    if (chatTargetType === "PROFESSOR_ESPECIFICO" && !chatSelectedTeacherId) {
+      setChatError("Selecione um professor.");
+      return;
     }
 
     setSendingChat(true);
@@ -462,53 +523,73 @@ export default function GestaoPage() {
     let failures = 0;
 
     try {
-      for (const target of targets) {
-        const body: Record<string, unknown> = {
+      if (chatTargetType === "ALUNO_ESPECIFICO") {
+        const ok = await sendOneChatMessage({
           content: chatContent.trim(),
           senderRole: "GESTOR",
-          studentId: target.studentId,
-          teacherId: target.teacherId,
-        };
-        try {
-          const res = await fetch("/api/questions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
+          studentId: chatSelectedStudentId,
+          teacherId: null,
+        });
+        if (ok) success++;
+        else failures++;
+      } else if (chatTargetType === "TODOS_ALUNOS") {
+        for (const s of students) {
+          const ok = await sendOneChatMessage({
+            content: chatContent.trim(),
+            senderRole: "GESTOR",
+            studentId: s.id,
+            teacherId: null,
           });
-          if (res.ok) {
-            success++;
-          } else {
-            failures++;
-          }
-        } catch {
-          failures++;
+          if (ok) success++;
+          else failures++;
+        }
+      } else if (chatTargetType === "PROFESSOR_ESPECIFICO") {
+        const ok = await sendOneChatMessage({
+          content: chatContent.trim(),
+          senderRole: "GESTOR",
+          studentId: null,
+          teacherId: chatSelectedTeacherId,
+        });
+        if (ok) success++;
+        else failures++;
+      } else if (chatTargetType === "TODOS_PROFESSORES") {
+        for (const t of teachers) {
+          const ok = await sendOneChatMessage({
+            content: chatContent.trim(),
+            senderRole: "GESTOR",
+            studentId: null,
+            teacherId: t.id,
+          });
+          if (ok) success++;
+          else failures++;
         }
       }
 
-      if (success > 0 && failures === 0) {
-        setChatSuccess(success === 1 ? "Mensagem enviada com sucesso." : "Mensagens enviadas com sucesso.");
-        setChatContent("");
-        await fetchQuestions();
+      if (failures === 0 && success === 1) {
+        setChatSuccess("Mensagem enviada com sucesso.");
+      } else if (failures === 0 && success > 1) {
+        setChatSuccess("Mensagens enviadas com sucesso.");
       } else if (success > 0 && failures > 0) {
         setChatSuccess(`Envio parcial: ${success} mensagem(ns) enviada(s), ${failures} falha(s).`);
-        await fetchQuestions();
       } else {
         setChatError("Falha ao enviar mensagem(ns).");
       }
-    } catch {
-      setChatError("Falha ao enviar mensagem(ns).");
+
+      if (success > 0) {
+        setChatContent("");
+        await fetchQuestions();
+      }
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Erro ao enviar mensagem.");
     } finally {
       setSendingChat(false);
     }
   }
 
-  async function handleReply(question: ThreadMessage) {
+  async function handleReply(question: ThreadMessage, e: FormEvent) {
+    e.preventDefault();
     const text = (replyContent[question.id] || "").trim();
     if (!text) return;
-    if (!currentUserId) {
-      setChatError("Sessão não carregada. Recarregue a página.");
-      return;
-    }
 
     try {
       const res = await fetch("/api/questions", {
@@ -517,91 +598,71 @@ export default function GestaoPage() {
         body: JSON.stringify({
           content: text,
           parentId: question.id,
-          studentId: question.studentId,
-          teacherId: question.teacherId,
+          studentId: question.studentId ?? null,
+          teacherId: question.teacherId ?? null,
           senderRole: "GESTOR",
           answeredById: currentUserId,
         }),
       });
       if (!res.ok) {
         const data = await safeJson(res);
-        const msg = isRecord(data) ? getString(data.error) : "";
-        setChatError(msg || "Falha ao enviar resposta.");
-        return;
+        const msg = isRecord(data) ? getStringFromRecord(data, "error") || getStringFromRecord(data, "message") : "";
+        throw new Error(msg || "Falha ao responder.");
       }
       setReplyContent((prev) => ({ ...prev, [question.id]: "" }));
       await fetchQuestions();
-    } catch {
-      setChatError("Falha ao enviar resposta.");
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Erro ao responder.");
     }
   }
 
-  function renderThread(messages: ThreadMessage[], depth = 0): JSX.Element {
-    return (
-      <div className={depth > 0 ? "ml-4 border-l border-[#ffffff10] pl-3 mt-2 space-y-2" : "space-y-2"}>
-        {messages.map((msg) => (
-          <div key={msg.id} className="rounded-md border border-[#ffffff10] bg-[#111111] p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className={`text-[10px] px-2 py-0.5 rounded border ${getRoleBadgeClass(msg.senderRole)}`}>
-                  {msg.senderRole}
-                </span>
-                <span className="text-sm text-[#f5f5f5] font-medium">{getAuthorName(msg)}</span>
-              </div>
-              <span className="text-[11px] text-[#a1a1a1]">{formatDateTime(msg.createdAt)}</span>
-            </div>
-            <p className="text-sm text-[#d4d4d4] mt-2 whitespace-pre-wrap">{msg.content}</p>
-            {msg.children && msg.children.length > 0 ? renderThread(msg.children, depth + 1) : null}
-          </div>
-        ))}
-      </div>
-    );
+  function getThreadList(q: ThreadMessage): ThreadMessage[] {
+    const list = [q, ...(q.children || [])];
+    return list.sort((a, b) => {
+      const da = new Date(a.createdAt).getTime();
+      const db = new Date(b.createdAt).getTime();
+      if (Number.isNaN(da) && Number.isNaN(db)) return 0;
+      if (Number.isNaN(da)) return 1;
+      if (Number.isNaN(db)) return -1;
+      return da - db;
+    });
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6">
+    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6 md:p-10">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-2xl font-semibold text-[#D4A373] mb-1">Gestão</h1>
-        <p className="text-xs text-[#a1a1a1] mb-6">
+        <h1 className="text-3xl font-semibold tracking-tight mb-1">Gestão</h1>
+        <p className="text-[#a1a1a1] text-sm mb-6">
           {students.length} aluno(s) carregado(s) · {teachers.length} professor(es) carregado(s)
         </p>
 
-        <div className="flex gap-2 mb-6">
-          <button
-            type="button"
-            onClick={() => setActiveTab("mural")}
-            className={`px-4 py-2 rounded-md text-sm border transition ${
-              activeTab === "mural"
-                ? "bg-[#D4A373] text-[#0a0a0a] border-[#D4A373]"
-                : "bg-[#111111] text-[#a1a1a1] border-[#ffffff10] hover:text-[#f5f5f5]"
-            }`}
-          >
-            Mural
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("chat")}
-            className={`px-4 py-2 rounded-md text-sm border transition ${
-              activeTab === "chat"
-                ? "bg-[#D4A373] text-[#0a0a0a] border-[#D4A373]"
-                : "bg-[#111111] text-[#a1a1a1] border-[#ffffff10] hover:text-[#f5f5f5]"
-            }`}
-          >
-            Chat
-          </button>
+        <div className="flex gap-2 mb-6 border-b border-[#ffffff10]">
+          {(["mural", "chat"] as ActiveTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+                activeTab === tab
+                  ? "border-[#D4A373] text-[#D4A373]"
+                  : "border-transparent text-[#a1a1a1] hover:text-[#f5f5f5]"
+              }`}
+            >
+              {tab === "mural" ? "Mural" : "Chat"}
+            </button>
+          ))}
         </div>
 
         {activeTab === "mural" && (
           <section className="space-y-6">
-            <form onSubmit={handlePublishNotice} className="space-y-4 bg-[#111111] border border-[#ffffff10] rounded-lg p-5">
-              <h2 className="text-lg font-medium text-[#f5f5f5]">Publicar aviso</h2>
+            <form onSubmit={handlePublishNotice} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6 space-y-4">
+              <h2 className="text-lg font-semibold">Novo aviso</h2>
 
               <div>
-                <label className="block text-xs text-[#a1a1a1] mb-1">Destinatário</label>
+                <label className="block text-sm text-[#a1a1a1] mb-1">Destinatário</label>
                 <select
                   value={targetType}
                   onChange={(e) => setTargetType(e.target.value as TargetType)}
-                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
+                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
                 >
                   <option value="TODOS_ALUNOS">Todos os alunos</option>
                   <option value="ALUNO_ESPECIFICO">Aluno específico</option>
@@ -612,16 +673,16 @@ export default function GestaoPage() {
 
               {targetType === "ALUNO_ESPECIFICO" && (
                 <div>
-                  <label className="block text-xs text-[#a1a1a1] mb-1">Aluno</label>
+                  <label className="block text-sm text-[#a1a1a1] mb-1">Aluno</label>
                   {studentsOptions.length === 0 ? (
-                    <p className="text-xs text-[#a1a1a1]">Nenhum aluno carregado.</p>
+                    <p className="text-sm text-[#a1a1a1]">Nenhum aluno carregado.</p>
                   ) : (
                     <select
                       value={selectedStudentId}
                       onChange={(e) => setSelectedStudentId(e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
+                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
                     >
-                      <option value="">Selecione um aluno</option>
+                      <option value="">Selecione...</option>
                       {studentsOptions.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
@@ -632,16 +693,16 @@ export default function GestaoPage() {
 
               {targetType === "PROFESSOR_ESPECIFICO" && (
                 <div>
-                  <label className="block text-xs text-[#a1a1a1] mb-1">Professor</label>
+                  <label className="block text-sm text-[#a1a1a1] mb-1">Professor</label>
                   {teachersOptions.length === 0 ? (
-                    <p className="text-xs text-[#a1a1a1]">Nenhum professor carregado.</p>
+                    <p className="text-sm text-[#a1a1a1]">Nenhum professor carregado.</p>
                   ) : (
                     <select
                       value={selectedTeacherId}
                       onChange={(e) => setSelectedTeacherId(e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
+                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
                     >
-                      <option value="">Selecione um professor</option>
+                      <option value="">Selecione...</option>
                       {teachersOptions.map((t) => (
                         <option key={t.id} value={t.id}>{t.name}</option>
                       ))}
@@ -651,56 +712,60 @@ export default function GestaoPage() {
               )}
 
               <div>
-                <label className="block text-xs text-[#a1a1a1] mb-1">Título</label>
+                <label className="block text-sm text-[#a1a1a1] mb-1">Título</label>
                 <input
                   type="text"
                   value={noticeTitle}
                   onChange={(e) => setNoticeTitle(e.target.value)}
-                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
                   placeholder="Título do aviso"
+                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-[#a1a1a1] mb-1">Conteúdo</label>
+                <label className="block text-sm text-[#a1a1a1] mb-1">Conteúdo</label>
                 <textarea
                   value={noticeContent}
                   onChange={(e) => setNoticeContent(e.target.value)}
-                  rows={4}
-                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
                   placeholder="Conteúdo do aviso"
+                  rows={4}
+                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] resize-y"
                 />
               </div>
 
-              {noticeError && <p className="text-xs text-red-400">{noticeError}</p>}
-              {noticeSuccess && <p className="text-xs text-[#D4A373]">{noticeSuccess}</p>}
+              {noticeError && <p className="text-sm text-red-400">{noticeError}</p>}
+              {noticeSuccess && <p className="text-sm text-[#D4A373]">{noticeSuccess}</p>}
 
               <button
                 type="submit"
                 disabled={savingNotice}
-                className="px-4 py-2 rounded-md bg-[#D4A373] text-[#0a0a0a] text-sm font-medium disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-[#D4A373] text-[#0a0a0a] text-sm font-semibold hover:bg-[#c89a63] disabled:opacity-50 transition-colors"
               >
                 {savingNotice ? "Publicando..." : "Publicar"}
               </button>
             </form>
 
             <div className="space-y-3">
-              <h3 className="text-sm text-[#a1a1a1]">Avisos publicados</h3>
+              <h3 className="text-sm uppercase tracking-wide text-[#a1a1a1]">Avisos recentes</h3>
               {notices.length === 0 ? (
-                <p className="text-xs text-[#a1a1a1]">Nenhum aviso publicado.</p>
+                <p className="text-sm text-[#a1a1a1]">Nenhum aviso publicado.</p>
               ) : (
                 notices.map((n) => (
-                  <div key={n.id} className="rounded-md border border-[#ffffff10] bg-[#111111] p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-[#f5f5f5]">{n.title || "Sem título"}</span>
-                      <span className="text-[11px] text-[#a1a1a1]">{formatDateTime(n.createdAt)}</span>
+                  <div key={n.id} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h4 className="font-medium text-[#f5f5f5]">{n.title || "Aviso da Gestão"}</h4>
+                      <span className="text-xs text-[#a1a1a1]">{formatDateTime(n.createdAt)}</span>
                     </div>
-                    <p className="text-sm text-[#d4d4d4] mt-2 whitespace-pre-wrap">{n.content}</p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[#a1a1a1]">
-                      {n.targetRole && <span className="px-2 py-0.5 rounded border border-[#ffffff10]">{n.targetRole}</span>}
+                    <p className="text-sm text-[#d4d4d4] whitespace-pre-wrap">{n.content}</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-[#a1a1a1]">
+                      {n.targetRole && (
+                        <span className={`px-2 py-0.5 rounded border ${getRoleBadgeClass(n.targetRole)}`}>
+                          {n.targetRole === "STUDENT" ? "Alunos" : "Professores"}
+                        </span>
+                      )}
                       {n.student && <span>Aluno: {n.student.name}</span>}
                       {n.professor && <span>Professor: {n.professor.name}</span>}
-                      {n.author?.name && <span>Autor: {n.author.name}</span>}
+                      {n.author?.name && <span>Por: {n.author.name}</span>}
                     </div>
                   </div>
                 ))
@@ -711,15 +776,15 @@ export default function GestaoPage() {
 
         {activeTab === "chat" && (
           <section className="space-y-6">
-            <form onSubmit={handleSendChat} className="space-y-4 bg-[#111111] border border-[#ffffff10] rounded-lg p-5">
-              <h2 className="text-lg font-medium text-[#f5f5f5]">Enviar mensagem</h2>
+            <form onSubmit={handleSendChat} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6 space-y-4">
+              <h2 className="text-lg font-semibold">Nova mensagem</h2>
 
               <div>
-                <label className="block text-xs text-[#a1a1a1] mb-1">Destinatário</label>
+                <label className="block text-sm text-[#a1a1a1] mb-1">Destinatário</label>
                 <select
                   value={chatTargetType}
                   onChange={(e) => setChatTargetType(e.target.value as TargetType)}
-                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
+                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
                 >
                   <option value="TODOS_ALUNOS">Todos os alunos</option>
                   <option value="ALUNO_ESPECIFICO">Aluno específico</option>
@@ -730,16 +795,16 @@ export default function GestaoPage() {
 
               {chatTargetType === "ALUNO_ESPECIFICO" && (
                 <div>
-                  <label className="block text-xs text-[#a1a1a1] mb-1">Aluno</label>
+                  <label className="block text-sm text-[#a1a1a1] mb-1">Aluno</label>
                   {studentsOptions.length === 0 ? (
-                    <p className="text-xs text-[#a1a1a1]">Nenhum aluno carregado.</p>
+                    <p className="text-sm text-[#a1a1a1]">Nenhum aluno carregado.</p>
                   ) : (
                     <select
-                      value={selectedStudentId}
-                      onChange={(e) => setSelectedStudentId(e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
+                      value={chatSelectedStudentId}
+                      onChange={(e) => setChatSelectedStudentId(e.target.value)}
+                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
                     >
-                      <option value="">Selecione um aluno</option>
+                      <option value="">Selecione...</option>
                       {studentsOptions.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
@@ -750,16 +815,16 @@ export default function GestaoPage() {
 
               {chatTargetType === "PROFESSOR_ESPECIFICO" && (
                 <div>
-                  <label className="block text-xs text-[#a1a1a1] mb-1">Professor</label>
+                  <label className="block text-sm text-[#a1a1a1] mb-1">Professor</label>
                   {teachersOptions.length === 0 ? (
-                    <p className="text-xs text-[#a1a1a1]">Nenhum professor carregado.</p>
+                    <p className="text-sm text-[#a1a1a1]">Nenhum professor carregado.</p>
                   ) : (
                     <select
-                      value={selectedTeacherId}
-                      onChange={(e) => setSelectedTeacherId(e.target.value)}
-                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
+                      value={chatSelectedTeacherId}
+                      onChange={(e) => setChatSelectedTeacherId(e.target.value)}
+                      className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
                     >
-                      <option value="">Selecione um professor</option>
+                      <option value="">Selecione...</option>
                       {teachersOptions.map((t) => (
                         <option key={t.id} value={t.id}>{t.name}</option>
                       ))}
@@ -769,84 +834,105 @@ export default function GestaoPage() {
               )}
 
               <div>
-                <label className="block text-xs text-[#a1a1a1] mb-1">Conteúdo</label>
+                <label className="block text-sm text-[#a1a1a1] mb-1">Conteúdo</label>
                 <textarea
                   value={chatContent}
                   onChange={(e) => setChatContent(e.target.value)}
-                  rows={4}
-                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
                   placeholder="Conteúdo da mensagem"
+                  rows={4}
+                  className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] resize-y"
                 />
               </div>
 
-              {chatError && <p className="text-xs text-red-400">{chatError}</p>}
-              {chatSuccess && <p className="text-xs text-[#D4A373]">{chatSuccess}</p>}
+              {chatError && <p className="text-sm text-red-400">{chatError}</p>}
+              {chatSuccess && <p className="text-sm text-[#D4A373]">{chatSuccess}</p>}
 
               <button
                 type="submit"
                 disabled={sendingChat}
-                className="px-4 py-2 rounded-md bg-[#D4A373] text-[#0a0a0a] text-sm font-medium disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-[#D4A373] text-[#0a0a0a] text-sm font-semibold hover:bg-[#c89a63] disabled:opacity-50 transition-colors"
               >
                 {sendingChat ? "Enviando..." : "Enviar"}
               </button>
             </form>
 
             <div className="space-y-3">
-              <h3 className="text-sm text-[#a1a1a1]">Histórico de conversas</h3>
+              <h3 className="text-sm uppercase tracking-wide text-[#a1a1a1]">Histórico de conversas</h3>
               {questions.length === 0 ? (
-                <p className="text-xs text-[#a1a1a1]">Nenhuma mensagem no histórico.</p>
+                <p className="text-sm text-[#a1a1a1]">Nenhuma mensagem encontrada.</p>
               ) : (
                 questions.map((q) => {
+                  const thread = getThreadList(q);
+                  const status = getThreadStatus(thread);
                   const isOpen = expandedQuestion === q.id;
-                  const status = getThreadStatus(q);
                   return (
-                    <div key={q.id} className="rounded-md border border-[#ffffff10] bg-[#111111] p-4">
-                      <div className="flex items-center justify-between">
+                    <div key={q.id} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4">
+                      <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
-                          <span className={`text-[10px] px-2 py-0.5 rounded border ${getRoleBadgeClass(q.senderRole)}`}>
+                          <span className={`px-2 py-0.5 rounded border text-xs ${getRoleBadgeClass(q.senderRole)}`}>
                             {q.senderRole}
                           </span>
-                          <span className="text-sm text-[#f5f5f5] font-medium">{getAuthorName(q)}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded border border-[#ffffff10] text-[#a1a1a1]">
-                            {status}
+                          <span className="text-xs text-[#a1a1a1]">
+                            {q.student?.name || q.teacher?.name || "—"}
                           </span>
                         </div>
-                        <span className="text-[11px] text-[#a1a1a1]">{formatDateTime(q.createdAt)}</span>
+                        <span className="text-xs text-[#a1a1a1]">{formatDateTime(q.createdAt)}</span>
                       </div>
-                      <p className="text-sm text-[#d4d4d4] mt-2 whitespace-pre-wrap">{q.content}</p>
 
-                      {q.children && q.children.length > 0 && renderThread(q.children, 1)}
+                      <div className="space-y-2">
+                        {thread.map((m) => (
+                          <div key={m.id} className="border-l border-[#ffffff10] pl-3">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-xs font-medium text-[#f5f5f5]">{getAuthorName(m)}</span>
+                              <span className="text-[10px] text-[#a1a1a1]">{formatDateTime(m.createdAt)}</span>
+                            </div>
+                            <p className="text-sm text-[#d4d4d4] whitespace-pre-wrap">{m.content}</p>
+                          </div>
+                        ))}
+                      </div>
 
-                      <div className="mt-3">
+                      <div className="mt-3 flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => setExpandedQuestion(isOpen ? null : q.id)}
-                          className="text-xs text-[#D4A373] hover:underline"
+                          className="text-xs px-3 py-1 rounded-lg border border-[#ffffff10] text-[#a1a1a1] hover:text-[#f5f5f5] hover:border-[#ffffff30] transition-colors"
                         >
-                          {isOpen ? "Fechar conversa" : "Continuar conversa"}
+                          Continuar conversa
                         </button>
+                        <span className="text-[10px] text-[#a1a1a1]">{status.total} mensagem(ns)</span>
+                      </div>
 
-                        {isOpen && (
-                          <div className="mt-2 space-y-2">
-                            <textarea
-                              value={replyContent[q.id] || ""}
-                              onChange={(e) =>
-                                setReplyContent((prev) => ({ ...prev, [q.id]: e.target.value }))
-                              }
-                              rows={3}
-                              className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-md px-3 py-2 text-sm text-[#f5f5f5]"
-                              placeholder="Escreva uma resposta"
-                            />
+                      {isOpen && (
+                        <form onSubmit={(e) => handleReply(q, e)} className="mt-3 space-y-2">
+                          <textarea
+                            value={replyContent[q.id] || ""}
+                            onChange={(e) =>
+                              setReplyContent((prev) => ({ ...prev, [q.id]: e.target.value }))
+                            }
+                            placeholder="Escreva sua resposta..."
+                            rows={3}
+                            className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] resize-y"
+                          />
+                          <div className="flex gap-2">
                             <button
-                              type="button"
-                              onClick={() => handleReply(q)}
-                              className="px-3 py-1.5 rounded-md bg-[#D4A373] text-[#0a0a0a] text-xs font-medium"
+                              type="submit"
+                              className="px-3 py-1.5 rounded-lg bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold hover:bg-[#c89a63] transition-colors"
                             >
                               Responder
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedQuestion(null);
+                                setReplyContent((prev) => ({ ...prev, [q.id]: "" }));
+                              }}
+                              className="px-3 py-1.5 rounded-lg border border-[#ffffff10] text-[#a1a1a1] text-xs hover:text-[#f5f5f5] transition-colors"
+                            >
+                              Cancelar
+                            </button>
                           </div>
-                        )}
-                      </div>
+                        </form>
+                      )}
                     </div>
                   );
                 })
