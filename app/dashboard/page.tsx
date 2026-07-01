@@ -3,7 +3,6 @@ import { authOptions } from '../api/auth/[...nextauth]/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import GestaoMessageReply from '@/components/GestaoMessageReply';
-
 function formatDate(date: Date) {
   return new Date(date).toLocaleDateString('pt-BR', {
     day: '2-digit',
@@ -13,17 +12,14 @@ function formatDate(date: Date) {
     minute: '2-digit',
   });
 }
-
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     redirect('/login');
   }
-
   const userId = session.user.id;
   const role = (session.user as any)?.role;
   const isGestor = role === 'GESTOR';
-
   const students = await prisma.student.findMany({
     where: isGestor ? {} : { userId },
     select: {
@@ -32,13 +28,11 @@ export default async function DashboardPage() {
       user: { select: { id: true, name: true } },
     },
   });
-
   const myStudentIds = students.map((s) => s.id);
-
   const pendingWorkouts = await prisma.workout.findMany({
     where: isGestor
-      ? { status: 'PENDING' }
-      : { status: 'PENDING', studentId: { in: myStudentIds } },
+      ? { status: 'PENDENTE' }
+      : { status: 'PENDENTE', studentId: { in: myStudentIds } },
     select: {
       id: true,
       createdAt: true,
@@ -47,7 +41,6 @@ export default async function DashboardPage() {
     orderBy: { createdAt: 'desc' },
     take: 10,
   });
-
   const unansweredQuestions = await prisma.question.findMany({
     where: {
       parentId: null,
@@ -65,7 +58,6 @@ export default async function DashboardPage() {
     orderBy: { createdAt: 'desc' },
     take: 10,
   });
-
   const noticesWithReads = await prisma.notice.findMany({
     where: {
       OR: [
@@ -75,7 +67,7 @@ export default async function DashboardPage() {
       ],
     },
     include: {
-      reads: { select: { userId: true, readAt: true } },
+      reads: { select: { studentId: true } },
       author: { select: { id: true, name: true } },
       student: { select: { id: true, name: true } },
       professor: { select: { id: true, name: true } },
@@ -83,25 +75,23 @@ export default async function DashboardPage() {
     orderBy: { createdAt: 'desc' },
     take: 50,
   });
-
-  const pendingReads = noticesWithReads
-    .filter((n) => {
-      if (n.targetRole && n.targetRole !== role) return false;
-      if (n.studentId && !myStudentIds.includes(n.studentId)) return false;
-      if (n.professorId && n.professorId !== userId) return false;
-      return !n.reads.some((r) => r.userId === userId);
-    })
-    .map((n) => ({
-      ...n,
-      createdAt: n.createdAt,
-    }));
-
+  const pendingReads = noticesWithReads.filter((n) => {
+    if (n.targetRole && n.targetRole !== role) return false;
+    if (n.studentId && !myStudentIds.includes(n.studentId)) return false;
+    if (n.professorId && n.professorId !== userId) return false;
+    if (n.studentId) {
+      return !n.reads.some((r) => r.studentId === n.studentId);
+    }
+    if (!isGestor) {
+      return myStudentIds.some((id) => !n.reads.some((r) => r.studentId === id));
+    }
+    return false;
+  });
   const managementNotices = await prisma.notice.findMany({
     where: { authorId: userId },
     orderBy: { createdAt: 'desc' },
     take: 10,
   });
-
   const managementMessages = await prisma.question.findMany({
     where: {
       parentId: null,
@@ -124,12 +114,10 @@ export default async function DashboardPage() {
     orderBy: { createdAt: 'desc' },
     take: 10,
   });
-
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
       <div className="max-w-6xl mx-auto space-y-8">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-
         <section className="bg-zinc-900 rounded-2xl p-6">
           <h2 className="text-xl font-semibold mb-4">Treinos pendentes</h2>
           {pendingWorkouts.length === 0 ? (
@@ -152,7 +140,6 @@ export default async function DashboardPage() {
             </div>
           )}
         </section>
-
         <section className="bg-zinc-900 rounded-2xl p-6">
           <h2 className="text-xl font-semibold mb-4">Dúvidas sem resposta</h2>
           {unansweredQuestions.length === 0 ? (
@@ -169,7 +156,6 @@ export default async function DashboardPage() {
             </div>
           )}
         </section>
-
         <section className="bg-zinc-900 rounded-2xl p-6">
           <h2 className="text-xl font-semibold mb-4">Avisos pendentes de leitura</h2>
           {pendingReads.length === 0 ? (
@@ -188,7 +174,6 @@ export default async function DashboardPage() {
             </div>
           )}
         </section>
-
         <section className="bg-zinc-900 rounded-2xl p-6">
           <h2 className="text-xl font-semibold mb-4">Avisos da gestão</h2>
           {managementNotices.length === 0 ? (
@@ -205,7 +190,6 @@ export default async function DashboardPage() {
             </div>
           )}
         </section>
-
         <section className="bg-zinc-900 rounded-2xl p-6">
           <h2 className="text-xl font-semibold mb-4">Mensagens da gestão</h2>
           {managementMessages.length === 0 ? (
@@ -215,7 +199,6 @@ export default async function DashboardPage() {
               {managementMessages.map((msg) => {
                 const replies = (msg.children || []).filter((c) => c.senderRole === 'TEACHER');
                 const lastReply = replies[replies.length - 1];
-
                 return (
                   <div key={msg.id} className="bg-zinc-800 rounded-xl p-4">
                     <div className="flex justify-between items-start">
@@ -245,7 +228,6 @@ export default async function DashboardPage() {
             </div>
           )}
         </section>
-
         <section className="bg-zinc-900 rounded-2xl p-6">
           <h2 className="text-xl font-semibold mb-4">Meus alunos</h2>
           {students.length === 0 ? (
