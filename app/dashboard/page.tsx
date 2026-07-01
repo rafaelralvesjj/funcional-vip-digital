@@ -3,6 +3,7 @@ import { authOptions } from '../api/auth/[...nextauth]/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import GestaoMessageReply from '@/components/GestaoMessageReply';
+import ManagementNoticeModalList from '@/components/ManagementNoticeModalList';
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -199,6 +200,7 @@ export default async function DashboardPage() {
       reads: {
         select: {
           studentId: true,
+          professorId: true,
         },
       },
     },
@@ -218,11 +220,6 @@ export default async function DashboardPage() {
    * 2. Aviso para todos os alunos:
    *    - no gestor, conta 1 pendência para cada aluno que ainda não leu;
    *    - no professor, conta 1 pendência para cada aluno dele que ainda não leu.
-   *
-   * Exemplo:
-   * professor1 tem aluno1 e aluno3.
-   * Um aviso enviado para todos os alunos deve contar 2 pendências para professor1,
-   * se aluno1 e aluno3 ainda não leram.
    */
   const pendingNoticeItems = notices.flatMap((notice) => {
     const targetRole = normalizeRole(notice.targetRole);
@@ -243,7 +240,11 @@ export default async function DashboardPage() {
       return [];
     }
 
-    const readStudentIds = new Set(notice.reads.map((read) => read.studentId));
+    const readStudentIds = new Set(
+      notice.reads
+        .map((read) => read.studentId)
+        .filter((studentId): studentId is string => Boolean(studentId))
+    );
 
     return targetStudents
       .filter((student) => !readStudentIds.has(student.id))
@@ -268,16 +269,20 @@ export default async function DashboardPage() {
     }
 
     /*
-     * Regra atual:
-     * "Avisos da gestão" agora é somente para avisos enviados a professores.
-     * Avisos da gestão enviados para alunos ficam apenas no bloco
-     * "Avisos pendentes de todos os alunos/dos meus alunos".
+     * "Avisos da gestão" mostra somente avisos enviados para professores.
+     * Avisos enviados para alunos ficam no bloco de avisos pendentes dos alunos.
      */
     if (targetRole !== 'TEACHER') {
       return false;
     }
 
     if (isTeacher) {
+      const wasReadByTeacher = notice.reads.some((read) => read.professorId === userId);
+
+      if (wasReadByTeacher) {
+        return false;
+      }
+
       return !notice.professorId || notice.professorId === userId;
     }
 
@@ -389,6 +394,17 @@ export default async function DashboardPage() {
 
     return 'Todos os alunos e professores';
   }
+
+  const managementNoticeItems = managementNotices.map((notice) => ({
+    id: notice.id,
+    title: notice.title || 'Aviso da gestão',
+    content: notice.content,
+    type: notice.type,
+    createdAt: notice.createdAt.toISOString(),
+    authorName: notice.author?.name || 'Gestão',
+    authorRole: notice.author?.role || null,
+    targetLabel: getNoticeTargetLabel(notice),
+  }));
 
   const summaryCards = [
     {
@@ -561,42 +577,11 @@ export default async function DashboardPage() {
             {labels.managementNoticesList}
           </h2>
 
-          {managementNotices.length === 0 ? (
-            <p className="text-[#a1a1a1]">
-              Nenhum aviso da gestão.
-            </p>
-          ) : (
-            <div className="divide-y divide-[#ffffff10]">
-              {managementNotices.map((notice) => (
-                <div key={notice.id} className="py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-[#f5f5f5] font-medium">
-                      {notice.title || 'Aviso da gestão'}
-                    </p>
-
-                    <p className="text-[#a1a1a1] text-sm">
-                      {formatDate(notice.createdAt)}
-                    </p>
-                  </div>
-
-                  <p className="text-[#a1a1a1] mt-2">
-                    {notice.content}
-                  </p>
-
-                  <div className="flex flex-wrap gap-3 mt-2 text-sm">
-                    <span className="text-[#D4A373]">
-                      Por: {notice.author?.name || 'Gestão'}
-                      {notice.author?.role ? ` (${notice.author.role})` : ''}
-                    </span>
-
-                    <span className="text-[#a1a1a1]">
-                      {getNoticeTargetLabel(notice)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <ManagementNoticeModalList
+            notices={managementNoticeItems}
+            emptyMessage="Nenhum aviso da gestão."
+            markAsReadOnClose={isTeacher}
+          />
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
