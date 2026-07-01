@@ -34,6 +34,7 @@ type Props = {
   currentUserId: string;
   currentRole: ConversationRole;
   emptyMessage?: string;
+  allowReply?: boolean;
 };
 
 function formatDateTime(dateStr: string): string {
@@ -117,6 +118,7 @@ export default function DashboardConversationList({
   currentUserId,
   currentRole,
   emptyMessage = "Nenhuma conversa encontrada.",
+  allowReply = true,
 }: Props) {
   const router = useRouter();
 
@@ -130,7 +132,7 @@ export default function DashboardConversationList({
   async function handleReply(event: FormEvent<HTMLFormElement>, conversation: ConversationItem) {
     event.preventDefault();
 
-    if (conversation.resolvedAt) return;
+    if (!allowReply || conversation.resolvedAt) return;
 
     const content = (replyContentById[conversation.id] || "").trim();
 
@@ -196,7 +198,7 @@ export default function DashboardConversationList({
   }
 
   async function handleCloseConversation(conversation: ConversationItem) {
-    if (conversation.resolvedAt || closingConversationId) return;
+    if (!allowReply || conversation.resolvedAt || closingConversationId) return;
 
     const confirmClose = window.confirm(
       "Deseja encerrar esta conversa? Depois de encerrada, ela ficará apenas para consulta."
@@ -353,6 +355,12 @@ export default function DashboardConversationList({
                   <div className="pt-2">
                     <p className="text-xs text-zinc-400">
                       Conversa encerrada em {formatDateTime(conversation.resolvedAt || "")}. Ela fica disponível apenas para consulta.
+                    </p>
+                  </div>
+                ) : !allowReply ? (
+                  <div className="pt-2">
+                    <p className="text-xs text-zinc-400">
+                      Visualização apenas para consulta. Somente o professor pode responder esta dúvida.
                     </p>
                   </div>
                 ) : (
