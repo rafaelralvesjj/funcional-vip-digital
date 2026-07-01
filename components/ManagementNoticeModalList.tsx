@@ -131,10 +131,26 @@ export default function ManagementNoticeModalList({
               className="w-full py-4 text-left hover:bg-[#0a0a0a] transition-colors rounded-lg px-2"
             >
               <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-[#f5f5f5] font-medium truncate">
                     {notice.title || "Aviso da gestão"}
                   </p>
+
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs text-[#a1a1a1]">
+                      De:{" "}
+                      <span className="text-[#f5f5f5]">
+                        {notice.authorName || "Gestão"}
+                      </span>
+                    </p>
+
+                    <p className="text-xs text-[#a1a1a1]">
+                      Para:{" "}
+                      <span className="text-[#D4A373]">
+                        {notice.targetLabel || "Não informado"}
+                      </span>
+                    </p>
+                  </div>
 
                   {showReadStatus && (
                     <span
