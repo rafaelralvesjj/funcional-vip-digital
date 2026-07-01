@@ -101,7 +101,8 @@ export default async function DashboardPage() {
     },
   });
 
-  const myStudentIds = students.map((s) => s.id);
+  const myStudentIds = students.map((student) => student.id);
+  const myStudentIdsSet = new Set(myStudentIds);
 
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
@@ -214,12 +215,17 @@ export default async function DashboardPage() {
       return false;
     }
 
-    const targetStudentIds = notice.studentId ? [notice.studentId] : myStudentIds;
+    if (isTeacher) {
+      if (notice.studentId && !myStudentIdsSet.has(notice.studentId)) {
+        return false;
+      }
 
-    if (targetStudentIds.length === 0) {
-      return false;
+      if (!notice.studentId && myStudentIds.length === 0) {
+        return false;
+      }
     }
 
+    const targetStudentIds = notice.studentId ? [notice.studentId] : myStudentIds;
     const readStudentIds = new Set(notice.reads.map((read) => read.studentId));
 
     return targetStudentIds.some((studentId) => !readStudentIds.has(studentId));
@@ -240,10 +246,19 @@ export default async function DashboardPage() {
     }
 
     if (isTeacher) {
-      return (
-        targetRole === 'TEACHER' &&
-        (!notice.professorId || notice.professorId === userId)
-      );
+      if (targetRole === 'TEACHER') {
+        return !notice.professorId || notice.professorId === userId;
+      }
+
+      if (targetRole === 'STUDENT') {
+        if (notice.studentId) {
+          return myStudentIdsSet.has(notice.studentId);
+        }
+
+        return myStudentIds.length > 0;
+      }
+
+      return false;
     }
 
     return true;
