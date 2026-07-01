@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
+
 interface Student { id: string; name: string; user?: { id: string; name: string }; }
 interface Teacher { id: string; name: string; email?: string; _count?: { students: number }; }
 interface Notice {
