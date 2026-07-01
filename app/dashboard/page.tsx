@@ -1,410 +1,756 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "../api/auth/[...nextauth]/auth";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import Link from "next/link";
-import GestaoMessageReply from "@/components/GestaoMessageReply";
+"use client";
 
-export const dynamic = "force-dynamic";
+import React, { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import {
+  Send,
+  MessageSquare,
+  Inbox,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  User,
+  Search,
+  Filter,
+  RefreshCw,
+  MoreHorizontal,
+} from "lucide-react";
 
-export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/auth/signin");
-  const userId = session.user.id;
-  const userRole = (session.user as any)?.role || "PROFESSOR";
-  const isGestor = userRole === "GESTOR";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-  // 1. ALUNOS
-  const myStudents = await prisma.student.findMany({
-    where: isGestor ? undefined : { userId },
-    select: { id: true, name: true, user: { select: { id: true, name: true } } },
-    orderBy: { name: "asc" },
-  });
-  const myStudentIds = myStudents.map((s) => s.id);
+interface UserLite {
+  id: string;
+  name: string | null;
+  email: string | null;
+}
 
-  // 2. WORKOUTS PENDENTES
-  const pendingWorkouts = await prisma.workout.findMany({
-    where: { studentId: { in: myStudentIds }, status: "PENDENTE" },
-    select: { id: true, studentId: true, date: true, workoutPlan: { select: { name: true } } },
-    orderBy: { date: "desc" },
-  });
-  const pendingByStudent = new Map<string, typeof pendingWorkouts>();
-  for (const w of pendingWorkouts) {
-    if (!pendingByStudent.has(w.studentId)) pendingByStudent.set(w.studentId, []);
-    pendingByStudent.get(w.studentId)!.push(w);
+interface QuestionChild {
+  id: string;
+  content: string;
+  senderRole: "GESTOR" | "TEACHER";
+  createdAt: string;
+  answeredBy?: UserLite | null;
+  answer?: string | null;
+}
+
+interface Question {
+  id: string;
+  content: string;
+  senderRole: "GESTOR" | "TEACHER";
+  createdAt: string;
+  answered?: boolean | null;
+  answer?: string | null;
+  answeredBy?: UserLite | null;
+  answeredAt?: string | null;
+  sender?: UserLite | null;
+  recipient?: UserLite | null;
+  children?: QuestionChild[];
+}
+
+interface Teacher {
+  id: string;
+  name: string | null;
+  email: string | null;
+}
+
+export default function DashboardPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  const [activeTab, setActiveTab] = useState("received");
+
+  const [receivedMessages, setReceivedMessages] = useState<Question[]>([]);
+  const [sentMessages, setSentMessages] = useState<Question[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+
+  const [loadingReceived, setLoadingReceived] = useState(true);
+  const [loadingSent, setLoadingSent] = useState(true);
+  const [loadingTeachers, setLoadingTeachers] = useState(true);
+
+  const [searchReceived, setSearchReceived] = useState("");
+  const [searchSent, setSearchSent] = useState("");
+
+  const [replyOpenId, setReplyOpenId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState<Record<string, string>>({});
+  const [replySending, setReplySending] = useState<Record<string, boolean>>({});
+
+  const [newMessageRecipient, setNewMessageRecipient] = useState("");
+  const [newMessageText, setNewMessageText] = useState("");
+  const [newMessageSending, setNewMessageSending] = useState(false);
+
+  const userRole = (session?.user?.role as "GESTOR" | "TEACHER") || "TEACHER";
+  const userName = session?.user?.name || "Usuário";
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetchReceived();
+      fetchSent();
+      if (userRole === "GESTOR") {
+        fetchTeachers();
+      }
+    }
+  }, [status, userRole]);
+
+  async function fetchReceived() {
+    try {
+      setLoadingReceived(true);
+      const res = await fetch("/api/questions?direction=received");
+      if (!res.ok) throw new Error("Erro ao buscar mensagens recebidas");
+      const data = await res.json();
+      setReceivedMessages(Array.isArray(data) ? data : data.questions || []);
+    } catch (err) {
+      toast.error("Não foi possível carregar as mensagens recebidas.");
+    } finally {
+      setLoadingReceived(false);
+    }
   }
-  const studentsWithPendingWorkouts = myStudents.map((s) => ({ ...s, workouts: pendingByStudent.get(s.id) || [] })).filter((s) => s.workouts.length > 0);
-  const totalPendingWorkouts = studentsWithPendingWorkouts.reduce((acc, s) => acc + s.workouts.length, 0);
 
-  // 3. AVISOS (leitura pendente) - do professor para alunos OU do gestor para alunos
-  const allNotices = await prisma.notice.findMany({
-    where: isGestor ? { targetRole: "ALUNO" } : { authorId: userId },
-    orderBy: { createdAt: "desc" },
-    include: { student: { select: { id: true, name: true } }, author: { select: { id: true, name: true, role: true } }, reads: { where: { studentId: { in: myStudentIds } }, select: { studentId: true } } },
-  });
-  const unreadNotices = allNotices.filter((n) => {
-    if (n.studentId) return !n.reads.some((r) => r.studentId === n.studentId);
-    if (myStudentIds.length === 0) return false;
-    return n.reads.filter((r) => myStudentIds.includes(r.studentId)).length < myStudentIds.length;
-  });
-  const totalUnreadNotices = unreadNotices.length;
+  async function fetchSent() {
+    try {
+      setLoadingSent(true);
+      const res = await fetch("/api/questions?direction=sent");
+      if (!res.ok) throw new Error("Erro ao buscar mensagens enviadas");
+      const data = await res.json();
+      setSentMessages(Array.isArray(data) ? data : data.questions || []);
+    } catch (err) {
+      toast.error("Não foi possível carregar as mensagens enviadas.");
+    } finally {
+      setLoadingSent(false);
+    }
+  }
 
-  // 4. DUVIDAS SEM RESPOSTA
-  const unansweredQuestions = await prisma.question.findMany({
-    where: { parentId: null, answer: null, answeredAt: null, studentId: { in: myStudentIds }, senderRole: "STUDENT" },
-    include: { student: { select: { id: true, name: true, user: { select: { id: true, name: true } } } }, children: { select: { id: true, answer: true } } },
-    orderBy: { createdAt: "desc" }, take: 20,
-  });
-  const trulyUnanswered = unansweredQuestions.filter((q) => !q.children.some((c) => c.answer !== null));
-  const totalUnansweredQuestions = trulyUnanswered.length;
+  async function fetchTeachers() {
+    try {
+      setLoadingTeachers(true);
+      const res = await fetch("/api/teachers");
+      if (!res.ok) throw new Error("Erro ao buscar professores");
+      const data = await res.json();
+      setTeachers(Array.isArray(data) ? data : data.teachers || []);
+    } catch (err) {
+      toast.error("Não foi possível carregar a lista de professores.");
+    } finally {
+      setLoadingTeachers(false);
+    }
+  }
 
-  // 5. AVISOS DA GESTÃO (só professor - recebidos do gestor)
-  let gestaoNotices: any[] = [];
-  if (!isGestor) {
-    gestaoNotices = await prisma.notice.findMany({
-      where: { targetRole: "PROFESSOR", OR: [{ professorId: userId }, { professorId: null }] },
-      orderBy: { createdAt: "desc" }, take: 20,
-      include: { author: { select: { id: true, name: true, role: true } } },
+  async function handleSendReply(questionId: string) {
+    const content = (replyText[questionId] || "").trim();
+    if (!content) {
+      toast.error("Digite uma resposta antes de enviar.");
+      return;
+    }
+
+    try {
+      setReplySending((prev) => ({ ...prev, [questionId]: true }));
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parentId: questionId,
+          senderRole: "TEACHER",
+          content,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Erro ao enviar resposta");
+      }
+
+      toast.success("Resposta enviada com sucesso!");
+      setReplyText((prev) => ({ ...prev, [questionId]: "" }));
+      setReplyOpenId(null);
+      await fetchReceived();
+      await fetchSent();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao enviar resposta.");
+    } finally {
+      setReplySending((prev) => ({ ...prev, [questionId]: false }));
+    }
+  }
+
+  async function handleSendNewMessage(e: React.FormEvent) {
+    e.preventDefault();
+    const content = newMessageText.trim();
+    if (!newMessageRecipient) {
+      toast.error("Selecione um professor destinatário.");
+      return;
+    }
+    if (!content) {
+      toast.error("Digite o conteúdo da mensagem.");
+      return;
+    }
+
+    try {
+      setNewMessageSending(true);
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientId: newMessageRecipient,
+          senderRole: "GESTOR",
+          content,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Erro ao enviar mensagem");
+      }
+
+      toast.success("Mensagem enviada com sucesso!");
+      setNewMessageRecipient("");
+      setNewMessageText("");
+      await fetchSent();
+      setActiveTab("sent");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao enviar mensagem.");
+    } finally {
+      setNewMessageSending(false);
+    }
+  }
+
+  const filteredReceived = receivedMessages.filter((msg) =>
+    msg.content.toLowerCase().includes(searchReceived.toLowerCase())
+  );
+
+  const filteredSent = sentMessages.filter((msg) =>
+    msg.content.toLowerCase().includes(searchSent.toLowerCase())
+  );
+
+  const hasTeacherReply = (msg: Question) => {
+    const teacherReplies = msg.children?.filter((c) => c.senderRole === "TEACHER") || [];
+    return teacherReplies.length > 0;
+  };
+
+  const getLastTeacherReply = (msg: Question) => {
+    const teacherReplies = msg.children?.filter((c) => c.senderRole === "TEACHER") || [];
+    return teacherReplies.length > 0 ? teacherReplies[teacherReplies.length - 1] : null;
+  };
+
+  function formatDate(dateString?: string | null) {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
-  // 6. MENSAGENS DA GESTÃO (só professor - recebidas do gestor)
-  let gestaoMessages: any[] = [];
-  if (!isGestor) {
-    gestaoMessages = await prisma.question.findMany({
-      where: { teacherId: userId, senderRole: "GESTOR" },
-      orderBy: { createdAt: "desc" }, take: 20,
-      include: {
-        student: { select: { id: true, name: true } },
-        answeredBy: { select: { id: true, name: true } },
-        children: { orderBy: { createdAt: "asc" }, select: { id: true, answer: true, content: true, answeredBy: { select: { name: true } } } },
-      },
-    });
+  function getInitials(name?: string | null) {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
   }
 
-  // 7. (NOVO) GESTOR: AVISOS ENVIADOS PARA PROFESSORES
-  let gestorNoticesToTeachers: any[] = [];
-  let totalGestorUnreadNotices = 0;
-  if (isGestor) {
-    gestorNoticesToTeachers = await prisma.notice.findMany({
-      where: { authorId: userId, targetRole: "PROFESSOR" },
-      orderBy: { createdAt: "desc" }, take: 20,
-      include: { author: { select: { id: true, name: true } }, professor: { select: { id: true, name: true } } },
-    });
-    totalGestorUnreadNotices = gestorNoticesToTeachers.length;
+  if (status === "loading") {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Skeleton className="h-10 w-64 mb-6" />
+        <Skeleton className="h-48 w-full mb-6" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    );
   }
 
-  // 8. (NOVO) GESTOR: MENSAGENS ENVIADAS PARA PROFESSORES (com status de resposta)
-  let gestorSentMessages: any[] = [];
-  if (isGestor) {
-    gestorSentMessages = await prisma.question.findMany({
-      where: { senderRole: "GESTOR" },
-      orderBy: { createdAt: "desc" }, take: 20,
-      include: {
-        student: { select: { id: true, name: true } },
-        teacher: { select: { id: true, name: true } },
-        children: { orderBy: { createdAt: "asc" }, select: { id: true, answer: true, answeredBy: { select: { name: true } } } },
-      },
-    });
+  if (status === "unauthenticated") {
+    return null;
   }
-
-  const totalStudents = myStudents.length;
-  const displayName = session.user.name ?? "Personal";
 
   return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0a]">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-[#f5f5f5]">Olá, {displayName}</h1>
-          <p className="text-xs md:text-sm text-[#a1a1a1]">{new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground">
+              Bem-vindo, {userName}. Gerencie suas mensagens e comunicações.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => { fetchReceived(); fetchSent(); }}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Atualizar
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] md:text-xs px-3 py-1 rounded-full border ${isGestor ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-[#D4A373]/10 text-[#D4A373] border-[#D4A373]/20"}`}>
-            {isGestor ? "Gestor" : "Professor"}
-          </span>
-          <span className="text-[10px] md:text-xs text-[#525252]">{totalStudents} aluno(s)</span>
+
+        <div className="grid gap-6 md:grid-cols-3 mb-8">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Total recebidas</CardDescription>
+              <CardTitle className="text-3xl">{receivedMessages.length}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xs text-muted-foreground">
+                Mensagens da gestão direcionadas a você
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Total enviadas</CardDescription>
+              <CardTitle className="text-3xl">{sentMessages.length}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xs text-muted-foreground">
+                Mensagens que você enviou para professores
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Respondidas</CardDescription>
+              <CardTitle className="text-3xl">
+                {sentMessages.filter((m) => hasTeacherReply(m)).length}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xs text-muted-foreground">
+                Mensagens enviadas com resposta do professor
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </div>
 
-      {/* CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-        <Link href="/dashboard/mural" className="group">
-          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalUnreadNotices > 0 ? "bg-amber-500/20 text-amber-400" : "bg-[#525252]/20 text-[#525252]"}`}>{totalUnreadNotices} não lido(s)</span>
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{totalUnreadNotices}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Avisos pendentes</p>
-          </div>
-        </Link>
-        <Link href="/dashboard/montar-treino" className="group">
-          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-green-500/10 text-green-400 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-              </div>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalPendingWorkouts > 0 ? "bg-green-500/20 text-green-400" : "bg-[#525252]/20 text-[#525252]"}`}>{totalPendingWorkouts} pendente(s)</span>
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{totalPendingWorkouts}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Treinos pendentes</p>
-          </div>
-        </Link>
-        <Link href="/dashboard/students" className="group">
-          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M09.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              </div>
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white">{totalUnansweredQuestions}</p>
-            <p className="text-xs text-[#a1a1a1] mt-1">Dúvidas sem resposta</p>
-          </div>
-        </Link>
-      </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 md:w-auto md:inline-grid">
+            <TabsTrigger value="received" className="gap-2">
+              <Inbox className="h-4 w-4" />
+              Mensagens da Gestão
+            </TabsTrigger>
+            <TabsTrigger value="sent" className="gap-2">
+              <Send className="h-4 w-4" />
+              Mensagens Enviadas
+            </TabsTrigger>
+          </TabsList>
 
-      {/* LISTA 1: ALUNOS COM TREINOS PENDENTES */}
-      {studentsWithPendingWorkouts.length > 0 && (
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">Alunos com treinos pendentes</h2>
-            <span className="text-xs text-[#a1a1a1]">{studentsWithPendingWorkouts.length} aluno(s)</span>
-          </div>
-          <div className="divide-y divide-[#ffffff05] max-h-80 overflow-y-auto">
-            {studentsWithPendingWorkouts.map((s) => {
-              const teacherName = myStudents.find((ms) => ms.id === s.id)?.user?.name || "";
-              return (
-                <div key={s.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#D4A373] transition">{s.name}</Link>
-                      {isGestor && teacherName && <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Prof: {teacherName}</span>}
+          <TabsContent value="received" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Mensagens da Gestão</CardTitle>
+                <CardDescription>
+                  Mensagens recebidas da gestão escolar. Responda quando necessário.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar mensagens..."
+                    value={searchReceived}
+                    onChange={(e) => setSearchReceived(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                {loadingReceived ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-32 w-full" />
+                    <Skeleton className="h-32 w-full" />
+                  </div>
+                ) : filteredReceived.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Inbox className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium">Nenhuma mensagem recebida</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      Você ainda não recebeu mensagens da gestão. Quando houver novas comunicações,
+                      elas aparecerão aqui.
+                    </p>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[600px] pr-4">
+                    <div className="space-y-4">
+                      {filteredReceived.map((msg) => {
+                        const teacherReplies =
+                          msg.children?.filter((c) => c.senderRole === "TEACHER") || [];
+                        const hasReply = teacherReplies.length > 0;
+                        const isOpen = replyOpenId === msg.id;
+
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="rounded-lg border bg-card p-4 shadow-sm"
+                          >
+                            <div className="flex items-start gap-4">
+                              <Avatar className="h-10 w-10">
+                                <AvatarFallback className="bg-primary/10 text-primary">
+                                  {getInitials(msg.sender?.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                  <div>
+                                    <p className="font-medium truncate">
+                                      {msg.sender?.name || "Gestão"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatDate(msg.createdAt)}
+                                    </p>
+                                  </div>
+                                  <Badge
+                                    variant={hasReply ? "default" : "secondary"}
+                                    className="w-fit"
+                                  >
+                                    {hasReply ? (
+                                      <>
+                                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                                        Respondida
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Clock className="mr-1 h-3 w-3" />
+                                        Aguardando
+                                      </>
+                                    )}
+                                  </Badge>
+                                </div>
+
+                                <div className="mt-3 rounded-md bg-muted p-3">
+                                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                </div>
+
+                                {hasReply && (
+                                  <div className="mt-3 rounded-md border-l-4 border-primary bg-primary/5 p-3">
+                                    <p className="text-sm font-medium text-primary mb-1">
+                                      Resposta enviada ✓
+                                    </p>
+                                    {teacherReplies.map((reply) => (
+                                      <p
+                                        key={reply.id}
+                                        className="text-sm text-muted-foreground whitespace-pre-wrap"
+                                      >
+                                        {reply.content}
+                                      </p>
+                                    ))}
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                      {formatDate(
+                                        teacherReplies[teacherReplies.length - 1].createdAt
+                                      )}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {!hasReply && (
+                                  <div className="mt-4">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        setReplyOpenId((id) => (id === msg.id ? null : msg.id))
+                                      }
+                                    >
+                                      <MessageSquare className="mr-2 h-4 w-4" />
+                                      {isOpen ? "Cancelar resposta" : "Responder"}
+                                      {isOpen ? (
+                                        <ChevronUp className="ml-2 h-4 w-4" />
+                                      ) : (
+                                        <ChevronDown className="ml-2 h-4 w-4" />
+                                      )}
+                                    </Button>
+
+                                    <AnimatePresence>
+                                      {isOpen && (
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: "auto" }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          className="overflow-hidden"
+                                        >
+                                          <div className="pt-3 space-y-3">
+                                            <Textarea
+                                              placeholder="Digite sua resposta..."
+                                              value={replyText[msg.id] || ""}
+                                              onChange={(e) =>
+                                                setReplyText((prev) => ({
+                                                  ...prev,
+                                                  [msg.id]: e.target.value,
+                                                }))
+                                              }
+                                              rows={4}
+                                            />
+                                            <div className="flex justify-end gap-2">
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setReplyOpenId(null)}
+                                              >
+                                                Cancelar
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                onClick={() => handleSendReply(msg.id)}
+                                                disabled={replySending[msg.id]}
+                                              >
+                                                {replySending[msg.id] ? (
+                                                  <>
+                                                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                                    Enviando...
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <Send className="mr-2 h-4 w-4" />
+                                                    Enviar resposta
+                                                  </>
+                                                )}
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                     </div>
-                    <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">{s.workouts.length} pendente(s)</span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {s.workouts.slice(0, 5).map((w, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 text-[10px] text-[#6b6b6b]">
-                        <span className="w-1 h-1 rounded-full bg-red-500/50" />
-                        <span>{w.workoutPlan?.name || "Treino"}</span>
-                        <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-      {/* LISTA 2: DUVIDAS SEM RESPOSTA */}
-      {trulyUnanswered.length > 0 && (
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">Dúvidas sem resposta</h2>
-            <span className="text-xs text-[#a1a1a1]">{trulyUnanswered.length} dúvida(s)</span>
-          </div>
-          <div className="divide-y divide-[#ffffff05]">
-            {trulyUnanswered.map((q) => {
-              const teacherName = (q.student as any)?.user?.name || "";
-              return (
-                <div key={q.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-xs font-medium text-[#D4A373] hover:text-[#c49563] transition">{q.student?.name || "Aluno"}</Link>
-                        {isGestor && teacherName && <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Prof: {teacherName}</span>}
+          <TabsContent value="sent" className="space-y-6">
+            {userRole === "GESTOR" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Nova mensagem para professor</CardTitle>
+                  <CardDescription>
+                    Envie uma nova mensagem para um professor da instituição.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSendNewMessage} className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Destinatário</label>
+                        <select
+                          value={newMessageRecipient}
+                          onChange={(e) => setNewMessageRecipient(e.target.value)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                          <option value="">Selecione um professor</option>
+                          {teachers.map((teacher) => (
+                            <option key={teacher.id} value={teacher.id}>
+                              {teacher.name || teacher.email || teacher.id}
+                            </option>
+                          ))}
+                        </select>
+                        {loadingTeachers && (
+                          <p className="text-xs text-muted-foreground">Carregando professores...</p>
+                        )}
                       </div>
-                      <p className="text-xs text-[#e5e5e5] mt-0.5 line-clamp-2">{q.content}</p>
                     </div>
-                    <span className="text-[9px] text-[#525252] shrink-0">{new Date(q.createdAt).toLocaleDateString("pt-BR")}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* LISTA 3: AVISOS COM LEITURA PENDENTE */}
-      {unreadNotices.length > 0 && (
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">Avisos com leitura pendente</h2>
-            <span className="text-xs text-[#a1a1a1]">{unreadNotices.length} aviso(s)</span>
-          </div>
-          <div className="divide-y divide-[#ffffff05] max-h-80 overflow-y-auto">
-            {unreadNotices.slice(0, 15).map((notice) => (
-              <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                      <span className="text-xs font-medium text-[#f5f5f5]">{notice.title || "Sem título"}</span>
-                      <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1 py-0.5 rounded-full">{notice.type || "Aviso"}</span>
-                      {isGestor && notice.author && <span className="text-[8px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Por: {notice.author.name}</span>}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Mensagem</label>
+                      <Textarea
+                        placeholder="Digite o conteúdo da mensagem..."
+                        value={newMessageText}
+                        onChange={(e) => setNewMessageText(e.target.value)}
+                        rows={4}
+                      />
                     </div>
-                    <p className="text-[10px] text-[#a1a1a1] mt-0.5 line-clamp-1">{notice.content}</p>
-                    {notice.student ? <p className="text-[8px] text-[#525252] mt-0.5">Para: {notice.student.name}</p> : <p className="text-[8px] text-[#525252] mt-0.5">Para: Todos os alunos</p>}
-                  </div>
-                  <span className="text-[8px] text-[#525252] shrink-0">{new Date(notice.createdAt).toLocaleDateString("pt-BR")}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* LISTA 4: AVISOS DA GESTÃO (só professor - ou avisos enviados para professores se for gestor) */}
-      {!isGestor && gestaoNotices.length > 0 && (
-        <div className="bg-[#111111] border border-[#D4A373]/20 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between bg-[#D4A373]/5">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">📢 Avisos da Gestão</h2>
-            <span className="text-xs text-[#a1a1a1]">{gestaoNotices.length} aviso(s)</span>
-          </div>
-          <div className="divide-y divide-[#ffffff05]">
-            {gestaoNotices.map((notice) => (
-              <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#D4A373] shrink-0" />
-                    <span className="text-xs font-medium text-[#f5f5f5]">{notice.title || "Comunicado"}</span>
-                    <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1.5 py-0.5 rounded-full">Gestão</span>
-                  </div>
-                  <p className="text-xs text-[#e5e5e5] mt-1">{notice.content}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[8px] text-[#525252]">{new Date(notice.createdAt).toLocaleDateString("pt-BR")}</span>
-                    {notice.author && <span className="text-[8px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">{notice.author.name}</span>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {isGestor && gestorNoticesToTeachers.length > 0 && (
-        <div className="bg-[#111111] border border-[#D4A373]/20 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between bg-[#D4A373]/5">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">📢 Avisos enviados para professores</h2>
-            <span className="text-xs text-[#a1a1a1]">{gestorNoticesToTeachers.length} aviso(s)</span>
-          </div>
-          <div className="divide-y divide-[#ffffff05]">
-            {gestorNoticesToTeachers.map((notice) => (
-              <div key={notice.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#D4A373] shrink-0" />
-                    <span className="text-xs font-medium text-[#f5f5f5]">{notice.title || "Comunicado"}</span>
-                    <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1.5 py-0.5 rounded-full">Gestão</span>
-                  </div>
-                  <p className="text-xs text-[#e5e5e5] mt-1">{notice.content}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[8px] text-[#525252]">{new Date(notice.createdAt).toLocaleDateString("pt-BR")}</span>
-                    {notice.professor && <span className="text-[8px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Prof: {notice.professor.name}</span>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* LISTA 5: MENSAGENS DA GESTÃO (só professor - ou mensagens enviadas se for gestor) */}
-      {!isGestor && gestaoMessages.length > 0 && (
-        <div className="bg-[#111111] border border-blue-500/20 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between bg-blue-500/5">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">💬 Mensagens da Gestão</h2>
-            <span className="text-xs text-[#a1a1a1]">{gestaoMessages.length} mensagem(ns)</span>
-          </div>
-          <div className="divide-y divide-[#ffffff05]">
-            {gestaoMessages.map((msg) => {
-              const hasDirectAnswer = !!msg.answer;
-              const hasChildAnswer = msg.children?.some((c: any) => c.answer);
-              const hasReply = hasDirectAnswer || hasChildAnswer;
-              return (
-                <div key={msg.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Gestão</span>
-                      {msg.student && <span className="text-[9px] text-[#525252]">Sobre: {msg.student.name}</span>}
-                      {hasReply ? <span className="text-[9px] text-green-400">Respondida</span> : <span className="text-[9px] text-amber-400">Aguardando resposta</span>}
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={newMessageSending}>
+                        {newMessageSending ? (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            Enviando...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="mr-2 h-4 w-4" />
+                            Enviar mensagem
+                          </>
+                        )}
+                      </Button>
                     </div>
-                    <p className="text-xs text-[#e5e5e5] mt-1">{msg.content}</p>
-                    <div className="text-[9px] text-[#525252] mt-0.5">{new Date(msg.createdAt).toLocaleDateString("pt-BR")}</div>
-                    {hasReply ? (
-                      <div className="mt-2 pl-3 border-l-2 border-green-500/30">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[9px] text-green-400">Resposta enviada ✓</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-2">
-                        <GestaoMessageReply questionId={msg.id} studentId={msg.studentId} teacherId={userId} currentUserId={userId} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      {isGestor && gestorSentMessages.length > 0 && (
-        <div className="bg-[#111111] border border-blue-500/20 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#ffffff10] flex items-center justify-between bg-blue-500/5">
-            <h2 className="text-sm font-semibold text-[#f5f5f5]">💬 Mensagens enviadas para professores</h2>
-            <span className="text-xs text-[#a1a1a1]">{gestorSentMessages.length} mensagem(ns)</span>
-          </div>
-          <div className="divide-y divide-[#ffffff05]">
-            {gestorSentMessages.map((msg) => {
-              const hasDirectAnswer = !!msg.answer;
-              const hasChildAnswer = msg.children?.some((c: any) => c.answer);
-              const hasReply = hasDirectAnswer || hasChildAnswer;
+                  </form>
+                </CardContent>
+              </Card>
+            )}
 
-              let replyAnswer = null;
-              let replyAuthor = null;
-              if (hasDirectAnswer) {
-                replyAnswer = msg.answer;
-                replyAuthor = msg.answeredBy?.name;
-              } else if (hasChildAnswer) {
-                const lastChild = msg.children?.filter((c: any) => c.answer).pop();
-                replyAnswer = lastChild?.answer;
-                replyAuthor = lastChild?.answeredBy?.name;
-              }
-              return (
-                <div key={msg.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full">Gestão</span>
-                      {msg.teacher && <span className="text-[9px] text-[#D4A373] bg-[#D4A373]/10 px-1.5 py-0.5 rounded-full">Para: {msg.teacher.name}</span>}
-                      {hasReply ? <span className="text-[9px] text-green-400">Respondida ✅</span> : <span className="text-[9px] text-amber-400">Aguardando</span>}
+            <Card>
+              <CardHeader>
+                <CardTitle>Mensagens enviadas para professores</CardTitle>
+                <CardDescription>
+                  Acompanhe o status das mensagens que você enviou para os professores.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar mensagens enviadas..."
+                    value={searchSent}
+                    onChange={(e) => setSearchSent(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                {loadingSent ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-32 w-full" />
+                    <Skeleton className="h-32 w-full" />
+                  </div>
+                ) : filteredSent.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Send className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium">Nenhuma mensagem enviada</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      Você ainda não enviou mensagens para professores. Use o formulário acima
+                      para iniciar uma comunicação.
+                    </p>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[600px] pr-4">
+                    <div className="space-y-4">
+                      {filteredSent.map((msg) => {
+                        const teacherReplies =
+                          msg.children?.filter((c) => c.senderRole === "TEACHER") || [];
+                        const hasReply = teacherReplies.length > 0;
+                        const lastReply = teacherReplies[teacherReplies.length - 1] || null;
+
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="rounded-lg border bg-card p-4 shadow-sm"
+                          >
+                            <div className="flex items-start gap-4">
+                              <Avatar className="h-10 w-10">
+                                <AvatarFallback className="bg-secondary/10 text-secondary-foreground">
+                                  <User className="h-5 w-5" />
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                  <div>
+                                    <p className="font-medium truncate">
+                                      Para: {msg.recipient?.name || "Professor"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Enviada em {formatDate(msg.createdAt)}
+                                    </p>
+                                  </div>
+                                  <Badge
+                                    variant={hasReply ? "default" : "secondary"}
+                                    className="w-fit"
+                                  >
+                                    {hasReply ? (
+                                      <>
+                                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                                        Respondida
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Clock className="mr-1 h-3 w-3" />
+                                        Aguardando resposta
+                                      </>
+                                    )}
+                                  </Badge>
+                                </div>
+
+                                <div className="mt-3 rounded-md bg-muted p-3">
+                                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                </div>
+
+                                {hasReply && lastReply && (
+                                  <div className="mt-4 rounded-md border-l-4 border-green-500 bg-green-50 p-4 dark:bg-green-950/20">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                      <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                                        Resposta do professor
+                                      </p>
+                                    </div>
+                                    <p className="text-sm whitespace-pre-wrap text-foreground">
+                                      {lastReply.content}
+                                    </p>
+                                    <div className="mt-3 flex items-center justify-between">
+                                      <p className="text-xs text-muted-foreground">
+                                        Respondido por{" "}
+                                        <span className="font-medium">
+                                          {lastReply.answeredBy?.name || "Professor"}
+                                        </span>
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {formatDate(lastReply.createdAt)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {!hasReply && (
+                                  <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                                    <AlertCircle className="h-4 w-4" />
+                                    Aguardando resposta do professor.
+                                  </div>
+                                )}
+                              </div>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => fetchSent()}>
+                                    <RefreshCw className="mr-2 h-4 w-4" />
+                                    Atualizar status
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                     </div>
-                    <p className="text-xs text-[#e5e5e5] mt-1">{msg.content}</p>
-                    <div className="text-[9px] text-[#525252] mt-0.5">{new Date(msg.createdAt).toLocaleDateString("pt-BR")}</div>
-                    {hasReply && replyAnswer && (
-                      <div className="mt-2 pl-3 border-l-2 border-green-500/30">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[9px] text-green-400">Resposta do professor:</span>
-                          {replyAuthor && <span className="text-[9px] text-[#525252]">- {replyAuthor}</span>}
-                        </div>
-                        <p className="text-xs text-[#a1a1a1] mt-0.5">{replyAnswer}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* FOOTER */}
-      <div className="text-center py-4">
-        <p className="text-[10px] text-[#525252]">Dashboard atualizado em tempo real | {new Date().toLocaleString("pt-BR")}</p>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
