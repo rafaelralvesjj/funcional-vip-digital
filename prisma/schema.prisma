@@ -19,13 +19,13 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  accounts      Account[]
-  sessions      Session[]
-  students      Student[]
-  notices       Notice[]
-  questions     Question[]
-  studentAuths  Student[] @relation("StudentAuth")
-  noticeProfessors Notice[] @relation("NoticeProfessor")
+  accounts         Account[]
+  sessions         Session[]
+  students         Student[]
+  notices          Notice[]
+  questions        Question[]
+  studentAuths     Student[]  @relation("StudentAuth")
+  noticeProfessors Notice[]   @relation("NoticeProfessor")
   questionTeachers Question[] @relation("QuestionTeacher")
 
   @@map("users")
@@ -76,8 +76,8 @@ model Student {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userAuth         User?             @relation("StudentAuth", fields: [userAuthId], references: [id])
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAuth         User?            @relation("StudentAuth", fields: [userAuthId], references: [id])
   workoutPlans     WorkoutPlan[]
   checkIns         CheckIn[]
   weeklyFeedbacks  WeeklyFeedback[]
@@ -186,12 +186,12 @@ model CheckIn {
 }
 
 model WeeklyFeedback {
-  id        String   @id @default(uuid())
-  studentId String   @map("student_id")
+  id        String    @id @default(uuid())
+  studentId String    @map("student_id")
   content   String
   rating    Int?
   weekStart DateTime? @map("week_start")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -199,21 +199,21 @@ model WeeklyFeedback {
 }
 
 model Notice {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   title       String?
   content     String
-  type        String   @default("AVISO")
-  authorId    String   @map("author_id")
-  studentId   String?  @map("student_id")
-  targetRole  String   @default("ALUNO") @map("targetRole")
-  professorId String?  @map("professorId")
+  type        String    @default("AVISO")
+  authorId    String    @map("author_id")
+  studentId   String?   @map("student_id")
+  targetRole  String    @default("ALUNO") @map("targetRole")
+  professorId String?   @map("professorId")
   expiresAt   DateTime? @map("expires_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
-  author    User        @relation(fields: [authorId], references: [id])
-  student   Student?    @relation(fields: [studentId], references: [id])
+  author    User         @relation(fields: [authorId], references: [id])
+  student   Student?     @relation(fields: [studentId], references: [id])
   reads     NoticeRead[]
-  professor User?       @relation("NoticeProfessor", fields: [professorId], references: [id])
+  professor User?        @relation("NoticeProfessor", fields: [professorId], references: [id])
 
   @@map("notices")
 }
@@ -233,7 +233,7 @@ model NoticeRead {
 
 model Question {
   id           String    @id @default(uuid())
-  studentId    String    @map("student_id")
+  studentId    String?   @map("student_id")
   parentId     String?   @map("parent_id")
   content      String
   videoUrl     String?   @map("video_url")
@@ -247,11 +247,11 @@ model Question {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student    Student?   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   parent     Question?  @relation("QuestionThread", fields: [parentId], references: [id])
   children   Question[] @relation("QuestionThread")
   answeredBy User?      @relation(fields: [answeredById], references: [id])
-  teacher    User?       @relation("QuestionTeacher", fields: [teacherId], references: [id])
+  teacher    User?      @relation("QuestionTeacher", fields: [teacherId], references: [id])
 
   @@map("questions")
 }
