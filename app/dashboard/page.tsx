@@ -160,8 +160,12 @@ export default async function DashboardPage() {
     },
     select: {
       id: true,
+      studentId: true,
+      teacherId: true,
+      senderRole: true,
       content: true,
       createdAt: true,
+      resolvedAt: true,
       student: {
         select: {
           id: true,
@@ -177,9 +181,12 @@ export default async function DashboardPage() {
       children: {
         select: {
           id: true,
+          studentId: true,
+          teacherId: true,
           senderRole: true,
           content: true,
           createdAt: true,
+          resolvedAt: true,
           answeredBy: {
             select: {
               id: true,
@@ -187,6 +194,21 @@ export default async function DashboardPage() {
               role: true,
             },
           },
+          student: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          teacher: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'asc',
         },
       },
     },
@@ -400,6 +422,36 @@ export default async function DashboardPage() {
       answerRoles.includes(normalizeRole(child.senderRole))
     );
   });
+
+  const unansweredQuestionConversationItems = questionsWithoutAnswer.map((question) => ({
+    id: question.id,
+    studentId: question.studentId || null,
+    teacherId: question.teacherId || (isTeacher ? userId : null),
+    content: question.content,
+    senderRole: question.senderRole || 'STUDENT',
+    createdAt: question.createdAt.toISOString(),
+    resolvedAt: question.resolvedAt ? question.resolvedAt.toISOString() : null,
+    authorName: question.student?.name || 'Aluno',
+    targetLabel: question.teacher?.name
+      ? `Professor: ${question.teacher.name}`
+      : isTeacher
+        ? `Professor: ${userName}`
+        : 'Professor',
+    children: (question.children || []).map((reply) => ({
+      id: reply.id,
+      studentId: reply.studentId || question.studentId || null,
+      teacherId: reply.teacherId || question.teacherId || (isTeacher ? userId : null),
+      content: reply.content,
+      senderRole: reply.senderRole || 'TEACHER',
+      createdAt: reply.createdAt.toISOString(),
+      resolvedAt: reply.resolvedAt ? reply.resolvedAt.toISOString() : null,
+      authorName:
+        reply.answeredBy?.name ||
+        reply.teacher?.name ||
+        reply.student?.name ||
+        'Usuário',
+    })),
+  }));
 
   function getNoticeTargetLabel(notice: (typeof notices)[number]): string {
     const targetRole = normalizeRole(notice.targetRole);
@@ -682,55 +734,12 @@ export default async function DashboardPage() {
             {labels.unansweredQuestionsList}
           </h2>
 
-          {questionsWithoutAnswer.length === 0 ? (
-            <p className="text-[#a1a1a1]">
-              Nenhuma dúvida aguardando resposta.
-            </p>
-          ) : (
-            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
-              {questionsWithoutAnswer.map((question) => (
-                <div
-                  key={question.id}
-                  className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
-                >
-                  <div className="p-4">
-                    <div className="flex justify-between items-start gap-4 mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/30 text-blue-400 border border-blue-500/20">
-                          STUDENT
-                        </span>
-
-                        <span className="text-sm font-bold text-[#f5f5f5] truncate">
-                          {question.student?.name || 'Aluno'}
-                        </span>
-                      </div>
-
-                      <span className="text-[10px] text-[#a1a1a1] shrink-0">
-                        {formatDate(question.createdAt)}
-                      </span>
-                    </div>
-
-                    <p className="text-sm text-[#f5f5f5] mb-3 whitespace-pre-wrap">
-                      {question.content}
-                    </p>
-
-                    <p className="text-xs text-[#a1a1a1] mb-3">
-                      Para:{' '}
-                      <span className="text-[#D4A373]">
-                        {question.teacher?.name ? `Professor: ${question.teacher.name}` : 'Professor'}
-                      </span>
-                    </p>
-
-                    <div className="flex justify-between items-center gap-4">
-                      <span className="text-[10px] text-amber-400">
-                        Aguardando resposta
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <DashboardConversationList
+            conversations={unansweredQuestionConversationItems}
+            currentUserId={userId}
+            currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
+            emptyMessage="Nenhuma dúvida aguardando resposta."
+          />
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
