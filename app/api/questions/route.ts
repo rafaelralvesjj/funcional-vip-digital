@@ -6,6 +6,30 @@ import { authOptions } from '../auth/[...nextauth]/auth';
 
 type SenderRole = 'GESTOR' | 'TEACHER' | 'STUDENT';
 
+type SessionUser = {
+  id?: unknown;
+  name?: unknown;
+  email?: unknown;
+  role?: unknown;
+};
+
+function getSessionUser(session: unknown): SessionUser | null {
+  if (!session || typeof session !== 'object') return null;
+
+  const possibleSession = session as { user?: unknown };
+
+  if (!possibleSession.user || typeof possibleSession.user !== 'object') {
+    return null;
+  }
+
+  return possibleSession.user as SessionUser;
+}
+
+function getSessionUserId(user: SessionUser | null): string | null {
+  if (!user) return null;
+  return typeof user.id === 'string' && user.id.trim() !== '' ? user.id.trim() : null;
+}
+
 function deriveSenderRole(role: unknown): SenderRole | null {
   if (typeof role !== 'string') return null;
 
@@ -16,11 +40,6 @@ function deriveSenderRole(role: unknown): SenderRole | null {
   if (upper === 'STUDENT' || upper === 'ALUNO') return 'STUDENT';
 
   return null;
-}
-
-function getSessionUserId(session: Awaited<ReturnType<typeof getServerSession>>): string | null {
-  const user = session?.user as { id?: unknown } | undefined;
-  return typeof user?.id === 'string' && user.id.trim() !== '' ? user.id.trim() : null;
 }
 
 function getStringFromBody(value: unknown): string {
@@ -37,6 +56,10 @@ function getErrorMessage(error: unknown): string {
   return 'Erro desconhecido';
 }
 
+/**
+ * Include reduzido para evitar recursão pesada em threads.
+ * Traz o suficiente para listar conversas, ver destinatário e renderizar respostas diretas.
+ */
 const includePayload = {
   student: true,
   teacher: true,
@@ -107,6 +130,11 @@ function buildQuestionCreateData(params: {
 }) {
   const { content, senderRole, studentId, teacherId, parentId, answeredById } = params;
 
+  /**
+   * Não usamos string vazia em studentId/teacherId.
+   * Se o campo vier vazio, ele é omitido.
+   * Isso evita erro 500 por FK inválida no Neon/PostgreSQL.
+   */
   const data: Record<string, unknown> = {
     content,
     senderRole,
@@ -116,6 +144,10 @@ function buildQuestionCreateData(params: {
   if (teacherId) data.teacherId = teacherId;
   if (parentId) data.parentId = parentId;
 
+  /**
+   * answeredById entra apenas em resposta de thread.
+   * Em mensagem nova, preservamos a autoria pelo senderRole.
+   */
   if (parentId && answeredById) {
     data.answeredById = answeredById;
   }
@@ -126,8 +158,9 @@ function buildQuestionCreateData(params: {
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const sessionUser = getSessionUser(session);
 
-    if (!session?.user) {
+    if (!sessionUser) {
       return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
     }
 
@@ -180,12 +213,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const sessionUser = getSessionUser(session);
 
-    if (!session?.user) {
+    if (!sessionUser) {
       return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
     }
 
-    const userId = getSessionUserId(session);
+    const userId = getSessionUserId(sessionUser);
     const body = await req.json().catch(() => ({}));
 
     const content = getStringFromBody(body.content);
@@ -269,8 +303,9 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const sessionUser = getSessionUser(session);
 
-    if (!session?.user) {
+    if (!sessionUser) {
       return NextResponse.json({ message: 'Não autorizado' }, { status: 401 });
     }
 
@@ -293,15 +328,18 @@ export async function PUT(req: NextRequest) {
     }
 
     if (typeof body.studentId === 'string') {
-      data.studentId = body.studentId.trim() || null;
+      const studentId = body.studentId.trim();
+      data.studentId = studentId !== '' ? studentId : null;
     }
 
     if (typeof body.teacherId === 'string') {
-      data.teacherId = body.teacherId.trim() || null;
+      const teacherId = body.teacherId.trim();
+      data.teacherId = teacherId !== '' ? teacherId : null;
     }
 
     if (typeof body.answeredById === 'string') {
-      data.answeredById = body.answeredById.trim() || null;
+      const answeredById = body.answeredById.trim();
+      data.answeredById = answeredById !== '' ? answeredById : null;
     }
 
     const studentId = typeof data.studentId === 'string' ? data.studentId : null;
