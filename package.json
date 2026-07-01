@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "vercel-build": "prisma db push --accept-data-loss && next build",
+    "vercel-build": "prisma generate && next build",
     "db:prepare": "prisma migrate dev --name init",
     "db:seed": "prisma db seed",
     "health": "node scripts/check-health.mjs",
@@ -43,6 +43,6 @@
     "prisma": "^5.10.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
-    "@types/bcryptjs": "^2.4.6" 
+    "@types/bcryptjs": "^2.4.6"
   }
 }
