@@ -4,16 +4,6 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import GestaoMessageReply from '@/components/GestaoMessageReply';
 
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(date));
-}
-
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
 
@@ -26,6 +16,16 @@ export default async function DashboardPage() {
   const isTeacher = role === 'TEACHER' || role === 'PROFESSOR';
   const isGestor = role === 'GESTOR' || role === 'ADMIN';
   const userName = (session.user as any)?.name || 'Usuário';
+
+  function formatDate(date: Date): string {
+    return new Date(date).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
 
   const students = await prisma.student.findMany({
     where: isTeacher ? { userId } : {},
@@ -42,7 +42,7 @@ export default async function DashboardPage() {
     },
   });
 
-  const myStudentIds = isTeacher ? students.map((s) => s.id) : [];
+  const myStudentIds = students.map((s) => s.id);
 
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
@@ -66,7 +66,7 @@ export default async function DashboardPage() {
     },
   });
 
-  const questionsRaw = await prisma.question.findMany({
+  const unansweredQuestions = await prisma.question.findMany({
     where: {
       parentId: null,
       senderRole: 'STUDENT',
@@ -107,10 +107,6 @@ export default async function DashboardPage() {
       },
     },
   });
-
-  const unansweredQuestions = questionsRaw.filter(
-    (q) => !q.children.some((c) => c.senderRole === 'TEACHER')
-  );
 
   const notices = await prisma.notice.findMany({
     select: {
@@ -153,12 +149,30 @@ export default async function DashboardPage() {
     },
   });
 
-  const pendingNotices = notices.filter(
-    (n) => !n.reads.some((r) => r.studentId === userId)
-  );
-  const managementNotices = notices.filter(
-    (n) => n.type === 'MANAGEMENT' || n.author?.role === 'GESTOR' || n.author?.role === 'ADMIN'
-  );
+  const pendingNotices = notices.filter((n) => {
+    if (!n.targetRole) return false;
+    const target = n.targetRole.toUpperCase();
+    if (target === 'STUDENT') {
+      if (isTeacher || isGestor) return false;
+      if (n.studentId) return n.studentId !== userId && !n.reads.some((r) => r.studentId === userId);
+      return !n.reads.some((r) => r.studentId === userId);
+    }
+    if (target === 'TEACHER') {
+      if (!isTeacher) return false;
+      if (n.professorId) return n.professorId !== userId;
+      return true;
+    }
+    if (target === 'GESTOR' || target === 'ADMIN') {
+      return isGestor;
+    }
+    return false;
+  });
+
+  const managementNotices = notices.filter((n) => {
+    const authorRole = (n.author?.role || '').toUpperCase();
+    const type = (n.type || '').toUpperCase();
+    return authorRole === 'GESTOR' || authorRole === 'ADMIN' || type === 'MANAGEMENT';
+  });
 
   const managementMessages = await prisma.question.findMany({
     where: {
@@ -218,167 +232,148 @@ export default async function DashboardPage() {
     },
   });
 
+  const questionsWithoutAnswer = unansweredQuestions.filter((q) => {
+    return !q.children.some((c) => c.senderRole === 'TEACHER');
+  });
+
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <header className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-[#a1a1a1]">
-            Bem-vindo(a), {userName}. Aqui está o resumo da sua área.
+    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+          <h1 className="text-2xl md:text-3xl font-semibold text-[#f5f5f5]">
+            Olá, {userName}
+          </h1>
+          <p className="mt-2 text-[#a1a1a1]">
+            Bem-vindo ao painel administrativo. Aqui está o resumo das atividades pendentes.
           </p>
-        </header>
+        </div>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
             <p className="text-[#a1a1a1] text-sm">Meus alunos</p>
-            <p className="text-2xl font-semibold text-[#f5f5f5] mt-1">{students.length}</p>
+            <p className="text-3xl font-semibold text-[#D4A373] mt-2">{students.length}</p>
           </div>
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-5">
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
             <p className="text-[#a1a1a1] text-sm">Treinos pendentes</p>
-            <p className="text-2xl font-semibold text-[#D4A373] mt-1">{pendingWorkouts.length}</p>
+            <p className="text-3xl font-semibold text-[#D4A373] mt-2">{pendingWorkouts.length}</p>
           </div>
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-5">
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
             <p className="text-[#a1a1a1] text-sm">Dúvidas sem resposta</p>
-            <p className="text-2xl font-semibold text-[#D4A373] mt-1">{unansweredQuestions.length}</p>
+            <p className="text-3xl font-semibold text-[#D4A373] mt-2">{questionsWithoutAnswer.length}</p>
           </div>
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-5">
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
             <p className="text-[#a1a1a1] text-sm">Avisos pendentes</p>
-            <p className="text-2xl font-semibold text-[#D4A373] mt-1">{pendingNotices.length}</p>
+            <p className="text-3xl font-semibold text-[#D4A373] mt-2">{pendingNotices.length}</p>
           </div>
-        </section>
+        </div>
 
-        <section className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-          <h2 className="text-lg font-medium mb-4">Alunos com treinos pendentes</h2>
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Alunos com treinos pendentes</h2>
           {pendingWorkouts.length === 0 ? (
-            <p className="text-[#a1a1a1] text-sm">Nenhum treino pendente no momento.</p>
+            <p className="text-[#a1a1a1]">Nenhum treino pendente no momento.</p>
           ) : (
-            <ul className="space-y-3">
+            <div className="divide-y divide-[#ffffff10]">
               {pendingWorkouts.map((w) => (
-                <li
-                  key={w.id}
-                  className="flex items-center justify-between bg-[#0a0a0a] border border-[#ffffff08] rounded-xl p-4"
-                >
+                <div key={w.id} className="py-4 flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-[#f5f5f5]">{w.student?.name || 'Aluno'}</p>
-                    <p className="text-xs text-[#a1a1a1] mt-0.5">Criado em {formatDate(w.createdAt)}</p>
+                    <p className="text-[#f5f5f5] font-medium">{w.student?.name || 'Aluno'}</p>
+                    <p className="text-[#a1a1a1] text-sm">{formatDate(w.createdAt)}</p>
                   </div>
-                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-[#D4A373]/10 text-[#D4A373]">
+                  <span className="px-3 py-1 rounded-full text-xs bg-[#D4A373]/10 text-[#D4A373]">
                     Pendente
                   </span>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-        </section>
+        </div>
 
-        <section className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-          <h2 className="text-lg font-medium mb-4">Dúvidas sem resposta</h2>
-          {unansweredQuestions.length === 0 ? (
-            <p className="text-[#a1a1a1] text-sm">Todas as dúvidas foram respondidas.</p>
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Dúvidas sem resposta</h2>
+          {questionsWithoutAnswer.length === 0 ? (
+            <p className="text-[#a1a1a1]">Nenhuma dúvida aguardando resposta.</p>
           ) : (
-            <ul className="space-y-3">
-              {unansweredQuestions.map((q) => (
-                <li
-                  key={q.id}
-                  className="bg-[#0a0a0a] border border-[#ffffff08] rounded-xl p-4"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="font-medium text-[#f5f5f5]">{q.student?.name || 'Aluno'}</p>
-                    <span className="text-xs text-[#a1a1a1]">{formatDate(q.createdAt)}</span>
+            <div className="divide-y divide-[#ffffff10]">
+              {questionsWithoutAnswer.map((q) => (
+                <div key={q.id} className="py-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[#f5f5f5] font-medium">{q.student?.name || 'Aluno'}</p>
+                    <p className="text-[#a1a1a1] text-sm">{formatDate(q.createdAt)}</p>
                   </div>
-                  <p className="text-sm text-[#a1a1a1] mt-2 line-clamp-2">{q.content}</p>
-                </li>
+                  <p className="text-[#a1a1a1] mt-2 line-clamp-2">{q.content}</p>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-        </section>
+        </div>
 
-        <section className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-          <h2 className="text-lg font-medium mb-4">Avisos com leitura pendente</h2>
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Avisos com leitura pendente</h2>
           {pendingNotices.length === 0 ? (
-            <p className="text-[#a1a1a1] text-sm">Nenhum aviso pendente de leitura.</p>
+            <p className="text-[#a1a1a1]">Nenhum aviso pendente de leitura.</p>
           ) : (
-            <ul className="space-y-3">
+            <div className="divide-y divide-[#ffffff10]">
               {pendingNotices.map((n) => (
-                <li
-                  key={n.id}
-                  className="bg-[#0a0a0a] border border-[#ffffff08] rounded-xl p-4"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="font-medium text-[#f5f5f5]">
+                <div key={n.id} className="py-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[#f5f5f5] font-medium">
                       {n.title || 'Aviso'}
                     </p>
-                    <span className="text-xs text-[#a1a1a1]">{formatDate(n.createdAt)}</span>
+                    <p className="text-[#a1a1a1] text-sm">{formatDate(n.createdAt)}</p>
                   </div>
-                  <p className="text-sm text-[#a1a1a1] mt-2">{n.content}</p>
-                </li>
+                  <p className="text-[#a1a1a1] mt-2">{n.content}</p>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-        </section>
+        </div>
 
-        <section className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-          <h2 className="text-lg font-medium mb-4">Avisos da gestão</h2>
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Avisos da gestão</h2>
           {managementNotices.length === 0 ? (
-            <p className="text-[#a1a1a1] text-sm">Nenhum aviso da gestão publicado.</p>
+            <p className="text-[#a1a1a1]">Nenhum aviso da gestão.</p>
           ) : (
-            <ul className="space-y-3">
+            <div className="divide-y divide-[#ffffff10]">
               {managementNotices.map((n) => (
-                <li
-                  key={n.id}
-                  className="bg-[#0a0a0a] border border-[#ffffff08] rounded-xl p-4"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="font-medium text-[#f5f5f5]">
-                      {n.title || 'Aviso da Gestão'}
-                    </p>
-                    <span className="text-xs text-[#a1a1a1]">{formatDate(n.createdAt)}</span>
+                <div key={n.id} className="py-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[#f5f5f5] font-medium">{n.title || 'Aviso da Gestão'}</p>
+                    <p className="text-[#a1a1a1] text-sm">{formatDate(n.createdAt)}</p>
                   </div>
-                  <p className="text-sm text-[#a1a1a1] mt-2">{n.content}</p>
-                  <p className="text-xs text-[#D4A373] mt-2">
-                    Por: {n.author?.name || 'Gestão'}
-                    {n.student?.name ? ` • Para aluno: ${n.student.name}` : ''}
-                    {n.professor?.name ? ` • Para professor: ${n.professor.name}` : ''}
+                  <p className="text-[#a1a1a1] mt-2">{n.content}</p>
+                  <p className="text-[#D4A373] text-sm mt-2">
+                    Por: {n.author?.name || 'Gestão'} {n.author?.role ? `(${n.author.role})` : ''}
                   </p>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-        </section>
+        </div>
 
-        <section className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-          <h2 className="text-lg font-medium mb-4">Mensagens da gestão</h2>
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Mensagens da gestão</h2>
           {managementMessages.length === 0 ? (
-            <p className="text-[#a1a1a1] text-sm">Nenhuma mensagem da gestão.</p>
+            <p className="text-[#a1a1a1]">Nenhuma mensagem da gestão.</p>
           ) : (
-            <ul className="space-y-4">
+            <div className="divide-y divide-[#ffffff10]">
               {managementMessages.map((msg) => {
-                const replies = (msg.children || []).filter(
-                  (c) => c.senderRole === 'TEACHER'
-                );
+                const replies = (msg.children || []).filter((c) => c.senderRole === 'TEACHER');
                 const lastReply = replies[replies.length - 1];
-
                 return (
-                  <li
-                    key={msg.id}
-                    className="bg-[#0a0a0a] border border-[#ffffff08] rounded-xl p-4"
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <p className="font-medium text-[#f5f5f5]">
-                        {msg.student?.name || 'Aluno'} / {msg.teacher?.name || 'Professor'}
+                  <div key={msg.id} className="py-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[#f5f5f5] font-medium">
+                        {msg.student?.name || 'Aluno'} {msg.teacher?.name ? `→ ${msg.teacher.name}` : ''}
                       </p>
-                      <span className="text-xs text-[#a1a1a1]">
-                        {formatDate(msg.createdAt)}
-                      </span>
+                      <p className="text-[#a1a1a1] text-sm">{formatDate(msg.createdAt)}</p>
                     </div>
-                    <p className="text-sm text-[#a1a1a1] mt-2">{msg.content}</p>
-
+                    <p className="text-[#a1a1a1] mt-2">{msg.content}</p>
                     {lastReply ? (
-                      <div className="mt-3 p-3 rounded-lg bg-[#111111] border border-[#ffffff08]">
-                        <p className="text-xs text-[#D4A373]">
-                          Última resposta de {lastReply.answeredBy?.name || 'Professor'}
+                      <div className="mt-3 p-3 rounded-lg bg-[#0a0a0a] border border-[#ffffff10]">
+                        <p className="text-[#a1a1a1] text-sm">
+                          Última resposta de {lastReply.answeredBy?.name || 'Professor'}:
                         </p>
-                        <p className="text-sm text-[#f5f5f5] mt-1">{lastReply.content}</p>
+                        <p className="text-[#f5f5f5] mt-1">{lastReply.content}</p>
                       </div>
                     ) : !isGestor ? (
                       <div className="mt-3">
@@ -390,34 +385,34 @@ export default async function DashboardPage() {
                         />
                       </div>
                     ) : null}
-                  </li>
+                  </div>
                 );
               })}
-            </ul>
+            </div>
           )}
-        </section>
+        </div>
 
-        <section className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
-          <h2 className="text-lg font-medium mb-4">Meus alunos</h2>
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Meus alunos</h2>
           {students.length === 0 ? (
-            <p className="text-[#a1a1a1] text-sm">Nenhum aluno vinculado.</p>
+            <p className="text-[#a1a1a1]">Nenhum aluno vinculado.</p>
           ) : (
-            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {students.map((s) => (
-                <li
+                <div
                   key={s.id}
-                  className="bg-[#0a0a0a] border border-[#ffffff08] rounded-xl p-4"
+                  className="p-4 rounded-xl bg-[#0a0a0a] border border-[#ffffff10]"
                 >
-                  <p className="font-medium text-[#f5f5f5]">{s.name}</p>
-                  <p className="text-xs text-[#a1a1a1] mt-1">
+                  <p className="text-[#f5f5f5] font-medium">{s.name}</p>
+                  <p className="text-[#a1a1a1] text-sm">
                     Usuário: {s.user?.name || 'Não vinculado'}
                   </p>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-        </section>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
