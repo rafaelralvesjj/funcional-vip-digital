@@ -739,6 +739,7 @@ export default async function DashboardPage() {
             currentUserId={userId}
             currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
             emptyMessage="Nenhuma dúvida aguardando resposta."
+            allowReply={isTeacher}
           />
         </div>
 
