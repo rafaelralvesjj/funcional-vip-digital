@@ -322,7 +322,9 @@ export default async function DashboardPage() {
           </div>
           <div className="divide-y divide-[#ffffff05]">
             {gestaoMessages.map((msg) => {
-              const hasReply = msg.children?.some((c: any) => c.answer);
+              const hasDirectAnswer = !!msg.answer;
+              const hasChildAnswer = msg.children?.some((c: any) => c.answer);
+              const hasReply = hasDirectAnswer || hasChildAnswer;
               return (
                 <div key={msg.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
                   <div className="flex-1 min-w-0">
@@ -335,7 +337,9 @@ export default async function DashboardPage() {
                     <div className="text-[9px] text-[#525252] mt-0.5">{new Date(msg.createdAt).toLocaleDateString("pt-BR")}</div>
                     {hasReply ? (
                       <div className="mt-2 pl-3 border-l-2 border-green-500/30">
-                        <p className="text-[9px] text-green-400">Resposta enviada ✓</p>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-green-400">Resposta enviada ✓</span>
+                        </div>
                       </div>
                     ) : (
                       <div className="mt-2">
@@ -357,8 +361,20 @@ export default async function DashboardPage() {
           </div>
           <div className="divide-y divide-[#ffffff05]">
             {gestorSentMessages.map((msg) => {
-              const hasReply = msg.children?.some((c: any) => c.answer);
-              const lastReply = msg.children?.filter((c: any) => c.answer).pop();
+              const hasDirectAnswer = !!msg.answer;
+              const hasChildAnswer = msg.children?.some((c: any) => c.answer);
+              const hasReply = hasDirectAnswer || hasChildAnswer;
+
+              let replyAnswer = null;
+              let replyAuthor = null;
+              if (hasDirectAnswer) {
+                replyAnswer = msg.answer;
+                replyAuthor = msg.answeredBy?.name;
+              } else if (hasChildAnswer) {
+                const lastChild = msg.children?.filter((c: any) => c.answer).pop();
+                replyAnswer = lastChild?.answer;
+                replyAuthor = lastChild?.answeredBy?.name;
+              }
               return (
                 <div key={msg.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
                   <div className="flex-1 min-w-0">
@@ -369,13 +385,13 @@ export default async function DashboardPage() {
                     </div>
                     <p className="text-xs text-[#e5e5e5] mt-1">{msg.content}</p>
                     <div className="text-[9px] text-[#525252] mt-0.5">{new Date(msg.createdAt).toLocaleDateString("pt-BR")}</div>
-                    {lastReply && (
+                    {hasReply && replyAnswer && (
                       <div className="mt-2 pl-3 border-l-2 border-green-500/30">
                         <div className="flex items-center gap-1">
                           <span className="text-[9px] text-green-400">Resposta do professor:</span>
-                          {lastReply.answeredBy && <span className="text-[9px] text-[#525252]">- {lastReply.answeredBy.name}</span>}
+                          {replyAuthor && <span className="text-[9px] text-[#525252]">- {replyAuthor}</span>}
                         </div>
-                        <p className="text-xs text-[#a1a1a1] mt-0.5">{lastReply.answer}</p>
+                        <p className="text-xs text-[#a1a1a1] mt-0.5">{replyAnswer}</p>
                       </div>
                     )}
                   </div>
