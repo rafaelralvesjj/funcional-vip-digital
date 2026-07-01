@@ -27,7 +27,10 @@ function getSessionUser(session: unknown): SessionUser | null {
 
 function getSessionUserId(user: SessionUser | null): string | null {
   if (!user) return null;
-  return typeof user.id === 'string' && user.id.trim() !== '' ? user.id.trim() : null;
+
+  return typeof user.id === 'string' && user.id.trim() !== ''
+    ? user.id.trim()
+    : null;
 }
 
 function deriveSenderRole(role: unknown): SenderRole | null {
@@ -56,10 +59,6 @@ function getErrorMessage(error: unknown): string {
   return 'Erro desconhecido';
 }
 
-/**
- * Include reduzido para evitar recursão pesada em threads.
- * Traz o suficiente para listar conversas, ver destinatário e renderizar respostas diretas.
- */
 const includePayload = {
   student: true,
   teacher: true,
@@ -104,8 +103,13 @@ async function validateRecipientExists(params: {
   }
 
   if (teacherId) {
-    const teacher = await prisma.teacher.findUnique({
-      where: { id: teacherId },
+    const teacher = await prisma.user.findFirst({
+      where: {
+        id: teacherId,
+        role: {
+          in: ['PROFESSOR', 'TEACHER'],
+        },
+      },
       select: { id: true },
     });
 
@@ -130,29 +134,28 @@ function buildQuestionCreateData(params: {
 }) {
   const { content, senderRole, studentId, teacherId, parentId, answeredById } = params;
 
-  /**
-   * Não usamos string vazia em studentId/teacherId.
-   * Se o campo vier vazio, ele é omitido.
-   * Isso evita erro 500 por FK inválida no Neon/PostgreSQL.
-   */
-  const data: Record<string, unknown> = {
+  const data: Prisma.QuestionUncheckedCreateInput = {
     content,
     senderRole,
   };
 
-  if (studentId) data.studentId = studentId;
-  if (teacherId) data.teacherId = teacherId;
-  if (parentId) data.parentId = parentId;
+  if (studentId) {
+    data.studentId = studentId;
+  }
 
-  /**
-   * answeredById entra apenas em resposta de thread.
-   * Em mensagem nova, preservamos a autoria pelo senderRole.
-   */
+  if (teacherId) {
+    data.teacherId = teacherId;
+  }
+
+  if (parentId) {
+    data.parentId = parentId;
+  }
+
   if (parentId && answeredById) {
     data.answeredById = answeredById;
   }
 
-  return data as Prisma.QuestionUncheckedCreateInput;
+  return data;
 }
 
 export async function GET(req: NextRequest) {
@@ -173,9 +176,17 @@ export async function GET(req: NextRequest) {
 
     const where: Prisma.QuestionWhereInput = {};
 
-    if (studentId) where.studentId = studentId;
-    if (teacherId) where.teacherId = teacherId;
-    if (parentId) where.parentId = parentId;
+    if (studentId) {
+      where.studentId = studentId;
+    }
+
+    if (teacherId) {
+      where.teacherId = teacherId;
+    }
+
+    if (parentId) {
+      where.parentId = parentId;
+    }
 
     if (senderRoleParam) {
       const normalizedSenderRole = deriveSenderRole(senderRoleParam);
@@ -320,9 +331,10 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const data: Record<string, unknown> = {};
+    const data: Prisma.QuestionUncheckedUpdateInput = {};
 
     const content = getStringFromBody(body.content);
+
     if (content) {
       data.content = content;
     }
@@ -356,7 +368,7 @@ export async function PUT(req: NextRequest) {
 
     const updated = await prisma.question.update({
       where: { id },
-      data: data as Prisma.QuestionUncheckedUpdateInput,
+      data,
       include: includePayload,
     });
 
