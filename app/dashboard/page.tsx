@@ -3,6 +3,85 @@ import { authOptions } from '../api/auth/[...nextauth]/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import GestaoMessageReply from '@/components/GestaoMessageReply';
+import Link from 'next/link';
+import { ReactNode } from 'react';
+
+interface Student {
+  id: string;
+  name: string;
+  userId: string | null;
+  user: { id: string; name: string | null } | null;
+}
+
+interface PendingWorkout {
+  id: string;
+  createdAt: Date;
+  student: { id: string; name: string } | null;
+}
+
+interface UnansweredQuestion {
+  id: string;
+  content: string;
+  createdAt: Date;
+  student: { id: string; name: string } | null;
+  teacher: { id: string; name: string } | null;
+  children: Array<{
+    id: string;
+    senderRole: string;
+    content: string;
+    createdAt: Date;
+    answeredBy?: { id: string; name: string | null; role: string | null } | null;
+  }>;
+}
+
+interface Notice {
+  id: string;
+  title: string;
+  content: string;
+  type: string | null;
+  createdAt: Date;
+  authorId: string | null;
+  targetRole: string | null;
+  studentId: string | null;
+  professorId: string | null;
+  author: { id: string; name: string | null; role: string | null } | null;
+  student: { id: string; name: string } | null;
+  professor: { id: string; name: string } | null;
+  reads: Array<{ studentId: string | null }>;
+}
+
+interface ManagementMessage {
+  id: string;
+  content: string;
+  createdAt: Date;
+  studentId: string | null;
+  teacherId: string | null;
+  senderRole: string;
+  parentId: string | null;
+  student: { id: string; name: string } | null;
+  teacher: { id: string; name: string } | null;
+  answeredBy: { id: string; name: string | null; role: string | null } | null;
+  children: Array<{
+    id: string;
+    senderRole: string;
+    content: string;
+    createdAt: Date;
+    answeredBy?: { id: string; name: string | null; role: string | null } | null;
+    student?: { id: string; name: string } | null;
+    teacher?: { id: string; name: string } | null;
+  }>;
+}
+
+const sidebarLinks = [
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/biblioteca', label: 'Biblioteca' },
+  { href: '/montar-treino', label: 'Montar Treino' },
+  { href: '/mural', label: 'Mural' },
+  { href: '/vincular-alunos', label: 'Vincular Alunos' },
+  { href: '/gerenciar-alunos', label: 'Gerenciar Alunos' },
+  { href: '/gerenciar-professores', label: 'Gerenciar Professores' },
+  { href: '/gerenciar-gestores', label: 'Gerenciar Gestores' },
+];
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('pt-BR', {
@@ -14,351 +93,389 @@ function formatDate(date: Date) {
   }).format(date);
 }
 
+function formatLongDate(date: Date) {
+  const formatted = new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  if (!session?.user?.id) redirect('/login');
 
-  if (!userId) {
-    redirect('/login');
-  }
-
-  const role = (session?.user as any)?.role?.toUpperCase?.() || '';
+  const userId = session.user.id;
+  const role = (session.user as any)?.role?.toUpperCase?.() || '';
   const isTeacher = role === 'TEACHER' || role === 'PROFESSOR';
   const isGestor = role === 'GESTOR' || role === 'ADMIN';
+  const userName = (session.user as any)?.name || 'Usuário';
 
-  const students = await prisma.student.findMany({
+  const rawStudents = await prisma.student.findMany({
     where: isTeacher ? { userId } : {},
     select: {
       id: true,
       name: true,
       userId: true,
-      user: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
+      user: { select: { id: true, name: true } },
     },
   });
-
+  const students = rawStudents as unknown as Student[];
   const studentMap = new Map(students.map((s) => [s.id, s]));
   const myStudentIds = students.map((s) => s.id);
 
-  const pendingWorkouts = await prisma.workout.findMany({
+  const rawPendingWorkouts = await prisma.workout.findMany({
     where: {
       status: 'PENDENTE',
-      ...(isTeacher && myStudentIds.length > 0
-        ? { studentId: { in: myStudentIds } }
-        : {}),
+      ...(isTeacher && myStudentIds.length ? { studentId: { in: myStudentIds } } : {}),
     },
     select: {
       id: true,
       createdAt: true,
-      student: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
+      student: { select: { id: true, name: true } },
     },
+    orderBy: { createdAt: 'desc' },
   });
+  const pendingWorkouts = rawPendingWorkouts as unknown as PendingWorkout[];
 
-  const allUnansweredQuestions = await prisma.question.findMany({
+  const rawUnansweredQuestions = await prisma.question.findMany({
     where: {
       parentId: null,
       senderRole: 'STUDENT',
-      ...(isTeacher && myStudentIds.length > 0
-        ? { studentId: { in: myStudentIds } }
-        : {}),
+      ...(isTeacher && myStudentIds.length ? { studentId: { in: myStudentIds } } : {}),
     },
     select: {
       id: true,
       content: true,
       createdAt: true,
-      student: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      teacher: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
+      student: { select: { id: true, name: true } },
+      teacher: { select: { id: true, name: true } },
       children: {
         select: {
           id: true,
           senderRole: true,
+          content: true,
+          createdAt: true,
+          answeredBy: { select: { id: true, name: true, role: true } },
         },
       },
     },
+    orderBy: { createdAt: 'desc' },
   });
-
-  const unansweredQuestions = allUnansweredQuestions.filter(
-    (q) => !q.children.some((child) => child.senderRole === 'TEACHER')
+  const unansweredQuestions = (rawUnansweredQuestions as unknown as UnansweredQuestion[]).filter(
+    (q) => !q.children.some((c) => c.senderRole === 'TEACHER')
   );
 
-  const allNotices = await prisma.notice.findMany({
-    where: isTeacher
-      ? {
-          OR: [{ professorId: userId }, { professorId: null }],
-        }
-      : {},
+  const rawNotices = await prisma.notice.findMany({
     select: {
       id: true,
       title: true,
       content: true,
       type: true,
       createdAt: true,
-      author: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
+      authorId: true,
+      targetRole: true,
       studentId: true,
       professorId: true,
-      targetRole: true,
-      reads: {
-        select: {
-          studentId: true,
-        },
-      },
+      author: { select: { id: true, name: true, role: true } },
+      student: { select: { id: true, name: true } },
+      professor: { select: { id: true, name: true } },
+      reads: { select: { studentId: true } },
     },
+    orderBy: { createdAt: 'desc' },
   });
+  const notices = rawNotices as unknown as Notice[];
 
-  const pendingNotices = allNotices.filter((n) => {
-    if (isGestor) {
-      return true;
-    }
-    if (isTeacher) {
-      if (n.professorId === userId) {
-        return true;
-      }
-      if (n.professorId === null && n.studentId === null) {
-        return true;
-      }
-      if (n.studentId && myStudentIds.includes(n.studentId)) {
-        const student = studentMap.get(n.studentId);
-        const hasRead = n.reads.some((r) => r.studentId === student?.id);
-        return !hasRead;
+  let pendingNotices: Notice[] = [];
+  if (isTeacher) {
+    pendingNotices = notices.filter((n) => {
+      if (n.professorId && n.professorId === userId) return true;
+      if (n.studentId && myStudentIds.includes(n.studentId)) return true;
+      if (!n.studentId && !n.professorId) {
+        const targetRole = (n.targetRole || '').toUpperCase();
+        if (targetRole === 'TEACHER' || targetRole === 'PROFESSOR' || targetRole === 'ALL') return true;
       }
       return false;
-    }
+    });
+  } else if (isGestor) {
+    pendingNotices = notices.filter((n) => {
+      if (n.studentId && !n.reads.some((r) => r.studentId === n.studentId)) return true;
+      if (!n.studentId && n.reads.length === 0) return true;
+      return false;
+    });
+  }
+
+  const managementNotices = notices.filter((n) => {
+    if (!n.author) return false;
+    const authorRole = (n.author.role || '').toUpperCase();
+    if (authorRole === 'GESTOR' || authorRole === 'ADMIN') return true;
+    const targetRole = (n.targetRole || '').toUpperCase();
+    if (isTeacher && (targetRole === 'TEACHER' || targetRole === 'PROFESSOR' || targetRole === 'ALL')) return true;
+    if (isGestor && (targetRole === 'GESTOR' || targetRole === 'ADMIN' || targetRole === 'ALL')) return true;
     return false;
   });
 
-  const managementNotices = await prisma.notice.findMany({
-    where: { authorId: userId },
-    select: {
-      id: true,
-      title: true,
-      content: true,
-      type: true,
-      createdAt: true,
-    },
-  });
-
-  const managementMessages = await prisma.question.findMany({
+  const rawManagementMessages = await prisma.question.findMany({
     where: {
       senderRole: 'GESTOR',
       parentId: null,
       ...(isTeacher ? { teacherId: userId } : {}),
     },
     include: {
-      student: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      teacher: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      answeredBy: {
-        select: {
-          id: true,
-          name: true,
-          role: true,
-        },
-      },
+      student: { select: { id: true, name: true } },
+      teacher: { select: { id: true, name: true } },
+      answeredBy: { select: { id: true, name: true, role: true } },
       children: {
-        orderBy: {
-          createdAt: 'asc',
-        },
+        orderBy: { createdAt: 'asc' },
         include: {
-          answeredBy: {
-            select: {
-              id: true,
-              name: true,
-              role: true,
-            },
-          },
-          student: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          teacher: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          answeredBy: { select: { id: true, name: true, role: true } },
+          student: { select: { id: true, name: true } },
+          teacher: { select: { id: true, name: true } },
         },
       },
     },
+    orderBy: { createdAt: 'desc' },
   });
+  const managementMessages = rawManagementMessages as unknown as ManagementMessage[];
+
+  const totalNotices = notices.length;
+  const unreadNotices = pendingNotices.length;
+  const pendingWorkoutCount = pendingWorkouts.length;
+  const unansweredCount = unansweredQuestions.length;
+
+  const longDate = formatLongDate(new Date());
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
-      <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
-
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Treinos Pendentes</h2>
-        <div className="space-y-4">
-          {pendingWorkouts.length === 0 && (
-            <p className="text-gray-400">Nenhum treino pendente.</p>
-          )}
-          {pendingWorkouts.map((w) => (
-            <div key={w.id} className="bg-gray-800 rounded-lg p-4">
-              <p className="font-medium">Treino pendente</p>
-              <p className="text-sm text-gray-400">
-                Aluno: {w.student?.name || 'Desconhecido'}
-              </p>
-              <p className="text-sm text-gray-400">{formatDate(w.createdAt)}</p>
-            </div>
-          ))}
+    <div className="flex min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
+      <aside className="w-64 flex-shrink-0 bg-[#111111] border-r border-[#ffffff10] flex flex-col">
+        <div className="p-6 border-b border-[#ffffff10]">
+          <h2 className="text-xl font-bold tracking-tight text-[#f5f5f5]">
+            Funcional Vip Digital
+          </h2>
         </div>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Perguntas sem Resposta</h2>
-        <div className="space-y-4">
-          {unansweredQuestions.length === 0 && (
-            <p className="text-gray-400">Nenhuma pergunta sem resposta.</p>
-          )}
-          {unansweredQuestions.map((q) => (
-            <div key={q.id} className="bg-gray-800 rounded-lg p-4">
-              <p className="font-medium">{q.content}</p>
-              <p className="text-sm text-gray-400">
-                Aluno: {q.student?.name || 'Desconhecido'}
-              </p>
-              <p className="text-sm text-gray-400">
-                Professor: {q.teacher?.name || 'Desconhecido'}
-              </p>
-              <p className="text-sm text-gray-400">{formatDate(q.createdAt)}</p>
-            </div>
+        <nav className="flex-1 p-4 space-y-1">
+          {sidebarLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="block px-4 py-2.5 rounded-lg text-sm text-[#a1a1a1] hover:bg-[#ffffff08] hover:text-[#f5f5f5] transition-colors"
+            >
+              {link.label}
+            </Link>
           ))}
-        </div>
-      </section>
+        </nav>
+      </aside>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Avisos Pendentes</h2>
-        <div className="space-y-4">
-          {pendingNotices.length === 0 && (
-            <p className="text-gray-400">Nenhum aviso pendente.</p>
-          )}
-          {pendingNotices.map((n) => (
-            <div key={n.id} className="bg-gray-800 rounded-lg p-4">
-              <p className="font-semibold">{n.title}</p>
-              <p className="text-sm text-gray-300">{n.content}</p>
-              <p className="text-sm text-gray-400">
-                Autor: {n.author?.name || 'Desconhecido'}
-              </p>
-              <p className="text-sm text-gray-400">{formatDate(n.createdAt)}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <main className="flex-1 flex flex-col min-w-0">
+        <header className="h-16 border-b border-[#ffffff10] flex items-center justify-between px-8 bg-[#111111]">
+          <div>
+            <h1 className="text-lg font-semibold text-[#f5f5f5]">
+              Olá, {userName} 👋
+            </h1>
+            <p className="text-xs text-[#a1a1a1]">{longDate}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#D4A373]/20 text-[#D4A373] border border-[#D4A373]/30">
+              {role || 'Usuário'}
+            </span>
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#ffffff10] text-[#a1a1a1] border border-[#ffffff10]">
+              {myStudentIds.length} alunos
+            </span>
+          </div>
+        </header>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Avisos da Gestão</h2>
-        <div className="space-y-4">
-          {managementNotices.length === 0 && (
-            <p className="text-gray-400">Nenhum aviso da gestão.</p>
-          )}
-          {managementNotices.map((n) => (
-            <div key={n.id} className="bg-gray-800 rounded-lg p-4">
-              <p className="font-semibold">{n.title}</p>
-              <p className="text-sm text-gray-300">{n.content}</p>
-              <p className="text-sm text-gray-400">{formatDate(n.createdAt)}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+        <div className="p-8 space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <SummaryCard
+              title="Avisos enviados"
+              value={totalNotices}
+              subtitle={`${unreadNotices} não lidos`}
+            />
+            <SummaryCard
+              title="Treinos não concluídos"
+              value={pendingWorkoutCount}
+              subtitle="pendentes"
+            />
+            <SummaryCard
+              title="Dúvidas aguardando resposta"
+              value={unansweredCount}
+              subtitle="sem resposta"
+            />
+          </div>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Mensagens da Gestão</h2>
-        <div className="space-y-4">
-          {managementMessages.length === 0 && (
-            <p className="text-gray-400">Nenhuma mensagem da gestão.</p>
-          )}
-          {managementMessages.map((msg) => {
-            const replies = (msg.children || []).filter(
-              (c: any) => c.senderRole === 'TEACHER'
-            );
-            const lastReply = replies[replies.length - 1];
-
-            return (
-              <div key={msg.id} className="bg-gray-800 rounded-lg p-4">
-                <p className="font-semibold">Mensagem da gestão</p>
-                <p className="text-sm text-gray-300">{msg.content}</p>
-                <p className="text-sm text-gray-400">
-                  Aluno: {msg.student?.name || 'Desconhecido'}
-                </p>
-                <p className="text-sm text-gray-400">
-                  Professor: {msg.teacher?.name || 'Desconhecido'}
-                </p>
-                <p className="text-sm text-gray-400">
-                  {formatDate(msg.createdAt)}
-                </p>
-                {lastReply ? (
-                  <div className="mt-3 border-l-2 border-blue-500 pl-3">
-                    <p className="text-sm text-gray-200">{lastReply.content}</p>
-                    <p className="text-xs text-gray-400">
-                      Última resposta por{' '}
-                      {lastReply.answeredBy?.name || 'Desconhecido'}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Block title="Alunos com treinos pendentes">
+              {pendingWorkouts.length > 0 ? (
+                pendingWorkouts.map((w) => (
+                  <div
+                    key={w.id}
+                    className="p-3 rounded-lg bg-[#ffffff05] border border-[#ffffff10]"
+                  >
+                    <p className="text-sm font-medium text-[#f5f5f5]">
+                      {w.student?.name || 'Aluno sem nome'}
+                    </p>
+                    <p className="text-xs text-[#a1a1a1] mt-1">
+                      Treino pendente • {formatDate(w.createdAt)}
                     </p>
                   </div>
-                ) : !isGestor ? (
-                  <div className="mt-3">
-                    <GestaoMessageReply
-                      questionId={msg.id}
-                      studentId={String(msg.studentId ?? '')}
-                      teacherId={userId}
-                      currentUserId={userId}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+                ))
+              ) : (
+                <p className="text-sm text-[#a1a1a1]">Nenhum treino pendente.</p>
+              )}
+            </Block>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Meus alunos</h2>
-        <div className="space-y-4">
-          {students.length === 0 && (
-            <p className="text-gray-400">Nenhum aluno vinculado.</p>
-          )}
-          {students.map((s) => (
-            <div key={s.id} className="bg-gray-800 rounded-lg p-4">
-              <p className="font-medium">{s.name}</p>
-              <p className="text-sm text-gray-400">
-                Usuário: {s.user?.name || 'Desconhecido'}
-              </p>
-            </div>
-          ))}
+            <Block title="Dúvidas sem resposta">
+              {unansweredQuestions.length > 0 ? (
+                unansweredQuestions.map((q) => (
+                  <div
+                    key={q.id}
+                    className="p-3 rounded-lg bg-[#ffffff05] border border-[#ffffff10]"
+                  >
+                    <p className="text-sm text-[#f5f5f5] line-clamp-2">{q.content}</p>
+                    <p className="text-xs text-[#a1a1a1] mt-1">
+                      {q.student?.name || 'Aluno'} • {formatDate(q.createdAt)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-[#a1a1a1]">Nenhuma dúvida aguardando resposta.</p>
+              )}
+            </Block>
+
+            <Block title="Avisos com leitura pendente">
+              {pendingNotices.length > 0 ? (
+                pendingNotices.map((n) => (
+                  <div
+                    key={n.id}
+                    className="p-3 rounded-lg bg-[#ffffff05] border border-[#ffffff10]"
+                  >
+                    <p className="text-sm font-medium text-[#f5f5f5]">{n.title}</p>
+                    <p className="text-xs text-[#a1a1a1] line-clamp-2 mt-1">{n.content}</p>
+                    <p className="text-xs text-[#a1a1a1] mt-1">{formatDate(n.createdAt)}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-[#a1a1a1]">Nenhum aviso com leitura pendente.</p>
+              )}
+            </Block>
+
+            <Block title="Avisos da gestão">
+              {managementNotices.length > 0 ? (
+                managementNotices.map((n) => (
+                  <div
+                    key={n.id}
+                    className="p-3 rounded-lg bg-[#ffffff05] border border-[#ffffff10]"
+                  >
+                    <p className="text-sm font-medium text-[#f5f5f5]">{n.title}</p>
+                    <p className="text-xs text-[#a1a1a1] line-clamp-2 mt-1">{n.content}</p>
+                    <p className="text-xs text-[#D4A373] mt-1">
+                      {n.author?.name || 'Gestão'} • {formatDate(n.createdAt)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-[#a1a1a1]">Nenhum aviso da gestão.</p>
+              )}
+            </Block>
+
+            <Block title="Mensagens da gestão">
+              {managementMessages.length > 0 ? (
+                managementMessages.map((msg) => {
+                  const replies = (msg.children || []).filter((c) => c.senderRole === 'TEACHER');
+                  const lastReply = replies[replies.length - 1];
+                  return (
+                    <div
+                      key={msg.id}
+                      className="p-3 rounded-lg bg-[#ffffff05] border border-[#ffffff10]"
+                    >
+                      <p className="text-sm text-[#f5f5f5]">{msg.content}</p>
+                      <p className="text-xs text-[#a1a1a1] mt-1">
+                        {msg.student?.name || msg.teacher?.name || 'Gestão'} • {formatDate(msg.createdAt)}
+                      </p>
+                      {lastReply ? (
+                        <div className="mt-2 pl-3 border-l-2 border-[#D4A373]">
+                          <p className="text-xs text-[#D4A373] font-medium">
+                            Resposta de {lastReply.answeredBy?.name || 'Professor'}:
+                          </p>
+                          <p className="text-xs text-[#a1a1a1] line-clamp-2">{lastReply.content}</p>
+                        </div>
+                      ) : !isGestor ? (
+                        <div className="mt-2">
+                          <GestaoMessageReply
+                            questionId={msg.id}
+                            studentId={String(msg.studentId ?? '')}
+                            teacherId={userId}
+                            currentUserId={userId}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-[#a1a1a1]">Nenhuma mensagem da gestão.</p>
+              )}
+            </Block>
+
+            <Block title="Meus alunos">
+              {students.length > 0 ? (
+                students.map((s) => (
+                  <div
+                    key={s.id}
+                    className="p-3 rounded-lg bg-[#ffffff05] border border-[#ffffff10] flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-[#f5f5f5]">{s.name}</p>
+                      {s.user?.name && (
+                        <p className="text-xs text-[#a1a1a1]">Usuário: {s.user.name}</p>
+                      )}
+                    </div>
+                    <Link
+                      href={`/alunos/${s.id}`}
+                      className="text-xs text-[#D4A373] hover:underline"
+                    >
+                      Ver
+                    </Link>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-[#a1a1a1]">Nenhum aluno vinculado.</p>
+              )}
+            </Block>
+          </div>
         </div>
-      </section>
+      </main>
+    </div>
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+  subtitle,
+}: {
+  title: string;
+  value: number;
+  subtitle: string;
+}) {
+  return (
+    <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6 hover:border-[#D4A373]/30 transition-colors">
+      <p className="text-sm text-[#a1a1a1]">{title}</p>
+      <p className="text-3xl font-bold text-[#f5f5f5] mt-2">{value}</p>
+      <p className="text-xs text-[#D4A373] mt-1">{subtitle}</p>
+    </div>
+  );
+}
+
+function Block({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6">
+      <h3 className="text-sm font-semibold text-[#f5f5f5] mb-4 uppercase tracking-wide">
+        {title}
+      </h3>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }
