@@ -207,40 +207,50 @@ export default async function DashboardPage() {
     },
   });
 
-  const pendingNotices = notices.filter((notice) => {
+  /*
+   * Regra de avisos pendentes:
+   *
+   * 1. Aviso para aluno específico:
+   *    - aparece para o aluno;
+   *    - aparece para a gestão;
+   *    - NÃO aparece para professor, mesmo que o aluno esteja vinculado a ele.
+   *
+   * 2. Aviso para todos os alunos:
+   *    - no gestor, conta 1 pendência para cada aluno que ainda não leu;
+   *    - no professor, conta 1 pendência para cada aluno dele que ainda não leu.
+   *
+   * Exemplo:
+   * professor1 tem aluno1 e aluno3.
+   * Um aviso enviado para todos os alunos deve contar 2 pendências para professor1,
+   * se aluno1 e aluno3 ainda não leram.
+   */
+  const pendingNoticeItems = notices.flatMap((notice) => {
     const targetRole = normalizeRole(notice.targetRole);
 
     if (targetRole !== 'STUDENT') {
-      return false;
+      return [];
     }
 
-    if (isTeacher) {
-      /*
-       * Regra:
-       * aviso enviado para aluno específico não aparece para professor,
-       * mesmo que o aluno esteja vinculado a ele.
-       *
-       * Professor só vê, nesse bloco, avisos gerais para todos os alunos,
-       * para acompanhar leitura pendente dos seus próprios alunos.
-       */
-      if (notice.studentId) {
-        return false;
-      }
-
-      if (myStudentIds.length === 0) {
-        return false;
-      }
+    if (isTeacher && notice.studentId) {
+      return [];
     }
 
-    const targetStudentIds = notice.studentId ? [notice.studentId] : myStudentIds;
+    const targetStudents = notice.studentId
+      ? students.filter((student) => student.id === notice.studentId)
+      : students;
 
-    if (targetStudentIds.length === 0) {
-      return false;
+    if (targetStudents.length === 0) {
+      return [];
     }
 
     const readStudentIds = new Set(notice.reads.map((read) => read.studentId));
 
-    return targetStudentIds.some((studentId) => !readStudentIds.has(studentId));
+    return targetStudents
+      .filter((student) => !readStudentIds.has(student.id))
+      .map((student) => ({
+        notice,
+        student,
+      }));
   });
 
   const managementNotices = notices.filter((notice) => {
@@ -258,11 +268,10 @@ export default async function DashboardPage() {
     }
 
     /*
-     * Regra:
-     * "Avisos da gestão" no dashboard mostra somente avisos da gestão
-     * direcionados a professores.
-     * Avisos da gestão enviados para alunos ficam apenas em
-     * "Avisos pendentes de todos os alunos" para evitar duplicidade.
+     * Regra atual:
+     * "Avisos da gestão" agora é somente para avisos enviados a professores.
+     * Avisos da gestão enviados para alunos ficam apenas no bloco
+     * "Avisos pendentes de todos os alunos/dos meus alunos".
      */
     if (targetRole !== 'TEACHER') {
       return false;
@@ -396,7 +405,7 @@ export default async function DashboardPage() {
     },
     {
       label: labels.pendingNoticesCard,
-      value: pendingNotices.length,
+      value: pendingNoticeItems.length,
     },
     {
       label: labels.managementNoticesCard,
@@ -510,31 +519,37 @@ export default async function DashboardPage() {
             {labels.pendingNoticesList}
           </h2>
 
-          {pendingNotices.length === 0 ? (
+          {pendingNoticeItems.length === 0 ? (
             <p className="text-[#a1a1a1]">
               Nenhum aviso pendente de leitura.
             </p>
           ) : (
             <div className="divide-y divide-[#ffffff10]">
-              {pendingNotices.map((notice) => (
-                <div key={notice.id} className="py-4">
+              {pendingNoticeItems.map((item) => (
+                <div key={`${item.notice.id}-${item.student.id}`} className="py-4">
                   <div className="flex items-center justify-between gap-4">
                     <p className="text-[#f5f5f5] font-medium">
-                      {notice.title || 'Aviso'}
+                      {item.notice.title || 'Aviso'}
                     </p>
 
                     <p className="text-[#a1a1a1] text-sm">
-                      {formatDate(notice.createdAt)}
+                      {formatDate(item.notice.createdAt)}
                     </p>
                   </div>
 
                   <p className="text-[#a1a1a1] mt-2">
-                    {notice.content}
+                    {item.notice.content}
                   </p>
 
-                  <p className="text-[#D4A373] text-sm mt-2">
-                    {getNoticeTargetLabel(notice)}
-                  </p>
+                  <div className="flex flex-wrap gap-3 mt-2 text-sm">
+                    <span className="text-[#D4A373]">
+                      Aluno pendente: {item.student.name}
+                    </span>
+
+                    <span className="text-[#a1a1a1]">
+                      {getNoticeTargetLabel(item.notice)}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
