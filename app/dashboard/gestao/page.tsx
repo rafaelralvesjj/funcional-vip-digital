@@ -1,4 +1,3 @@
-
 "use client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
@@ -49,10 +48,113 @@ interface ThreadMessage {
 type TargetType = "ALUNO_ESPECIFICO" | "TODOS_ALUNOS" | "PROFESSOR_ESPECIFICO" | "TODOS_PROFESSORES";
 type ActiveTab = "mural" | "chat";
 
+async function safeJson(response: Response): Promise<any> {
+  const text = await response.text();
+  let body: any = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = { message: text };
+  }
+  if (!response.ok) {
+    throw new Error(
+      body?.message || body?.error || body?.err || `Erro ${response.status}`
+    );
+  }
+  return body;
+}
+
+function extractArray(data: any, candidateKeys: string[]): any[] {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== "object") return [];
+  for (const key of candidateKeys) {
+    const value = data[key];
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+}
+
+function normalizeStudent(item: any): Student | null {
+  if (!item || typeof item !== "object") return null;
+  const id =
+    item.id || item.student?.id || item.studentId || item.userId || item.user?.id;
+  const name =
+    item.name || item.student?.name || item.studentName || item.user?.name;
+  if (!id || !name) return null;
+  return {
+    id: String(id),
+    name: String(name),
+    userId: item.userId ? String(item.userId) : null,
+    user: item.user
+      ? { id: String(item.user.id), name: item.user.name ?? null }
+      : null,
+  };
+}
+
+function normalizeTeacher(item: any): Teacher | null {
+  if (!item || typeof item !== "object") return null;
+  const id = item.userId || item.user?.id || item.id;
+  const name =
+    item.name || item.user?.name || item.teacherName || item.teacher?.name;
+  if (!id || !name) return null;
+  return {
+    id: String(id),
+    name: String(name),
+    email: item.email ?? item.user?.email ?? null,
+    userId: item.userId ? String(item.userId) : null,
+    user: item.user
+      ? {
+          id: String(item.user.id),
+          name: item.user.name ?? null,
+          email: item.user.email ?? null,
+        }
+      : null,
+    _count: item._count,
+  };
+}
+
+function formatDateTime(dateStr: string): string {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString("pt-BR");
+}
+
+function getThreadStatus(thread: ThreadMessage[]): string {
+  if (!thread.length) return "Aguardando resposta";
+  const last = thread[thread.length - 1];
+  const role = last.senderRole;
+  if (role === "TEACHER") return "Respondida / aguardando gestão";
+  if (role === "GESTOR") return "Aguardando professor";
+  if (role === "STUDENT") return "Aguardando resposta";
+  return "Aguardando resposta";
+}
+
+function getAuthorName(msg: ThreadMessage): string {
+  const role = msg.senderRole;
+  if (role === "TEACHER") return msg.answeredBy?.name || msg.teacher?.name || "Professor";
+  if (role === "STUDENT") return msg.student?.name || "Aluno";
+  if (role === "GESTOR") return "Gestão";
+  return msg.answeredBy?.name || "Desconhecido";
+}
+
+function getRoleBadgeClass(role: string): string {
+  switch (role) {
+    case "GESTOR":
+      return "bg-[#D4A373] text-[#0a0a0a]";
+    case "TEACHER":
+      return "bg-blue-500/20 text-blue-300";
+    case "STUDENT":
+      return "bg-emerald-500/20 text-emerald-300";
+    default:
+      return "bg-[#ffffff10] text-[#a1a1a1]";
+  }
+}
+
 export default function GestaoPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("mural");
   const [currentUserId, setCurrentUserId] = useState<string>("");
-  const [targetType, setTargetType] = useState<TargetType>("ALUNO_ESPECIFICO");
+  const [targetType, setTargetType] = useState<TargetType>("TODOS_ALUNOS");
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>("");
   const [students, setStudents] = useState<Student[]>([]);
@@ -71,162 +173,70 @@ export default function GestaoPage() {
   const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
 
-  const studentsOptions = useMemo(() => {
-    return [...students].sort((a, b) => a.name.localeCompare(b.name));
-  }, [students]);
-
-  const teachersOptions = useMemo(() => {
-    return [...teachers].sort((a, b) => a.name.localeCompare(b.name));
-  }, [teachers]);
-
-  async function safeJson(response: Response) {
-    const text = await response.text();
-    try {
-      return text ? JSON.parse(text) : {};
-    } catch {
-      return { message: text || "Erro inesperado" };
-    }
-  }
-
-  function extractArray(data: any, candidateKeys: string[]): any[] {
-    if (!data) return [];
-    if (Array.isArray(data)) return data;
-    for (const key of candidateKeys) {
-      if (Array.isArray(data[key])) return data[key];
-    }
-    return [];
-  }
-
-  function normalizeStudent(item: any): Student | null {
-    if (!item || typeof item !== "object") return null;
-    const id = item.id || item.studentId || item.userId || "";
-    const name = item.name || item.studentName || item.user?.name || item.student?.name || "Aluno";
-    if (!id || !name) return null;
-    return {
-      id: String(id),
-      name: String(name),
-      userId: item.userId ?? null,
-      user: item.user ?? null,
-    };
-  }
-
-  function normalizeTeacher(item: any): Teacher | null {
-    if (!item || typeof item !== "object") return null;
-    const id = item.userId || item.user?.id || item.id || "";
-    const name = item.name || item.user?.name || item.teacherName || item.teacher?.name || "Professor";
-    const email = item.email || item.user?.email || null;
-    if (!id || !name) return null;
-    return {
-      id: String(id),
-      name: String(name),
-      email: email ? String(email) : null,
-      userId: item.userId ?? null,
-      user: item.user ?? null,
-      _count: item._count ?? undefined,
-    };
-  }
-
-  function formatDateTime(dateStr: string): string {
-    return new Date(dateStr).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
-  function getThreadStatus(thread: ThreadMessage[]): string {
-    if (thread.length === 0) return "Aguardando resposta";
-    const last = thread[thread.length - 1];
-    const role = (last.senderRole || "").toUpperCase();
-    if (role === "TEACHER") return "Respondida / aguardando gestão";
-    if (role === "GESTOR") return "Aguardando professor";
-    if (role === "STUDENT") return "Aguardando resposta";
-    return "Aguardando resposta";
-  }
-
-  function getAuthorName(msg: ThreadMessage): string {
-    const role = (msg.senderRole || "").toUpperCase();
-    if (role === "TEACHER") return msg.answeredBy?.name || msg.teacher?.name || "Professor";
-    if (role === "STUDENT") return msg.student?.name || "Aluno";
-    if (role === "GESTOR") return "Gestão";
-    return "Desconhecido";
-  }
-
-  function getRoleBadgeClass(role?: string | null): string {
-    const r = (role || "").toUpperCase();
-    if (r === "TEACHER" || r === "PROFESSOR") return "bg-blue-500/10 text-blue-400";
-    if (r === "STUDENT" || r === "ALUNO") return "bg-green-500/10 text-green-400";
-    if (r === "GESTOR" || r === "ADMIN") return "bg-[#D4A373]/10 text-[#D4A373]";
-    return "bg-[#ffffff10] text-[#a1a1a1]";
-  }
-
-  async function fetchSession() {
+  const fetchSession = async () => {
     try {
       const res = await fetch("/api/auth/session", { cache: "no-store" });
       const data = await safeJson(res);
-      if (data?.user?.id) {
-        setCurrentUserId(String(data.user.id));
-      }
-    } catch (err) {
-      console.error("Erro ao buscar sessão", err);
+      setCurrentUserId(data?.user?.id || "");
+    } catch (e) {
+      console.error("Erro ao carregar sessão:", e);
     }
-  }
+  };
 
-  async function fetchStudents() {
+  const fetchStudents = async () => {
     try {
       const res = await fetch("/api/students", { cache: "no-store" });
       const data = await safeJson(res);
-      const items = extractArray(data, ["students", "items", "results", "data"]);
-      const normalized = items
+      const list = extractArray(data, ["students", "items", "results", "data"])
         .map(normalizeStudent)
-        .filter((s): s is Student => s !== null && !!s.id && !!s.name);
-      setStudents(normalized);
-    } catch (err) {
-      console.error("Erro ao buscar alunos", err);
+        .filter(Boolean) as Student[];
+      setStudents(list);
+    } catch (e) {
+      console.error("Erro ao carregar alunos:", e);
     }
-  }
+  };
 
-  async function fetchTeachers() {
+  const fetchTeachers = async () => {
     try {
       const res = await fetch("/api/teachers", { cache: "no-store" });
       const data = await safeJson(res);
-      const items = extractArray(data, ["teachers", "items", "results", "data"]);
-      const normalized = items
+      const list = extractArray(data, ["teachers", "items", "results", "data"])
         .map(normalizeTeacher)
-        .filter((t): t is Teacher => t !== null && !!t.id && !!t.name);
-      setTeachers(normalized);
-    } catch (err) {
-      console.error("Erro ao buscar professores", err);
+        .filter(Boolean) as Teacher[];
+      setTeachers(list);
+    } catch (e) {
+      console.error("Erro ao carregar professores:", e);
     }
-  }
+  };
 
-  async function fetchNotices() {
+  const fetchNotices = async () => {
     try {
       const res = await fetch("/api/notices", { cache: "no-store" });
       const data = await safeJson(res);
-      const items = extractArray(data, ["notices", "items", "results", "data"]);
-      setNotices(items || []);
-    } catch (err) {
-      console.error("Erro ao buscar avisos", err);
+      const list = Array.isArray(data) ? data : data?.notices || [];
+      setNotices(list);
+    } catch (e) {
+      console.error("Erro ao carregar avisos:", e);
     }
-  }
+  };
 
-  async function fetchQuestions() {
+  const fetchQuestions = async () => {
     try {
-      const params = new URLSearchParams();
-      params.set("senderRole", "GESTOR");
-      if (selectedTeacherId) params.set("teacherId", selectedTeacherId);
-      if (selectedStudentId) params.set("studentId", selectedStudentId);
-      const res = await fetch(`/api/questions?${params.toString()}`, { cache: "no-store" });
+      const params = new URLSearchParams({ senderRole: "GESTOR" });
+      if (selectedTeacherId) params.append("teacherId", selectedTeacherId);
+      if (selectedStudentId) params.append("studentId", selectedStudentId);
+      const res = await fetch(`/api/questions?${params.toString()}`, {
+        cache: "no-store",
+      });
       const data = await safeJson(res);
-      const items = extractArray(data, ["questions", "items", "results", "data"]);
-      setQuestions(items || []);
-    } catch (err) {
-      console.error("Erro ao buscar conversas", err);
+      const list = Array.isArray(data)
+        ? data
+        : data?.questions || data?.items || data?.results || data?.data || [];
+      setQuestions(list);
+    } catch (e) {
+      console.error("Erro ao carregar conversas:", e);
     }
-  }
+  };
 
   useEffect(() => {
     fetchSession();
@@ -241,7 +251,15 @@ export default function GestaoPage() {
     }
   }, [activeTab, selectedStudentId, selectedTeacherId]);
 
-  async function handlePublishNotice(e: FormEvent) {
+  const studentsOptions = useMemo(() => {
+    return [...students].sort((a, b) => a.name.localeCompare(b.name));
+  }, [students]);
+
+  const teachersOptions = useMemo(() => {
+    return [...teachers].sort((a, b) => a.name.localeCompare(b.name));
+  }, [teachers]);
+
+  const handlePublishNotice = async (e: FormEvent) => {
     e.preventDefault();
     setNoticeError("");
     setNoticeSuccess("");
@@ -252,12 +270,12 @@ export default function GestaoPage() {
     }
 
     let targetRole = "";
-    let studentId: string | null = null;
-    let professorId: string | null = null;
+    let studentId: string | undefined;
+    let professorId: string | undefined;
 
     if (targetType === "ALUNO_ESPECIFICO") {
       if (!selectedStudentId) {
-        setNoticeError("Selecione um aluno específico.");
+        setNoticeError("Selecione um aluno.");
         return;
       }
       targetRole = "STUDENT";
@@ -266,7 +284,7 @@ export default function GestaoPage() {
       targetRole = "STUDENT";
     } else if (targetType === "PROFESSOR_ESPECIFICO") {
       if (!selectedTeacherId) {
-        setNoticeError("Selecione um professor específico.");
+        setNoticeError("Selecione um professor.");
         return;
       }
       targetRole = "TEACHER";
@@ -289,23 +307,19 @@ export default function GestaoPage() {
           professorId,
         }),
       });
-      const json = await safeJson(res);
-      if (!res.ok) {
-        setNoticeError(json.message || "Erro ao publicar aviso.");
-      } else {
-        setNoticeSuccess("Aviso publicado com sucesso.");
-        setNoticeTitle("");
-        setNoticeContent("");
-        await fetchNotices();
-      }
-    } catch (err) {
-      setNoticeError("Erro ao publicar aviso.");
+      await safeJson(res);
+      setNoticeSuccess("Aviso publicado com sucesso.");
+      setNoticeTitle("");
+      setNoticeContent("");
+      await fetchNotices();
+    } catch (err: any) {
+      setNoticeError(err?.message || "Erro ao publicar aviso.");
     } finally {
       setSavingNotice(false);
     }
-  }
+  };
 
-  async function handleSendChat(e: FormEvent) {
+  const handleSendChat = async (e: FormEvent) => {
     e.preventDefault();
     setChatError("");
     setChatSuccess("");
@@ -315,7 +329,7 @@ export default function GestaoPage() {
       return;
     }
     if (!selectedStudentId || !selectedTeacherId) {
-      setChatError("Selecione um aluno e um professor.");
+      setChatError("Selecione o aluno e o professor.");
       return;
     }
 
@@ -331,31 +345,27 @@ export default function GestaoPage() {
           teacherId: selectedTeacherId,
         }),
       });
-      const json = await safeJson(res);
-      if (!res.ok) {
-        setChatError(json.message || "Erro ao enviar mensagem.");
-      } else {
-        setChatSuccess("Mensagem enviada com sucesso.");
-        setChatContent("");
-        await fetchQuestions();
-      }
-    } catch (err) {
-      setChatError("Erro ao enviar mensagem.");
+      await safeJson(res);
+      setChatSuccess("Mensagem enviada.");
+      setChatContent("");
+      await fetchQuestions();
+    } catch (err: any) {
+      setChatError(err?.message || "Erro ao enviar mensagem.");
     } finally {
       setSendingChat(false);
     }
-  }
+  };
 
-  async function handleReply(question: ThreadMessage) {
-    const replyText = replyContent[question.id] || "";
-    if (!replyText.trim()) return;
+  const handleReply = async (question: ThreadMessage) => {
+    const replyText = (replyContent[question.id] || "").trim();
+    if (!replyText) return;
 
     try {
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: replyText.trim(),
+          content: replyText,
           parentId: question.id,
           studentId: question.studentId,
           teacherId: question.teacherId,
@@ -363,33 +373,28 @@ export default function GestaoPage() {
           answeredById: currentUserId,
         }),
       });
-      const json = await safeJson(res);
-      if (!res.ok) {
-        console.error(json.message || "Erro ao responder");
-      } else {
-        setReplyContent((prev) => ({ ...prev, [question.id]: "" }));
-        await fetchQuestions();
-      }
-    } catch (err) {
-      console.error("Erro ao responder conversa", err);
+      await safeJson(res);
+      setReplyContent((prev) => ({ ...prev, [question.id]: "" }));
+      setExpandedQuestion(null);
+      await fetchQuestions();
+    } catch (err: any) {
+      setChatError(err?.message || "Erro ao responder.");
     }
-  }
+  };
+
+  const inputClass =
+    "w-full bg-[#111111] border border-[#ffffff10] rounded-lg p-3 text-[#f5f5f5] placeholder:text-[#a1a1a1] focus:outline-none focus:border-[#D4A373]";
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6 md:p-8">
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h1 className="text-2xl md:text-3xl font-semibold text-[#f5f5f5]">Gestão</h1>
-          <p className="mt-2 text-[#a1a1a1]">
-            Painel administrativo para publicação de avisos e acompanhamento de conversas.
-          </p>
-        </div>
+    <main className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold tracking-tight mb-6">Gestão</h1>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-4">
           <button
             type="button"
             onClick={() => setActiveTab("mural")}
-            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               activeTab === "mural"
                 ? "bg-[#D4A373] text-[#0a0a0a]"
                 : "bg-[#111111] text-[#a1a1a1] border border-[#ffffff10] hover:text-[#f5f5f5]"
@@ -400,7 +405,7 @@ export default function GestaoPage() {
           <button
             type="button"
             onClick={() => setActiveTab("chat")}
-            className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               activeTab === "chat"
                 ? "bg-[#D4A373] text-[#0a0a0a]"
                 : "bg-[#111111] text-[#a1a1a1] border border-[#ffffff10] hover:text-[#f5f5f5]"
@@ -410,289 +415,293 @@ export default function GestaoPage() {
           </button>
         </div>
 
+        <p className="text-xs text-[#a1a1a1] mb-8">
+          Alunos carregados: {students.length} | Professores carregados: {teachers.length}
+        </p>
+
         {activeTab === "mural" && (
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8 space-y-6">
-            <div>
-              <h2 className="text-xl font-semibold text-[#f5f5f5]">Novo aviso</h2>
-              <p className="text-sm text-[#a1a1a1] mt-1">
-                Carregados {students.length} alunos e {teachers.length} professores.
-              </p>
-            </div>
-
-            <form onSubmit={handlePublishNotice} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-[#f5f5f5] mb-2">Destinatário</label>
-                <select
-                  value={targetType}
-                  onChange={(e) => setTargetType(e.target.value as TargetType)}
-                  className="w-full rounded-lg bg-[#0a0a0a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 outline-none focus:border-[#D4A373]"
-                >
-                  <option value="ALUNO_ESPECIFICO">Aluno específico</option>
-                  <option value="TODOS_ALUNOS">Todos os alunos</option>
-                  <option value="PROFESSOR_ESPECIFICO">Professor específico</option>
-                  <option value="TODOS_PROFESSORES">Todos os professores</option>
-                </select>
-              </div>
-
-              {targetType === "ALUNO_ESPECIFICO" && (
+          <div className="space-y-8">
+            <section className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
+              <h2 className="text-lg font-semibold mb-4">Novo aviso</h2>
+              <form onSubmit={handlePublishNotice} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#f5f5f5] mb-2">Aluno</label>
+                  <label className="block text-sm text-[#a1a1a1] mb-1">Destinatário</label>
                   <select
-                    value={selectedStudentId}
-                    onChange={(e) => setSelectedStudentId(e.target.value)}
-                    className="w-full rounded-lg bg-[#0a0a0a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 outline-none focus:border-[#D4A373]"
+                    value={targetType}
+                    onChange={(e) => setTargetType(e.target.value as TargetType)}
+                    className={inputClass}
                   >
-                    <option value="">Selecione um aluno</option>
-                    {studentsOptions.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
+                    <option value="TODOS_ALUNOS">Todos os alunos</option>
+                    <option value="ALUNO_ESPECIFICO">Aluno específico</option>
+                    <option value="TODOS_PROFESSORES">Todos os professores</option>
+                    <option value="PROFESSOR_ESPECIFICO">Professor específico</option>
                   </select>
                 </div>
-              )}
 
-              {targetType === "PROFESSOR_ESPECIFICO" && (
-                <div>
-                  <label className="block text-sm font-medium text-[#f5f5f5] mb-2">Professor</label>
-                  <select
-                    value={selectedTeacherId}
-                    onChange={(e) => setSelectedTeacherId(e.target.value)}
-                    className="w-full rounded-lg bg-[#0a0a0a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 outline-none focus:border-[#D4A373]"
-                  >
-                    <option value="">Selecione um professor</option>
-                    {teachersOptions.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-[#f5f5f5] mb-2">Título</label>
-                <input
-                  type="text"
-                  value={noticeTitle}
-                  onChange={(e) => setNoticeTitle(e.target.value)}
-                  placeholder="Título do aviso"
-                  className="w-full rounded-lg bg-[#0a0a0a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 outline-none focus:border-[#D4A373] placeholder:text-[#a1a1a1]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#f5f5f5] mb-2">Conteúdo</label>
-                <textarea
-                  value={noticeContent}
-                  onChange={(e) => setNoticeContent(e.target.value)}
-                  placeholder="Escreva o conteúdo do aviso"
-                  rows={5}
-                  className="w-full rounded-lg bg-[#0a0a0a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 outline-none focus:border-[#D4A373] placeholder:text-[#a1a1a1] resize-none"
-                />
-              </div>
-
-              {noticeError && <p className="text-red-400 text-sm">{noticeError}</p>}
-              {noticeSuccess && <p className="text-green-400 text-sm">{noticeSuccess}</p>}
-
-              <button
-                type="submit"
-                disabled={savingNotice}
-                className="px-6 py-3 rounded-lg bg-[#D4A373] text-[#0a0a0a] font-medium hover:bg-[#b88a5e] disabled:opacity-50 transition-colors"
-              >
-                {savingNotice ? "Publicando..." : "Publicar aviso"}
-              </button>
-            </form>
-
-            <div className="pt-6 border-t border-[#ffffff10]">
-              <h3 className="text-lg font-medium text-[#f5f5f5] mb-4">Avisos publicados</h3>
-              {notices.length === 0 ? (
-                <p className="text-[#a1a1a1]">Nenhum aviso publicado.</p>
-              ) : (
-                <div className="space-y-4">
-                  {notices.map((n) => (
-                    <div
-                      key={n.id}
-                      className="p-4 rounded-xl bg-[#0a0a0a] border border-[#ffffff10]"
+                {targetType === "ALUNO_ESPECIFICO" && (
+                  <div>
+                    <label className="block text-sm text-[#a1a1a1] mb-1">Aluno</label>
+                    <select
+                      value={selectedStudentId}
+                      onChange={(e) => setSelectedStudentId(e.target.value)}
+                      className={inputClass}
+                      required
                     >
-                      <div className="flex items-center justify-between">
-                        <p className="text-[#f5f5f5] font-medium">{n.title || "Aviso"}</p>
-                        <span className="text-xs text-[#a1a1a1]">{formatDateTime(n.createdAt)}</span>
-                      </div>
-                      <p className="text-[#a1a1a1] mt-2 text-sm">{n.content}</p>
-                      <p className="text-xs text-[#D4A373] mt-2">
-                        Para: {n.targetRole || "Todos"}
-                        {n.student?.name ? ` — ${n.student.name}` : ""}
-                        {n.professor?.name ? ` — ${n.professor.name}` : ""}
-                      </p>
-                    </div>
-                  ))}
+                      <option value="">Selecione um aluno</option>
+                      {studentsOptions.map((student) => (
+                        <option key={student.id} value={student.id}>
+                          {student.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {targetType === "PROFESSOR_ESPECIFICO" && (
+                  <div>
+                    <label className="block text-sm text-[#a1a1a1] mb-1">Professor</label>
+                    <select
+                      value={selectedTeacherId}
+                      onChange={(e) => setSelectedTeacherId(e.target.value)}
+                      className={inputClass}
+                      required
+                    >
+                      <option value="">Selecione um professor</option>
+                      {teachersOptions.map((teacher) => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm text-[#a1a1a1] mb-1">Título</label>
+                  <input
+                    type="text"
+                    value={noticeTitle}
+                    onChange={(e) => setNoticeTitle(e.target.value)}
+                    placeholder="Título do aviso"
+                    className={inputClass}
+                  />
                 </div>
+
+                <div>
+                  <label className="block text-sm text-[#a1a1a1] mb-1">Conteúdo</label>
+                  <textarea
+                    value={noticeContent}
+                    onChange={(e) => setNoticeContent(e.target.value)}
+                    placeholder="Escreva o conteúdo do aviso..."
+                    rows={5}
+                    className={inputClass}
+                  />
+                </div>
+
+                {noticeError && (
+                  <p className="text-sm text-red-400">{noticeError}</p>
+                )}
+                {noticeSuccess && (
+                  <p className="text-sm text-emerald-400">{noticeSuccess}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={savingNotice}
+                  className="bg-[#D4A373] text-[#0a0a0a] px-6 py-2 rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
+                >
+                  {savingNotice ? "Publicando..." : "Publicar aviso"}
+                </button>
+              </form>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold">Avisos publicados</h2>
+              {notices.length === 0 && (
+                <p className="text-sm text-[#a1a1a1]">Nenhum aviso publicado.</p>
               )}
-            </div>
+              {notices.map((notice) => (
+                <div
+                  key={notice.id}
+                  className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <h3 className="font-medium text-[#f5f5f5]">
+                      {notice.title || "Aviso"}
+                    </h3>
+                    <span className="text-xs px-2 py-1 rounded-full bg-[#ffffff10] text-[#a1a1a1]">
+                      {notice.targetRole || "Todos"}
+                    </span>
+                  </div>
+                  <p className="text-[#a1a1a1] whitespace-pre-wrap text-sm">
+                    {notice.content}
+                  </p>
+                  <p className="text-xs text-[#a1a1a1] mt-3">
+                    {formatDateTime(notice.createdAt)}
+                  </p>
+                </div>
+              ))}
+            </section>
           </div>
         )}
 
         {activeTab === "chat" && (
           <div className="space-y-6">
-            <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8 space-y-4">
-              <h2 className="text-xl font-semibold text-[#f5f5f5]">Nova mensagem</h2>
-              <p className="text-sm text-[#a1a1a1]">
-                Carregados {students.length} alunos e {teachers.length} professores.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6">
+              <h2 className="text-lg font-semibold mb-4">Nova mensagem</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#f5f5f5] mb-2">Aluno</label>
+                  <label className="block text-sm text-[#a1a1a1] mb-1">Aluno</label>
                   <select
                     value={selectedStudentId}
                     onChange={(e) => setSelectedStudentId(e.target.value)}
-                    className="w-full rounded-lg bg-[#0a0a0a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 outline-none focus:border-[#D4A373]"
+                    className={inputClass}
                   >
                     <option value="">Selecione um aluno</option>
-                    {studentsOptions.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
+                    {studentsOptions.map((student) => (
+                      <option key={student.id} value={student.id}>
+                        {student.name}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#f5f5f5] mb-2">Professor</label>
+                  <label className="block text-sm text-[#a1a1a1] mb-1">Professor</label>
                   <select
                     value={selectedTeacherId}
                     onChange={(e) => setSelectedTeacherId(e.target.value)}
-                    className="w-full rounded-lg bg-[#0a0a0a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 outline-none focus:border-[#D4A373]"
+                    className={inputClass}
                   >
                     <option value="">Selecione um professor</option>
-                    {teachersOptions.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
+                    {teachersOptions.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.name}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              <form onSubmit={handleSendChat} className="space-y-4">
+              <form onSubmit={handleSendChat} className="space-y-3">
                 <textarea
                   value={chatContent}
                   onChange={(e) => setChatContent(e.target.value)}
-                  placeholder="Digite a mensagem para iniciar a conversa"
-                  rows={4}
-                  className="w-full rounded-lg bg-[#0a0a0a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 outline-none focus:border-[#D4A373] placeholder:text-[#a1a1a1] resize-none"
+                  placeholder="Escreva a mensagem..."
+                  rows={3}
+                  className={inputClass}
                 />
-                {chatError && <p className="text-red-400 text-sm">{chatError}</p>}
-                {chatSuccess && <p className="text-green-400 text-sm">{chatSuccess}</p>}
+                {chatError && <p className="text-sm text-red-400">{chatError}</p>}
+                {chatSuccess && <p className="text-sm text-emerald-400">{chatSuccess}</p>}
                 <button
                   type="submit"
                   disabled={sendingChat}
-                  className="px-6 py-3 rounded-lg bg-[#D4A373] text-[#0a0a0a] font-medium hover:bg-[#b88a5e] disabled:opacity-50 transition-colors"
+                  className="bg-[#D4A373] text-[#0a0a0a] px-6 py-2 rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50"
                 >
                   {sendingChat ? "Enviando..." : "Enviar mensagem"}
                 </button>
               </form>
-            </div>
+            </section>
 
-            <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-              <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">Histórico de conversas</h2>
-              {questions.length === 0 ? (
-                <p className="text-[#a1a1a1]">Nenhuma conversa encontrada.</p>
-              ) : (
-                <div className="space-y-4">
-                  {questions.map((q) => {
-                    const thread = [q, ...(q.children || [])].sort(
-                      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-                    );
-                    const isExpanded = expandedQuestion === q.id;
-                    return (
-                      <div key={q.id} className="p-4 rounded-xl bg-[#0a0a0a] border border-[#ffffff10]">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-[#f5f5f5] font-medium">
-                              {q.student?.name || "Aluno"} ↔ {q.teacher?.name || "Professor"}
-                            </p>
-                            <p className="text-xs text-[#a1a1a1] mt-1">
-                              {getThreadStatus(thread)} · {thread.length} mensagens
-                            </p>
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold">Histórico de conversas</h2>
+              {questions.length === 0 && (
+                <p className="text-sm text-[#a1a1a1]">Nenhuma conversa encontrada.</p>
+              )}
+              {questions.map((question) => {
+                const thread = [question, ...(question.children || [])].sort(
+                  (a, b) =>
+                    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                );
+                const isExpanded = expandedQuestion === question.id;
+                return (
+                  <div
+                    key={question.id}
+                    className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-5"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                      <span className="text-sm text-[#a1a1a1]">
+                        {getThreadStatus(thread)}
+                      </span>
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full ${getRoleBadgeClass(
+                          question.senderRole
+                        )}`}
+                      >
+                        {question.senderRole}
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      {thread.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className="border-l-2 border-[#ffffff10] pl-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-[#f5f5f5]">
+                              {getAuthorName(msg)}
+                            </span>
+                            <span className="text-xs text-[#a1a1a1]">
+                              {formatDateTime(msg.createdAt)}
+                            </span>
                           </div>
+                          <p className="text-sm text-[#a1a1a1]">{msg.content}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {!isExpanded && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedQuestion(question.id);
+                          setChatError("");
+                        }}
+                        className="mt-4 text-sm text-[#D4A373] hover:underline"
+                      >
+                        Continuar conversa
+                      </button>
+                    )}
+
+                    {isExpanded && (
+                      <div className="mt-4 space-y-3">
+                        <textarea
+                          value={replyContent[question.id] || ""}
+                          onChange={(e) =>
+                            setReplyContent((prev) => ({
+                              ...prev,
+                              [question.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="Escreva a resposta..."
+                          rows={3}
+                          className={inputClass}
+                        />
+                        <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => setExpandedQuestion(isExpanded ? null : q.id)}
-                            className="px-4 py-2 rounded-lg text-sm bg-[#ffffff10] text-[#f5f5f5] hover:bg-[#ffffff20] transition-colors"
+                            onClick={() => handleReply(question)}
+                            className="bg-[#D4A373] text-[#0a0a0a] px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition"
                           >
-                            {isExpanded ? "Ocultar" : "Continuar conversa"}
+                            Responder
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedQuestion(null)}
+                            className="px-4 py-2 rounded-lg text-sm text-[#a1a1a1] border border-[#ffffff10] hover:bg-[#ffffff08] transition"
+                          >
+                            Cancelar
                           </button>
                         </div>
-
-                        <div className="mt-4 space-y-3">
-                          {thread.map((msg) => (
-                            <div
-                              key={msg.id}
-                              className={`p-3 rounded-lg border ${
-                                (msg.senderRole || "").toUpperCase() === "GESTOR"
-                                  ? "bg-[#D4A373]/10 border-[#D4A373]/30"
-                                  : "bg-[#111111] border-[#ffffff10]"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-[#f5f5f5]">
-                                  {getAuthorName(msg)}
-                                </span>
-                                <span
-                                  className={`text-xs px-2 py-0.5 rounded ${getRoleBadgeClass(
-                                    msg.senderRole
-                                  )}`}
-                                >
-                                  {msg.senderRole || "Desconhecido"}
-                                </span>
-                                <span className="text-xs text-[#a1a1a1]">
-                                  {formatDateTime(msg.createdAt)}
-                                </span>
-                              </div>
-                              <p className="text-[#a1a1a1] text-sm mt-2">{msg.content}</p>
-                            </div>
-                          ))}
-                        </div>
-
-                        {isExpanded && (
-                          <div className="mt-4 space-y-3">
-                            <textarea
-                              value={replyContent[q.id] || ""}
-                              onChange={(e) =>
-                                setReplyContent((prev) => ({ ...prev, [q.id]: e.target.value }))
-                              }
-                              placeholder="Escreva uma resposta como gestão"
-                              rows={3}
-                              className="w-full rounded-lg bg-[#111111] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 outline-none focus:border-[#D4A373] placeholder:text-[#a1a1a1] resize-none"
-                            />
-                            <div className="flex gap-3">
-                              <button
-                                type="button"
-                                onClick={() => handleReply(q)}
-                                className="px-5 py-2.5 rounded-lg bg-[#D4A373] text-[#0a0a0a] text-sm font-medium hover:bg-[#b88a5e] transition-colors"
-                              >
-                                Responder
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setExpandedQuestion(null)}
-                                className="px-5 py-2.5 rounded-lg bg-[#ffffff10] text-[#f5f5f5] text-sm font-medium hover:bg-[#ffffff20] transition-colors"
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                    )}
+                  </div>
+                );
+              })}
+            </section>
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }
