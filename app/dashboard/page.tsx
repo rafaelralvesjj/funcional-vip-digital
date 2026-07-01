@@ -104,6 +104,23 @@ export default async function DashboardPage() {
 
   const myStudentIds = students.map((student) => student.id);
 
+  const professors = await prisma.user.findMany({
+    where: {
+      role: {
+        in: ['PROFESSOR', 'TEACHER'],
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+    orderBy: {
+      name: 'asc',
+    },
+  });
+
+  const professorIds = professors.map((professor) => professor.id);
+
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
       status: 'PENDENTE',
@@ -395,19 +412,75 @@ export default async function DashboardPage() {
     return 'Todos os alunos e professores';
   }
 
-  const managementNoticeItems = managementNotices.map((notice) => ({
-    id: notice.id,
-    title: notice.title || 'Aviso da gestão',
-    content: notice.content,
-    type: notice.type,
-    createdAt: notice.createdAt.toISOString(),
-    authorName: notice.author?.name || 'Gestão',
-    authorRole: notice.author?.role || null,
-    targetLabel: getNoticeTargetLabel(notice),
-    readByCurrentUser: isTeacher
-      ? notice.reads.some((read) => read.professorId === userId)
-      : false,
-  }));
+  function getManagementNoticeReadStatus(notice: (typeof notices)[number]) {
+    const readProfessorIds = new Set(
+      notice.reads
+        .map((read) => read.professorId)
+        .filter((professorId): professorId is string => Boolean(professorId))
+    );
+
+    if (isTeacher) {
+      const readByCurrentUser = readProfessorIds.has(userId);
+
+      return {
+        readByCurrentUser,
+        readStatusLabel: readByCurrentUser ? 'Lido' : 'Pendente',
+        readStatusVariant: readByCurrentUser ? 'read' : 'pending',
+        readStatusDescription: readByCurrentUser
+          ? 'Você já leu este aviso.'
+          : 'Aguardando sua leitura.',
+      };
+    }
+
+    if (isGestor) {
+      const targetProfessorIds = notice.professorId ? [notice.professorId] : professorIds;
+      const totalTargetProfessors = targetProfessorIds.length;
+      const totalReadProfessors = targetProfessorIds.filter((professorId) =>
+        readProfessorIds.has(professorId)
+      ).length;
+
+      if (totalTargetProfessors === 0) {
+        return {
+          readByCurrentUser: false,
+          readStatusLabel: 'Sem professores',
+          readStatusVariant: 'neutral',
+          readStatusDescription: 'Nenhum professor foi encontrado para este aviso.',
+        };
+      }
+
+      const allRead = totalReadProfessors === totalTargetProfessors;
+
+      return {
+        readByCurrentUser: false,
+        readStatusLabel: allRead ? 'Lido' : 'Pendente',
+        readStatusVariant: allRead ? 'read' : 'pending',
+        readStatusDescription: `${totalReadProfessors}/${totalTargetProfessors} professor(es) leram.`,
+      };
+    }
+
+    return {
+      readByCurrentUser: false,
+      readStatusLabel: 'Pendente',
+      readStatusVariant: 'pending',
+      readStatusDescription: '',
+    };
+  }
+
+  const managementNoticeItems = managementNotices.map((notice) => {
+    const readStatus = getManagementNoticeReadStatus(notice);
+
+    return {
+      id: notice.id,
+      title: notice.title || 'Aviso da gestão',
+      content: notice.content,
+      type: notice.type,
+      createdAt: notice.createdAt.toISOString(),
+      authorName: notice.author?.name || 'Gestão',
+      authorRole: notice.author?.role || null,
+      targetLabel: getNoticeTargetLabel(notice),
+      ...readStatus,
+    };
+  });
 
   const summaryCards = [
     {
@@ -584,7 +657,7 @@ export default async function DashboardPage() {
             notices={managementNoticeItems}
             emptyMessage="Nenhum aviso da gestão."
             markAsReadOnClose={isTeacher}
-            showReadStatus={isTeacher}
+            showReadStatus={true}
           />
         </div>
 
