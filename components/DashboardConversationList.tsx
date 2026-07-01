@@ -252,7 +252,7 @@ export default function DashboardConversationList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-h-[620px] overflow-y-auto pr-2">
       {conversations.map((conversation) => {
         const isExpanded = expandedConversationId === conversation.id;
         const isClosed = Boolean(conversation.resolvedAt);
