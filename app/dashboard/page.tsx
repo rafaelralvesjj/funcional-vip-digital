@@ -138,6 +138,12 @@ export default async function DashboardPage() {
         select: {
           id: true,
           name: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       },
     },
@@ -589,6 +595,12 @@ export default async function DashboardPage() {
                     <p className="text-[#f5f5f5] font-medium">
                       {workout.student?.name || 'Aluno'}
                     </p>
+
+                    {isGestor && (
+                      <p className="text-[#a1a1a1] text-sm">
+                        Professor: {workout.student?.user?.name || 'Não vinculado'}
+                      </p>
+                    )}
 
                     <p className="text-[#a1a1a1] text-sm">
                       {formatDate(workout.createdAt)}
