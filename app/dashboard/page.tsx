@@ -412,7 +412,12 @@ export default async function DashboardPage() {
     return 'Todos os alunos e professores';
   }
 
-  function getManagementNoticeReadStatus(notice: (typeof notices)[number]) {
+  function getManagementNoticeReadStatus(notice: (typeof notices)[number]): {
+    readByCurrentUser: boolean;
+    readStatusLabel: string;
+    readStatusVariant: 'read' | 'pending' | 'neutral';
+    readStatusDescription: string;
+  } {
     const readProfessorIds = new Set(
       notice.reads
         .map((read) => read.professorId)
