@@ -26,6 +26,37 @@ function cleanText(value: unknown): string {
   return value.trim();
 }
 
+async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
+  const contentType = req.headers.get("content-type") || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const form = await req.formData();
+    const body: Record<string, unknown> = {};
+
+    for (const [key, value] of form.entries()) {
+      if (typeof value === "string") {
+        body[key] = value;
+      } else if (value instanceof File) {
+        body[key] = value;
+      }
+    }
+
+    return body;
+  }
+
+  try {
+    const json = await req.json();
+
+    if (json && typeof json === "object" && !Array.isArray(json)) {
+      return json as Record<string, unknown>;
+    }
+
+    return {};
+  } catch {
+    return {};
+  }
+}
+
 async function getStudentFromSessionOrId(userId: string, studentId?: string | null) {
   if (studentId) {
     return prisma.student.findUnique({
@@ -54,27 +85,31 @@ async function getStudentFromSessionOrId(userId: string, studentId?: string | nu
   });
 }
 
-export async function GET(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    const sessionUser = session?.user as any;
-
-    if (!sessionUser?.id) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(req.url);
-    const studentId = cleanId(searchParams.get("studentId"));
-    const student = await getStudentFromSessionOrId(String(sessionUser.id), studentId);
-
-    if (!student) {
-      return NextResponse.json([]);
-    }
-
-    const questions = await prisma.question.findMany({
-      where: {
-        studentId: student.id,
-        parentId: null,
+function getQuestionIncludes() {
+  return {
+    student: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    teacher: {
+      select: {
+        id: true,
+        name: true,
+        role: true,
+      },
+    },
+    answeredBy: {
+      select: {
+        id: true,
+        name: true,
+        role: true,
+      },
+    },
+    children: {
+      orderBy: {
+        createdAt: "asc" as const,
       },
       include: {
         student: {
@@ -97,34 +132,34 @@ export async function GET(req: NextRequest) {
             role: true,
           },
         },
-        children: {
-          orderBy: {
-            createdAt: "asc",
-          },
-          include: {
-            student: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            teacher: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
-            answeredBy: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
-          },
-        },
       },
+    },
+  };
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    const sessionUser = session?.user as any;
+
+    if (!sessionUser?.id) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const studentId = cleanId(searchParams.get("studentId"));
+    const student = await getStudentFromSessionOrId(String(sessionUser.id), studentId);
+
+    if (!student) {
+      return NextResponse.json([]);
+    }
+
+    const questions = await prisma.question.findMany({
+      where: {
+        studentId: student.id,
+        parentId: null,
+      },
+      include: getQuestionIncludes(),
       orderBy: {
         createdAt: "desc",
       },
@@ -149,9 +184,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = await readBody(req);
+    const userId = String(sessionUser.id);
     const content = cleanText(body.content || body.question || body.message);
     const studentIdFromBody = cleanId(body.studentId);
+    const parentId = cleanId(body.parentId);
     const target = String(body.target || body.targetType || "PROFESSOR").toUpperCase();
 
     if (!content) {
@@ -161,7 +198,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const student = await getStudentFromSessionOrId(String(sessionUser.id), studentIdFromBody);
+    const student = await getStudentFromSessionOrId(userId, studentIdFromBody);
 
     if (!student) {
       return NextResponse.json(
@@ -170,15 +207,83 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let rootQuestion: {
+      id: string;
+      studentId: string | null;
+      teacherId: string | null;
+      resolvedAt: Date | null;
+    } | null = null;
+
+    if (parentId) {
+      const parent = await prisma.question.findUnique({
+        where: {
+          id: parentId,
+        },
+        select: {
+          id: true,
+          parentId: true,
+          studentId: true,
+          teacherId: true,
+          resolvedAt: true,
+        },
+      });
+
+      if (!parent) {
+        return NextResponse.json(
+          { error: "Conversa não encontrada" },
+          { status: 404 }
+        );
+      }
+
+      rootQuestion = parent.parentId
+        ? await prisma.question.findUnique({
+            where: {
+              id: parent.parentId,
+            },
+            select: {
+              id: true,
+              studentId: true,
+              teacherId: true,
+              resolvedAt: true,
+            },
+          })
+        : parent;
+
+      if (!rootQuestion) {
+        return NextResponse.json(
+          { error: "Conversa principal não encontrada" },
+          { status: 404 }
+        );
+      }
+
+      if (rootQuestion.resolvedAt) {
+        return NextResponse.json(
+          { error: "Esta conversa já foi encerrada" },
+          { status: 400 }
+        );
+      }
+
+      if (rootQuestion.studentId !== student.id) {
+        return NextResponse.json(
+          { error: "Você não tem permissão para responder esta conversa" },
+          { status: 403 }
+        );
+      }
+    }
+
     const sendToGestao =
       target === "GESTAO" ||
+      target === "GESTÃO" ||
       target === "GESTOR" ||
-      target === "MANAGEMENT" ||
-      target === "GESTÃO";
+      target === "MANAGEMENT";
 
-    const teacherId = sendToGestao ? null : student.userId;
+    const teacherId = rootQuestion
+      ? rootQuestion.teacherId
+      : sendToGestao
+        ? null
+        : student.userId;
 
-    if (!sendToGestao && !teacherId) {
+    if (!rootQuestion && !sendToGestao && !teacherId) {
       return NextResponse.json(
         { error: "Aluno sem professor vinculado" },
         { status: 400 }
@@ -190,58 +295,11 @@ export async function POST(req: NextRequest) {
         content,
         studentId: student.id,
         teacherId,
+        parentId: rootQuestion?.id || null,
         senderRole: "STUDENT",
-        answeredById: String(sessionUser.id),
+        answeredById: userId,
       },
-      include: {
-        student: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        teacher: {
-          select: {
-            id: true,
-            name: true,
-            role: true,
-          },
-        },
-        answeredBy: {
-          select: {
-            id: true,
-            name: true,
-            role: true,
-          },
-        },
-        children: {
-          orderBy: {
-            createdAt: "asc",
-          },
-          include: {
-            student: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            teacher: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
-            answeredBy: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
-          },
-        },
-      },
+      include: getQuestionIncludes(),
     });
 
     return NextResponse.json(question, { status: 201 });
@@ -265,7 +323,7 @@ export async function PUT(req: NextRequest) {
 
     const role = normalizeRole(String(sessionUser.role || ""));
     const userId = String(sessionUser.id);
-    const body = await req.json().catch(() => ({}));
+    const body = await readBody(req);
 
     const questionId = cleanId(body.id || body.questionId);
     const answer = cleanText(body.answer || body.content);
@@ -383,55 +441,7 @@ export async function PUT(req: NextRequest) {
         answeredAt: now,
         answeredById: userId,
       },
-      include: {
-        student: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        teacher: {
-          select: {
-            id: true,
-            name: true,
-            role: true,
-          },
-        },
-        answeredBy: {
-          select: {
-            id: true,
-            name: true,
-            role: true,
-          },
-        },
-        children: {
-          orderBy: {
-            createdAt: "asc",
-          },
-          include: {
-            student: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            teacher: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
-            answeredBy: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
-          },
-        },
-      },
+      include: getQuestionIncludes(),
     });
 
     return NextResponse.json({
@@ -443,6 +453,73 @@ export async function PUT(req: NextRequest) {
     console.error("PUT /api/aluno/questions error:", error);
     return NextResponse.json(
       { error: "Erro ao responder dúvida" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    const sessionUser = session?.user as any;
+
+    if (!sessionUser?.id) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const body = await readBody(req);
+    const questionId = cleanId(body.id || body.questionId);
+    const action = cleanText(body.action);
+
+    if (!questionId) {
+      return NextResponse.json(
+        { error: "ID da dúvida é obrigatório" },
+        { status: 400 }
+      );
+    }
+
+    if (action !== "resolve") {
+      return NextResponse.json(
+        { error: "Ação inválida" },
+        { status: 400 }
+      );
+    }
+
+    const question = await prisma.question.findUnique({
+      where: {
+        id: questionId,
+      },
+      select: {
+        id: true,
+        parentId: true,
+        studentId: true,
+      },
+    });
+
+    if (!question) {
+      return NextResponse.json(
+        { error: "Dúvida não encontrada" },
+        { status: 404 }
+      );
+    }
+
+    const rootQuestionId = question.parentId || question.id;
+
+    const updated = await prisma.question.update({
+      where: {
+        id: rootQuestionId,
+      },
+      data: {
+        resolvedAt: new Date(),
+      },
+      include: getQuestionIncludes(),
+    });
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("PATCH /api/aluno/questions error:", error);
+    return NextResponse.json(
+      { error: "Erro ao encerrar dúvida" },
       { status: 500 }
     );
   }
