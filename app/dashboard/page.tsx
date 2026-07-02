@@ -440,14 +440,21 @@ export default async function DashboardPage() {
   });
 
   const questionsWithoutAnswer = unansweredQuestions.filter((question) => {
-    const answerRoles = ['TEACHER', 'PROFESSOR', 'GESTOR', 'ADMIN'];
-
     if (question.resolvedAt) return false;
-    if (question.answer) return false;
 
-    return !question.children.some((child) =>
-      answerRoles.includes(normalizeRole(child.senderRole))
-    );
+    /*
+     * Regra corrigida:
+     * A dúvida volta para a lista sempre que a ÚLTIMA mensagem do fio for do aluno.
+     *
+     * Exemplo:
+     * aluno pergunta -> aparece
+     * professor responde -> sai da lista
+     * aluno pergunta de novo no mesmo fio -> volta para a lista
+     */
+    const messages = [question, ...(question.children || [])];
+    const lastMessage = messages[messages.length - 1];
+
+    return normalizeRole(lastMessage?.senderRole) === 'STUDENT';
   });
 
   const unansweredQuestionConversationItems = questionsWithoutAnswer.map((question) => ({
