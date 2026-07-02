@@ -23,6 +23,7 @@ export default function AlunoPage() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(true);
   const [newQuestion, setNewQuestion] = useState("");
+  const [questionTarget, setQuestionTarget] = useState<"PROFESSOR" | "GESTAO">("PROFESSOR");
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [sendingQuestion, setSendingQuestion] = useState(false);
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
@@ -178,7 +179,12 @@ export default function AlunoPage() {
       const form = new FormData();
       form.append("content", text.trim());
       form.append("studentId", studentId);
-      if (parentId) form.append("parentId", parentId);
+
+      if (parentId) {
+        form.append("parentId", parentId);
+      } else {
+        form.append("target", questionTarget);
+      }
       const file = parentId ? followUpFile : questionFile;
       if (file) form.append("file", file);
 
@@ -246,6 +252,18 @@ export default function AlunoPage() {
       return new Date(last.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
     }
     return new Date(q.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function getQuestionTargetLabel(q: any): string {
+    if (q?.teacher?.name) {
+      return "Professor: " + q.teacher.name;
+    }
+
+    if (q?.teacherId) {
+      return "Professor";
+    }
+
+    return "Gestão";
   }
 
   function getWeekDayName(day: number): string {
@@ -393,8 +411,20 @@ export default function AlunoPage() {
               </div>
 
               {/* Formulário de nova dúvida */}
+              <label className="block text-[9px] text-[#a1a1a1] mb-1">
+                Enviar para
+              </label>
+              <select
+                value={questionTarget}
+                onChange={(e) => setQuestionTarget(e.target.value as "PROFESSOR" | "GESTAO")}
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#D4A373] mb-1.5"
+              >
+                <option value="PROFESSOR">Meu professor</option>
+                <option value="GESTAO">Gestão</option>
+              </select>
+
               <textarea value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
-                placeholder="Pergunte aqui..."
+                placeholder={questionTarget === "GESTAO" ? "Pergunte para a gestão..." : "Pergunte para seu professor..."}
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
               <div className="flex items-center gap-1 mb-1.5">
                 <input type="file" accept="image/*,video/*" onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
@@ -423,6 +453,9 @@ export default function AlunoPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-[10px] text-[#e5e5e5] font-medium truncate">
                             {q.content.substring(0, 50)}{q.content.length > 50 ? "..." : ""}
+                          </p>
+                          <p className="text-[8px] text-[#D4A373] mt-0.5 truncate">
+                            Para: {getQuestionTargetLabel(q)}
                           </p>
                           <div className="flex items-center gap-1 mt-0.5">
                             <p className="text-[8px] text-[#6b6b6b]">{getThreadTime(q)}</p>
@@ -455,7 +488,12 @@ export default function AlunoPage() {
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[#ffffff10] shrink-0">
-              <h2 className="text-sm font-bold text-[#f5f5f5]">Duvida</h2>
+              <div>
+                <h2 className="text-sm font-bold text-[#f5f5f5]">Duvida</h2>
+                <p className="text-[9px] text-[#D4A373] mt-0.5">
+                  Para: {getQuestionTargetLabel(selectedQuestion)}
+                </p>
+              </div>
               <button onClick={() => setSelectedQuestion(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
             </div>
 
@@ -530,7 +568,7 @@ export default function AlunoPage() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      Aguardando resposta do professor...
+                      Aguardando resposta de {getQuestionTargetLabel(selectedQuestion).toLowerCase()}...
                     </div>
                   );
                 }
