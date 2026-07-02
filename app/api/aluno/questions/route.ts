@@ -33,13 +33,13 @@ async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
     const form = await req.formData();
     const body: Record<string, unknown> = {};
 
-    for (const [key, value] of form.entries()) {
+    form.forEach((value, key) => {
       if (typeof value === "string") {
         body[key] = value;
       } else if (value instanceof File) {
         body[key] = value;
       }
-    }
+    });
 
     return body;
   }
