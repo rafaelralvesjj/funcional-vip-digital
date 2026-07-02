@@ -419,19 +419,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (isAnswerFromStaff && parentId) {
-      await prisma.question.update({
-        where: {
-          id: parentId,
-        },
-        data: {
-          answer: content,
-          answeredAt: new Date(),
-          answeredById,
-        },
-      });
-    }
-
     return NextResponse.json(question, { status: 201 });
   } catch (error) {
     console.error("POST /api/questions error:", error);
