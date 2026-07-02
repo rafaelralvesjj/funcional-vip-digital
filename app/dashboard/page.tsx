@@ -156,6 +156,9 @@ export default async function DashboardPage() {
     where: {
       parentId: null,
       senderRole: 'STUDENT',
+      teacherId: {
+        not: null,
+      },
       ...(isTeacher ? { studentId: { in: myStudentIds } } : {}),
     },
     select: {
@@ -164,6 +167,9 @@ export default async function DashboardPage() {
       teacherId: true,
       senderRole: true,
       content: true,
+      answer: true,
+      answeredAt: true,
+      answeredById: true,
       createdAt: true,
       resolvedAt: true,
       student: {
@@ -359,9 +365,27 @@ export default async function DashboardPage() {
 
   const managementMessages = await prisma.question.findMany({
     where: {
-      senderRole: 'GESTOR',
       parentId: null,
-      ...(isTeacher ? { teacherId: userId } : {}),
+      ...(isTeacher
+        ? {
+            senderRole: 'GESTOR',
+            teacherId: userId,
+          }
+        : {
+            OR: [
+              {
+                senderRole: 'GESTOR',
+              },
+              {
+                senderRole: 'STUDENT',
+                teacherId: null,
+              },
+              {
+                senderRole: 'TEACHER',
+                studentId: null,
+              },
+            ],
+          }),
     },
     include: {
       student: {
@@ -417,6 +441,9 @@ export default async function DashboardPage() {
 
   const questionsWithoutAnswer = unansweredQuestions.filter((question) => {
     const answerRoles = ['TEACHER', 'PROFESSOR', 'GESTOR', 'ADMIN'];
+
+    if (question.resolvedAt) return false;
+    if (question.answer) return false;
 
     return !question.children.some((child) =>
       answerRoles.includes(normalizeRole(child.senderRole))
@@ -478,6 +505,16 @@ export default async function DashboardPage() {
   function getManagementMessageTargetLabel(
     message: (typeof managementMessages)[number]
   ): string {
+    const senderRole = normalizeRole(message.senderRole);
+
+    if (senderRole === 'STUDENT' && !message.teacherId) {
+      return 'Gestão';
+    }
+
+    if (senderRole === 'TEACHER' && !message.studentId) {
+      return 'Gestão';
+    }
+
     if (message.student?.name && message.teacher?.name) {
       return `${message.student.name} → ${message.teacher.name}`;
     }
@@ -490,19 +527,21 @@ export default async function DashboardPage() {
       return `Aluno: ${message.student.name}`;
     }
 
-    return 'Todos os alunos e professores';
+    return 'Gestão';
   }
 
   function getMessageAuthorName(message: (typeof managementMessages)[number]): string {
-    if (message.senderRole === 'GESTOR') {
+    const senderRole = normalizeRole(message.senderRole);
+
+    if (senderRole === 'GESTOR') {
       return message.answeredBy?.name || 'Gestor';
     }
 
-    if (message.senderRole === 'STUDENT') {
+    if (senderRole === 'STUDENT') {
       return message.student?.name || 'Aluno';
     }
 
-    if (message.senderRole === 'TEACHER' || message.senderRole === 'PROFESSOR') {
+    if (senderRole === 'TEACHER') {
       return message.teacher?.name || message.answeredBy?.name || 'Professor';
     }
 
