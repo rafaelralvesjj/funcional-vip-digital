@@ -60,8 +60,8 @@ function getRoleLabel(role: string): string {
   const normalized = normalizeRole(role);
 
   if (normalized === "GESTOR") return "GESTOR";
-  if (normalized === "STUDENT") return "STUDENT";
-  if (normalized === "TEACHER") return "TEACHER";
+  if (normalized === "STUDENT") return "ALUNO";
+  if (normalized === "TEACHER") return "PROFESSOR";
 
   return normalized || "USUÁRIO";
 }
