@@ -213,13 +213,21 @@ export default function AlunoPage() {
   }
 
   // ⚫ Cinza = duvida resolvida (fechada)
-  // 🟢 Verde = professor respondeu (tem novidade)
-  // 🔵 Azul = aluno enviou, aguardando professor
+  // 🟢 Verde = professor/gestão respondeu (tem novidade)
+  // 🔵 Azul = aluno enviou, aguardando resposta
   function getThreadStatus(q: any): "resolved" | "new_reply" | "waiting" {
     if (q.resolvedAt) return "resolved";
+
     const messages = [q, ...(q.children || [])];
     const last = messages[messages.length - 1];
-    return last.answer ? "new_reply" : "waiting";
+    const lastRole = String(last?.senderRole || "").toUpperCase();
+
+    if (last.answer) return "new_reply";
+    if (lastRole === "TEACHER" || lastRole === "PROFESSOR" || lastRole === "GESTOR" || lastRole === "ADMIN") {
+      return "new_reply";
+    }
+
+    return "waiting";
   }
 
   async function handleResolveDoubt(questionId: string) {
@@ -264,6 +272,48 @@ export default function AlunoPage() {
     }
 
     return "Gestão";
+  }
+
+  function getMessageRole(msg: any): "STUDENT" | "TEACHER" | "GESTOR" {
+    const role = String(msg?.senderRole || "").toUpperCase();
+
+    if (role === "TEACHER" || role === "PROFESSOR") return "TEACHER";
+    if (role === "GESTOR" || role === "ADMIN") return "GESTOR";
+
+    return "STUDENT";
+  }
+
+  function getMessageAuthorLabel(msg: any, thread?: any): string {
+    const role = getMessageRole(msg);
+
+    if (role === "STUDENT") return "Você";
+    if (role === "GESTOR") return "Gestão";
+
+    return msg?.teacher?.name || thread?.teacher?.name || "Professor";
+  }
+
+  function getMessageDotClass(msg: any): string {
+    const role = getMessageRole(msg);
+
+    if (role === "STUDENT") return "bg-green-500";
+    if (role === "GESTOR") return "bg-amber-500";
+
+    return "bg-[#D4A373]";
+  }
+
+  function getMessageAuthorClass(msg: any): string {
+    const role = getMessageRole(msg);
+
+    if (role === "STUDENT") return "text-green-400";
+    if (role === "GESTOR") return "text-amber-400";
+
+    return "text-[#D4A373]";
+  }
+
+  function shouldShowLegacyAnswer(msg: any): boolean {
+    const role = getMessageRole(msg);
+
+    return role === "STUDENT" && Boolean(msg.answer);
   }
 
   function getWeekDayName(day: number): string {
@@ -501,19 +551,23 @@ export default function AlunoPage() {
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {(() => {
                 const messages: any[] = [selectedQuestion, ...(selectedQuestion.children || [])];
+
                 return messages.map((msg: any, idx: number) => (
                   <div key={msg.id || idx}>
-                    {/* Pergunta do aluno */}
                     <div className="flex items-start gap-2">
-                      <div className={"w-2 h-2 rounded-full mt-1.5 shrink-0 " + (msg.answer ? "bg-green-500" : "bg-blue-500")} />
+                      <div className={"w-2 h-2 rounded-full mt-1.5 shrink-0 " + getMessageDotClass(msg)} />
                       <div className="flex-1 bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
                         <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-[9px] font-semibold text-[#D4A373]">Voce</span>
+                          <span className={"text-[9px] font-semibold " + getMessageAuthorClass(msg)}>
+                            {getMessageAuthorLabel(msg, selectedQuestion)}
+                          </span>
                           <span className="text-[8px] text-[#525252]">
                             {new Date(msg.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
+
                         <p className="text-xs text-[#e5e5e5]">{msg.content}</p>
+
                         {(msg.imageUrl || msg.videoUrl) && (
                           <div className="mt-1.5 flex gap-2">
                             {msg.imageUrl && (
@@ -522,6 +576,7 @@ export default function AlunoPage() {
                                 Ver imagem
                               </a>
                             )}
+
                             {msg.videoUrl && (
                               <a href={msg.videoUrl} target="_blank" className="text-[9px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -533,14 +588,13 @@ export default function AlunoPage() {
                       </div>
                     </div>
 
-                    {/* Resposta do professor */}
-                    {msg.answer && (
+                    {shouldShowLegacyAnswer(msg) && (
                       <div className="flex items-start gap-2 ml-4 mt-2">
                         <div className="w-2 h-2 rounded-full mt-1.5 bg-[#D4A373] shrink-0" />
                         <div className="flex-1 bg-[#D4A373]/5 rounded-lg p-2.5 border border-[#D4A373]/15">
                           <div className="flex items-center gap-1.5 mb-1">
                             <span className="text-[9px] font-semibold text-[#D4A373]">
-                              {msg.answeredBy?.name || "Professor"}
+                              {msg.answeredBy?.name || getQuestionTargetLabel(selectedQuestion)}
                             </span>
                             <span className="text-[8px] text-[#525252]">
                               {msg.answeredAt ? new Date(msg.answeredAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
