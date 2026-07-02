@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 
+type SenderRole = "GESTOR" | "TEACHER" | "STUDENT";
+
 function normalizeRole(value?: string | null): string {
   const roleValue = String(value || "").toUpperCase();
 
@@ -10,6 +12,15 @@ function normalizeRole(value?: string | null): string {
   if (roleValue === "PROFESSOR") return "TEACHER";
 
   return roleValue;
+}
+
+function getSenderRole(value: unknown, fallback: string): SenderRole {
+  const role = normalizeRole(typeof value === "string" ? value : fallback);
+
+  if (role === "STUDENT") return "STUDENT";
+  if (role === "TEACHER") return "TEACHER";
+
+  return "GESTOR";
 }
 
 function cleanId(value: unknown): string | null {
@@ -49,6 +60,7 @@ async function validateStudent(studentId: string) {
     select: {
       id: true,
       name: true,
+      userId: true,
     },
   });
 }
@@ -69,7 +81,7 @@ async function validateTeacher(teacherId: string) {
   });
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     const sessionUser = getSessionUser(session);
@@ -78,15 +90,28 @@ export async function GET() {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
     const userId = sessionUser.id;
     const role = normalizeRole(sessionUser.role);
 
-    const where: any = {
-      parentId: null,
-    };
+    const studentId = cleanId(searchParams.get("studentId"));
+    const teacherId = cleanId(searchParams.get("teacherId"));
+    const senderRole = cleanId(searchParams.get("senderRole"));
+    const parentId = cleanId(searchParams.get("parentId"));
+
+    const where: any = {};
+
+    if (studentId) where.studentId = studentId;
+    if (teacherId) where.teacherId = teacherId;
+    if (parentId) where.parentId = parentId;
+    if (senderRole) where.senderRole = normalizeRole(senderRole);
+
+    if (!parentId) {
+      where.parentId = null;
+    }
 
     if (role === "TEACHER") {
-      const teacherStudents = await prisma.student.findMany({
+      const myStudents = await prisma.student.findMany({
         where: {
           userId,
         },
@@ -95,7 +120,7 @@ export async function GET() {
         },
       });
 
-      const teacherStudentIds = teacherStudents.map((student) => student.id);
+      const myStudentIds = myStudents.map((student) => student.id);
 
       where.OR = [
         {
@@ -103,7 +128,7 @@ export async function GET() {
         },
         {
           studentId: {
-            in: teacherStudentIds,
+            in: myStudentIds,
           },
         },
       ];
@@ -212,6 +237,7 @@ export async function POST(req: NextRequest) {
     const requestedAnsweredById = cleanId(body.answeredById);
     const videoUrl = cleanId(body.videoUrl);
     const imageUrl = cleanId(body.imageUrl);
+    const senderRole = getSenderRole(body.senderRole, loggedRole || "GESTOR");
 
     if (!content) {
       return NextResponse.json(
@@ -279,10 +305,11 @@ export async function POST(req: NextRequest) {
     }
 
     /*
-     * Regra corrigida:
-     * A conversa pode ser com aluno OU com professor.
-     * Antes a API exigia aluno sempre, por isso dava erro:
-     * "Aluno é obrigatório" quando o professor respondia uma mensagem enviada só para ele.
+     * Regras:
+     * - aluno pode enviar para professor: studentId + teacherId.
+     * - aluno pode enviar para gestão: studentId sem teacherId.
+     * - gestor pode enviar/responder para aluno ou professor.
+     * - professor responde conversas em que ele é o teacherId.
      */
     if (!studentId && !teacherId) {
       return NextResponse.json(
@@ -320,8 +347,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const senderRoleFromBody = normalizeRole(cleanText(body.senderRole));
-    const senderRole = senderRoleFromBody || loggedRole || "GESTOR";
+    const isReply = Boolean(parentId);
+    const isAnswerFromStaff = isReply && senderRole !== "STUDENT";
     const answeredById = requestedAnsweredById || userId;
 
     const question = await prisma.question.create({
@@ -334,6 +361,12 @@ export async function POST(req: NextRequest) {
         answeredById,
         videoUrl,
         imageUrl,
+        ...(isAnswerFromStaff
+          ? {
+              answer: content,
+              answeredAt: new Date(),
+            }
+          : {}),
       },
       include: {
         student: {
@@ -385,103 +418,25 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+
+    if (isAnswerFromStaff && parentId) {
+      await prisma.question.update({
+        where: {
+          id: parentId,
+        },
+        data: {
+          answer: content,
+          answeredAt: new Date(),
+          answeredById,
+        },
+      });
+    }
 
     return NextResponse.json(question, { status: 201 });
   } catch (error) {
     console.error("POST /api/questions error:", error);
     return NextResponse.json(
       { error: "Erro ao enviar mensagem" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    const sessionUser = getSessionUser(session);
-
-    if (!sessionUser.id) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
-
-    const body = await req.json().catch(() => ({}));
-    const questionId = cleanId(body.id || body.questionId);
-    const answer = cleanText(body.answer);
-
-    if (!questionId) {
-      return NextResponse.json(
-        { error: "ID da mensagem é obrigatório" },
-        { status: 400 }
-      );
-    }
-
-    const question = await prisma.question.update({
-      where: {
-        id: questionId,
-      },
-      data: {
-        answer: answer || null,
-        answeredAt: answer ? new Date() : null,
-        answeredById: cleanId(body.answeredById) || sessionUser.id,
-        resolvedAt: body.resolvedAt ? new Date() : undefined,
-      },
-      include: {
-        student: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        teacher: {
-          select: {
-            id: true,
-            name: true,
-            role: true,
-          },
-        },
-        answeredBy: {
-          select: {
-            id: true,
-            name: true,
-            role: true,
-          },
-        },
-        children: {
-          orderBy: {
-            createdAt: "asc",
-          },
-          include: {
-            student: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            teacher: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
-            answeredBy: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    return NextResponse.json(question);
-  } catch (error) {
-    console.error("PUT /api/questions error:", error);
-    return NextResponse.json(
-      { error: "Erro ao atualizar mensagem" },
       { status: 500 }
     );
   }
