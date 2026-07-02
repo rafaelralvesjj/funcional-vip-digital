@@ -432,14 +432,9 @@ export async function PUT(req: NextRequest) {
       },
     });
 
-    const updatedRoot = await prisma.question.update({
+    const updatedRoot = await prisma.question.findUnique({
       where: {
         id: rootQuestion.id,
-      },
-      data: {
-        answer,
-        answeredAt: now,
-        answeredById: userId,
       },
       include: getQuestionIncludes(),
     });
