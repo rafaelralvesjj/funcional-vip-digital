@@ -235,6 +235,39 @@ export default function GestaoPage() {
   const studentsOptions = useMemo(() => students.filter(s => !!s.id && !!s.name), [students]);
   const teachersOptions = useMemo(() => teachers.filter(t => !!t.id && !!t.name), [teachers]);
 
+  function getNoticeTargetGroup(notice: Notice): string {
+    return String(notice.targetRole || "").toUpperCase() === "TEACHER"
+      ? "Professores"
+      : "Alunos";
+  }
+
+  function getNoticeTargetNames(notice: Notice): string[] {
+    const targetRole = String(notice.targetRole || "").toUpperCase();
+
+    if (targetRole === "TEACHER") {
+      if (notice.professor?.name) {
+        return [notice.professor.name];
+      }
+
+      if (notice.professorId) {
+        const professor = teachersOptions.find((teacher) => teacher.id === notice.professorId);
+        return [professor?.name || "Professor específico"];
+      }
+
+      return teachersOptions.map((teacher) => teacher.name);
+    }
+
+    if (notice.student?.name) {
+      return [notice.student.name];
+    }
+
+    if (notice.studentId) {
+      const student = studentsOptions.find((item) => item.id === notice.studentId);
+      return [student?.name || "Aluno específico"];
+    }
+
+    return studentsOptions.map((student) => student.name);
+  }
 
   const reloadQuestions = async () => {
     const qRes = await fetch('/api/questions', { cache: 'no-store' });
@@ -554,12 +587,32 @@ export default function GestaoPage() {
                       <span className="text-[10px] text-[#a1a1a1]">{formatDateTime(n.createdAt)}</span>
                     </div>
                     <p className="text-sm text-[#f5f5f5] whitespace-pre-wrap mb-3">{n.content}</p>
-                    <div className="flex gap-2">
-                      <span className="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-[#a1a1a1]">
-                        Para: {n.targetRole === 'TEACHER' ? 'Professores' : 'Alunos'}
-                      </span>
-                      {n.student && <span className="text-[10px] bg-blue-900/20 text-blue-400 px-2 py-0.5 rounded">{n.student.name}</span>}
-                      {n.professor && <span className="text-[10px] bg-emerald-900/20 text-emerald-400 px-2 py-0.5 rounded">{n.professor.name}</span>}
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        <span className="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-[#a1a1a1]">
+                          Para: {getNoticeTargetGroup(n)}
+                        </span>
+
+                        {getNoticeTargetNames(n).length === 0 ? (
+                          <span className="text-[10px] bg-[#D4A373]/10 text-[#D4A373] px-2 py-0.5 rounded">
+                            Nenhum destinatário carregado
+                          </span>
+                        ) : (
+                          getNoticeTargetNames(n).map((name) => (
+                            <span
+                              key={`${n.id}-${name}`}
+                              className={
+                                "text-[10px] px-2 py-0.5 rounded " +
+                                (String(n.targetRole || "").toUpperCase() === "TEACHER"
+                                  ? "bg-emerald-900/20 text-emerald-400"
+                                  : "bg-blue-900/20 text-blue-400")
+                              }
+                            >
+                              {name}
+                            </span>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))
