@@ -3,108 +3,89 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-function normalizeRole(role?: string | null) {
-  const value = String(role || "").toUpperCase();
-
-  if (value === "ALUNO") return "STUDENT";
-  if (value === "PROFESSOR") return "TEACHER";
-
-  return value;
-}
-
 export async function GET(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: { studentId: string } }
 ) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.id as string | undefined;
+
+  if (!userId) {
+    return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
+  }
+
   try {
-    const session = await getServerSession(authOptions);
-    const sessionUser = session?.user as any;
+    const { studentId } = params;
 
-    if (!sessionUser?.id) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    if (!studentId) {
+      return NextResponse.json(
+        { error: "ID do aluno e obrigatorio" },
+        { status: 400 }
+      );
     }
-
-    const studentId = params.studentId;
 
     const student = await prisma.student.findUnique({
       where: { id: studentId },
       select: {
         id: true,
         createdAt: true,
-        userAuthId: true,
       },
     });
 
     if (!student) {
-      return NextResponse.json({ error: "Aluno não encontrado" }, { status: 404 });
-    }
-
-    const role = normalizeRole(sessionUser.role);
-
-    const canAccess =
-      role === "GESTOR" ||
-      role === "ADMIN" ||
-      student.userAuthId === String(sessionUser.id);
-
-    if (!canAccess) {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Aluno nao encontrado" },
+        { status: 404 }
+      );
     }
 
     /*
      * Regra do mural do aluno:
      *
-     * 1. Mostra apenas avisos destinados a ALUNO/STUDENT.
-     * 2. Avisos internos da gestão, como "Novo aluno aguardando vínculo",
-     *    podem ter studentId para controle operacional, mas NÃO aparecem
-     *    no mural do aluno.
+     * 1. Avisos específicos só aparecem no mural se forem destinados a ALUNO/STUDENT.
+     * 2. Pendências internas da gestão usam studentId para controle operacional,
+     *    mas não aparecem no mural do aluno.
      * 3. Avisos gerais para alunos só aparecem para alunos que já existiam
-     *    na data de criação do aviso.
+     *    na data em que o aviso foi criado.
+     *
+     * Importante:
+     * Mantemos o retorno como ARRAY, porque a tela do aluno já espera uma lista direta.
      */
     const notices = await prisma.notice.findMany({
       where: {
-        AND: [
+        OR: [
           {
-            OR: [
-              { targetRole: "STUDENT" },
-              { targetRole: "ALUNO" },
-            ],
+            studentId,
+            targetRole: {
+              in: ["ALUNO", "STUDENT"],
+            },
+            NOT: {
+              type: {
+                in: ["GESTAO_PENDENCIA", "MANAGEMENT_PENDING"],
+              },
+            },
           },
           {
-            OR: [
-              {
-                studentId,
+            studentId: null,
+            professorId: null,
+            targetRole: {
+              in: ["ALUNO", "STUDENT"],
+            },
+            createdAt: {
+              gte: student.createdAt,
+            },
+            NOT: {
+              type: {
+                in: ["GESTAO_PENDENCIA", "MANAGEMENT_PENDING"],
               },
-              {
-                studentId: null,
-                professorId: null,
-                createdAt: {
-                  gte: student.createdAt,
-                },
-              },
-            ],
-          },
-          {
-            NOT: [
-              { targetRole: "GESTOR" },
-              { targetRole: "ADMIN" },
-              { type: "GESTAO_PENDENCIA" },
-              { type: "MANAGEMENT_PENDING" },
-            ],
+            },
           },
         ],
       },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        type: true,
-        targetRole: true,
-        studentId: true,
-        professorId: true,
-        createdAt: true,
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: {
         author: {
           select: {
             id: true,
@@ -112,36 +93,40 @@ export async function GET(
             role: true,
           },
         },
-        reads: {
-          where: {
-            studentId,
-          },
-          select: {
-            id: true,
-            studentId: true,
-            professorId: true,
-            createdAt: true,
-          },
+      },
+    });
+
+    let noticesWithReadStatus = notices;
+
+    try {
+      const reads = await prisma.noticeRead.findMany({
+        where: {
+          studentId,
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        select: {
+          noticeId: true,
+        },
+      });
 
-    const formattedNotices = notices.map((notice) => ({
-      ...notice,
-      readByStudent: notice.reads.length > 0,
-    }));
+      const readNoticeIds = new Set(reads.map((read: any) => read.noticeId));
 
-    return NextResponse.json({
-      notices: formattedNotices,
-    });
+      noticesWithReadStatus = notices.map((notice) => ({
+        ...notice,
+        readByStudent: readNoticeIds.has(notice.id),
+      }));
+    } catch {
+      noticesWithReadStatus = notices.map((notice) => ({
+        ...notice,
+        readByStudent: false,
+      }));
+    }
+
+    return NextResponse.json(noticesWithReadStatus);
   } catch (error) {
     console.error("Erro ao buscar avisos do aluno:", error);
 
     return NextResponse.json(
-      { error: "Erro ao buscar avisos do aluno" },
+      { error: "Erro ao buscar avisos" },
       { status: 500 }
     );
   }
