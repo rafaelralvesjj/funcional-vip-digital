@@ -1,5 +1,190 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { sendEmail } from "@/lib/sendEmail";
+
+function getAppLoginUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/auth/signin`;
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function notifyInitialEvaluationCompleted(alunoId: string) {
+  const student = await prisma.student.findUnique({
+    where: { id: alunoId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      userAuthId: true,
+    },
+  });
+
+  if (!student) return;
+
+  let studentEmail = student.email || null;
+  let studentName = student.name || "Aluno";
+
+  if (!studentEmail && student.userAuthId) {
+    const userAuth = await prisma.user.findUnique({
+      where: { id: student.userAuthId },
+      select: {
+        name: true,
+        email: true,
+      },
+    });
+
+    studentEmail = userAuth?.email || null;
+    studentName = student.name || userAuth?.name || "Aluno";
+  }
+
+  const gestores = await prisma.user.findMany({
+    where: {
+      role: {
+        in: ["GESTOR", "ADMIN"],
+      },
+      email: {
+        not: null,
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  });
+
+  const loginUrl = getAppLoginUrl();
+  const safeStudentName = escapeHtml(studentName);
+
+  const emailTasks: Promise<unknown>[] = [];
+
+  if (studentEmail) {
+    const subject = "Bem-vindo ao Funcional Vip Digital";
+
+    const text = [
+      `Olá, ${studentName}!`,
+      "",
+      "Seu cadastro e formulário de bioimpedância foram concluídos com sucesso.",
+      "",
+      "No seu painel do aluno, você poderá acompanhar seus treinos, avisos, dúvidas e orientações do seu professor.",
+      "",
+      "Enquanto seu professor é vinculado e seu treino é preparado, fique atento ao mural do aluno e ao seu e-mail.",
+      "",
+      `Entrar no sistema: ${loginUrl}`,
+    ].join("\n");
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+        <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+          <h2 style="color:#D4A373; margin:0 0 16px;">Bem-vindo ao Funcional Vip Digital</h2>
+
+          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+            Olá, <strong>${safeStudentName}</strong>!
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Seu cadastro e formulário de bioimpedância foram concluídos com sucesso.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            No seu painel do aluno, você poderá acompanhar seus treinos, avisos, dúvidas, orientações e atualizações do seu professor.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Enquanto seu professor é vinculado e seu treino é preparado, fique atento ao mural do aluno e ao seu e-mail.
+          </p>
+
+          <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+            Acessar meu painel
+          </a>
+
+          <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
+            Este é um aviso automático do Funcional Vip Digital.
+          </p>
+        </div>
+      </div>
+    `;
+
+    emailTasks.push(
+      sendEmail({
+        to: studentEmail,
+        subject,
+        text,
+        html,
+      })
+    );
+  }
+
+  gestores
+    .filter((gestor) => Boolean(gestor.email))
+    .forEach((gestor) => {
+      const gestorName = gestor.name || "Gestão";
+      const subject = "Novo aluno cadastrado no Funcional Vip Digital";
+
+      const text = [
+        `Olá, ${gestorName}!`,
+        "",
+        `O aluno ${studentName} concluiu o cadastro e o formulário de bioimpedância.`,
+        "",
+        "Acesse a gestão para vincular o professor responsável e preencher a quantidade contratada de treinos/dias no mês.",
+        "",
+        `Entrar no sistema: ${loginUrl}`,
+      ].join("\n");
+
+      const html = `
+        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+            <h2 style="color:#D4A373; margin:0 0 16px;">Novo aluno cadastrado</h2>
+
+            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+              Olá, ${escapeHtml(gestorName)}!
+            </p>
+
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              O aluno <strong style="color:#f5f5f5;">${safeStudentName}</strong> concluiu o cadastro e o formulário de bioimpedância.
+            </p>
+
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Acesse a gestão para vincular o professor responsável e preencher a quantidade contratada de treinos/dias no mês.
+            </p>
+
+            <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+              Acessar gestão
+            </a>
+
+            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
+              Este é um aviso automático do Funcional Vip Digital.
+            </p>
+          </div>
+        </div>
+      `;
+
+      emailTasks.push(
+        sendEmail({
+          to: gestor.email as string,
+          subject,
+          text,
+          html,
+        })
+      );
+    });
+
+  if (emailTasks.length > 0) {
+    await Promise.allSettled(emailTasks);
+  }
+}
 
 // GET /api/avaliacao?alunoId=xxx&tipo=INICIAL
 export async function GET(req: Request) {
@@ -46,7 +231,7 @@ export async function POST(req: Request) {
       coxa,
       gluteo,
       preferencia,
-      equipamentos, // 🔥 NOVO: campo de equipamentos para treino em casa
+      equipamentos,
       frequencia,
       nivelAtividade,
       lesoes,
@@ -60,11 +245,26 @@ export async function POST(req: Request) {
       );
     }
 
+    const tipoNormalizado = String(tipo || "").toUpperCase();
+
+    const avaliacaoInicialExistente =
+      tipoNormalizado === "INICIAL"
+        ? await prisma.avaliacao.findFirst({
+            where: {
+              alunoId,
+              tipo: "INICIAL",
+            },
+            select: {
+              id: true,
+            },
+          })
+        : null;
+
     // Cria a avaliação
     const avaliacao = await prisma.avaliacao.create({
       data: {
         alunoId,
-        tipo,
+        tipo: tipoNormalizado,
         mesReferencia,
         objetivo,
         metaEspecifica,
@@ -76,7 +276,7 @@ export async function POST(req: Request) {
         coxa: coxa ? parseFloat(coxa) : null,
         gluteo: gluteo ? parseFloat(gluteo) : null,
         preferencia,
-        equipamentos: equipamentos || null, // 🔥 NOVO: salva os equipamentos selecionados
+        equipamentos: equipamentos || null,
         frequencia: frequencia ? parseInt(frequencia) : null,
         nivelAtividade,
         lesoes,
@@ -85,11 +285,21 @@ export async function POST(req: Request) {
     });
 
     // Se for avaliação INICIAL, marca o onboarding como completo
-    if (tipo === "INICIAL") {
+    if (tipoNormalizado === "INICIAL") {
       await prisma.student.update({
         where: { id: alunoId },
         data: { onboardingCompleto: true },
       });
+
+      // Dispara os e-mails somente na primeira avaliação inicial.
+      // Se o aluno editar/refizer depois, não reenvia boas-vindas nem aviso para gestão.
+      if (!avaliacaoInicialExistente) {
+        try {
+          await notifyInitialEvaluationCompleted(alunoId);
+        } catch (emailError) {
+          console.error("Erro ao enviar e-mails de conclusão da avaliação inicial:", emailError);
+        }
+      }
     }
 
     return NextResponse.json(avaliacao, { status: 201 });
