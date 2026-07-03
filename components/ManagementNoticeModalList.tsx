@@ -153,7 +153,7 @@ export default function ManagementNoticeModalList({
 
   return (
     <>
-      <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
+      <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
         {notices.map((notice) => (
           <div
             key={notice.id}
