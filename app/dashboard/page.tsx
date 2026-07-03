@@ -286,14 +286,16 @@ export default async function DashboardPage() {
   function getWorkoutPlansCountByStudentForWeek(week: { startOfWeek: Date; endOfWeek: Date }) {
     const countByStudent = new Map<string, number>();
 
-    workoutPlansInControlWeeks
-      .filter((plan) => plan.date >= week.startOfWeek && plan.date < week.endOfWeek)
-      .forEach((plan) => {
+    workoutPlansInControlWeeks.forEach((plan) => {
+      if (!plan.date) return;
+
+      if (plan.date >= week.startOfWeek && plan.date < week.endOfWeek) {
         countByStudent.set(
           plan.studentId,
           (countByStudent.get(plan.studentId) || 0) + 1
         );
-      });
+      }
+    });
 
     return countByStudent;
   }
