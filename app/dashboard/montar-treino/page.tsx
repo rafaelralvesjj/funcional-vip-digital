@@ -104,6 +104,13 @@ export default function MontarTreinoPage() {
   const [weeklyInfoLoading, setWeeklyInfoLoading] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const studentIdFromUrl = params.get("studentId");
+
+    if (studentIdFromUrl) {
+      setSelectedStudent(studentIdFromUrl);
+    }
+
     fetchStudents();
     fetchLibrary();
   }, []);
