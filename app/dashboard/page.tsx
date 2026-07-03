@@ -24,6 +24,15 @@ export default async function DashboardPage() {
   const isGestor = role === 'GESTOR' || role === 'ADMIN';
   const userName = sessionUser?.name || 'Usuário';
 
+  const currentUser = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      createdAt: true,
+    },
+  });
+
   const labels = {
     studentsCard: isGestor ? 'Todos os alunos' : 'Meus alunos',
 
@@ -95,6 +104,7 @@ export default async function DashboardPage() {
       id: true,
       name: true,
       userId: true,
+      createdAt: true,
       user: {
         select: {
           id: true,
@@ -118,6 +128,7 @@ export default async function DashboardPage() {
     select: {
       id: true,
       name: true,
+      createdAt: true,
     },
     orderBy: {
       name: 'asc',
@@ -290,7 +301,7 @@ export default async function DashboardPage() {
 
     const targetStudents = notice.studentId
       ? students.filter((student) => student.id === notice.studentId)
-      : students;
+      : students.filter((student) => student.createdAt <= notice.createdAt);
 
     if (targetStudents.length === 0) {
       return [];
@@ -333,7 +344,15 @@ export default async function DashboardPage() {
     }
 
     if (isTeacher) {
-      return !notice.professorId || notice.professorId === userId;
+      if (notice.professorId) {
+        return notice.professorId === userId;
+      }
+
+      if (currentUser?.createdAt && notice.createdAt < currentUser.createdAt) {
+        return false;
+      }
+
+      return true;
     }
 
     return true;
@@ -351,7 +370,11 @@ export default async function DashboardPage() {
     }
 
     if (isGestor) {
-      const targetProfessorIds = notice.professorId ? [notice.professorId] : professorIds;
+      const targetProfessorIds = notice.professorId
+        ? [notice.professorId]
+        : professors
+            .filter((professor) => professor.createdAt <= notice.createdAt)
+            .map((professor) => professor.id);
 
       if (targetProfessorIds.length === 0) {
         return false;
