@@ -37,6 +37,8 @@ export default async function DashboardPage() {
   const labels = {
     studentsCard: isGestor ? 'Todos os alunos' : 'Meus alunos',
 
+    awaitingAssignmentCard: 'Alunos aguardando vínculo',
+
     pendingWorkoutsCard: isGestor
       ? 'Treinos pendentes de todos os alunos'
       : 'Treinos pendentes dos meus alunos',
@@ -78,6 +80,8 @@ export default async function DashboardPage() {
       : 'Mensagens da gestão direcionado para mim',
 
     studentsList: isGestor ? 'Todos os alunos' : 'Meus alunos',
+
+    awaitingAssignmentList: 'Alunos aguardando vínculo',
   };
 
   function formatDate(date: Date): string {
@@ -104,7 +108,11 @@ export default async function DashboardPage() {
     select: {
       id: true,
       name: true,
+      email: true,
       userId: true,
+      userAuthId: true,
+      onboardingCompleto: true,
+      contractedTrainingDaysPerMonth: true,
       createdAt: true,
       user: {
         select: {
@@ -137,6 +145,21 @@ export default async function DashboardPage() {
   });
 
   const professorIds = professors.map((professor) => professor.id);
+
+  const studentsAwaitingAssignment = isGestor
+    ? students.filter((student) => {
+        if (!student.onboardingCompleto) return false;
+
+        const hasProfessorLinked =
+          Boolean(student.userId) && professorIds.includes(student.userId);
+
+        const hasContractedDays =
+          typeof student.contractedTrainingDaysPerMonth === 'number' &&
+          student.contractedTrainingDaysPerMonth > 0;
+
+        return !hasProfessorLinked || !hasContractedDays;
+      })
+    : [];
 
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
@@ -694,6 +717,15 @@ export default async function DashboardPage() {
       label: labels.studentsCard,
       value: students.length,
     },
+    ...(isGestor
+      ? [
+          {
+            id: 'awaiting-assignment',
+            label: labels.awaitingAssignmentCard,
+            value: studentsAwaitingAssignment.length,
+          },
+        ]
+      : []),
     {
       id: 'pending-workouts',
       label: labels.pendingWorkoutsCard,
@@ -784,6 +816,113 @@ export default async function DashboardPage() {
               </div>
             )}
           </div>
+
+          {isGestor && (
+            <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-[#f5f5f5]">
+                    {labels.awaitingAssignmentList}
+                  </h2>
+
+                  <p className="text-sm text-[#a1a1a1] mt-1">
+                    Pendência de ação: vincular professor responsável e preencher os dias contratados por mês.
+                  </p>
+                </div>
+
+                <a
+                  href="/dashboard/gestor/vincular-alunos"
+                  className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
+                >
+                  Ir para vincular alunos
+                </a>
+              </div>
+
+              {studentsAwaitingAssignment.length === 0 ? (
+                <p className="text-[#a1a1a1]">
+                  Nenhum aluno aguardando vínculo no momento.
+                </p>
+              ) : (
+                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
+                  {studentsAwaitingAssignment.map((student) => {
+                    const hasProfessorLinked =
+                      Boolean(student.userId) && professorIds.includes(student.userId);
+
+                    const hasContractedDays =
+                      typeof student.contractedTrainingDaysPerMonth === 'number' &&
+                      student.contractedTrainingDaysPerMonth > 0;
+
+                    return (
+                      <div
+                        key={student.id}
+                        className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
+                      >
+                        <div className="p-4">
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
+                                AÇÃO
+                              </span>
+
+                              <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                                {student.name}
+                              </span>
+                            </div>
+
+                            <span className="text-[10px] text-[#a1a1a1] shrink-0">
+                              Bioimpedância concluída
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                            <div>
+                              <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                                E-mail
+                              </p>
+                              <p className="text-xs text-[#a1a1a1] truncate" title={student.email || '-'}>
+                                {student.email || '-'}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                                Professor
+                              </p>
+                              <p className={"text-xs " + (hasProfessorLinked ? "text-emerald-400" : "text-amber-400")}>
+                                {hasProfessorLinked ? student.user?.name || 'Vinculado' : 'Pendente'}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                                Dias contratados/mês
+                              </p>
+                              <p className={"text-xs " + (hasContractedDays ? "text-emerald-400" : "text-amber-400")}>
+                                {hasContractedDays ? student.contractedTrainingDaysPerMonth : 'Pendente'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                            <p className="text-xs text-[#a1a1a1]">
+                              A pendência some automaticamente quando o professor for vinculado e os dias contratados forem preenchidos.
+                            </p>
+
+                            <a
+                              href="/dashboard/gestor/vincular-alunos"
+                              className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                            >
+                              Resolver vínculo
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
             <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
