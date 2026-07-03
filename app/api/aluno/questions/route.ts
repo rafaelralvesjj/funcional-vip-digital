@@ -620,6 +620,9 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
+    const currentUserId = String(sessionUser.id);
+    const currentRole = normalizeRole(String(sessionUser.role || ""));
+
     const body = await readBody(req);
     const questionId = cleanId(body.id || body.questionId);
     const action = cleanText(body.action);
@@ -645,7 +648,6 @@ export async function PATCH(req: NextRequest) {
       select: {
         id: true,
         parentId: true,
-        studentId: true,
       },
     });
 
@@ -658,12 +660,54 @@ export async function PATCH(req: NextRequest) {
 
     const rootQuestionId = question.parentId || question.id;
 
+    const rootQuestion = await prisma.question.findUnique({
+      where: {
+        id: rootQuestionId,
+      },
+      select: {
+        id: true,
+        studentId: true,
+        senderRole: true,
+        answeredById: true,
+        resolvedAt: true,
+        student: {
+          select: {
+            id: true,
+            userAuthId: true,
+          },
+        },
+      },
+    });
+
+    if (!rootQuestion) {
+      return NextResponse.json(
+        { error: "Conversa principal não encontrada" },
+        { status: 404 }
+      );
+    }
+
+    const openerRole = normalizeRole(rootQuestion.senderRole);
+
+    const canClose =
+      currentRole === "STUDENT" &&
+      openerRole === "STUDENT" &&
+      Boolean(rootQuestion.student?.userAuthId) &&
+      rootQuestion.student?.userAuthId === currentUserId &&
+      rootQuestion.answeredById === currentUserId;
+
+    if (!canClose) {
+      return NextResponse.json(
+        { error: "Apenas quem abriu esta conversa pode encerrá-la." },
+        { status: 403 }
+      );
+    }
+
     const updated = await prisma.question.update({
       where: {
         id: rootQuestionId,
       },
       data: {
-        resolvedAt: new Date(),
+        resolvedAt: rootQuestion.resolvedAt || new Date(),
       },
       include: getQuestionIncludes(),
     });
