@@ -83,7 +83,7 @@ async function notifyWorkoutAvailable({
   const loginUrl = getAppLoginUrl();
 
   const title = isFirstWorkoutPlan
-    ? "Seu primeiro treino está disponível"
+    ? "Seu primeiro treino da semana está disponível"
     : "Seu treino da semana está disponível";
 
   const content = isFirstWorkoutPlan
@@ -126,9 +126,9 @@ async function notifyWorkoutAvailable({
       ? [
           `Olá, ${studentName}!`,
           "",
-          `Seu primeiro treino (${planName}) está disponível no Funcional Vip Digital.`,
+          `Seu treino da semana (${planName}) está disponível no Funcional Vip Digital.`,
           "",
-          "Antes de começar, separe uns 10 minutinhos para olhar o treino com calma.",
+          "Como este é o seu primeiro acesso ao treino, separe uns 10 minutinhos antes de começar para olhar tudo com calma.",
           "Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.",
           "",
           `Acessar o sistema: ${loginUrl}`,
@@ -146,11 +146,11 @@ async function notifyWorkoutAvailable({
     const introHtml = isFirstWorkoutPlan
       ? `
           <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Seu primeiro treino, <strong style="color:#f5f5f5;">${safePlanName}</strong>, está disponível no Funcional Vip Digital.
+            Seu treino da semana, <strong style="color:#f5f5f5;">${safePlanName}</strong>, está disponível no Funcional Vip Digital.
           </p>
 
           <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Antes de começar, separe uns 10 minutinhos para olhar o treino com calma.
+            Como este é o seu primeiro acesso ao treino, separe uns 10 minutinhos antes de começar para olhar tudo com calma.
             Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.
           </p>
         `
