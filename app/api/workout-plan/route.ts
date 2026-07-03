@@ -530,7 +530,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, name, description, notes } = body;
+    const { id, name, description, date, notes, exercises } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -539,19 +539,92 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const data: any = {};
-    if (name !== undefined) data.name = name;
-    if (description !== undefined) data.description = description;
-    if (notes !== undefined) data.notes = notes;
-
-    const plan = await prisma.workoutPlan.update({
+    const planExists = await prisma.workoutPlan.findUnique({
       where: { id },
-      data,
-      include: {
-        exercises: {
-          orderBy: { order: "asc" },
+      select: { id: true },
+    });
+
+    if (!planExists) {
+      return NextResponse.json(
+        { error: "Workout plan not found" },
+        { status: 404 }
+      );
+    }
+
+    if (exercises !== undefined && !Array.isArray(exercises)) {
+      return NextResponse.json(
+        { error: "exercises must be an array" },
+        { status: 400 }
+      );
+    }
+
+    if (exercises !== undefined && exercises.length === 0) {
+      return NextResponse.json(
+        { error: "O treino precisa ter pelo menos um exercício." },
+        { status: 400 }
+      );
+    }
+
+    const data: any = {};
+
+    if (name !== undefined) data.name = String(name || "").trim();
+    if (description !== undefined) data.description = description ? String(description).trim() : null;
+    if (notes !== undefined) data.notes = notes ? String(notes).trim() : null;
+    if (date !== undefined) data.date = date ? new Date(date + "T12:00:00") : null;
+
+    const normalizedExercises = Array.isArray(exercises)
+      ? exercises.map((ex: any, index: number) => ({
+          name: ex.name,
+          description: ex.description,
+          series: Number(ex.series) || 1,
+          reps: ex.reps,
+          weight: ex.weight,
+          restTime: ex.restTime,
+          notes: ex.notes,
+          order: typeof ex.order === "number" ? ex.order : index,
+          videoUrl: ex.videoUrl,
+          imageUrl: ex.imageUrl,
+        }))
+      : null;
+
+    const plan = await prisma.$transaction(async (tx) => {
+      if (Object.keys(data).length > 0) {
+        await tx.workoutPlan.update({
+          where: { id },
+          data,
+        });
+      }
+
+      if (data.date !== undefined) {
+        await tx.workout.updateMany({
+          where: { workoutPlanId: id },
+          data: {
+            date: data.date,
+          },
+        });
+      }
+
+      if (normalizedExercises) {
+        await tx.exercise.deleteMany({
+          where: { workoutPlanId: id },
+        });
+
+        await tx.exercise.createMany({
+          data: normalizedExercises.map((exercise: any) => ({
+            ...exercise,
+            workoutPlanId: id,
+          })),
+        });
+      }
+
+      return tx.workoutPlan.findUnique({
+        where: { id },
+        include: {
+          exercises: {
+            orderBy: { order: "asc" },
+          },
         },
-      },
+      });
     });
 
     return NextResponse.json(plan);
