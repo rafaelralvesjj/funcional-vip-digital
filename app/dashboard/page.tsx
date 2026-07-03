@@ -488,6 +488,8 @@ export default async function DashboardPage() {
     senderRole: question.senderRole || 'STUDENT',
     createdAt: question.createdAt.toISOString(),
     resolvedAt: question.resolvedAt ? question.resolvedAt.toISOString() : null,
+    answeredById: question.answeredById || null,
+    openedById: question.answeredById || null,
     authorName: question.student?.name || 'Aluno',
     targetLabel: question.teacher?.name
       ? `Professor: ${question.teacher.name}`
@@ -502,6 +504,7 @@ export default async function DashboardPage() {
       senderRole: reply.senderRole || 'TEACHER',
       createdAt: reply.createdAt.toISOString(),
       resolvedAt: reply.resolvedAt ? reply.resolvedAt.toISOString() : null,
+      answeredById: reply.answeredById || null,
       authorName:
         reply.answeredBy?.name ||
         reply.teacher?.name ||
@@ -586,6 +589,8 @@ export default async function DashboardPage() {
     senderRole: message.senderRole || 'GESTOR',
     createdAt: message.createdAt.toISOString(),
     resolvedAt: message.resolvedAt ? message.resolvedAt.toISOString() : null,
+    answeredById: message.answeredById || null,
+    openedById: message.answeredById || null,
     authorName: getMessageAuthorName(message),
     targetLabel: getManagementMessageTargetLabel(message),
     children: (message.children || []).map((reply) => ({
@@ -596,6 +601,7 @@ export default async function DashboardPage() {
       senderRole: reply.senderRole || 'GESTOR',
       createdAt: reply.createdAt.toISOString(),
       resolvedAt: reply.resolvedAt ? reply.resolvedAt.toISOString() : null,
+      answeredById: reply.answeredById || null,
       authorName:
         reply.answeredBy?.name ||
         reply.teacher?.name ||
