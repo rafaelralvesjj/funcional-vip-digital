@@ -67,6 +67,25 @@ function formatDatePtBr(date: Date): string {
   });
 }
 
+function isFutureWeek(startOfWeek: Date): boolean {
+  const currentWeek = getWeekRange(new Date());
+
+  return startOfWeek.getTime() > currentWeek.startOfWeek.getTime();
+}
+
+function getStartOfNextWeek(): Date {
+  return getWeekRange(new Date()).endOfWeek;
+}
+
+function normalizeRole(role?: string | null): string {
+  const value = String(role || "").toUpperCase();
+
+  if (value === "ALUNO") return "STUDENT";
+  if (value === "PROFESSOR") return "TEACHER";
+
+  return value;
+}
+
 async function getStudentEmail(student: {
   email?: string | null;
   userAuthId?: string | null;
@@ -433,8 +452,18 @@ export async function POST(req: NextRequest) {
 
     const workoutsThisWeekAfterCreate = workoutPlansThisWeek + 1;
     const isWeeklyPackageComplete = workoutsThisWeekAfterCreate >= weeklyLimit;
+    const futureWeek = isFutureWeek(startOfWeek);
+    let emailSent = false;
 
-    if (isWeeklyPackageComplete) {
+    /*
+     * Regra de liberação para o aluno:
+     *
+     * - Professor pode montar treino de semana futura.
+     * - Gestor/professor conseguem ver e controlar o planejamento.
+     * - Aluno NÃO recebe e-mail/aviso quando a semana ainda é futura.
+     * - Aluno só enxerga treinos da semana vigente ou semanas anteriores.
+     */
+    if (isWeeklyPackageComplete && !futureWeek) {
       try {
         const fallbackAuthorId = await getFallbackNoticeAuthorId(studentExists.userId);
         const authorId = currentUserId || fallbackAuthorId;
@@ -448,10 +477,14 @@ export async function POST(req: NextRequest) {
           startOfWeek,
           endOfWeek,
         });
+
+        emailSent = true;
       } catch (notificationError) {
         console.error("Erro ao notificar aluno sobre treinos da semana:", notificationError);
       }
     }
+
+    const weekEndDisplay = new Date(endOfWeek.getTime() - 1);
 
     return NextResponse.json(
       {
@@ -460,10 +493,13 @@ export async function POST(req: NextRequest) {
           weeklyLimit,
           workoutsThisWeek: workoutsThisWeekAfterCreate,
           weekComplete: isWeeklyPackageComplete,
-          emailSent: isWeeklyPackageComplete,
+          futureWeek,
+          emailSent,
           message: isWeeklyPackageComplete
-            ? "Meta semanal completa. Aluno notificado sobre os treinos da semana."
-            : `Treino salvo. Ainda falta(m) ${weeklyLimit - workoutsThisWeekAfterCreate} treino(s) para liberar a semana e notificar o aluno.`,
+            ? futureWeek
+              ? `Semana futura planejada. O aluno só verá estes treinos na semana de ${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}. Nenhum e-mail foi enviado agora.`
+              : "Meta semanal completa. Aluno notificado sobre os treinos da semana."
+            : `Treino salvo. Ainda falta(m) ${weeklyLimit - workoutsThisWeekAfterCreate} treino(s) para completar a semana.`,
         },
       },
       { status: 201 }
@@ -479,9 +515,16 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    const sessionUser = session?.user as any;
+    const currentUserId = sessionUser?.id ? String(sessionUser.id) : null;
+    const role = normalizeRole(sessionUser?.role);
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     const studentId = searchParams.get("studentId");
+    const startOfNextWeek = getStartOfNextWeek();
+    const isStudentUser = role === "STUDENT";
 
     if (id) {
       const plan = await prisma.workoutPlan.findUnique({
@@ -492,18 +535,62 @@ export async function GET(req: NextRequest) {
           },
         },
       });
+
       if (!plan) {
         return NextResponse.json(
           { error: "Workout plan not found" },
           { status: 404 }
         );
       }
+
+      if (isStudentUser) {
+        const student = await prisma.student.findUnique({
+          where: { id: plan.studentId },
+          select: {
+            userAuthId: true,
+          },
+        });
+
+        if (!student || student.userAuthId !== currentUserId) {
+          return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+        }
+
+        if (plan.date && plan.date >= startOfNextWeek) {
+          return NextResponse.json(
+            { error: "Este treino ainda não está disponível para o aluno." },
+            { status: 404 }
+          );
+        }
+      }
+
       return NextResponse.json(plan);
     }
 
     if (studentId) {
+      const where: any = { studentId };
+
+      if (isStudentUser) {
+        const student = await prisma.student.findUnique({
+          where: { id: studentId },
+          select: {
+            userAuthId: true,
+          },
+        });
+
+        if (!student || student.userAuthId !== currentUserId) {
+          return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+        }
+
+        // Aluno só vê treinos da semana vigente ou anteriores.
+        // Treinos de semana futura ficam escondidos inclusive das bolinhas do calendário,
+        // desde que o calendário use esta rota para buscar os treinos.
+        where.date = {
+          lt: startOfNextWeek,
+        };
+      }
+
       const plans = await prisma.workoutPlan.findMany({
-        where: { studentId },
+        where,
         include: {
           exercises: {
             orderBy: { order: "asc" },
@@ -511,6 +598,7 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       });
+
       return NextResponse.json(plans);
     }
 
