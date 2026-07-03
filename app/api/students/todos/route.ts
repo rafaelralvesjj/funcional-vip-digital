@@ -13,7 +13,25 @@ export async function GET() {
 
   try {
     const students = await prisma.student.findMany({
-      select: { id: true, name: true, email: true, userId: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        userId: true,
+        userAuthId: true,
+        active: true,
+        contractedTrainingDaysPerMonth: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+      },
       orderBy: { name: "asc" },
     });
 
