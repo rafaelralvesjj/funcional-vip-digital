@@ -504,7 +504,6 @@ export default async function DashboardPage() {
       senderRole: reply.senderRole || 'TEACHER',
       createdAt: reply.createdAt.toISOString(),
       resolvedAt: reply.resolvedAt ? reply.resolvedAt.toISOString() : null,
-      answeredById: reply.answeredById || null,
       authorName:
         reply.answeredBy?.name ||
         reply.teacher?.name ||
@@ -601,7 +600,6 @@ export default async function DashboardPage() {
       senderRole: reply.senderRole || 'GESTOR',
       createdAt: reply.createdAt.toISOString(),
       resolvedAt: reply.resolvedAt ? reply.resolvedAt.toISOString() : null,
-      answeredById: reply.answeredById || null,
       authorName:
         reply.answeredBy?.name ||
         reply.teacher?.name ||
