@@ -365,7 +365,7 @@ export default function GerenciarAlunosPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="p-3 md:p-5 max-w-full mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#D4A373]">Gerenciar Alunos</h1>
         <p className="text-[#a1a1a1] mt-1">
@@ -399,43 +399,43 @@ export default function GerenciarAlunosPage() {
           <div className="w-full">
             <table className="w-full table-fixed">
               <colgroup>
-                <col className="w-[19%]" />
-                <col className="w-[20%]" />
-                <col className="w-[13%]" />
-                <col className="w-[13%]" />
+                <col className="w-[16%]" />
+                <col className="w-[24%]" />
+                <col className="w-[12%]" />
+                <col className="w-[11%]" />
                 <col className="w-[8%]" />
-                <col className="w-[9%]" />
-                <col className="w-[18%]" />
+                <col className="w-[8%]" />
+                <col className="w-[12%]" />
               </colgroup>
 
               <thead>
                 <tr className="border-b border-[#ffffff10]">
-                  <th className="text-left px-3 py-3 text-xs font-medium text-[#a1a1a1]">Aluno</th>
-                  <th className="text-left px-3 py-3 text-xs font-medium text-[#a1a1a1]">E-mail</th>
-                  <th className="text-left px-3 py-3 text-xs font-medium text-[#a1a1a1]">Telefone</th>
-                  <th className="text-left px-3 py-3 text-xs font-medium text-[#a1a1a1]">Professor</th>
-                  <th className="text-left px-2 py-3 text-xs font-medium text-[#a1a1a1] whitespace-nowrap">Dias/mês</th>
-                  <th className="text-left px-2 py-3 text-xs font-medium text-[#a1a1a1]">Status</th>
-                  <th className="text-right px-3 py-3 text-xs font-medium text-[#a1a1a1]">Ações</th>
+                  <th className="text-left px-2 py-2 text-[11px] font-medium text-[#a1a1a1]">Aluno</th>
+                  <th className="text-left px-2 py-2 text-[11px] font-medium text-[#a1a1a1]">E-mail</th>
+                  <th className="text-left px-2 py-2 text-[11px] font-medium text-[#a1a1a1]">Telefone</th>
+                  <th className="text-left px-2 py-2 text-[11px] font-medium text-[#a1a1a1]">Professor</th>
+                  <th className="text-left px-2 py-2 text-[11px] font-medium text-[#a1a1a1] whitespace-nowrap">Dias/mês</th>
+                  <th className="text-left px-2 py-2 text-[11px] font-medium text-[#a1a1a1]">Status</th>
+                  <th className="text-right px-2 py-2 text-[11px] font-medium text-[#a1a1a1]">Ações</th>
                 </tr>
               </thead>
 
               <tbody>
                 {students.map((student) => (
                   <tr key={student.id} className="border-b border-[#ffffff10] hover:bg-white/5">
-                    <td className="px-3 py-3">
+                    <td className="px-2 py-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-xs shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-[11px] shrink-0">
                           {(student.name || "?").charAt(0).toUpperCase()}
                         </div>
 
                         <div className="min-w-0">
-                          <p className="text-[#f5f5f5] text-sm font-medium truncate">
+                          <p className="text-[#f5f5f5] text-xs font-medium truncate">
                             {student.name}
                           </p>
 
                           {student.notes && (
-                            <p className="text-[#525252] text-[11px] truncate">
+                            <p className="text-[#525252] text-[10px] truncate">
                               {student.notes}
                             </p>
                           )}
@@ -443,34 +443,34 @@ export default function GerenciarAlunosPage() {
                       </div>
                     </td>
 
-                    <td className="px-3 py-3">
-                      <p className="text-xs text-[#a1a1a1] truncate">
+                    <td className="px-2 py-2">
+                      <p className="text-[11px] text-[#a1a1a1] truncate">
                         {student.email || "-"}
                       </p>
                     </td>
 
-                    <td className="px-3 py-3">
-                      <p className="text-xs text-[#a1a1a1] truncate">
+                    <td className="px-2 py-2">
+                      <p className="text-[11px] text-[#a1a1a1] truncate">
                         {student.phone || "-"}
                       </p>
                     </td>
 
-                    <td className="px-3 py-3">
-                      <p className="text-xs text-[#a1a1a1] truncate" title={getProfessorName(student)}>
+                    <td className="px-2 py-2">
+                      <p className="text-[11px] text-[#a1a1a1] truncate" title={getProfessorName(student)}>
                         {getProfessorName(student)}
                       </p>
                     </td>
 
-                    <td className="px-2 py-3">
-                      <p className="text-xs text-[#a1a1a1] whitespace-nowrap">
+                    <td className="px-2 py-2">
+                      <p className="text-[11px] text-[#a1a1a1] whitespace-nowrap">
                         {student.contractedTrainingDaysPerMonth ?? "-"}
                       </p>
                     </td>
 
-                    <td className="px-2 py-3">
+                    <td className="px-2 py-2">
                       <span
                         className={
-                          "text-[11px] px-2 py-1 rounded-full whitespace-nowrap " +
+                          "text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap " +
                           (student.active === false
                             ? "bg-red-500/10 text-red-400"
                             : "bg-green-500/10 text-green-400")
@@ -480,11 +480,11 @@ export default function GerenciarAlunosPage() {
                       </span>
                     </td>
 
-                    <td className="px-3 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                    <td className="px-2 py-2 text-right">
+                      <div className="flex flex-col items-end justify-center gap-1 whitespace-nowrap">
                         <button
                           onClick={() => abrirEditar(student)}
-                          className="text-[#D4A373] hover:text-[#c49563] text-xs px-2 py-1 rounded hover:bg-[#D4A373]/5 transition"
+                          className="text-[#D4A373] hover:text-[#c49563] text-[11px] px-1.5 py-0.5 rounded hover:bg-[#D4A373]/5 transition"
                         >
                           Editar
                         </button>
@@ -494,7 +494,7 @@ export default function GerenciarAlunosPage() {
                             <button
                               onClick={() => excluirAluno(student.id)}
                               disabled={deleting === student.id}
-                              className="bg-red-500 text-white text-xs font-medium px-2 py-1 rounded hover:bg-red-600 transition disabled:opacity-50"
+                              className="bg-red-500 text-white text-[11px] font-medium px-1.5 py-0.5 rounded hover:bg-red-600 transition disabled:opacity-50"
                               title="Confirmar exclusão"
                             >
                               {deleting === student.id ? "..." : "Sim"}
@@ -502,7 +502,7 @@ export default function GerenciarAlunosPage() {
 
                             <button
                               onClick={() => setConfirmDelete(null)}
-                              className="text-[#a1a1a1] text-xs px-2 py-1 rounded hover:bg-white/5 transition"
+                              className="text-[#a1a1a1] text-[11px] px-1.5 py-0.5 rounded hover:bg-white/5 transition"
                               title="Cancelar exclusão"
                             >
                               Não
@@ -511,7 +511,7 @@ export default function GerenciarAlunosPage() {
                         ) : (
                           <button
                             onClick={() => setConfirmDelete(student.id)}
-                            className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-500/5 transition"
+                            className="text-red-400 hover:text-red-300 text-[11px] px-1.5 py-0.5 rounded hover:bg-red-500/5 transition"
                           >
                             Excluir
                           </button>
