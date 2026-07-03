@@ -24,11 +24,35 @@ export async function GET(
       );
     }
 
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: {
+        id: true,
+        createdAt: true,
+      },
+    });
+
+    if (!student) {
+      return NextResponse.json(
+        { error: "Aluno nao encontrado" },
+        { status: 404 }
+      );
+    }
+
     const notices = await prisma.notice.findMany({
       where: {
         OR: [
+          // Avisos específicos para este aluno sempre aparecem.
           { studentId },
-          { studentId: null },
+
+          // Avisos gerais para alunos só aparecem se foram criados
+          // depois do cadastro do aluno.
+          {
+            studentId: null,
+            professorId: null,
+            targetRole: { in: ["ALUNO", "STUDENT"] },
+            createdAt: { gte: student.createdAt },
+          },
         ],
       },
       orderBy: { createdAt: "desc" },
@@ -37,14 +61,16 @@ export async function GET(
       },
     });
 
-    // Tenta buscar leituras, mas funciona mesmo se a tabela nao existir
     let noticesWithReadStatus = notices;
+
     try {
       const reads = await prisma.noticeRead.findMany({
         where: { studentId },
         select: { noticeId: true },
       });
+
       const readNoticeIds = new Set(reads.map((r: any) => r.noticeId));
+
       noticesWithReadStatus = notices.map((notice) => ({
         ...notice,
         readByStudent: readNoticeIds.has(notice.id),
