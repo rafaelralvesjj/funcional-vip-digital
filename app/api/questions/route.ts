@@ -440,10 +440,14 @@ export async function POST(req: NextRequest) {
     const requestedParentId = cleanId(body.parentId);
     const requestedStudentId = cleanId(body.studentId);
     const requestedTeacherId = cleanId(body.teacherId);
-    const requestedAnsweredById = cleanId(body.answeredById);
     const videoUrl = cleanId(body.videoUrl);
     const imageUrl = cleanId(body.imageUrl);
-    const senderRole = getSenderRole(body.senderRole, loggedRole || "GESTOR");
+    const senderRole: SenderRole =
+      loggedRole === "TEACHER"
+        ? "TEACHER"
+        : loggedRole === "STUDENT"
+          ? "STUDENT"
+          : "GESTOR";
 
     if (!content) {
       return NextResponse.json(
@@ -555,7 +559,7 @@ export async function POST(req: NextRequest) {
 
     const isReply = Boolean(parentId);
     const isAnswerFromStaff = isReply && senderRole !== "STUDENT";
-    const answeredById = requestedAnsweredById || userId;
+    const answeredById = userId;
 
     const question = await prisma.question.create({
       data: {
