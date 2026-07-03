@@ -6,6 +6,7 @@ interface Student {
   name: string;
   email?: string;
   image?: string;
+  contractedTrainingDaysPerMonth?: number | null;
 }
 
 interface LibraryExercise {
@@ -14,6 +15,12 @@ interface LibraryExercise {
   description: string;
   muscleGroup: string;
   imageUrl?: string;
+}
+
+interface WorkoutPlanSummary {
+  id: string;
+  date?: string | null;
+  createdAt?: string | null;
 }
 
 interface ExerciseItem {
@@ -25,6 +32,57 @@ interface ExerciseItem {
   restTime: string;
   notes: string;
   order: number;
+}
+
+function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): number | null {
+  const contracted = Number(contractedTrainingDaysPerMonth || 0);
+
+  if (!Number.isFinite(contracted) || contracted <= 0) {
+    return null;
+  }
+
+  if (contracted <= 4) return 1;
+  if (contracted <= 8) return 2;
+  if (contracted <= 16) return 3;
+
+  return Math.ceil(contracted / 4);
+}
+
+function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
+  const date = new Date(referenceDate);
+  date.setHours(0, 0, 0, 0);
+
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+
+  const startOfWeek = new Date(date);
+  startOfWeek.setDate(date.getDate() + diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+  endOfWeek.setHours(0, 0, 0, 0);
+
+  return { startOfWeek, endOfWeek };
+}
+
+function formatDatePtBr(date: Date): string {
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function normalizeWorkoutPlans(data: any): WorkoutPlanSummary[] {
+  if (Array.isArray(data)) return data;
+
+  if (Array.isArray(data?.plans)) return data.plans;
+  if (Array.isArray(data?.workoutPlans)) return data.workoutPlans;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
+
+  return [];
 }
 
 export default function MontarTreinoPage() {
@@ -42,6 +100,8 @@ export default function MontarTreinoPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [weeklyPlansCount, setWeeklyPlansCount] = useState(0);
+  const [weeklyInfoLoading, setWeeklyInfoLoading] = useState(false);
 
   useEffect(() => {
     fetchStudents();
@@ -63,12 +123,82 @@ export default function MontarTreinoPage() {
     }
   }, [searchTerm, library]);
 
+  const selectedStudentInfo = students.find((student) => student.id === selectedStudent);
+  const weeklyWorkoutLimit = getWeeklyWorkoutLimit(
+    selectedStudentInfo?.contractedTrainingDaysPerMonth
+  );
+  const weeklyRemaining =
+    weeklyWorkoutLimit == null ? null : Math.max(weeklyWorkoutLimit - weeklyPlansCount, 0);
+  const referenceWeekDate = date ? new Date(date + "T12:00:00") : new Date();
+  const { startOfWeek, endOfWeek } = getWeekRange(referenceWeekDate);
+  const isWeeklyLimitReached =
+    weeklyWorkoutLimit != null && weeklyPlansCount >= weeklyWorkoutLimit;
+
+  useEffect(() => {
+    async function fetchWeeklyWorkoutInfo() {
+      if (!selectedStudent) {
+        setWeeklyPlansCount(0);
+        return;
+      }
+
+      setWeeklyInfoLoading(true);
+
+      try {
+        const res = await fetch(`/api/workout-plan?studentId=${selectedStudent}`, {
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          setWeeklyPlansCount(0);
+          return;
+        }
+
+        const data = await res.json();
+        const plans = normalizeWorkoutPlans(data);
+        const { startOfWeek, endOfWeek } = getWeekRange(
+          date ? new Date(date + "T12:00:00") : new Date()
+        );
+
+        const countThisWeek = plans.filter((plan) => {
+          const rawDate = plan.date || plan.createdAt;
+          if (!rawDate) return false;
+
+          const planDate = new Date(rawDate);
+
+          return planDate >= startOfWeek && planDate < endOfWeek;
+        }).length;
+
+        setWeeklyPlansCount(countThisWeek);
+      } catch (error) {
+        console.error("Erro ao buscar treinos da semana:", error);
+        setWeeklyPlansCount(0);
+      } finally {
+        setWeeklyInfoLoading(false);
+      }
+    }
+
+    fetchWeeklyWorkoutInfo();
+  }, [selectedStudent, date]);
+
   async function fetchStudents() {
     try {
       const res = await fetch("/api/students");
       if (res.ok) {
         const data = await res.json();
-        setStudents(Array.isArray(data) ? data : data.students || data || []);
+        const rawStudents = Array.isArray(data) ? data : data.students || data || [];
+
+        setStudents(
+          rawStudents.map((student: any) => ({
+            id: student.id,
+            name: student.name,
+            email: student.email,
+            image: student.image,
+            contractedTrainingDaysPerMonth:
+              student.contractedTrainingDaysPerMonth ??
+              student.contracted_training_days_per_month ??
+              null,
+          }))
+        );
       }
     } catch (e) {
       console.error("Erro ao buscar alunos:", e);
@@ -123,6 +253,20 @@ export default function MontarTreinoPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedStudent || !planName.trim() || exercises.length === 0) return;
+
+    if (!weeklyWorkoutLimit) {
+      alert(
+        "Este aluno ainda não tem quantidade contratada de treinos/dias no mês configurada. A gestão precisa preencher essa informação antes de montar o treino."
+      );
+      return;
+    }
+
+    if (isWeeklyLimitReached) {
+      alert(
+        `Este aluno já recebeu ${weeklyPlansCount} treino(s) nesta semana. O limite atual é de ${weeklyWorkoutLimit} treino(s) por semana.`
+      );
+      return;
+    }
     setSaving(true);
     setSuccess(false);
     try {
@@ -154,6 +298,7 @@ export default function MontarTreinoPage() {
         setDescription("");
         setNotes("");
         setExercises([]);
+        setWeeklyPlansCount((current) => current + 1);
         setTimeout(() => setSuccess(false), 3000);
       } else {
         const err = await res.json();
@@ -199,6 +344,68 @@ export default function MontarTreinoPage() {
                 ))}
               </select>
             </div>
+
+            {selectedStudent && (
+              <div className="md:col-span-2 bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[#D4A373]">
+                      📆 Programação semanal do aluno
+                    </p>
+
+                    <p className="text-xs text-[#a1a1a1] mt-1">
+                      Semana de {formatDatePtBr(startOfWeek)} a{" "}
+                      {formatDatePtBr(new Date(endOfWeek.getTime() - 1))}
+                    </p>
+                  </div>
+
+                  {weeklyInfoLoading ? (
+                    <span className="text-xs text-[#a1a1a1]">
+                      Carregando treinos da semana...
+                    </span>
+                  ) : weeklyWorkoutLimit ? (
+                    <span
+                      className={
+                        "text-xs font-bold px-3 py-1 rounded-full " +
+                        (isWeeklyLimitReached
+                          ? "bg-red-500/10 text-red-400"
+                          : "bg-emerald-500/10 text-emerald-400")
+                      }
+                    >
+                      {weeklyPlansCount}/{weeklyWorkoutLimit} treino(s) criados nesta semana
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-red-500/10 text-red-400">
+                      Contrato sem quantidade definida
+                    </span>
+                  )}
+                </div>
+
+                {weeklyWorkoutLimit ? (
+                  <p className="text-xs text-[#a1a1a1] mt-3">
+                    Este aluno contratou{" "}
+                    <span className="text-[#f5f5f5] font-semibold">
+                      {selectedStudentInfo?.contractedTrainingDaysPerMonth}
+                    </span>{" "}
+                    treino(s)/dia(s) no mês. Para esta semana, o professor deve deixar{" "}
+                    <span className="text-[#f5f5f5] font-semibold">
+                      {weeklyWorkoutLimit}
+                    </span>{" "}
+                    treino(s) pronto(s). Ainda falta(m){" "}
+                    <span className="text-[#f5f5f5] font-semibold">
+                      {weeklyRemaining}
+                    </span>{" "}
+                    treino(s).
+                  </p>
+                ) : (
+                  <p className="text-xs text-red-400 mt-3">
+                    A gestão precisa vincular o aluno e preencher a quantidade contratada
+                    de treinos/dias no mês antes do professor montar o treino.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div>
               <label className="text-sm text-[#e5e5e5] block mb-1">Nome do treino *</label>
               <input
@@ -332,10 +539,24 @@ export default function MontarTreinoPage() {
 
         <button
           type="submit"
-          disabled={saving || !selectedStudent || !planName.trim() || !date || exercises.length === 0}
+          disabled={
+            saving ||
+            !selectedStudent ||
+            !planName.trim() ||
+            !date ||
+            exercises.length === 0 ||
+            !weeklyWorkoutLimit ||
+            isWeeklyLimitReached
+          }
           className="w-full bg-[#D4A373] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#b88a5e] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {saving ? "💾 Salvando treino..." : "✅ Salvar e enviar treino para o aluno"}
+          {saving
+            ? "💾 Salvando treino..."
+            : !weeklyWorkoutLimit && selectedStudent
+              ? "⚠️ Quantidade contratada não configurada"
+              : isWeeklyLimitReached
+                ? "🚫 Limite semanal atingido"
+                : "✅ Salvar e enviar treino para o aluno"}
         </button>
         <p className="text-xs text-[#525252] text-center">
           {exercises.length} exercício{exercises.length !== 1 ? "s" : ""}
