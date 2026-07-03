@@ -1,24 +1,40 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 
 interface Student {
   id: string;
   name: string;
-  email?: string;
-  userId?: string;
+  email?: string | null;
+  phone?: string | null;
+  userId?: string | null;
+  active?: boolean;
+  contractedTrainingDaysPerMonth?: number | null;
 }
 
 interface Professor {
   id: string;
   name: string;
-  email?: string;
+  email?: string | null;
+  role?: string | null;
+}
+
+function normalizeStudents(data: any): Student[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.students)) return data.students;
+  return [];
+}
+
+function normalizeProfessors(data: any): Professor[] {
+  const list = Array.isArray(data) ? data : data?.teachers || data?.professores || [];
+  return Array.isArray(list) ? list : [];
 }
 
 export default function VincularAlunosPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [selectedProfessor, setSelectedProfessor] = useState<Record<string, string>>({});
-  const [selectedPlan, setSelectedPlan] = useState<Record<string, string>>({});
+  const [selectedDays, setSelectedDays] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [success, setSuccess] = useState("");
@@ -28,29 +44,50 @@ export default function VincularAlunosPage() {
     loadData();
   }, []);
 
+  const professorIds = useMemo(() => new Set(professors.map((professor) => professor.id)), [professors]);
+
+  const professorMap = useMemo(() => {
+    const map = new Map<string, Professor>();
+    professors.forEach((professor) => map.set(professor.id, professor));
+    return map;
+  }, [professors]);
+
   async function loadData() {
     setLoading(true);
+
     try {
       const [studentsRes, professorsRes] = await Promise.all([
-        fetch("/api/students/todos"),
-        fetch("/api/professores"),
+        fetch("/api/students/todos", { cache: "no-store" }),
+        fetch("/api/professores", { cache: "no-store" }),
       ]);
+
+      let studentsList: Student[] = [];
+
       if (studentsRes.ok) {
         const data = await studentsRes.json();
-        if (Array.isArray(data)) {
-          setStudents(data);
-        } else {
-          setStudents([]);
-        }
+        studentsList = normalizeStudents(data);
+        setStudents(studentsList);
+      } else {
+        setStudents([]);
       }
+
       if (professorsRes.ok) {
         const data = await professorsRes.json();
-        if (Array.isArray(data)) {
-          setProfessors(data);
-        } else {
-          setProfessors([]);
-        }
+        setProfessors(normalizeProfessors(data));
+      } else {
+        setProfessors([]);
       }
+
+      const initialDays: Record<string, string> = {};
+      studentsList.forEach((student) => {
+        if (
+          student.contractedTrainingDaysPerMonth !== null &&
+          student.contractedTrainingDaysPerMonth !== undefined
+        ) {
+          initialDays[student.id] = String(student.contractedTrainingDaysPerMonth);
+        }
+      });
+      setSelectedDays(initialDays);
     } catch (e) {
       console.error(e);
     } finally {
@@ -58,27 +95,42 @@ export default function VincularAlunosPage() {
     }
   }
 
-  async function vincularAluno(studentId: string) {
-    const professorId = selectedProfessor[studentId];
-    if (!professorId) return;
+  async function vincularAluno(student: Student) {
+    const currentProfessorIsValid = Boolean(student.userId && professorIds.has(student.userId));
+    const professorId = selectedProfessor[student.id] || (currentProfessorIsValid ? student.userId || "" : "");
+    const daysValue = selectedDays[student.id];
 
-    setSaving(studentId);
+    if (!professorId) {
+      alert("Selecione um professor.");
+      return;
+    }
+
+    if (!daysValue) {
+      alert("Informe a quantidade de dias contratados por mês.");
+      return;
+    }
+
+    setSaving(student.id);
     setSuccess("");
 
     try {
       const res = await fetch("/api/students/assign-professor", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId, professorId }),
+        body: JSON.stringify({
+          studentId: student.id,
+          professorId,
+          contractedTrainingDaysPerMonth: Number(daysValue),
+        }),
       });
 
       if (res.ok) {
         setSuccess("Aluno vinculado com sucesso!");
         setTimeout(() => setSuccess(""), 3000);
-        loadData();
+        await loadData();
       } else {
         const err = await res.json();
-        alert("Erro: " + err.error);
+        alert("Erro: " + (err.error || "Erro ao vincular aluno."));
       }
     } catch {
       alert("Erro ao vincular aluno.");
@@ -87,28 +139,34 @@ export default function VincularAlunosPage() {
     }
   }
 
-  const professorIds = new Set(professors.map((p) => p.id));
   const studentsWithoutProfessor = students.filter(
-    (s) => !s.userId || !professorIds.has(s.userId)
+    (student) => !student.userId || !professorIds.has(student.userId)
   );
 
-  const displayStudents = activeTab === "unassigned"
-    ? studentsWithoutProfessor
-    : students;
+  const displayStudents = activeTab === "unassigned" ? studentsWithoutProfessor : students;
 
-  function getProfessorName(studentId: string): string {
-    const professorId = students.find((s) => s.id === studentId)?.userId;
-    if (!professorId) return "";
-    const professor = professors.find((p) => p.id === professorId);
-    return professor ? professor.name : "";
+  function getProfessorName(student: Student): string {
+    if (!student.userId || !professorIds.has(student.userId)) {
+      return "";
+    }
+
+    return professorMap.get(student.userId)?.name || "";
+  }
+
+  function getButtonDisabled(student: Student): boolean {
+    const currentProfessorIsValid = Boolean(student.userId && professorIds.has(student.userId));
+    const professorId = selectedProfessor[student.id] || (currentProfessorIsValid ? student.userId || "" : "");
+    const daysValue = selectedDays[student.id];
+
+    return !professorId || !daysValue || saving === student.id;
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#D4A373]">Vincular Alunos a Professores</h1>
         <p className="text-[#a1a1a1] mt-1">
-          Distribua os alunos entre os professores disponiveis
+          Distribua os alunos entre os professores e registre os dias de treino contratados por mês.
         </p>
       </div>
 
@@ -138,7 +196,7 @@ export default function VincularAlunosPage() {
       ) : displayStudents.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-[#525252] text-lg">Nenhum aluno encontrado</p>
-          <p className="text-[#525252] text-sm mt-1">Os alunos aparecerao aqui apos se cadastrarem.</p>
+          <p className="text-[#525252] text-sm mt-1">Os alunos aparecerão aqui após se cadastrarem.</p>
         </div>
       ) : (
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
@@ -149,19 +207,19 @@ export default function VincularAlunosPage() {
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Aluno</th>
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Professor Atual</th>
                   <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Vincular / Trocar</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Plano (dias/semana)</th>
-                  <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Acao</th>
+                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Dias contratados/mês</th>
+                  <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Ação</th>
                 </tr>
               </thead>
               <tbody>
                 {displayStudents.map((student) => {
-                  const currentProfessor = getProfessorName(student.id);
+                  const currentProfessor = getProfessorName(student);
                   return (
                     <tr key={student.id} className="border-b border-[#ffffff10] hover:bg-white/5">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-sm">
-                            {student.name.charAt(0).toUpperCase()}
+                            {(student.name || "?").charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <p className="text-[#f5f5f5] text-sm font-medium">{student.name}</p>
@@ -171,6 +229,7 @@ export default function VincularAlunosPage() {
                           </div>
                         </div>
                       </td>
+
                       <td className="px-5 py-4">
                         {currentProfessor ? (
                           <span className="text-xs bg-[#D4A373]/20 text-[#D4A373] px-2 py-1 rounded-full">
@@ -180,6 +239,7 @@ export default function VincularAlunosPage() {
                           <span className="text-xs text-[#525252]">Sem professor</span>
                         )}
                       </td>
+
                       <td className="px-5 py-4">
                         <select
                           value={selectedProfessor[student.id] || ""}
@@ -191,38 +251,40 @@ export default function VincularAlunosPage() {
                           }
                           className="w-full max-w-xs rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
                         >
-                          <option value="">{currentProfessor ? "Trocar professor..." : "Selecione um professor..."}</option>
-                          {professors.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
+                          <option value="">
+                            {currentProfessor ? "Manter ou trocar professor..." : "Selecione um professor..."}
+                          </option>
+                          {professors.map((professor) => (
+                            <option key={professor.id} value={professor.id}>
+                              {professor.name}
                             </option>
                           ))}
                         </select>
                       </td>
+
                       <td className="px-5 py-4">
-                        <select
-                          value={selectedPlan[student.id] || ""}
+                        <input
+                          value={selectedDays[student.id] || ""}
                           onChange={(e) =>
-                            setSelectedPlan((prev) => ({
+                            setSelectedDays((prev) => ({
                               ...prev,
                               [student.id]: e.target.value,
                             }))
                           }
-                          className="w-full max-w-[160px] rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-                        >
-                          <option value="">Selecione o plano...</option>
-                          <option value="2">2 dias por semana</option>
-                          <option value="3">3 dias por semana</option>
-                          <option value="5">5 dias por semana</option>
-                        </select>
+                          type="number"
+                          min="0"
+                          placeholder="Ex.: 8, 12, 16, 20"
+                          className="w-full max-w-[190px] rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                        />
                       </td>
+
                       <td className="px-5 py-4 text-right">
                         <button
-                          onClick={() => vincularAluno(student.id)}
-                          disabled={!selectedProfessor[student.id] || saving === student.id}
+                          onClick={() => vincularAluno(student)}
+                          disabled={getButtonDisabled(student)}
                           className="bg-[#D4A373] text-[#0a0a0a] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#c49463] transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {saving === student.id ? "Vinculando..." : "Vincular"}
+                          {saving === student.id ? "Salvando..." : currentProfessor ? "Salvar" : "Vincular"}
                         </button>
                       </td>
                     </tr>
@@ -241,7 +303,7 @@ export default function VincularAlunosPage() {
       )}
 
       <p className="text-xs text-[#525252] text-center mt-6">
-        {displayStudents.length} aluno(s) - {professors.length} professor(es) disponiveis
+        {displayStudents.length} aluno(s) - {professors.length} professor(es) disponíveis
       </p>
     </div>
   );
