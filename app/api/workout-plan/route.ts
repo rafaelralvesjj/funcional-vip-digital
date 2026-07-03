@@ -22,6 +22,51 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
+function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): number | null {
+  const contracted = Number(contractedTrainingDaysPerMonth || 0);
+
+  if (!Number.isFinite(contracted) || contracted <= 0) {
+    return null;
+  }
+
+  // Regra comercial atual:
+  // até 4 treinos/mês  -> 1 treino por semana
+  // até 8 treinos/mês  -> 2 treinos por semana
+  // até 16 treinos/mês -> 3 treinos por semana
+  // acima disso, divide por 4 semanas arredondando para cima.
+  if (contracted <= 4) return 1;
+  if (contracted <= 8) return 2;
+  if (contracted <= 16) return 3;
+
+  return Math.ceil(contracted / 4);
+}
+
+function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
+  const date = new Date(referenceDate);
+  date.setHours(0, 0, 0, 0);
+
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+
+  const startOfWeek = new Date(date);
+  startOfWeek.setDate(date.getDate() + diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+  endOfWeek.setHours(0, 0, 0, 0);
+
+  return { startOfWeek, endOfWeek };
+}
+
+function formatDatePtBr(date: Date): string {
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 async function getStudentEmail(student: {
   email?: string | null;
   userAuthId?: string | null;
@@ -239,6 +284,7 @@ export async function POST(req: NextRequest) {
         email: true,
         userId: true,
         userAuthId: true,
+        contractedTrainingDaysPerMonth: true,
       },
     });
 
@@ -254,6 +300,44 @@ export async function POST(req: NextRequest) {
     });
 
     const isFirstWorkoutPlan = existingWorkoutPlanCount === 0;
+
+    const workoutDate = date ? new Date(date + "T12:00:00") : new Date();
+    const weeklyLimit = getWeeklyWorkoutLimit(studentExists.contractedTrainingDaysPerMonth);
+
+    if (!weeklyLimit) {
+      return NextResponse.json(
+        {
+          error:
+            "Este aluno ainda não tem quantidade contratada de treinos/dias no mês configurada. Vincule o aluno na gestão e preencha a quantidade contratada antes de montar o treino.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const { startOfWeek, endOfWeek } = getWeekRange(workoutDate);
+
+    const workoutPlansThisWeek = await prisma.workoutPlan.count({
+      where: {
+        studentId,
+        date: {
+          gte: startOfWeek,
+          lt: endOfWeek,
+        },
+      },
+    });
+
+    if (workoutPlansThisWeek >= weeklyLimit) {
+      return NextResponse.json(
+        {
+          error: `Este aluno já recebeu ${workoutPlansThisWeek} treino(s) na semana de ${formatDatePtBr(
+            startOfWeek
+          )} a ${formatDatePtBr(
+            new Date(endOfWeek.getTime() - 1)
+          )}. O limite atual é de ${weeklyLimit} treino(s) por semana, conforme a quantidade contratada no mês.`,
+        },
+        { status: 400 }
+      );
+    }
 
     const normalizedExercises = exercises.map((ex: any, index: number) => ({
       name: ex.name,
@@ -274,7 +358,7 @@ export async function POST(req: NextRequest) {
           studentId,
           name: name.trim(),
           description: description?.trim() || null,
-          date: date ? new Date(date + "T12:00:00") : null,
+          date: workoutDate,
           notes: notes?.trim() || null,
           exercises: {
             create: normalizedExercises,
@@ -293,7 +377,7 @@ export async function POST(req: NextRequest) {
         data: {
           studentId,
           workoutPlanId: plan.id,
-          date: date ? new Date(date + "T12:00:00") : new Date(),
+          date: workoutDate,
           status: "PENDENTE",
         },
       });
