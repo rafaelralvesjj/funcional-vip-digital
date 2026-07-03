@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-type ConversationRole = "GESTOR" | "TEACHER";
+type ConversationRole = "GESTOR" | "ADMIN" | "TEACHER" | "PROFESSOR";
 
 type ConversationReply = {
   id: string;
@@ -14,6 +14,8 @@ type ConversationReply = {
   createdAt: string;
   resolvedAt?: string | null;
   authorName: string;
+  answeredById?: string | null;
+  authorId?: string | null;
 };
 
 type ConversationItem = {
@@ -27,6 +29,12 @@ type ConversationItem = {
   authorName: string;
   targetLabel: string;
   children: ConversationReply[];
+
+  // Campos opcionais para conseguir identificar exatamente quem abriu a conversa.
+  // Se a página que monta a lista enviar algum deles, o botão de encerrar fica mais preciso.
+  answeredById?: string | null;
+  authorId?: string | null;
+  openedById?: string | null;
 };
 
 type Props = {
@@ -56,10 +64,16 @@ function normalizeRole(role: string): string {
   return roleValue;
 }
 
+function isManagerRole(role: string): boolean {
+  const normalized = normalizeRole(role);
+  return normalized === "GESTOR" || normalized === "ADMIN";
+}
+
 function getRoleLabel(role: string): string {
   const normalized = normalizeRole(role);
 
   if (normalized === "GESTOR") return "GESTOR";
+  if (normalized === "ADMIN") return "ADMIN";
   if (normalized === "STUDENT") return "ALUNO";
   if (normalized === "TEACHER") return "PROFESSOR";
 
@@ -71,6 +85,7 @@ function getRoleBadgeClass(role: string): string {
 
   switch (normalized) {
     case "GESTOR":
+    case "ADMIN":
       return "bg-amber-900/30 text-amber-400 border border-amber-500/20";
     case "STUDENT":
       return "bg-blue-900/30 text-blue-400 border border-blue-500/20";
@@ -111,6 +126,53 @@ function getErrorMessage(data: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function getOpenerUserId(conversation: ConversationItem): string {
+  return String(
+    conversation.openedById ||
+      conversation.answeredById ||
+      conversation.authorId ||
+      ""
+  );
+}
+
+function canCurrentUserCloseConversation(
+  conversation: ConversationItem,
+  currentUserId: string,
+  currentRole: ConversationRole
+): boolean {
+  if (conversation.resolvedAt) return false;
+
+  const openerRole = normalizeRole(conversation.senderRole);
+  const userRole = normalizeRole(currentRole);
+  const openerUserId = getOpenerUserId(conversation);
+
+  // Aluno abriu a dúvida. No dashboard, professor/gestão não encerram.
+  // O encerramento do aluno deve ficar no painel do aluno.
+  if (openerRole === "STUDENT") {
+    return false;
+  }
+
+  // Professor abriu a conversa. Só o próprio professor vinculado na raiz pode encerrar.
+  if (openerRole === "TEACHER") {
+    return userRole === "TEACHER" && conversation.teacherId === currentUserId;
+  }
+
+  // Gestão abriu a conversa. Só o gestor/admin que abriu deve encerrar.
+  // Se a lista ainda não trouxer answeredById/authorId/openedById, deixamos o botão
+  // visível para gestor/admin e a API faz o bloqueio real de segurança.
+  if (isManagerRole(openerRole)) {
+    if (!isManagerRole(userRole)) return false;
+
+    if (openerUserId) {
+      return openerUserId === currentUserId;
+    }
+
+    return true;
+  }
+
+  return false;
 }
 
 export default function DashboardConversationList({
@@ -261,6 +323,11 @@ export default function DashboardConversationList({
         const replyValue = replyContentById[conversation.id] || "";
         const error = errorById[conversation.id];
         const success = successById[conversation.id];
+        const canCloseConversation = canCurrentUserCloseConversation(
+          conversation,
+          currentUserId,
+          currentRole
+        );
 
         return (
           <div
@@ -386,15 +453,23 @@ export default function DashboardConversationList({
                         {sendingConversationId === conversation.id ? "Enviando..." : "Responder"}
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleCloseConversation(conversation)}
-                        disabled={closingConversationId === conversation.id}
-                        className="border border-red-500/30 text-red-400 text-xs font-bold px-4 py-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                      >
-                        {closingConversationId === conversation.id ? "Encerrando..." : "Encerrar conversa"}
-                      </button>
+                      {canCloseConversation && (
+                        <button
+                          type="button"
+                          onClick={() => handleCloseConversation(conversation)}
+                          disabled={closingConversationId === conversation.id}
+                          className="border border-red-500/30 text-red-400 text-xs font-bold px-4 py-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                        >
+                          {closingConversationId === conversation.id ? "Encerrando..." : "Encerrar conversa"}
+                        </button>
+                      )}
                     </div>
+
+                    {!canCloseConversation && (
+                      <p className="text-[10px] text-zinc-500">
+                        Apenas quem abriu esta conversa pode encerrá-la.
+                      </p>
+                    )}
                   </form>
                 )}
               </div>
