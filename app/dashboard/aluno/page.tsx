@@ -1,492 +1,590 @@
 "use client";
-import { Suspense, useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
-function PerfilContent() {
-  const searchParams = useSearchParams();
-  const studentId = searchParams.get("id");
-  const [student, setStudent] = useState<any>(null);
-  const [plans, setPlans] = useState<any[]>([]);
-  const [notices, setNotices] = useState<any[]>([]);
-  const [workouts, setWorkouts] = useState<any[]>([]);
-  const [questions, setQuestions] = useState<any[]>([]);
+
+import { useEffect, useMemo, useState } from "react";
+
+interface Student {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  image?: string | null;
+  active?: boolean;
+  userId?: string | null;
+  userAuthId?: string | null;
+  contractedTrainingDaysPerMonth?: number | null;
+  user?: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    role?: string | null;
+  } | null;
+}
+
+interface Teacher {
+  id: string;
+  name: string;
+  email?: string | null;
+  role?: string | null;
+}
+
+interface StudentFormState {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  notes: string;
+  image: string;
+  active: boolean;
+  professorId: string;
+  contractedTrainingDaysPerMonth: string;
+}
+
+const emptyForm: StudentFormState = {
+  name: "",
+  email: "",
+  phone: "",
+  password: "",
+  notes: "",
+  image: "",
+  active: true,
+  professorId: "",
+  contractedTrainingDaysPerMonth: "",
+};
+
+function normalizeStudents(data: any): Student[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.students)) return data.students;
+  return [];
+}
+
+function normalizeTeachers(data: any): Teacher[] {
+  const list = Array.isArray(data) ? data : data?.teachers || data?.professores || [];
+  return Array.isArray(list) ? list : [];
+}
+
+function normalizeRole(role?: string | null) {
+  return String(role || "").toUpperCase();
+}
+
+export default function GerenciarAlunosPage() {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"treinos" | "avisos" | "duvidas">("treinos");
-  const [editPlan, setEditPlan] = useState<any>(null);
-  const [editNotice, setEditNotice] = useState<any>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editContent, setEditContent] = useState("");
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [currentUserRole, setCurrentUserRole] = useState<string>("");
-  const [currentUserId, setCurrentUserId] = useState<string>("");
-  // Estados do modal de dúvidas
-  const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
-  const [answerText, setAnswerText] = useState("");
-  const [sendingAnswer, setSendingAnswer] = useState(false);
-  const loadData = useCallback(async () => {
-    if (!studentId) { setLoading(false); return; }
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const [editStudent, setEditStudent] = useState<Student | null>(null);
+  const [editForm, setEditForm] = useState<StudentFormState>(emptyForm);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [addStudent, setAddStudent] = useState(false);
+  const [newForm, setNewForm] = useState<StudentFormState>(emptyForm);
+  const [savingAdd, setSavingAdd] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const teacherOptions = useMemo(() => {
+    return teachers.filter((teacher) => {
+      const role = normalizeRole(teacher.role);
+      return !role || role === "PROFESSOR" || role === "TEACHER";
+    });
+  }, [teachers]);
+
+  const teacherIds = useMemo(() => new Set(teacherOptions.map((teacher) => teacher.id)), [teacherOptions]);
+
+  async function loadData() {
+    setLoading(true);
     try {
-      const sessionRes = await fetch("/api/auth/session");
-      if (sessionRes.ok) {
-        const session = await sessionRes.json();
-        setCurrentUserRole(session?.user?.role || "");
-        setCurrentUserId(session?.user?.id || "");
-      }
-      const [studentsRes, plansRes, noticesRes, workoutsRes, questionsRes] = await Promise.all([
-        fetch("/api/students"),
-        fetch("/api/workout-plan?studentId=" + studentId),
-        fetch("/api/notices?studentId=" + studentId),
-        fetch("/api/workout/mark-complete?studentId=" + studentId),
-        fetch("/api/aluno/questions?studentId=" + studentId)
+      const [studentsRes, teachersRes] = await Promise.all([
+        fetch("/api/students", { cache: "no-store" }),
+        fetch("/api/teachers", { cache: "no-store" }),
       ]);
+
       if (studentsRes.ok) {
         const data = await studentsRes.json();
-        const list = Array.isArray(data) ? data : data.students || data || [];
-        const found = list.find((s: any) => s.id === studentId);
-        if (found) setStudent(found);
+        setStudents(normalizeStudents(data));
+      } else {
+        setStudents([]);
       }
-      if (plansRes.ok) {
-        const data = await plansRes.json();
-        setPlans(Array.isArray(data) ? data : []);
+
+      if (teachersRes.ok) {
+        const data = await teachersRes.json();
+        setTeachers(normalizeTeachers(data));
+      } else {
+        setTeachers([]);
       }
-      if (noticesRes.ok) {
-        const data = await noticesRes.json();
-        setNotices(Array.isArray(data) ? data : []);
-      }
-      if (workoutsRes.ok) {
-        const data = await workoutsRes.json();
-        setWorkouts(Array.isArray(data) ? data : []);
-      }
-      if (questionsRes.ok) {
-        const data = await questionsRes.json();
-        setQuestions(Array.isArray(data) ? data : []);
-      }
-    } catch {}
-    setLoading(false);
-  }, [studentId]);
-  useEffect(() => { loadData(); }, [loadData]);
-  function isPlanCompleted(planId: string): boolean {
-    return workouts.some((w: any) => w.workoutPlanId === planId && w.status === "CONCLUIDO");
+    } catch {
+      setMessage({ type: "error", text: "Erro ao carregar alunos" });
+    } finally {
+      setLoading(false);
+    }
   }
-  function canEditOrDelete(notice: any): boolean {
-    return currentUserRole === "GESTOR" || notice.authorId === currentUserId;
+
+  function getProfessorName(student: Student): string {
+    if (!student.userId || !teacherIds.has(student.userId)) {
+      return "Sem professor";
+    }
+
+    const professor = teacherOptions.find((teacher) => teacher.id === student.userId);
+    return professor?.name || student.user?.name || "Professor";
   }
-  async function deletePlan(id: string) {
-    if (!confirm("Excluir este plano de treino?")) return;
-    const res = await fetch("/api/workout-plan?id=" + id, { method: "DELETE" });
-    if (res.ok) setPlans((prev) => prev.filter((p) => p.id !== id));
+
+  function updateNewForm(field: keyof StudentFormState, value: string | boolean) {
+    setNewForm((prev) => ({ ...prev, [field]: value }));
   }
-  async function savePlan() {
-    if (!editPlan) return;
-    const res = await fetch("/api/workout-plan", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: editPlan.id, name: editName, description: editDescription }),
+
+  function updateEditForm(field: keyof StudentFormState, value: string | boolean) {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function openAddModal() {
+    setNewForm(emptyForm);
+    setMessage(null);
+    setAddStudent(true);
+  }
+
+  function abrirEditar(student: Student) {
+    setEditStudent(student);
+    setEditForm({
+      name: student.name || "",
+      email: student.email || "",
+      phone: student.phone || "",
+      password: "",
+      notes: student.notes || "",
+      image: student.image || "",
+      active: student.active !== false,
+      professorId: student.userId && teacherIds.has(student.userId) ? student.userId : "",
+      contractedTrainingDaysPerMonth:
+        student.contractedTrainingDaysPerMonth !== null &&
+        student.contractedTrainingDaysPerMonth !== undefined
+          ? String(student.contractedTrainingDaysPerMonth)
+          : "",
     });
-    if (res.ok) {
-      const updated = await res.json();
-      setPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-      setEditPlan(null);
-    }
   }
-  async function deleteNotice(id: string) {
-    if (!confirm("Excluir este aviso?")) return;
-    const res = await fetch("/api/notices?id=" + id, { method: "DELETE" });
-    if (res.ok) setNotices((prev) => prev.filter((n) => n.id !== id));
-  }
-  async function saveNotice() {
-    if (!editNotice) return;
-    const res = await fetch("/api/notices", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: editNotice.id, title: editTitle, content: editContent }),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setNotices((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
-      setEditNotice(null);
-    }
-  }
-  // ⚫ Cinza = duvida resolvida (fechada)
-  // 🟢 Verde = aluno enviou pergunta sem resposta (professor precisa responder)
-  // 🔵 Azul = professor/gestão respondeu (aguardando aluno)
-  function getThreadStatus(q: any): "pending" | "answered" | "resolved" {
-    if (q.resolvedAt) return "resolved";
 
-    const messages = [q, ...(q.children || [])];
-    const last = messages[messages.length - 1];
-    const lastRole = String(last?.senderRole || "").toUpperCase();
+  function buildPayload(form: StudentFormState, includePassword: boolean) {
+    return {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim() || null,
+      ...(includePassword && { password: form.password }),
+      ...(includePassword === false && form.password.trim() ? { password: form.password } : {}),
+      notes: form.notes.trim() || null,
+      image: form.image.trim() || null,
+      active: form.active,
+      professorId: form.professorId || null,
+      contractedTrainingDaysPerMonth:
+        form.contractedTrainingDaysPerMonth.trim() === ""
+          ? null
+          : Number(form.contractedTrainingDaysPerMonth),
+    };
+  }
 
-    if (last.answer) return "answered";
-    if (lastRole === "TEACHER" || lastRole === "PROFESSOR" || lastRole === "GESTOR" || lastRole === "ADMIN") {
-      return "answered";
+  async function handleAddAluno() {
+    if (!newForm.name.trim() || !newForm.email.trim() || !newForm.password.trim()) {
+      setMessage({ type: "error", text: "Preencha nome, e-mail e senha inicial." });
+      return;
     }
 
-    return "pending";
-  }
-  function getMessageRole(msg: any): "STUDENT" | "TEACHER" | "GESTOR" {
-    const role = String(msg?.senderRole || "").toUpperCase();
+    setSavingAdd(true);
+    setMessage(null);
 
-    if (role === "TEACHER" || role === "PROFESSOR") return "TEACHER";
-    if (role === "GESTOR" || role === "ADMIN") return "GESTOR";
-
-    return "STUDENT";
-  }
-
-  function getMessageAuthorLabel(msg: any, thread?: any): string {
-    const role = getMessageRole(msg);
-
-    if (role === "STUDENT") return msg?.student?.name || student?.name || "Aluno";
-    if (role === "GESTOR") return msg?.answeredBy?.name || "Gestão";
-
-    return msg?.answeredBy?.name || msg?.teacher?.name || thread?.teacher?.name || "Professor";
-  }
-
-  function getMessageDotClass(msg: any): string {
-    const role = getMessageRole(msg);
-
-    if (role === "STUDENT") return "bg-green-500";
-    if (role === "GESTOR") return "bg-amber-500";
-
-    return "bg-[#D4A373]";
-  }
-
-  function getMessageAuthorClass(msg: any): string {
-    const role = getMessageRole(msg);
-
-    if (role === "STUDENT") return "text-green-400";
-    if (role === "GESTOR") return "text-amber-400";
-
-    return "text-[#D4A373]";
-  }
-
-  function getMessageCardClass(msg: any): string {
-    const role = getMessageRole(msg);
-
-    if (role === "STUDENT") {
-      return "bg-[#1a1a1a] border-[#ffffff08]";
-    }
-
-    return "bg-[#D4A373]/5 border-[#D4A373]/15";
-  }
-
-  function shouldShowLegacyAnswer(msg: any): boolean {
-    const role = getMessageRole(msg);
-
-    return role === "STUDENT" && Boolean(msg.answer);
-  }
-
-  async function handleAnswerFromModal(questionId: string) {
-    if (!answerText.trim()) return;
-    setSendingAnswer(true);
     try {
-      const res = await fetch("/api/aluno/questions", {
+      const res = await fetch("/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(newForm, true)),
+      });
+
+      if (res.ok) {
+        setMessage({ type: "success", text: "Aluno cadastrado com sucesso!" });
+        setAddStudent(false);
+        setNewForm(emptyForm);
+        await loadData();
+      } else {
+        const err = await res.json();
+        setMessage({ type: "error", text: "Erro: " + (err.error || "Erro ao cadastrar") });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao cadastrar aluno" });
+    } finally {
+      setSavingAdd(false);
+    }
+  }
+
+  async function salvarEdicao() {
+    if (!editStudent) return;
+
+    if (!editForm.name.trim() || !editForm.email.trim()) {
+      setMessage({ type: "error", text: "Preencha nome e e-mail." });
+      return;
+    }
+
+    setSavingEdit(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/students/" + editStudent.id, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: questionId, answer: answerText.trim() }),
+        body: JSON.stringify(buildPayload(editForm, false)),
       });
+
       if (res.ok) {
-        const questionsRes = await fetch("/api/aluno/questions?studentId=" + studentId);
-        if (questionsRes.ok) {
-          const data = await questionsRes.json();
-          setQuestions(Array.isArray(data) ? data : []);
-        }
-        setAnswerText("");
-        setSelectedQuestion(null);
+        setMessage({ type: "success", text: "Aluno atualizado com sucesso!" });
+        setEditStudent(null);
+        await loadData();
+      } else {
+        const err = await res.json();
+        setMessage({ type: "error", text: "Erro: " + (err.error || "Erro ao atualizar") });
       }
-    } catch {}
-    setSendingAnswer(false);
+    } catch {
+      setMessage({ type: "error", text: "Erro ao atualizar aluno" });
+    } finally {
+      setSavingEdit(false);
+    }
   }
-  if (loading) {
+
+  async function excluirAluno(studentId: string) {
+    setDeleting(studentId);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/students/" + studentId, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setMessage({ type: "success", text: "Aluno e login excluídos com sucesso!" });
+        setStudents((prev) => prev.filter((student) => student.id !== studentId));
+        setConfirmDelete(null);
+      } else {
+        const err = await res.json();
+        setMessage({ type: "error", text: "Erro: " + (err.error || "Erro ao excluir") });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao excluir aluno" });
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  function StudentForm({
+    form,
+    onChange,
+    isEdit = false,
+  }: {
+    form: StudentFormState;
+    onChange: (field: keyof StudentFormState, value: string | boolean) => void;
+    isEdit?: boolean;
+  }) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
-        <p className="text-[#6b6b6b]">Carregando...</p>
+      <div className="space-y-3">
+        <input
+          value={form.name}
+          onChange={(e) => onChange("name", e.target.value)}
+          placeholder="Nome completo"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
+        />
+
+        <input
+          value={form.email}
+          onChange={(e) => onChange("email", e.target.value)}
+          placeholder="E-mail"
+          type="email"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
+        />
+
+        <input
+          value={form.phone}
+          onChange={(e) => onChange("phone", e.target.value)}
+          placeholder="Telefone"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
+        />
+
+        <input
+          value={form.password}
+          onChange={(e) => onChange("password", e.target.value)}
+          placeholder={isEdit ? "Nova senha, se quiser alterar" : "Senha inicial"}
+          type="password"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
+        />
+
+        <select
+          value={form.professorId}
+          onChange={(e) => onChange("professorId", e.target.value)}
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
+        >
+          <option value="">Sem professor definido</option>
+          {teacherOptions.map((teacher) => (
+            <option key={teacher.id} value={teacher.id}>
+              {teacher.name}
+            </option>
+          ))}
+        </select>
+
+        <input
+          value={form.contractedTrainingDaysPerMonth}
+          onChange={(e) => onChange("contractedTrainingDaysPerMonth", e.target.value)}
+          placeholder="Dias contratados por mês. Ex.: 8, 12, 16, 20"
+          type="number"
+          min="0"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
+        />
+
+        <input
+          value={form.image}
+          onChange={(e) => onChange("image", e.target.value)}
+          placeholder="URL da foto/imagem, se houver"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
+        />
+
+        <textarea
+          value={form.notes}
+          onChange={(e) => onChange("notes", e.target.value)}
+          placeholder="Observações"
+          rows={3}
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373] resize-none"
+        />
+
+        <label className="flex items-center gap-2 text-sm text-[#a1a1a1]">
+          <input
+            type="checkbox"
+            checked={form.active}
+            onChange={(e) => onChange("active", e.target.checked)}
+            className="accent-[#D4A373]"
+          />
+          Aluno ativo
+        </label>
       </div>
     );
   }
-  if (!studentId) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
-        <p className="text-[#6b6b6b]">Nenhum ID de aluno informado.</p>
-      </div>
-    );
-  }
+
   return (
-    <>
-      <div className="min-h-screen bg-[#0a0a0a] p-6">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-xl font-bold text-[#D4A373]">{student?.name || "Aluno"}</h1>
-          <p className="text-sm text-[#6b6b6b] mb-6">Bem vindo ao perfil do aluno!</p>
-          <div className="flex gap-4 border-b border-[#2a2a2a] mb-6">
-            <button onClick={() => setActiveTab("treinos")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "treinos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
-              Planos de Treino
-            </button>
-            <button onClick={() => setActiveTab("avisos")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "avisos" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
-              Avisos
-            </button>
-            <button onClick={() => setActiveTab("duvidas")} className={"pb-2 px-4 text-sm font-medium transition-colors " + (activeTab === "duvidas" ? "text-[#D4A373] border-b-2 border-[#D4A373]" : "text-[#6b6b6b] hover:text-[#a1a1a1]")}>
-              Duvidas {questions.filter((q: any) => getThreadStatus(q) === "pending").length > 0 && (
-                <span className="ml-1 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                  {questions.filter((q: any) => getThreadStatus(q) === "pending").length}
-                </span>
-              )}
-            </button>
-          </div>
-          {activeTab === "treinos" && (
-            <div>
-              {plans.length === 0 ? (
-                <p className="text-[#6b6b6b] text-sm">Nenhum plano de treino encontrado.</p>
-              ) : (
-                <div className="space-y-3">
-                  {plans.map((plan) => {
-                    const completed = isPlanCompleted(plan.id);
-                    return (
-                      <div key={plan.id} className="bg-[#1a1a1a] rounded-lg p-4 flex items-center justify-between">
-                        <div className="flex items-start gap-3">
-                          <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (completed ? "bg-green-500" : "bg-[#525252]")} />
-                          <div>
-                            <h3 className="text-white font-medium">
-                              {plan.name}
-                              {completed && <span className="text-green-400 text-[10px] ml-2">Concluido</span>}
-                              <span className="text-[#6b6b6b] text-xs font-normal ml-2">{plan.date ? new Date(plan.date).toLocaleDateString("pt-BR") : "Sem data"}</span>
-                            </h3>
-                            <p className="text-[#6b6b6b] text-xs mt-1">{plan.description || "Sem descricao"} - {plan.exercises?.length || 0} exercicios</p>
-                          </div>
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-[#D4A373]">Gerenciar Alunos</h1>
+        <p className="text-[#a1a1a1] mt-1">
+          Cadastre, edite e exclua alunos do sistema
+        </p>
+      </div>
+
+      {message && (
+        <div className={"text-sm rounded-lg p-4 mb-6 " + (message.type === "success" ? "bg-green-500/10 border border-green-500/20 text-green-400" : "bg-red-500/10 border border-red-500/20 text-red-400")}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="mb-4">
+        <button
+          onClick={openAddModal}
+          className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#c49563]"
+        >
+          + Cadastrar Aluno
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12 text-[#525252]">Carregando...</div>
+      ) : students.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-[#525252] text-lg">Nenhum aluno cadastrado</p>
+        </div>
+      ) : (
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
+          <div className="w-full">
+            <table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[19%]" />
+                <col className="w-[20%]" />
+                <col className="w-[13%]" />
+                <col className="w-[13%]" />
+                <col className="w-[8%]" />
+                <col className="w-[9%]" />
+                <col className="w-[18%]" />
+              </colgroup>
+
+              <thead>
+                <tr className="border-b border-[#ffffff10]">
+                  <th className="text-left px-3 py-3 text-xs font-medium text-[#a1a1a1]">Aluno</th>
+                  <th className="text-left px-3 py-3 text-xs font-medium text-[#a1a1a1]">E-mail</th>
+                  <th className="text-left px-3 py-3 text-xs font-medium text-[#a1a1a1]">Telefone</th>
+                  <th className="text-left px-3 py-3 text-xs font-medium text-[#a1a1a1]">Professor</th>
+                  <th className="text-left px-2 py-3 text-xs font-medium text-[#a1a1a1] whitespace-nowrap">Dias/mês</th>
+                  <th className="text-left px-2 py-3 text-xs font-medium text-[#a1a1a1]">Status</th>
+                  <th className="text-right px-3 py-3 text-xs font-medium text-[#a1a1a1]">Ações</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student.id} className="border-b border-[#ffffff10] hover:bg-white/5">
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-xs shrink-0">
+                          {(student.name || "?").charAt(0).toUpperCase()}
                         </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => { setEditPlan(plan); setEditName(plan.name); setEditDescription(plan.description || ""); }} className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors">Editar</button>
-                          <button onClick={() => deletePlan(plan.id)} className="text-xs bg-[#3a1a1a] hover:bg-[#4a2a2a] text-[#ff6b6b] px-3 py-1.5 rounded transition-colors">Excluir</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {editPlan && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditPlan(null)}>
-                  <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-                    <h2 className="text-white font-medium mb-4">Editar Plano de Treino</h2>
-                    <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nome do plano" className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]" />
-                    <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} placeholder="Descricao" rows={3} className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373] resize-none" />
-                    <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditPlan(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">Cancelar</button>
-                      <button onClick={savePlan} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors">Salvar</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {activeTab === "avisos" && (
-            <div>
-              {notices.length === 0 ? (
-                <p className="text-[#6b6b6b] text-sm">Nenhum aviso encontrado.</p>
-              ) : (
-                <div className="space-y-3">
-                  {notices.map((notice) => (
-                    <div key={notice.id} className="bg-[#1a1a1a] rounded-lg p-4 flex items-center justify-between">
-                      <div className="flex items-start gap-3">
-                        <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (notice.readByStudent ? "bg-[#525252]" : "bg-green-500")} />
-                        <div>
-                          <h3 className="text-white font-medium">{notice.title || "Sem titulo"}</h3>
-                          <p className="text-[#6b6b6b] text-xs mt-1">{notice.content?.substring(0, 80)}{notice.content?.length > 80 ? "..." : ""} - {new Date(notice.createdAt).toLocaleDateString("pt-BR")}</p>
-                          {notice.author && (
-                            <p className="text-[10px] text-[#6b6b6b] mt-1">
-                              Enviado por: {notice.author.name}
-                              {notice.author.role && (
-                                <span className={"ml-1 px-1 py-0.5 rounded text-[9px] " + (notice.author.role === "GESTOR" ? "bg-blue-500/10 text-blue-400" : "bg-green-500/10 text-green-400")}>
-                                  {notice.author.role === "GESTOR" ? "Gestao" : "Professor"}
-                                </span>
-                              )}
+
+                        <div className="min-w-0">
+                          <p className="text-[#f5f5f5] text-sm font-medium truncate">
+                            {student.name}
+                          </p>
+
+                          {student.notes && (
+                            <p className="text-[#525252] text-[11px] truncate">
+                              {student.notes}
                             </p>
                           )}
                         </div>
                       </div>
-                      {canEditOrDelete(notice) && (
-                        <div className="flex gap-2">
-                          <button onClick={() => { setEditNotice(notice); setEditTitle(notice.title || ""); setEditContent(notice.content); }} className="text-xs bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#a1a1a1] px-3 py-1.5 rounded transition-colors">Editar</button>
-                          <button onClick={() => deleteNotice(notice.id)} className="text-xs bg-[#3a1a1a] hover:bg-[#4a2a2a] text-[#ff6b6b] px-3 py-1.5 rounded transition-colors">Excluir</button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {editNotice && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditNotice(null)}>
-                  <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-                    <h2 className="text-white font-medium mb-4">Editar Aviso</h2>
-                    <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Titulo" className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]" />
-                    <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} placeholder="Conteudo" rows={3} className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373] resize-none" />
-                    <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditNotice(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">Cancelar</button>
-                      <button onClick={saveNotice} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors">Salvar</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {activeTab === "duvidas" && (
-            <div>
-              {questions.length === 0 ? (
-                <p className="text-[#6b6b6b] text-sm">Nenhuma duvida enviada pelo aluno.</p>
-              ) : (
-                <div className="space-y-3">
-                  {questions.map((q) => {
-                    const status = getThreadStatus(q);
-                    return (
-                      <div key={q.id}
-                        onClick={() => setSelectedQuestion(q)}
-                        className={"bg-[#1a1a1a] rounded-lg p-4 transition " + (status === "resolved" ? "opacity-60" : "cursor-pointer hover:bg-[#222]")}>
-                        <div className="flex items-start gap-3">
-                          <div className={"w-3 h-3 rounded-full mt-1 shrink-0 " + (
-                            status === "resolved" ? "bg-[#525252]" :
-                            status === "pending" ? "bg-green-500" : "bg-blue-500"
-                          )} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-white text-sm">{q.content}</p>
-                                <p className="text-[10px] text-[#6b6b6b] mt-1">
-                                  {new Date(q.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                                </p>
-                              </div>
-                              <span className={"text-[10px] px-2 py-0.5 rounded shrink-0 " + (
-                                status === "resolved" ? "bg-[#525252]/20 text-[#6b6b6b]" :
-                                status === "pending" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400"
-                              )}>
-                                {status === "resolved" ? "Resolvida" : status === "pending" ? "Pendente" : "Respondida"}
-                              </span>
-                            </div>
-                            {(q.children?.length || 0) > 0 && (
-                              <p className="text-[9px] text-[#525252] mt-1">{q.children.length + 1} mensagens</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-      {/* MODAL DA THREAD DE DÚVIDA (PROFESSOR) */}
-      {selectedQuestion && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedQuestion(null)}>
-          <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10] shrink-0">
-              <h2 className="text-sm font-bold text-[#f5f5f5]">Duvida de {student?.name || "Aluno"}</h2>
-              <button onClick={() => setSelectedQuestion(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {(() => {
-                const messages = [selectedQuestion, ...(selectedQuestion.children || [])];
+                    </td>
 
-                return messages.map((msg: any, idx: number) => (
-                  <div key={msg.id || idx}>
-                    <div className="flex items-start gap-2">
-                      <div className={"w-2 h-2 rounded-full mt-1.5 shrink-0 " + getMessageDotClass(msg)} />
-                      <div className={"flex-1 rounded-lg p-2.5 border " + getMessageCardClass(msg)}>
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className={"text-[9px] font-semibold " + getMessageAuthorClass(msg)}>
-                            {getMessageAuthorLabel(msg, selectedQuestion)}
-                          </span>
-                          <span className="text-[8px] text-[#525252]">
-                            {new Date(msg.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </div>
+                    <td className="px-3 py-3">
+                      <p className="text-xs text-[#a1a1a1] truncate">
+                        {student.email || "-"}
+                      </p>
+                    </td>
 
-                        <p className="text-xs text-[#e5e5e5]">{msg.content}</p>
+                    <td className="px-3 py-3">
+                      <p className="text-xs text-[#a1a1a1] truncate">
+                        {student.phone || "-"}
+                      </p>
+                    </td>
 
-                        {(msg.imageUrl || msg.videoUrl) && (
-                          <div className="mt-1.5 flex gap-2">
-                            {msg.imageUrl && (
-                              <a href={msg.imageUrl} target="_blank" className="text-[9px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                Ver imagem
-                              </a>
-                            )}
+                    <td className="px-3 py-3">
+                      <p className="text-xs text-[#a1a1a1] truncate" title={getProfessorName(student)}>
+                        {getProfessorName(student)}
+                      </p>
+                    </td>
 
-                            {msg.videoUrl && (
-                              <a href={msg.videoUrl} target="_blank" className="text-[9px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                Ver video
-                              </a>
-                            )}
-                          </div>
+                    <td className="px-2 py-3">
+                      <p className="text-xs text-[#a1a1a1] whitespace-nowrap">
+                        {student.contractedTrainingDaysPerMonth ?? "-"}
+                      </p>
+                    </td>
+
+                    <td className="px-2 py-3">
+                      <span
+                        className={
+                          "text-[11px] px-2 py-1 rounded-full whitespace-nowrap " +
+                          (student.active === false
+                            ? "bg-red-500/10 text-red-400"
+                            : "bg-green-500/10 text-green-400")
+                        }
+                      >
+                        {student.active === false ? "Inativo" : "Ativo"}
+                      </span>
+                    </td>
+
+                    <td className="px-3 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                        <button
+                          onClick={() => abrirEditar(student)}
+                          className="text-[#D4A373] hover:text-[#c49563] text-xs px-2 py-1 rounded hover:bg-[#D4A373]/5 transition"
+                        >
+                          Editar
+                        </button>
+
+                        {confirmDelete === student.id ? (
+                          <>
+                            <button
+                              onClick={() => excluirAluno(student.id)}
+                              disabled={deleting === student.id}
+                              className="bg-red-500 text-white text-xs font-medium px-2 py-1 rounded hover:bg-red-600 transition disabled:opacity-50"
+                              title="Confirmar exclusão"
+                            >
+                              {deleting === student.id ? "..." : "Sim"}
+                            </button>
+
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              className="text-[#a1a1a1] text-xs px-2 py-1 rounded hover:bg-white/5 transition"
+                              title="Cancelar exclusão"
+                            >
+                              Não
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDelete(student.id)}
+                            className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-500/5 transition"
+                          >
+                            Excluir
+                          </button>
                         )}
                       </div>
-                    </div>
-
-                    {shouldShowLegacyAnswer(msg) && (
-                      <div className="flex items-start gap-2 ml-4 mt-2">
-                        <div className="w-2 h-2 rounded-full mt-1.5 bg-[#D4A373] shrink-0" />
-                        <div className="flex-1 bg-[#D4A373]/5 rounded-lg p-2.5 border border-[#D4A373]/15">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-[9px] font-semibold text-[#D4A373]">
-                              {msg.answeredBy?.name || "Professor"}
-                            </span>
-                            <span className="text-[8px] text-[#525252]">
-                              {msg.answeredAt ? new Date(msg.answeredAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
-                            </span>
-                          </div>
-                          <p className="text-xs text-[#e5e5e5]">{msg.answer}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {idx < messages.length - 1 && (
-                      <div className="border-t border-[#ffffff05] my-2" />
-                    )}
-                  </div>
-                ));
-              })()}
-            </div>
-            {selectedQuestion.resolvedAt ? (
-              <div className="border-t border-[#ffffff10] p-3 shrink-0">
-                <p className="text-[9px] text-[#525252] text-center italic">
-                  Duvida encerrada pelo aluno.
-                </p>
-              </div>
-            ) : (
-              <div className="border-t border-[#ffffff10] p-3 shrink-0">
-                <p className="text-[9px] text-[#D4A373] font-medium mb-1">Sua resposta:</p>
-                <textarea value={answerText} onChange={(e) => setAnswerText(e.target.value)}
-                  placeholder="Digite sua resposta..."
-                  rows={3}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none mb-1.5" />
-                <button onClick={() => handleAnswerFromModal(
-                  (() => {
-                    const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
-                    for (let i = msgs.length - 1; i >= 0; i--) {
-                      if (!msgs[i].answer) return msgs[i].id;
-                    }
-                    return selectedQuestion.id;
-                  })()
-                )}
-                  disabled={sendingAnswer || !answerText.trim()}
-                  className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
-                  {sendingAnswer ? "Enviando..." : "Responder"}
-                </button>
-              </div>
-            )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
-    </>
-  );
-}
-export default function PerfilAlunoPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#0a0a0a] p-6 flex items-center justify-center">
-        <p className="text-[#6b6b6b]">Carregando...</p>
-      </div>
-    }>
-      <PerfilContent />
-    </Suspense>
+
+      {editStudent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditStudent(null)}>
+          <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-white font-medium mb-4">Editar Aluno</h2>
+
+            <StudentForm form={editForm} onChange={updateEditForm} isEdit />
+
+            <div className="flex gap-2 justify-end mt-5">
+              <button
+                onClick={() => setEditStudent(null)}
+                className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvarEdicao}
+                disabled={savingEdit}
+                className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50"
+              >
+                {savingEdit ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addStudent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => { setAddStudent(false); setMessage(null); }}>
+          <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-white font-medium mb-4">Cadastrar Aluno</h2>
+
+            <StudentForm form={newForm} onChange={updateNewForm} />
+
+            <p className="text-[11px] text-[#6b6b6b] mt-3">
+              A bioimpedância/anamnese continua separada. Este cadastro cria o login e o registro cadastral do aluno.
+            </p>
+
+            <div className="flex gap-2 justify-end mt-5">
+              <button
+                onClick={() => { setAddStudent(false); setMessage(null); }}
+                className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddAluno}
+                disabled={savingAdd}
+                className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50"
+              >
+                {savingAdd ? "Cadastrando..." : "Cadastrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-[#525252] text-center mt-6">
+        {students.length} aluno(s) no total
+      </p>
+    </div>
   );
 }
