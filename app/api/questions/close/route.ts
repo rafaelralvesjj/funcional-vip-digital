@@ -12,6 +12,10 @@ function normalizeRole(value?: string | null): string {
   return roleValue;
 }
 
+function isManagerRole(role: string): boolean {
+  return role === "GESTOR" || role === "ADMIN";
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -22,7 +26,8 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = String(sessionUser.id);
-    const role = normalizeRole(String(sessionUser.role || ""));
+    const currentRole = normalizeRole(String(sessionUser.role || ""));
+
     const body = await req.json().catch(() => ({}));
     const questionId = typeof body.questionId === "string" ? body.questionId.trim() : "";
 
@@ -35,8 +40,6 @@ export async function POST(req: NextRequest) {
       select: {
         id: true,
         parentId: true,
-        studentId: true,
-        teacherId: true,
       },
     });
 
@@ -52,7 +55,15 @@ export async function POST(req: NextRequest) {
         id: true,
         studentId: true,
         teacherId: true,
+        senderRole: true,
+        answeredById: true,
         resolvedAt: true,
+        student: {
+          select: {
+            id: true,
+            userAuthId: true,
+          },
+        },
       },
     });
 
@@ -60,14 +71,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Conversa principal não encontrada" }, { status: 404 });
     }
 
-    const canClose =
-      role === "GESTOR" ||
-      role === "ADMIN" ||
-      ((role === "TEACHER" || role === "PROFESSOR") && rootQuestion.teacherId === userId);
+    const openerRole = normalizeRole(rootQuestion.senderRole);
+
+    let canClose = false;
+
+    if (openerRole === "STUDENT") {
+      // Aluno abriu a conversa/dúvida.
+      // Só o próprio aluno logado pode encerrar.
+      canClose =
+        currentRole === "STUDENT" &&
+        Boolean(rootQuestion.student?.userAuthId) &&
+        rootQuestion.student?.userAuthId === userId;
+    } else if (openerRole === "TEACHER") {
+      // Professor abriu a conversa.
+      // Só o professor que abriu pode encerrar.
+      canClose =
+        currentRole === "TEACHER" &&
+        Boolean(rootQuestion.teacherId) &&
+        rootQuestion.teacherId === userId;
+    } else if (isManagerRole(openerRole)) {
+      // Gestão abriu a conversa.
+      // Só o gestor/admin que abriu pode encerrar.
+      // Para isso, a pergunta raiz precisa ter answeredById com o id de quem abriu.
+      canClose =
+        isManagerRole(currentRole) &&
+        Boolean(rootQuestion.answeredById) &&
+        rootQuestion.answeredById === userId;
+    }
 
     if (!canClose) {
       return NextResponse.json(
-        { error: "Você não tem permissão para encerrar esta conversa" },
+        {
+          error:
+            "Apenas quem abriu esta conversa pode encerrá-la.",
+        },
         { status: 403 }
       );
     }
