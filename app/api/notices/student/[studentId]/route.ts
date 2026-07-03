@@ -9,6 +9,7 @@ export async function GET(
 ) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
+  const role = String((session?.user as any)?.role || "").toUpperCase();
 
   if (!userId) {
     return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
@@ -29,6 +30,8 @@ export async function GET(
       select: {
         id: true,
         createdAt: true,
+        userId: true,
+        userAuthId: true,
       },
     });
 
@@ -39,17 +42,27 @@ export async function GET(
       );
     }
 
+    const normalizedRole =
+      role === "PROFESSOR" ? "TEACHER" : role === "ALUNO" ? "STUDENT" : role;
+
+    const canAccess =
+      normalizedRole === "GESTOR" ||
+      normalizedRole === "ADMIN" ||
+      student.userAuthId === userId ||
+      student.userId === userId;
+
+    if (!canAccess) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+
     /*
-     * Regra do mural do aluno:
+     * Regra do mural/histórico de avisos do aluno:
      *
-     * 1. Avisos específicos só aparecem no mural se forem destinados a ALUNO/STUDENT.
+     * 1. Mostra apenas avisos destinados a ALUNO/STUDENT.
      * 2. Pendências internas da gestão usam studentId para controle operacional,
-     *    mas não aparecem no mural do aluno.
+     *    mas não aparecem nem no mural do aluno nem na visão do professor.
      * 3. Avisos gerais para alunos só aparecem para alunos que já existiam
      *    na data em que o aviso foi criado.
-     *
-     * Importante:
-     * Mantemos o retorno como ARRAY, porque a tela do aluno já espera uma lista direta.
      */
     const notices = await prisma.notice.findMany({
       where: {
