@@ -729,7 +729,7 @@ export default async function DashboardPage() {
               Nenhum treino pendente no momento.
             </p>
           ) : (
-            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
+            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
               {pendingWorkouts.map((workout) => (
                 <div
                   key={workout.id}
@@ -799,7 +799,7 @@ export default async function DashboardPage() {
               Nenhum aviso pendente de leitura.
             </p>
           ) : (
-            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
+            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
               {pendingNoticeItems.map((item) => (
                 <div
                   key={`${item.notice.id}-${item.student.id}`}
@@ -888,7 +888,7 @@ export default async function DashboardPage() {
               Nenhum aluno vinculado.
             </p>
           ) : (
-            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
+            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
               {students.map((student) => (
                 <div
                   key={student.id}
