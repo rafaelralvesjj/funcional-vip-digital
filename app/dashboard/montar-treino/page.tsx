@@ -106,9 +106,14 @@ export default function MontarTreinoPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const studentIdFromUrl = params.get("studentId");
+    const dateFromUrl = params.get("date");
 
     if (studentIdFromUrl) {
       setSelectedStudent(studentIdFromUrl);
+    }
+
+    if (dateFromUrl) {
+      setDate(dateFromUrl);
     }
 
     fetchStudents();
@@ -145,6 +150,9 @@ export default function MontarTreinoPage() {
     weeklyPlansCount + 1 >= weeklyWorkoutLimit;
   const referenceWeekDate = date ? new Date(date + "T12:00:00") : new Date();
   const { startOfWeek, endOfWeek } = getWeekRange(referenceWeekDate);
+  const currentWeekRange = getWeekRange(new Date());
+  const isFutureWorkoutWeek =
+    startOfWeek.getTime() > currentWeekRange.startOfWeek.getTime();
   const isWeeklyLimitReached =
     weeklyWorkoutLimit != null && weeklyPlansCount >= weeklyWorkoutLimit;
 
@@ -335,7 +343,7 @@ export default function MontarTreinoPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#D4A373]">📋 Montar Treino</h1>
         <p className="text-[#a1a1a1] mt-1">
-          Monte os treinos da semana. O aluno só será avisado quando a meta semanal estiver completa.
+          Monte os treinos da semana. Treinos futuros ficam planejados para professor/gestão e só aparecem para o aluno na semana correta.
         </p>
       </div>
 
@@ -429,10 +437,16 @@ export default function MontarTreinoPage() {
                     }
                   >
                     {isWeeklyLimitReached
-                      ? "Semana já completa. O aluno já deve ter sido notificado sobre os treinos desta semana."
+                      ? isFutureWorkoutWeek
+                        ? "Semana futura já planejada. O aluno só verá estes treinos quando chegar a semana correta."
+                        : "Semana já completa. O aluno já deve ter sido notificado sobre os treinos desta semana."
                       : willCompleteWeekOnSave
-                        ? "Ao salvar este treino, a meta semanal será completa e o aluno será notificado com um único e-mail."
-                        : "Este treino será salvo, mas o aluno ainda não será notificado. O aviso será enviado somente quando todos os treinos da semana forem criados."}
+                        ? isFutureWorkoutWeek
+                          ? "Ao salvar este treino, a meta da semana futura ficará completa. O aluno não será notificado agora e só verá o treino na semana correta."
+                          : "Ao salvar este treino, a meta semanal será completa e o aluno será notificado com um único e-mail."
+                        : isFutureWorkoutWeek
+                          ? "Este treino futuro será salvo como planejamento. O aluno ainda não verá este treino."
+                          : "Este treino será salvo, mas o aluno ainda não será notificado. O aviso será enviado somente quando todos os treinos da semana forem criados."}
                   </div>
                   </>
                 ) : (
@@ -595,9 +609,13 @@ export default function MontarTreinoPage() {
               : isWeeklyLimitReached
                 ? "🚫 Limite semanal atingido"
                 : willCompleteWeekOnSave
-                  ? "✅ Salvar treino e liberar semana para o aluno"
+                  ? isFutureWorkoutWeek
+                    ? "✅ Salvar e deixar semana futura planejada"
+                    : "✅ Salvar treino e liberar semana para o aluno"
                   : weeklyWorkoutLimit && nextWeeklyCount
-                    ? `💾 Salvar treino ${nextWeeklyCount}/${weeklyWorkoutLimit} sem notificar ainda`
+                    ? isFutureWorkoutWeek
+                      ? `💾 Salvar treino futuro ${nextWeeklyCount}/${weeklyWorkoutLimit}`
+                      : `💾 Salvar treino ${nextWeeklyCount}/${weeklyWorkoutLimit} sem notificar ainda`
                     : "💾 Salvar treino"}
         </button>
         <p className="text-xs text-[#525252] text-center">
