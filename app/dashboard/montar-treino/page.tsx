@@ -98,7 +98,7 @@ export default function MontarTreinoPage() {
   const [exercises, setExercises] = useState<ExerciseItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [weeklyPlansCount, setWeeklyPlansCount] = useState(0);
   const [weeklyInfoLoading, setWeeklyInfoLoading] = useState(false);
@@ -129,6 +129,13 @@ export default function MontarTreinoPage() {
   );
   const weeklyRemaining =
     weeklyWorkoutLimit == null ? null : Math.max(weeklyWorkoutLimit - weeklyPlansCount, 0);
+  const nextWeeklyCount =
+    weeklyWorkoutLimit == null ? null : Math.min(weeklyPlansCount + 1, weeklyWorkoutLimit);
+  const willCompleteWeekOnSave =
+    weeklyWorkoutLimit != null &&
+    !isNaN(weeklyWorkoutLimit) &&
+    weeklyPlansCount < weeklyWorkoutLimit &&
+    weeklyPlansCount + 1 >= weeklyWorkoutLimit;
   const referenceWeekDate = date ? new Date(date + "T12:00:00") : new Date();
   const { startOfWeek, endOfWeek } = getWeekRange(referenceWeekDate);
   const isWeeklyLimitReached =
@@ -268,7 +275,7 @@ export default function MontarTreinoPage() {
       return;
     }
     setSaving(true);
-    setSuccess(false);
+    setSuccess(null);
     try {
       const res = await fetch("/api/workout-plan", {
         method: "POST",
@@ -292,14 +299,19 @@ export default function MontarTreinoPage() {
         }),
       });
       if (res.ok) {
-        setSuccess(true);
+        const result = await res.json();
+        const weeklyMessage =
+          result?.weeklyNotification?.message ||
+          "Treino salvo com sucesso.";
+
+        setSuccess(weeklyMessage);
         setPlanName("");
         setDate("");
         setDescription("");
         setNotes("");
         setExercises([]);
         setWeeklyPlansCount((current) => current + 1);
-        setTimeout(() => setSuccess(false), 3000);
+        setTimeout(() => setSuccess(null), 5000);
       } else {
         const err = await res.json();
         alert(`Erro ao salvar: ${err.error}`);
@@ -316,13 +328,13 @@ export default function MontarTreinoPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#D4A373]">📋 Montar Treino</h1>
         <p className="text-[#a1a1a1] mt-1">
-          Monte um plano de treino personalizado e envie para o aluno
+          Monte os treinos da semana. O aluno só será avisado quando a meta semanal estiver completa.
         </p>
       </div>
 
       {success && (
         <div className="bg-green-500/10 border border-green-500/20 text-green-400 text-sm rounded-lg p-4 mb-6">
-          ✅ Treino salvo e enviado com sucesso!
+          ✅ {success}
         </div>
       )}
 
@@ -397,6 +409,23 @@ export default function MontarTreinoPage() {
                     </span>{" "}
                     treino(s).
                   </p>
+
+                  <div
+                    className={
+                      "mt-3 rounded-lg border p-3 text-xs " +
+                      (isWeeklyLimitReached
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                        : willCompleteWeekOnSave
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                          : "border-amber-500/20 bg-amber-500/10 text-amber-400")
+                    }
+                  >
+                    {isWeeklyLimitReached
+                      ? "Semana já completa. O aluno já deve ter sido notificado sobre os treinos desta semana."
+                      : willCompleteWeekOnSave
+                        ? "Ao salvar este treino, a meta semanal será completa e o aluno será notificado com um único e-mail."
+                        : "Este treino será salvo, mas o aluno ainda não será notificado. O aviso será enviado somente quando todos os treinos da semana forem criados."}
+                  </div>
                 ) : (
                   <p className="text-xs text-red-400 mt-3">
                     A gestão precisa vincular o aluno e preencher a quantidade contratada
@@ -556,12 +585,17 @@ export default function MontarTreinoPage() {
               ? "⚠️ Quantidade contratada não configurada"
               : isWeeklyLimitReached
                 ? "🚫 Limite semanal atingido"
-                : "✅ Salvar e enviar treino para o aluno"}
+                : willCompleteWeekOnSave
+                  ? "✅ Salvar treino e liberar semana para o aluno"
+                  : weeklyWorkoutLimit && nextWeeklyCount
+                    ? `💾 Salvar treino ${nextWeeklyCount}/${weeklyWorkoutLimit} sem notificar ainda`
+                    : "💾 Salvar treino"}
         </button>
         <p className="text-xs text-[#525252] text-center">
           {exercises.length} exercício{exercises.length !== 1 ? "s" : ""}
           {selectedStudent && ` • Aluno: ${students.find((s) => s.id === selectedStudent)?.name || ""}`}
           {date && ` • Data: ${new Date(date).toLocaleDateString("pt-BR")}`}
+          {weeklyWorkoutLimit && ` • Semana: ${weeklyPlansCount}/${weeklyWorkoutLimit}`}
         </p>
       </form>
     </div>
