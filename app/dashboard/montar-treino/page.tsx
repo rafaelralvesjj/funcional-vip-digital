@@ -394,7 +394,8 @@ export default function MontarTreinoPage() {
                 </div>
 
                 {weeklyWorkoutLimit ? (
-                  <p className="text-xs text-[#a1a1a1] mt-3">
+                  <>
+                    <p className="text-xs text-[#a1a1a1] mt-3">
                     Este aluno contratou{" "}
                     <span className="text-[#f5f5f5] font-semibold">
                       {selectedStudentInfo?.contractedTrainingDaysPerMonth}
@@ -426,6 +427,7 @@ export default function MontarTreinoPage() {
                         ? "Ao salvar este treino, a meta semanal será completa e o aluno será notificado com um único e-mail."
                         : "Este treino será salvo, mas o aluno ainda não será notificado. O aviso será enviado somente quando todos os treinos da semana forem criados."}
                   </div>
+                  </>
                 ) : (
                   <p className="text-xs text-red-400 mt-3">
                     A gestão precisa vincular o aluno e preencher a quantidade contratada
