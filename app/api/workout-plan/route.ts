@@ -1,8 +1,212 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { sendEmail } from "@/lib/sendEmail";
+
+function getAppLoginUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/auth/signin`;
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function getStudentEmail(student: {
+  email?: string | null;
+  userAuthId?: string | null;
+}): Promise<string | null> {
+  if (student.email) return student.email;
+
+  if (!student.userAuthId) return null;
+
+  const userAuth = await prisma.user.findUnique({
+    where: { id: student.userAuthId },
+    select: { email: true },
+  });
+
+  return userAuth?.email || null;
+}
+
+async function getFallbackNoticeAuthorId(studentProfessorId?: string | null): Promise<string | null> {
+  if (studentProfessorId) return studentProfessorId;
+
+  const gestor = await prisma.user.findFirst({
+    where: {
+      role: {
+        in: ["GESTOR", "ADMIN"],
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return gestor?.id || null;
+}
+
+async function notifyWorkoutAvailable({
+  studentId,
+  planName,
+  isFirstWorkoutPlan,
+  authorId,
+}: {
+  studentId: string;
+  planName: string;
+  isFirstWorkoutPlan: boolean;
+  authorId: string | null;
+}) {
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      userAuthId: true,
+    },
+  });
+
+  if (!student) return;
+
+  const studentName = student.name || "Aluno";
+  const studentEmail = await getStudentEmail(student);
+  const loginUrl = getAppLoginUrl();
+
+  const title = isFirstWorkoutPlan
+    ? "Seu primeiro treino está disponível"
+    : "Seu treino da semana está disponível";
+
+  const content = isFirstWorkoutPlan
+    ? [
+        "Seu primeiro treino já está disponível no painel do aluno.",
+        "",
+        "Antes de começar, separe uns 10 minutinhos para olhar o treino com calma.",
+        "Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.",
+      ].join("\n")
+    : [
+        "Seu treino da semana está disponível no painel do aluno.",
+        "",
+        "Acesse o sistema para visualizar as orientações e seguir sua programação.",
+      ].join("\n");
+
+  const notificationTasks: Promise<unknown>[] = [];
+
+  if (authorId) {
+    notificationTasks.push(
+      prisma.notice.create({
+        data: {
+          title,
+          content,
+          type: "WORKOUT",
+          targetRole: "STUDENT",
+          studentId,
+          authorId,
+        },
+      })
+    );
+  }
+
+  if (studentEmail) {
+    const safeStudentName = escapeHtml(studentName);
+    const safePlanName = escapeHtml(planName);
+
+    const subject = title;
+
+    const text = isFirstWorkoutPlan
+      ? [
+          `Olá, ${studentName}!`,
+          "",
+          `Seu primeiro treino (${planName}) está disponível no Funcional Vip Digital.`,
+          "",
+          "Antes de começar, separe uns 10 minutinhos para olhar o treino com calma.",
+          "Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.",
+          "",
+          `Acessar o sistema: ${loginUrl}`,
+        ].join("\n")
+      : [
+          `Olá, ${studentName}!`,
+          "",
+          `Seu treino da semana (${planName}) está disponível no Funcional Vip Digital.`,
+          "",
+          "Acesse seu painel do aluno para visualizar as orientações e seguir sua programação.",
+          "",
+          `Acessar o sistema: ${loginUrl}`,
+        ].join("\n");
+
+    const introHtml = isFirstWorkoutPlan
+      ? `
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Seu primeiro treino, <strong style="color:#f5f5f5;">${safePlanName}</strong>, está disponível no Funcional Vip Digital.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Antes de começar, separe uns 10 minutinhos para olhar o treino com calma.
+            Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.
+          </p>
+        `
+      : `
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Seu treino da semana, <strong style="color:#f5f5f5;">${safePlanName}</strong>, está disponível no Funcional Vip Digital.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Acesse seu painel do aluno para visualizar as orientações e seguir sua programação.
+          </p>
+        `;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+        <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+          <h2 style="color:#D4A373; margin:0 0 16px;">${escapeHtml(title)}</h2>
+
+          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+            Olá, <strong>${safeStudentName}</strong>!
+          </p>
+
+          ${introHtml}
+
+          <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+            Acessar meu treino
+          </a>
+
+          <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
+            Este é um aviso automático do Funcional Vip Digital.
+          </p>
+        </div>
+      </div>
+    `;
+
+    notificationTasks.push(
+      sendEmail({
+        to: studentEmail,
+        subject,
+        text,
+        html,
+      })
+    );
+  }
+
+  if (notificationTasks.length > 0) {
+    await Promise.allSettled(notificationTasks);
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    const sessionUser = session?.user as any;
+    const currentUserId = sessionUser?.id ? String(sessionUser.id) : null;
+
     const body = await req.json();
     const { studentId, name, description, date, notes, exercises = [] } = body;
 
@@ -29,6 +233,13 @@ export async function POST(req: NextRequest) {
 
     const studentExists = await prisma.student.findUnique({
       where: { id: studentId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        userId: true,
+        userAuthId: true,
+      },
     });
 
     if (!studentExists) {
@@ -37,6 +248,12 @@ export async function POST(req: NextRequest) {
         { status: 404 }
       );
     }
+
+    const existingWorkoutPlanCount = await prisma.workoutPlan.count({
+      where: { studentId },
+    });
+
+    const isFirstWorkoutPlan = existingWorkoutPlanCount === 0;
 
     const normalizedExercises = exercises.map((ex: any, index: number) => ({
       name: ex.name,
@@ -83,6 +300,20 @@ export async function POST(req: NextRequest) {
 
       return plan;
     });
+
+    try {
+      const fallbackAuthorId = await getFallbackNoticeAuthorId(studentExists.userId);
+      const authorId = currentUserId || fallbackAuthorId;
+
+      await notifyWorkoutAvailable({
+        studentId,
+        planName: result.name,
+        isFirstWorkoutPlan,
+        authorId,
+      });
+    } catch (notificationError) {
+      console.error("Erro ao notificar aluno sobre novo treino:", notificationError);
+    }
 
     return NextResponse.json(result, { status: 201 });
   } catch (error: any) {
