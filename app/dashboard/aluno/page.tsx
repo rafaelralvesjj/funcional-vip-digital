@@ -40,6 +40,7 @@ interface WorkoutPlan {
   exercises?: Array<{
     id?: string;
     name?: string | null;
+    description?: string | null;
     series?: number | null;
     reps?: string | null;
     weight?: string | null;
@@ -47,6 +48,26 @@ interface WorkoutPlan {
     notes?: string | null;
     order?: number | null;
   }>;
+}
+
+interface WorkoutEditExercise {
+  name: string;
+  description: string;
+  series: number;
+  reps: string;
+  weight: string;
+  restTime: string;
+  notes: string;
+  order: number;
+}
+
+interface WorkoutEditForm {
+  id: string;
+  name: string;
+  date: string;
+  description: string;
+  notes: string;
+  exercises: WorkoutEditExercise[];
 }
 
 interface QuestionItem {
@@ -95,6 +116,19 @@ function formatDate(value?: string | null) {
   });
 }
 
+function toInputDate(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function formatDateTime(value?: string | null) {
   if (!value) return "-";
 
@@ -134,6 +168,10 @@ export default function AlunoDetalhePage() {
   const [questionLoadError, setQuestionLoadError] = useState(false);
   const [replyContent, setReplyContent] = useState<Record<string, string>>({});
   const [replyingQuestionId, setReplyingQuestionId] = useState<string | null>(null);
+  const [editingWorkout, setEditingWorkout] = useState<WorkoutPlan | null>(null);
+  const [editWorkoutForm, setEditWorkoutForm] = useState<WorkoutEditForm | null>(null);
+  const [savingWorkoutEdit, setSavingWorkoutEdit] = useState(false);
+  const [deletingWorkoutId, setDeletingWorkoutId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -297,6 +335,162 @@ export default function AlunoDetalhePage() {
     }
   }
 
+  function openEditWorkout(workout: WorkoutPlan) {
+    setEditingWorkout(workout);
+    setEditWorkoutForm({
+      id: workout.id,
+      name: workout.name || "",
+      date: toInputDate(workout.date || workout.createdAt),
+      description: workout.description || "",
+      notes: workout.notes || "",
+      exercises: (workout.exercises || []).map((exercise, index) => ({
+        name: exercise.name || "",
+        description: exercise.description || "",
+        series: exercise.series || 3,
+        reps: exercise.reps || "",
+        weight: exercise.weight || "",
+        restTime: exercise.restTime || "",
+        notes: exercise.notes || "",
+        order: typeof exercise.order === "number" ? exercise.order : index,
+      })),
+    });
+  }
+
+  function updateWorkoutForm(field: keyof WorkoutEditForm, value: string) {
+    setEditWorkoutForm((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        [field]: value,
+      };
+    });
+  }
+
+  function updateWorkoutExercise(
+    index: number,
+    field: keyof WorkoutEditExercise,
+    value: string | number
+  ) {
+    setEditWorkoutForm((prev) => {
+      if (!prev) return prev;
+
+      const exercises = [...prev.exercises];
+      exercises[index] = {
+        ...exercises[index],
+        [field]: value,
+      };
+
+      return {
+        ...prev,
+        exercises,
+      };
+    });
+  }
+
+  function removeWorkoutExercise(index: number) {
+    setEditWorkoutForm((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        exercises: prev.exercises
+          .filter((_, currentIndex) => currentIndex !== index)
+          .map((exercise, order) => ({
+            ...exercise,
+            order,
+          })),
+      };
+    });
+  }
+
+  async function saveWorkoutEdit() {
+    if (!editWorkoutForm) return;
+
+    if (!editWorkoutForm.name.trim()) {
+      alert("Informe o nome do treino.");
+      return;
+    }
+
+    if (editWorkoutForm.exercises.length === 0) {
+      alert("O treino precisa ter pelo menos um exercício.");
+      return;
+    }
+
+    setSavingWorkoutEdit(true);
+
+    try {
+      const res = await fetch("/api/workout-plan", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: editWorkoutForm.id,
+          name: editWorkoutForm.name.trim(),
+          date: editWorkoutForm.date || null,
+          description: editWorkoutForm.description.trim() || null,
+          notes: editWorkoutForm.notes.trim() || null,
+          exercises: editWorkoutForm.exercises.map((exercise, index) => ({
+            name: exercise.name,
+            description: exercise.description || null,
+            series: Number(exercise.series) || 1,
+            reps: exercise.reps || null,
+            weight: exercise.weight || null,
+            restTime: exercise.restTime || null,
+            notes: exercise.notes || null,
+            order: index,
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        alert("Erro ao editar treino: " + (err?.error || "não foi possível salvar."));
+        return;
+      }
+
+      await loadStudentData(studentId);
+      setEditingWorkout(null);
+      setEditWorkoutForm(null);
+      setActiveTab("treinos");
+    } catch (error) {
+      console.error("Erro ao editar treino:", error);
+      alert("Erro ao editar treino.");
+    } finally {
+      setSavingWorkoutEdit(false);
+    }
+  }
+
+  async function deleteWorkout(workoutId: string) {
+    const confirmed = window.confirm(
+      "Tem certeza que deseja excluir este treino? Essa ação não pode ser desfeita."
+    );
+
+    if (!confirmed) return;
+
+    setDeletingWorkoutId(workoutId);
+
+    try {
+      const res = await fetch(`/api/workout-plan?id=${workoutId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        alert("Erro ao excluir treino: " + (err?.error || "não foi possível excluir."));
+        return;
+      }
+
+      setWorkouts((prev) => prev.filter((workout) => workout.id !== workoutId));
+    } catch (error) {
+      console.error("Erro ao excluir treino:", error);
+      alert("Erro ao excluir treino.");
+    } finally {
+      setDeletingWorkoutId(null);
+    }
+  }
+
   if (!studentId) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
@@ -452,7 +646,7 @@ export default function AlunoDetalhePage() {
                   key={workout.id}
                   className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-4"
                 >
-                  <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-[#f5f5f5] truncate">
                         {workout.name || "Treino"}
@@ -462,9 +656,28 @@ export default function AlunoDetalhePage() {
                       </p>
                     </div>
 
-                    <span className="text-[10px] px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 shrink-0">
-                      {workout.exercises?.length || 0} exercício(s)
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] px-2 py-1 rounded-full bg-blue-500/10 text-blue-400">
+                        {workout.exercises?.length || 0} exercício(s)
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => openEditWorkout(workout)}
+                        className="text-[11px] px-2 py-1 rounded-lg text-[#D4A373] hover:bg-[#D4A373]/10 transition"
+                      >
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => deleteWorkout(workout.id)}
+                        disabled={deletingWorkoutId === workout.id}
+                        className="text-[11px] px-2 py-1 rounded-lg text-red-400 hover:bg-red-500/10 transition disabled:opacity-50"
+                      >
+                        {deletingWorkoutId === workout.id ? "Excluindo..." : "Excluir"}
+                      </button>
+                    </div>
                   </div>
 
                   {workout.description && (
@@ -639,6 +852,226 @@ export default function AlunoDetalhePage() {
           )}
         </div>
       )}
+      {editingWorkout && editWorkoutForm && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setEditingWorkout(null);
+            setEditWorkoutForm(null);
+          }}
+        >
+          <div
+            className="bg-[#1a1a1a] border border-[#ffffff10] rounded-2xl p-5 w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <h2 className="text-lg font-semibold text-[#D4A373]">
+                  Editar treino
+                </h2>
+                <p className="text-xs text-[#a1a1a1] mt-1">
+                  Ajuste os dados do treino e os exercícios já cadastrados.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingWorkout(null);
+                  setEditWorkoutForm(null);
+                }}
+                className="text-[#a1a1a1] hover:text-white text-sm"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="text-xs text-[#a1a1a1] block mb-1">
+                  Nome do treino
+                </label>
+                <input
+                  value={editWorkoutForm.name}
+                  onChange={(event) => updateWorkoutForm("name", event.target.value)}
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-[#a1a1a1] block mb-1">
+                  Data
+                </label>
+                <input
+                  type="date"
+                  value={editWorkoutForm.date}
+                  onChange={(event) => updateWorkoutForm("date", event.target.value)}
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] [color-scheme:dark]"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs text-[#a1a1a1] block mb-1">
+                  Descrição
+                </label>
+                <input
+                  value={editWorkoutForm.description}
+                  onChange={(event) => updateWorkoutForm("description", event.target.value)}
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs text-[#a1a1a1] block mb-1">
+                  Observações gerais
+                </label>
+                <textarea
+                  value={editWorkoutForm.notes}
+                  onChange={(event) => updateWorkoutForm("notes", event.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-[#f5f5f5]">
+                Exercícios
+              </p>
+
+              {editWorkoutForm.exercises.map((exercise, index) => (
+                <div
+                  key={`${exercise.name}-${index}`}
+                  className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-4"
+                >
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <p className="text-xs text-[#D4A373] font-semibold">
+                      Exercício {index + 1}
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => removeWorkoutExercise(index)}
+                      className="text-xs text-red-400 hover:text-red-300"
+                    >
+                      Remover
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-[#a1a1a1] block mb-1">
+                        Nome
+                      </label>
+                      <input
+                        value={exercise.name}
+                        onChange={(event) =>
+                          updateWorkoutExercise(index, "name", event.target.value)
+                        }
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#111111] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-[#a1a1a1] block mb-1">
+                        Séries
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={exercise.series}
+                        onChange={(event) =>
+                          updateWorkoutExercise(
+                            index,
+                            "series",
+                            Number(event.target.value) || 1
+                          )
+                        }
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#111111] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-[#a1a1a1] block mb-1">
+                        Repetições
+                      </label>
+                      <input
+                        value={exercise.reps}
+                        onChange={(event) =>
+                          updateWorkoutExercise(index, "reps", event.target.value)
+                        }
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#111111] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-[#a1a1a1] block mb-1">
+                        Carga
+                      </label>
+                      <input
+                        value={exercise.weight}
+                        onChange={(event) =>
+                          updateWorkoutExercise(index, "weight", event.target.value)
+                        }
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#111111] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-[#a1a1a1] block mb-1">
+                        Descanso
+                      </label>
+                      <input
+                        value={exercise.restTime}
+                        onChange={(event) =>
+                          updateWorkoutExercise(index, "restTime", event.target.value)
+                        }
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#111111] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-[#a1a1a1] block mb-1">
+                        Observações do exercício
+                      </label>
+                      <input
+                        value={exercise.notes}
+                        onChange={(event) =>
+                          updateWorkoutExercise(index, "notes", event.target.value)
+                        }
+                        className="w-full rounded-lg border border-[#ffffff10] bg-[#111111] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingWorkout(null);
+                  setEditWorkoutForm(null);
+                }}
+                className="text-xs text-[#a1a1a1] hover:text-white px-4 py-2 rounded-lg hover:bg-white/5 transition"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={saveWorkoutEdit}
+                disabled={savingWorkoutEdit}
+                className="text-xs bg-[#D4A373] text-[#0a0a0a] font-bold px-4 py-2 rounded-lg hover:bg-[#c49563] transition disabled:opacity-50"
+              >
+                {savingWorkoutEdit ? "Salvando..." : "Salvar alterações"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
