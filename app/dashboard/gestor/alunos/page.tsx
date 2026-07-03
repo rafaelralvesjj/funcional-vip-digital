@@ -365,7 +365,7 @@ export default function GerenciarAlunosPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 w-full max-w-none mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#D4A373]">Gerenciar Alunos</h1>
         <p className="text-[#a1a1a1] mt-1">
@@ -395,88 +395,117 @@ export default function GerenciarAlunosPage() {
           <p className="text-[#525252] text-lg">Nenhum aluno cadastrado</p>
         </div>
       ) : (
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#ffffff10]">
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Aluno</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">E-mail</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Telefone</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Professor</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Dias/mês</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Status</th>
-                  <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((student) => (
-                  <tr key={student.id} className="border-b border-[#ffffff10] hover:bg-white/5">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-sm">
-                          {(student.name || "?").charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-[#f5f5f5] text-sm font-medium">{student.name}</p>
-                          {student.notes && (
-                            <p className="text-[#525252] text-xs max-w-[220px] truncate">{student.notes}</p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-[#a1a1a1]">{student.email || "-"}</td>
-                    <td className="px-5 py-4 text-sm text-[#a1a1a1]">{student.phone || "-"}</td>
-                    <td className="px-5 py-4 text-sm text-[#a1a1a1]">{getProfessorName(student)}</td>
-                    <td className="px-5 py-4 text-sm text-[#a1a1a1]">
-                      {student.contractedTrainingDaysPerMonth ?? "-"}
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className={"text-xs px-2 py-1 rounded-full " + (student.active === false ? "bg-red-500/10 text-red-400" : "bg-green-500/10 text-green-400")}>
-                        {student.active === false ? "Inativo" : "Ativo"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => abrirEditar(student)}
-                          className="text-[#D4A373] hover:text-[#c49563] text-sm px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
-                        >
-                          Editar
-                        </button>
+        <div className="space-y-3">
+          {students.map((student) => (
+            <div
+              key={student.id}
+              className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4 hover:bg-white/[0.03] transition"
+            >
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex items-center gap-3 min-w-0 xl:w-[190px] xl:shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-sm shrink-0">
+                    {(student.name || "?").charAt(0).toUpperCase()}
+                  </div>
 
-                        {confirmDelete === student.id ? (
-                          <>
-                            <span className="text-xs text-red-400">Confirmar?</span>
-                            <button
-                              onClick={() => excluirAluno(student.id)}
-                              disabled={deleting === student.id}
-                              className="bg-red-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-red-600 transition disabled:opacity-50"
-                            >
-                              {deleting === student.id ? "..." : "Excluir"}
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(null)}
-                              className="text-[#a1a1a1] text-xs px-3 py-1.5 rounded-lg hover:bg-white/5 transition"
-                            >
-                              Cancelar
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmDelete(student.id)}
-                            className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg hover:bg-red-500/5 transition"
-                          >
-                            Excluir
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  <div className="min-w-0">
+                    <p className="text-[#f5f5f5] text-sm font-medium truncate">
+                      {student.name}
+                    </p>
+
+                    {student.notes && (
+                      <p className="text-[#525252] text-xs truncate">
+                        {student.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 flex-1 min-w-0">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                      E-mail
+                    </p>
+                    <p className="text-xs text-[#a1a1a1] truncate" title={student.email || "-"}>
+                      {student.email || "-"}
+                    </p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                      Telefone
+                    </p>
+                    <p className="text-xs text-[#a1a1a1] truncate">
+                      {student.phone || "-"}
+                    </p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                      Professor
+                    </p>
+                    <p className="text-xs text-[#a1a1a1] truncate" title={getProfessorName(student)}>
+                      {getProfessorName(student)}
+                    </p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                      Dias/mês
+                    </p>
+                    <p className="text-xs text-[#a1a1a1]">
+                      {student.contractedTrainingDaysPerMonth ?? "-"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 xl:justify-end xl:w-[210px] xl:shrink-0">
+                  <span
+                    className={
+                      "text-[11px] px-2 py-1 rounded-full whitespace-nowrap " +
+                      (student.active === false
+                        ? "bg-red-500/10 text-red-400"
+                        : "bg-green-500/10 text-green-400")
+                    }
+                  >
+                    {student.active === false ? "Inativo" : "Ativo"}
+                  </span>
+
+                  <button
+                    onClick={() => abrirEditar(student)}
+                    className="text-[#D4A373] hover:text-[#c49563] text-xs px-2 py-1 rounded-lg hover:bg-[#D4A373]/5 transition"
+                  >
+                    Editar
+                  </button>
+
+                  {confirmDelete === student.id ? (
+                    <>
+                      <button
+                        onClick={() => excluirAluno(student.id)}
+                        disabled={deleting === student.id}
+                        className="bg-red-500 text-white text-xs font-medium px-2 py-1 rounded-lg hover:bg-red-600 transition disabled:opacity-50"
+                      >
+                        {deleting === student.id ? "..." : "Sim"}
+                      </button>
+
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        className="text-[#a1a1a1] text-xs px-2 py-1 rounded-lg hover:bg-white/5 transition"
+                      >
+                        Não
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(student.id)}
+                      className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded-lg hover:bg-red-500/5 transition"
+                    >
+                      Excluir
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
