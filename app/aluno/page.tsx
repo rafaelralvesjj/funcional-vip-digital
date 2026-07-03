@@ -99,7 +99,13 @@ export default function AlunoPage() {
       const res = await fetch("/api/workout-plan?studentId=" + id);
       if (res.ok) {
         const data = await res.json();
-        setPlans(Array.isArray(data) ? data : []);
+        const rawPlans = Array.isArray(data) ? data : [];
+
+        setPlans(
+          rawPlans.filter((plan: any) =>
+            canStudentSeePlanByDate(plan.date || plan.createdAt)
+          )
+        );
       }
     } catch {}
   }
@@ -109,7 +115,13 @@ export default function AlunoPage() {
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setWorkouts(Array.isArray(data) ? data : []);
+        const rawWorkouts = Array.isArray(data) ? data : [];
+
+        setWorkouts(
+          rawWorkouts.filter((workout: any) =>
+            canStudentSeePlanByDate(workout.date || workout.createdAt)
+          )
+        );
       }
     } catch {}
   }
@@ -316,6 +328,46 @@ export default function AlunoPage() {
     return role === "STUDENT" && Boolean(msg.answer);
   }
 
+  function getStartOfCurrentWeek(): Date {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const day = today.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() + diffToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    return startOfWeek;
+  }
+
+  function getStartOfNextWeek(): Date {
+    const startOfCurrentWeek = getStartOfCurrentWeek();
+    const startOfNextWeek = new Date(startOfCurrentWeek);
+    startOfNextWeek.setDate(startOfCurrentWeek.getDate() + 7);
+    startOfNextWeek.setHours(0, 0, 0, 0);
+
+    return startOfNextWeek;
+  }
+
+  function canStudentSeePlanByDate(value?: string | null): boolean {
+    if (!value) return false;
+
+    const planDate = new Date(value);
+
+    if (Number.isNaN(planDate.getTime())) return false;
+
+    planDate.setHours(0, 0, 0, 0);
+
+    /*
+     * O aluno só enxerga treinos da semana vigente ou anteriores.
+     * Treinos de semana futura podem ser planejados pelo professor,
+     * mas não aparecem no calendário, nas bolinhas ou na lista do aluno.
+     */
+    return planDate < getStartOfNextWeek();
+  }
+
   function getWeekDayName(day: number): string {
     const date = new Date(currentYear, currentMonth, day);
     const dayIndex = date.getDay();
@@ -326,18 +378,37 @@ export default function AlunoPage() {
     return reverseMap[dayIndex];
   }
   function getPlanForDay(day: number): any | null {
+    const selectedDate = new Date(currentYear, currentMonth, day);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate >= getStartOfNextWeek()) {
+      return null;
+    }
+
     const dateStr = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+
     return plans.find((p: any) => {
       if (!p.date) return false;
+      if (!canStudentSeePlanByDate(p.date || p.createdAt)) return false;
+
       const planDate = new Date(p.date);
       const planStr = planDate.getUTCFullYear() + "-" + String(planDate.getUTCMonth() + 1).padStart(2, "0") + "-" + String(planDate.getUTCDate()).padStart(2, "0");
+
       return planStr === dateStr;
     }) || null;
   }
   function handleDayClick(day: number) {
+    const selectedDate = new Date(currentYear, currentMonth, day);
+    selectedDate.setHours(0, 0, 0, 0);
+
     setSelectedDay(day);
     setSelectedExercise(null);
     setSelectedPlan(null);
+
+    if (selectedDate >= getStartOfNextWeek()) {
+      return;
+    }
+
     const plan = getPlanForDay(day);
     if (plan) {
       setSelectedPlan(plan);
@@ -349,6 +420,13 @@ export default function AlunoPage() {
     return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
   }
   function isCompleted(day: number) {
+    const selectedDate = new Date(currentYear, currentMonth, day);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate >= getStartOfNextWeek()) {
+      return false;
+    }
+
     const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
     return workouts.some((w: any) => {
       const workoutDate = new Date(w.date);
@@ -430,9 +508,12 @@ export default function AlunoPage() {
                   const sel = selectedDay === day;
                   const done = isCompleted(day);
                   const plan = hasPlan(day);
+                  const dayDate = new Date(currentYear, currentMonth, day);
+                  dayDate.setHours(0, 0, 0, 0);
+                  const isFutureHidden = dayDate >= getStartOfNextWeek();
                   return (
                     <button key={day} onClick={() => handleDayClick(day)}
-                      className={"aspect-square rounded-sm flex flex-col items-center justify-center text-[7px] transition cursor-pointer " +
+                      className={"aspect-square rounded-sm flex flex-col items-center justify-center text-[7px] transition " + (isFutureHidden ? "cursor-default opacity-40 " : "cursor-pointer ") +
                         (sel ? "bg-[#D4A373]/20 border border-[#D4A373] text-[#D4A373]" :
                          hoje ? "border border-[#D4A373]/50 text-[#D4A373] font-bold" :
                          "text-[#a1a1a1] hover:bg-white/5")}>
