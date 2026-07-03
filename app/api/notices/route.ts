@@ -29,63 +29,45 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
-async function notifyProfessorNoticeByEmail(notice: {
+type NoticeEmailRecipient = {
   id: string;
-  title: string | null;
-  content: string;
-  targetRole: string;
-  professorId: string | null;
-  professor?: {
-    id: string;
-    name: string | null;
-    email: string | null;
-  } | null;
+  name: string | null;
+  email: string | null;
+};
+
+async function sendNoticeEmailToRecipients({
+  recipients,
+  title,
+  recipientKind,
+}: {
+  recipients: NoticeEmailRecipient[];
+  title: string;
+  recipientKind: "STUDENT" | "TEACHER";
 }) {
-  const targetRole = normalizeRole(notice.targetRole);
-
-  if (targetRole !== "TEACHER") return;
-
-  let recipients: Array<{ id: string; name: string | null; email: string | null }> = [];
-
-  if (notice.professorId && notice.professor) {
-    recipients = [notice.professor];
-  } else if (!notice.professorId) {
-    recipients = await prisma.user.findMany({
-      where: {
-        role: {
-          in: ["PROFESSOR", "TEACHER"],
-        },
-        email: {
-          not: null,
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
-    });
-  }
-
   const loginUrl = getAppLoginUrl();
-  const title = notice.title || "Novo aviso da gestão";
   const safeTitle = escapeHtml(title);
   const subject = `Novo aviso da gestão: ${title}`;
+
+  const panelText =
+    recipientKind === "STUDENT"
+      ? "seu painel do aluno"
+      : "seu painel do professor";
 
   await Promise.allSettled(
     recipients
       .filter((recipient) => Boolean(recipient.email))
       .map((recipient) => {
-        const professorName = recipient.name || "professor";
+        const recipientName =
+          recipient.name || (recipientKind === "STUDENT" ? "aluno" : "professor");
 
         const text = [
-          `Olá, ${professorName}!`,
+          `Olá, ${recipientName}!`,
           "",
           "Você recebeu um novo aviso da gestão no Funcional Vip Digital.",
           "",
           `Título: ${title}`,
           "",
-          "Acesse seu painel do aluno para ler o aviso completo.",
+          `Para ler o aviso completo, acesse ${panelText}.`,
           "",
           `Entrar no sistema: ${loginUrl}`,
         ].join("\n");
@@ -96,7 +78,7 @@ async function notifyProfessorNoticeByEmail(notice: {
               <h2 style="color:#D4A373; margin:0 0 16px;">Novo aviso da gestão</h2>
 
               <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-                Olá, ${escapeHtml(professorName)}!
+                Olá, ${escapeHtml(recipientName)}!
               </p>
 
               <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
@@ -109,7 +91,7 @@ async function notifyProfessorNoticeByEmail(notice: {
               </div>
 
               <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                Para ler o aviso completo, acesse seu painel do aluno.
+                Para ler o aviso completo, acesse ${panelText}.
               </p>
 
               <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
@@ -131,6 +113,80 @@ async function notifyProfessorNoticeByEmail(notice: {
         });
       })
   );
+}
+
+async function notifyNoticeByEmail(notice: {
+  id: string;
+  title: string | null;
+  content: string;
+  targetRole: string;
+  studentId: string | null;
+  professorId: string | null;
+  student?: NoticeEmailRecipient | null;
+  professor?: NoticeEmailRecipient | null;
+}) {
+  const targetRole = normalizeRole(notice.targetRole);
+  const title = notice.title || "Novo aviso da gestão";
+
+  if (targetRole === "TEACHER") {
+    let recipients: NoticeEmailRecipient[] = [];
+
+    if (notice.professorId && notice.professor) {
+      recipients = [notice.professor];
+    } else if (!notice.professorId) {
+      recipients = await prisma.user.findMany({
+        where: {
+          role: {
+            in: ["PROFESSOR", "TEACHER"],
+          },
+          email: {
+            not: null,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      });
+    }
+
+    await sendNoticeEmailToRecipients({
+      recipients,
+      title,
+      recipientKind: "TEACHER",
+    });
+
+    return;
+  }
+
+  if (targetRole === "STUDENT") {
+    let recipients: NoticeEmailRecipient[] = [];
+
+    if (notice.studentId && notice.student) {
+      recipients = [notice.student];
+    } else if (!notice.studentId) {
+      recipients = await prisma.student.findMany({
+        where: {
+          active: true,
+          email: {
+            not: null,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      });
+    }
+
+    await sendNoticeEmailToRecipients({
+      recipients,
+      title,
+      recipientKind: "STUDENT",
+    });
+  }
 }
 
 export async function GET(req: Request) {
@@ -198,6 +254,7 @@ export async function GET(req: Request) {
           select: {
             id: true,
             name: true,
+            email: true,
           },
         },
         professor: {
@@ -269,6 +326,7 @@ export async function POST(req: Request) {
           select: {
             id: true,
             name: true,
+            email: true,
           },
         },
         professor: {
@@ -283,12 +341,14 @@ export async function POST(req: Request) {
     });
 
     try {
-      await notifyProfessorNoticeByEmail({
+      await notifyNoticeByEmail({
         id: notice.id,
         title: notice.title,
         content: notice.content,
         targetRole: notice.targetRole,
+        studentId: notice.studentId,
         professorId: notice.professorId,
+        student: notice.student,
         professor: notice.professor,
       });
     } catch (emailError) {
@@ -337,6 +397,7 @@ export async function PUT(req: Request) {
           select: {
             id: true,
             name: true,
+            email: true,
           },
         },
         professor: {
