@@ -103,13 +103,19 @@ async function getFallbackNoticeAuthorId(studentProfessorId?: string | null): Pr
 async function notifyWorkoutAvailable({
   studentId,
   planName,
-  isFirstWorkoutPlan,
+  isFirstWorkoutPackage,
   authorId,
+  weeklyLimit,
+  startOfWeek,
+  endOfWeek,
 }: {
   studentId: string;
   planName: string;
-  isFirstWorkoutPlan: boolean;
+  isFirstWorkoutPackage: boolean;
   authorId: string | null;
+  weeklyLimit: number;
+  startOfWeek: Date;
+  endOfWeek: Date;
 }) {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
@@ -127,26 +133,51 @@ async function notifyWorkoutAvailable({
   const studentEmail = await getStudentEmail(student);
   const loginUrl = getAppLoginUrl();
 
-  const title = isFirstWorkoutPlan
-    ? "Seu primeiro treino da semana está disponível"
-    : "Seu treino da semana está disponível";
+  const weekEndDisplay = new Date(endOfWeek.getTime() - 1);
+  const weekLabel = `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`;
 
-  const content = isFirstWorkoutPlan
+  const title = isFirstWorkoutPackage
+    ? "Seus primeiros treinos da semana estão disponíveis"
+    : "Seus treinos da semana estão disponíveis";
+
+  const content = isFirstWorkoutPackage
     ? [
-        "Seu primeiro treino já está disponível no painel do aluno.",
+        `Seus ${weeklyLimit} treino(s) da semana já estão disponíveis no painel do aluno.`,
+        `Semana de referência: ${weekLabel}.`,
         "",
-        "Antes de começar, separe uns 10 minutinhos para olhar o treino com calma.",
+        "Como este é seu primeiro pacote de treinos no sistema, separe uns 10 minutinhos antes de começar para olhar tudo com calma.",
         "Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.",
       ].join("\n")
     : [
-        "Seu treino da semana está disponível no painel do aluno.",
+        `Seus ${weeklyLimit} treino(s) da semana já estão disponíveis no painel do aluno.`,
+        `Semana de referência: ${weekLabel}.`,
         "",
         "Acesse o sistema para visualizar as orientações e seguir sua programação.",
       ].join("\n");
 
   const notificationTasks: Promise<unknown>[] = [];
 
-  if (authorId) {
+  /*
+   * Evita duplicidade de aviso/e-mail para a mesma semana.
+   * Como a tabela Notice não tem campo específico de semana do treino,
+   * usamos o mesmo título e o texto com a semana de referência.
+   */
+  const existingWeekNotice = await prisma.notice.findFirst({
+    where: {
+      studentId,
+      type: "WORKOUT",
+      targetRole: "STUDENT",
+      title,
+      content: {
+        contains: weekLabel,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!existingWeekNotice && authorId) {
     notificationTasks.push(
       prisma.notice.create({
         data: {
@@ -161,19 +192,21 @@ async function notifyWorkoutAvailable({
     );
   }
 
-  if (studentEmail) {
+  if (!existingWeekNotice && studentEmail) {
     const safeStudentName = escapeHtml(studentName);
     const safePlanName = escapeHtml(planName);
+    const safeWeekLabel = escapeHtml(weekLabel);
 
     const subject = title;
 
-    const text = isFirstWorkoutPlan
+    const text = isFirstWorkoutPackage
       ? [
           `Olá, ${studentName}!`,
           "",
-          `Seu treino da semana (${planName}) está disponível no Funcional Vip Digital.`,
+          `Seus ${weeklyLimit} treino(s) da semana estão disponíveis no Funcional Vip Digital.`,
+          `Semana de referência: ${weekLabel}.`,
           "",
-          "Como este é o seu primeiro acesso ao treino, separe uns 10 minutinhos antes de começar para olhar tudo com calma.",
+          "Como este é seu primeiro pacote de treinos no sistema, separe uns 10 minutinhos antes de começar para olhar tudo com calma.",
           "Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.",
           "",
           `Acessar o sistema: ${loginUrl}`,
@@ -181,27 +214,36 @@ async function notifyWorkoutAvailable({
       : [
           `Olá, ${studentName}!`,
           "",
-          `Seu treino da semana (${planName}) está disponível no Funcional Vip Digital.`,
+          `Seus ${weeklyLimit} treino(s) da semana estão disponíveis no Funcional Vip Digital.`,
+          `Semana de referência: ${weekLabel}.`,
           "",
           "Acesse seu painel do aluno para visualizar as orientações e seguir sua programação.",
           "",
           `Acessar o sistema: ${loginUrl}`,
         ].join("\n");
 
-    const introHtml = isFirstWorkoutPlan
+    const introHtml = isFirstWorkoutPackage
       ? `
           <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Seu treino da semana, <strong style="color:#f5f5f5;">${safePlanName}</strong>, está disponível no Funcional Vip Digital.
+            Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana estão disponíveis no Funcional Vip Digital.
           </p>
 
           <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Como este é o seu primeiro acesso ao treino, separe uns 10 minutinhos antes de começar para olhar tudo com calma.
+            Semana de referência: <strong style="color:#f5f5f5;">${safeWeekLabel}</strong>.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Como este é seu primeiro pacote de treinos no sistema, separe uns 10 minutinhos antes de começar para olhar tudo com calma.
             Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.
           </p>
         `
       : `
           <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Seu treino da semana, <strong style="color:#f5f5f5;">${safePlanName}</strong>, está disponível no Funcional Vip Digital.
+            Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana estão disponíveis no Funcional Vip Digital.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Semana de referência: <strong style="color:#f5f5f5;">${safeWeekLabel}</strong>.
           </p>
 
           <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
@@ -220,8 +262,12 @@ async function notifyWorkoutAvailable({
 
           ${introHtml}
 
+          <p style="color:#6b6b6b; font-size:11px; line-height:1.5;">
+            Último treino salvo neste pacote: ${safePlanName}.
+          </p>
+
           <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
-            Acessar meu treino
+            Acessar meus treinos
           </a>
 
           <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
@@ -385,21 +431,43 @@ export async function POST(req: NextRequest) {
       return plan;
     });
 
-    try {
-      const fallbackAuthorId = await getFallbackNoticeAuthorId(studentExists.userId);
-      const authorId = currentUserId || fallbackAuthorId;
+    const workoutsThisWeekAfterCreate = workoutPlansThisWeek + 1;
+    const isWeeklyPackageComplete = workoutsThisWeekAfterCreate >= weeklyLimit;
 
-      await notifyWorkoutAvailable({
-        studentId,
-        planName: result.name,
-        isFirstWorkoutPlan,
-        authorId,
-      });
-    } catch (notificationError) {
-      console.error("Erro ao notificar aluno sobre novo treino:", notificationError);
+    if (isWeeklyPackageComplete) {
+      try {
+        const fallbackAuthorId = await getFallbackNoticeAuthorId(studentExists.userId);
+        const authorId = currentUserId || fallbackAuthorId;
+
+        await notifyWorkoutAvailable({
+          studentId,
+          planName: result.name,
+          isFirstWorkoutPackage: isFirstWorkoutPlan || existingWorkoutPlanCount < weeklyLimit,
+          authorId,
+          weeklyLimit,
+          startOfWeek,
+          endOfWeek,
+        });
+      } catch (notificationError) {
+        console.error("Erro ao notificar aluno sobre treinos da semana:", notificationError);
+      }
     }
 
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json(
+      {
+        ...result,
+        weeklyNotification: {
+          weeklyLimit,
+          workoutsThisWeek: workoutsThisWeekAfterCreate,
+          weekComplete: isWeeklyPackageComplete,
+          emailSent: isWeeklyPackageComplete,
+          message: isWeeklyPackageComplete
+            ? "Meta semanal completa. Aluno notificado sobre os treinos da semana."
+            : `Treino salvo. Ainda falta(m) ${weeklyLimit - workoutsThisWeekAfterCreate} treino(s) para liberar a semana e notificar o aluno.`,
+        },
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error("POST /api/workout-plan error:", error);
     return NextResponse.json(
