@@ -289,15 +289,9 @@ export async function GET(request: NextRequest) {
 
   const { startOfWeek, endOfWeek } = getWeekRange(new Date());
 
-  const students = await prisma.student.findMany({
+  const allActiveStudents = await prisma.student.findMany({
     where: {
       active: true,
-      userId: {
-        not: null,
-      },
-      contractedTrainingDaysPerMonth: {
-        not: null,
-      },
     },
     select: {
       id: true,
@@ -310,6 +304,17 @@ export async function GET(request: NextRequest) {
     orderBy: {
       name: "asc",
     },
+  });
+
+  /*
+   * Filtramos professor vinculado e dias contratados em memória para evitar
+   * incompatibilidade de tipo quando o Prisma Client do projeto trata userId
+   * como string obrigatória em vez de string nullable.
+   */
+  const students = allActiveStudents.filter((student) => {
+    const weeklyLimit = getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth);
+
+    return Boolean(student.userId) && Boolean(weeklyLimit);
   });
 
   const released: any[] = [];
