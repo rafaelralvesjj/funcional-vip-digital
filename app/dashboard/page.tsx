@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import DashboardConversationList from '@/components/DashboardConversationList';
 import ManagementNoticeModalList from '@/components/ManagementNoticeModalList';
 import DashboardAutoRefresh from '@/components/DashboardAutoRefresh';
+import DashboardSectionSwitcher from '@/components/DashboardSectionSwitcher';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -689,26 +690,32 @@ export default async function DashboardPage() {
 
   const summaryCards = [
     {
+      id: 'students',
       label: labels.studentsCard,
       value: students.length,
     },
     {
+      id: 'pending-workouts',
       label: labels.pendingWorkoutsCard,
       value: pendingWorkouts.length,
     },
     {
+      id: 'unanswered-questions',
       label: labels.unansweredQuestionsCard,
       value: questionsWithoutAnswer.length,
     },
     {
+      id: 'pending-notices',
       label: labels.pendingNoticesCard,
       value: pendingNoticeItems.length,
     },
     {
+      id: 'management-notices',
       label: labels.managementNoticesCard,
       value: unreadManagementNoticesCount,
     },
     {
+      id: 'management-messages',
       label: labels.managementMessagesCard,
       value: activeManagementMessagesCount,
     },
@@ -729,229 +736,214 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {summaryCards.map((card) => (
-            <div
-              key={card.label}
-              className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6"
-            >
-              <p className="text-[#a1a1a1] text-sm min-h-[40px]">
-                {card.label}
+        <DashboardSectionSwitcher cards={summaryCards}>
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+              {labels.studentsList}
+            </h2>
+
+            {students.length === 0 ? (
+              <p className="text-[#a1a1a1]">
+                Nenhum aluno vinculado.
               </p>
+            ) : (
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
+                {students.map((student) => (
+                  <div
+                    key={student.id}
+                    className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
+                  >
+                    <div className="p-4">
+                      <div className="flex justify-between items-start gap-4 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/30 text-blue-400 border border-blue-500/20">
+                            ALUNO
+                          </span>
 
-              <p className="text-3xl font-semibold text-[#D4A373] mt-2">
-                {card.value}
+                          <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                            {student.name}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-[#a1a1a1] mb-3">
+                        Professor:{' '}
+                        <span className="text-[#D4A373]">
+                          {student.user?.name || 'Não vinculado'}
+                        </span>
+                      </p>
+
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-[10px] text-emerald-400">
+                          Vinculado
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+              {labels.pendingWorkoutsList}
+            </h2>
+
+            {pendingWorkouts.length === 0 ? (
+              <p className="text-[#a1a1a1]">
+                Nenhum treino pendente no momento.
               </p>
-            </div>
-          ))}
-        </div>
+            ) : (
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
+                {pendingWorkouts.map((workout) => (
+                  <div
+                    key={workout.id}
+                    className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
+                  >
+                    <div className="p-4">
+                      <div className="flex justify-between items-start gap-4 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
+                            TREINO
+                          </span>
 
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
-            {labels.pendingWorkoutsList}
-          </h2>
+                          <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                            {workout.student?.name || 'Aluno'}
+                          </span>
+                        </div>
 
-          {pendingWorkouts.length === 0 ? (
-            <p className="text-[#a1a1a1]">
-              Nenhum treino pendente no momento.
-            </p>
-          ) : (
-            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
-              {pendingWorkouts.map((workout) => (
-                <div
-                  key={workout.id}
-                  className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
-                >
-                  <div className="p-4">
-                    <div className="flex justify-between items-start gap-4 mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
-                          TREINO
-                        </span>
-
-                        <span className="text-sm font-bold text-[#f5f5f5] truncate">
-                          {workout.student?.name || 'Aluno'}
+                        <span className="text-[10px] text-[#a1a1a1] shrink-0">
+                          {formatDate(workout.createdAt)}
                         </span>
                       </div>
 
-                      <span className="text-[10px] text-[#a1a1a1] shrink-0">
-                        {formatDate(workout.createdAt)}
-                      </span>
-                    </div>
+                      <p className="text-sm text-[#f5f5f5] mb-3">
+                        Treino pendente de análise.
+                      </p>
 
-                    <p className="text-sm text-[#f5f5f5] mb-3">
-                      Treino pendente de análise.
-                    </p>
-
-                    <p className="text-xs text-[#a1a1a1] mb-3">
-                      Professor:{' '}
-                      <span className="text-[#D4A373]">
-                        {workout.student?.user?.name || 'Não vinculado'}
-                      </span>
-                    </p>
-
-                    <div className="flex justify-between items-center gap-4">
-                      <span className="text-[10px] text-amber-400">
-                        Pendente
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
-            {labels.unansweredQuestionsList}
-          </h2>
-
-          <DashboardConversationList
-            conversations={unansweredQuestionConversationItems}
-            currentUserId={userId}
-            currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
-            emptyMessage="Nenhuma dúvida aguardando resposta."
-            allowReply={isTeacher}
-          />
-        </div>
-
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
-            {labels.pendingNoticesList}
-          </h2>
-
-          {pendingNoticeItems.length === 0 ? (
-            <p className="text-[#a1a1a1]">
-              Nenhum aviso pendente de leitura.
-            </p>
-          ) : (
-            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
-              {pendingNoticeItems.map((item) => (
-                <div
-                  key={`${item.notice.id}-${item.student.id}`}
-                  className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
-                >
-                  <div className="p-4">
-                    <div className="flex justify-between items-start gap-4 mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
-                          AVISO
+                      <p className="text-xs text-[#a1a1a1] mb-3">
+                        Professor:{' '}
+                        <span className="text-[#D4A373]">
+                          {workout.student?.user?.name || 'Não vinculado'}
                         </span>
+                      </p>
 
-                        <span className="text-sm font-bold text-[#f5f5f5] truncate">
-                          {item.notice.author?.name || 'Gestão'}
-                        </span>
-                      </div>
-
-                      <span className="text-[10px] text-[#a1a1a1] shrink-0">
-                        {formatDate(item.notice.createdAt)}
-                      </span>
-                    </div>
-
-                    <p className="text-sm text-[#f5f5f5] mb-3 whitespace-pre-wrap">
-                      {item.notice.title || 'Aviso'}
-                    </p>
-
-                    <p className="text-xs text-[#a1a1a1] mb-2">
-                      Para:{' '}
-                      <span className="text-[#D4A373]">
-                        Aluno: {item.student.name}
-                      </span>
-                    </p>
-
-                    <p className="text-xs text-[#a1a1a1] mb-3">
-                      Destino original:{' '}
-                      <span className="text-[#D4A373]">
-                        {getNoticeTargetLabel(item.notice)}
-                      </span>
-                    </p>
-
-                    <div className="flex justify-between items-center gap-4">
-                      <span className="text-[10px] text-amber-400">
-                        Pendente
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
-            {labels.managementNoticesList}
-          </h2>
-
-          <ManagementNoticeModalList
-            notices={managementNoticeItems}
-            emptyMessage="Nenhum aviso da gestão."
-            markAsReadOnClose={isTeacher}
-            showReadStatus={true}
-          />
-        </div>
-
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
-            {labels.managementMessagesList}
-          </h2>
-
-          <DashboardConversationList
-            conversations={managementConversationItems}
-            currentUserId={userId}
-            currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
-            emptyMessage="Nenhuma mensagem da gestão."
-          />
-        </div>
-
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
-            {labels.studentsList}
-          </h2>
-
-          {students.length === 0 ? (
-            <p className="text-[#a1a1a1]">
-              Nenhum aluno vinculado.
-            </p>
-          ) : (
-            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
-              {students.map((student) => (
-                <div
-                  key={student.id}
-                  className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
-                >
-                  <div className="p-4">
-                    <div className="flex justify-between items-start gap-4 mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/30 text-blue-400 border border-blue-500/20">
-                          ALUNO
-                        </span>
-
-                        <span className="text-sm font-bold text-[#f5f5f5] truncate">
-                          {student.name}
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-[10px] text-amber-400">
+                          Pendente
                         </span>
                       </div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                    <p className="text-xs text-[#a1a1a1] mb-3">
-                      Professor:{' '}
-                      <span className="text-[#D4A373]">
-                        {student.user?.name || 'Não vinculado'}
-                      </span>
-                    </p>
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+              {labels.unansweredQuestionsList}
+            </h2>
 
-                    <div className="flex justify-between items-center gap-4">
-                      <span className="text-[10px] text-emerald-400">
-                        Vinculado
-                      </span>
+            <DashboardConversationList
+              conversations={unansweredQuestionConversationItems}
+              currentUserId={userId}
+              currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
+              emptyMessage="Nenhuma dúvida aguardando resposta."
+              allowReply={isTeacher}
+            />
+          </div>
+
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+              {labels.pendingNoticesList}
+            </h2>
+
+            {pendingNoticeItems.length === 0 ? (
+              <p className="text-[#a1a1a1]">
+                Nenhum aviso pendente de leitura.
+              </p>
+            ) : (
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
+                {pendingNoticeItems.map((item) => (
+                  <div
+                    key={`${item.notice.id}-${item.student.id}`}
+                    className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
+                  >
+                    <div className="p-4">
+                      <div className="flex justify-between items-start gap-4 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
+                            AVISO
+                          </span>
+
+                          <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                            {item.notice.author?.name || 'Gestão'}
+                          </span>
+                        </div>
+
+                        <span className="text-[10px] text-[#a1a1a1] shrink-0">
+                          {formatDate(item.notice.createdAt)}
+                        </span>
+                      </div>
+
+                      <p className="text-sm text-[#f5f5f5] mb-3 whitespace-pre-wrap">
+                        {item.notice.title || 'Aviso'}
+                      </p>
+
+                      <p className="text-xs text-[#a1a1a1] mb-2">
+                        Para:{' '}
+                        <span className="text-[#D4A373]">
+                          Aluno: {item.student.name}
+                        </span>
+                      </p>
+
+                      <p className="text-xs text-[#a1a1a1] mb-3">
+                        Destino original:{' '}
+                        <span className="text-[#D4A373]">
+                          {getNoticeTargetLabel(item.notice)}
+                        </span>
+                      </p>
+
+                      <div className="flex justify-between items-center gap-4">
+                        <span className="text-[10px] text-amber-400">
+                          Pendente
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+              {labels.managementNoticesList}
+            </h2>
+
+            <ManagementNoticeModalList
+              notices={managementNoticeItems}
+              emptyMessage="Nenhum aviso da gestão."
+              markAsReadOnClose={isTeacher}
+              showReadStatus={true}
+            />
+          </div>
+
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+              {labels.managementMessagesList}
+            </h2>
+
+            <DashboardConversationList
+              conversations={managementConversationItems}
+              currentUserId={userId}
+              currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
+              emptyMessage="Nenhuma mensagem da gestão."
+            />
+          </div>
+        </DashboardSectionSwitcher>
       </div>
     </div>
   );
