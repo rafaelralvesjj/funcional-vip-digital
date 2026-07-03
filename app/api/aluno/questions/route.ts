@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/auth";
+import { sendEmail } from "@/lib/sendEmail";
 
 function normalizeRole(value?: string | null): string {
   const roleValue = String(value || "").toUpperCase();
@@ -24,6 +25,152 @@ function cleanText(value: unknown): string {
   if (typeof value !== "string") return "";
 
   return value.trim();
+}
+
+function getAppLoginUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/auth/signin`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+type StudentQuestionEmailRecipient = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  panelKind: "TEACHER" | "GESTOR";
+};
+
+async function notifyNewStudentQuestionByEmail({
+  studentId,
+  teacherId,
+}: {
+  studentId: string;
+  teacherId: string | null;
+}) {
+  const student = await prisma.student.findUnique({
+    where: {
+      id: studentId,
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  const senderLabel = student?.name || "um aluno";
+  let recipients: StudentQuestionEmailRecipient[] = [];
+
+  if (teacherId) {
+    const teacher = await prisma.user.findUnique({
+      where: {
+        id: teacherId,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    if (teacher) {
+      recipients = [{ ...teacher, panelKind: "TEACHER" }];
+    }
+  } else {
+    const gestores = await prisma.user.findMany({
+      where: {
+        role: {
+          in: ["GESTOR", "ADMIN"],
+        },
+        email: {
+          not: null,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    recipients = gestores.map((gestor) => ({
+      ...gestor,
+      panelKind: "GESTOR" as const,
+    }));
+  }
+
+  const loginUrl = getAppLoginUrl();
+  const safeSenderLabel = escapeHtml(senderLabel);
+
+  await Promise.allSettled(
+    recipients
+      .filter((recipient) => Boolean(recipient.email))
+      .map((recipient) => {
+        const recipientName = recipient.name || "usuário";
+        const panelText =
+          recipient.panelKind === "TEACHER"
+            ? "seu painel do professor"
+            : "seu painel da gestão";
+
+        const subject = "Nova dúvida no Funcional Vip Digital";
+
+        const text = [
+          `Olá, ${recipientName}!`,
+          "",
+          `Você recebeu uma nova dúvida de ${senderLabel} no Funcional Vip Digital.`,
+          "",
+          `Para visualizar, acesse ${panelText}.`,
+          "",
+          `Entrar no sistema: ${loginUrl}`,
+        ].join("\n");
+
+        const html = `
+          <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+            <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+              <h2 style="color:#D4A373; margin:0 0 16px;">Nova dúvida</h2>
+
+              <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+                Olá, ${escapeHtml(recipientName)}!
+              </p>
+
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                Você recebeu uma nova dúvida de <strong style="color:#f5f5f5;">${safeSenderLabel}</strong> no Funcional Vip Digital.
+              </p>
+
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                Para visualizar, acesse ${panelText}.
+              </p>
+
+              <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+                Acessar o sistema
+              </a>
+
+              <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
+                Este é um aviso automático do Funcional Vip Digital.
+              </p>
+            </div>
+          </div>
+        `;
+
+        return sendEmail({
+          to: recipient.email as string,
+          subject,
+          text,
+          html,
+        });
+      })
+  );
 }
 
 async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
@@ -301,6 +448,17 @@ export async function POST(req: NextRequest) {
       },
       include: getQuestionIncludes(),
     });
+
+    if (!rootQuestion) {
+      try {
+        await notifyNewStudentQuestionByEmail({
+          studentId: student.id,
+          teacherId,
+        });
+      } catch (emailError) {
+        console.error("Erro ao enviar e-mail de nova dúvida do aluno:", emailError);
+      }
+    }
 
     return NextResponse.json(question, { status: 201 });
   } catch (error) {
