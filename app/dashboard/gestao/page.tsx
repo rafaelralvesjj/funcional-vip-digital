@@ -39,6 +39,7 @@ interface ThreadMessage {
   content: string;
   senderRole: string;
   createdAt: string;
+  answeredById?: string | null;
   answeredBy?: { id: string; name: string | null; role?: string | null } | null;
   student?: { id: string; name: string } | null;
   teacher?: { id: string; name: string | null } | null;
@@ -137,6 +138,7 @@ function normalizeThreadMessage(item: any): ThreadMessage {
     content: getString(item.content),
     senderRole: getString(item.senderRole),
     createdAt: getString(item.createdAt),
+    answeredById: getString(item.answeredById || item.answeredBy?.id),
     parentId: getString(item.parentId),
     resolvedAt: getString(item.resolvedAt),
     answeredBy: isRecord(item.answeredBy) ? { id: getString(item.answeredBy.id), name: getString(item.answeredBy.name), role: getString(item.answeredBy.role) } : null,
@@ -198,6 +200,21 @@ function getErrorMessage(data: unknown, fallback: string): string {
     if (message) return message;
   }
   return fallback;
+}
+
+function canCurrentGestorCloseThread(thread: ThreadMessage, currentUserId: string): boolean {
+  if (!currentUserId || thread.resolvedAt) return false;
+
+  const openerRole = String(thread.senderRole || "").toUpperCase();
+  const openerUserId = thread.answeredById || thread.answeredBy?.id || "";
+
+  // Nesta tela da Gestão, o botão só aparece quando a própria gestão abriu a conversa.
+  // Conversas abertas por aluno ou professor ficam sem botão de encerramento aqui.
+  if (openerRole !== "GESTOR" && openerRole !== "ADMIN") {
+    return false;
+  }
+
+  return Boolean(openerUserId) && openerUserId === currentUserId;
 }
 
 // --- PAGE COMPONENT ---
@@ -772,15 +789,23 @@ export default function GestaoPage() {
                                 Responder
                               </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleCloseConversation(q)}
-                                disabled={closingQuestionId === q.id}
-                                className="border border-red-500/30 text-red-400 text-xs font-bold px-4 py-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                              >
-                                {closingQuestionId === q.id ? "Encerrando..." : "Encerrar conversa"}
-                              </button>
+                              {canCurrentGestorCloseThread(q, currentUserId) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCloseConversation(q)}
+                                  disabled={closingQuestionId === q.id}
+                                  className="border border-red-500/30 text-red-400 text-xs font-bold px-4 py-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                                >
+                                  {closingQuestionId === q.id ? "Encerrando..." : "Encerrar conversa"}
+                                </button>
+                              )}
                             </div>
+
+                            {!canCurrentGestorCloseThread(q, currentUserId) && (
+                              <p className="text-[10px] text-zinc-500">
+                                Apenas quem abriu esta conversa pode encerrá-la.
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>
