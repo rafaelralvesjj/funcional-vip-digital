@@ -209,6 +209,20 @@ export async function GET(req: Request) {
     }
 
     if (studentId) {
+      const student = await prisma.student.findUnique({
+        where: {
+          id: studentId,
+        },
+        select: {
+          id: true,
+          createdAt: true,
+        },
+      });
+
+      if (!student) {
+        return NextResponse.json([]);
+      }
+
       where.OR = [
         {
           studentId,
@@ -216,15 +230,35 @@ export async function GET(req: Request) {
         {
           studentId: null,
           targetRole: "STUDENT",
+          createdAt: {
+            gte: student.createdAt,
+          },
         },
         {
           studentId: null,
           targetRole: "ALUNO",
+          createdAt: {
+            gte: student.createdAt,
+          },
         },
       ];
     }
 
     if (professorId) {
+      const professor = await prisma.user.findUnique({
+        where: {
+          id: professorId,
+        },
+        select: {
+          id: true,
+          createdAt: true,
+        },
+      });
+
+      if (!professor) {
+        return NextResponse.json([]);
+      }
+
       where.OR = [
         {
           professorId,
@@ -232,10 +266,16 @@ export async function GET(req: Request) {
         {
           professorId: null,
           targetRole: "TEACHER",
+          createdAt: {
+            gte: professor.createdAt,
+          },
         },
         {
           professorId: null,
           targetRole: "PROFESSOR",
+          createdAt: {
+            gte: professor.createdAt,
+          },
         },
       ];
     }
