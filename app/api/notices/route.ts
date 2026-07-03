@@ -70,7 +70,6 @@ async function notifyProfessorNoticeByEmail(notice: {
   const loginUrl = getAppLoginUrl();
   const title = notice.title || "Novo aviso da gestão";
   const safeTitle = escapeHtml(title);
-  const safeContent = escapeHtml(notice.content);
   const subject = `Novo aviso da gestão: ${title}`;
 
   await Promise.allSettled(
@@ -86,9 +85,9 @@ async function notifyProfessorNoticeByEmail(notice: {
           "",
           `Título: ${title}`,
           "",
-          notice.content,
+          "Acesse seu painel do aluno para ler o aviso completo.",
           "",
-          `Acesse sua conta para visualizar: ${loginUrl}`,
+          `Entrar no sistema: ${loginUrl}`,
         ].join("\n");
 
         const html = `
@@ -106,11 +105,12 @@ async function notifyProfessorNoticeByEmail(notice: {
 
               <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:16px; margin:20px 0;">
                 <p style="color:#a1a1a1; font-size:12px; margin:0 0 6px;">Título do aviso</p>
-                <p style="color:#f5f5f5; font-size:16px; font-weight:bold; margin:0 0 14px;">${safeTitle}</p>
-
-                <p style="color:#a1a1a1; font-size:12px; margin:0 0 6px;">Mensagem</p>
-                <p style="color:#e5e5e5; font-size:14px; line-height:1.5; white-space:pre-line; margin:0;">${safeContent}</p>
+                <p style="color:#f5f5f5; font-size:16px; font-weight:bold; margin:0;">${safeTitle}</p>
               </div>
+
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                Para ler o aviso completo, acesse seu painel do aluno.
+              </p>
 
               <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
                 Acessar o sistema
