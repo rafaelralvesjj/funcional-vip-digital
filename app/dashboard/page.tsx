@@ -304,22 +304,19 @@ export default async function DashboardPage() {
    * Regra de avisos pendentes:
    *
    * 1. Aviso para aluno específico:
-   *    - aparece para o aluno;
    *    - aparece para a gestão;
-   *    - NÃO aparece para professor, mesmo que o aluno esteja vinculado a ele.
+   *    - aparece para o professor responsável, se o aluno estiver vinculado a ele;
+   *    - conta como pendente enquanto o aluno não tiver lido.
    *
    * 2. Aviso para todos os alunos:
    *    - no gestor, conta 1 pendência para cada aluno que ainda não leu;
-   *    - no professor, conta 1 pendência para cada aluno dele que ainda não leu.
+   *    - no professor, conta 1 pendência para cada aluno dele que ainda não leu;
+   *    - não conta para alunos criados depois do aviso.
    */
   const pendingNoticeItems = notices.flatMap((notice) => {
     const targetRole = normalizeRole(notice.targetRole);
 
     if (targetRole !== 'STUDENT') {
-      return [];
-    }
-
-    if (isTeacher && notice.studentId) {
       return [];
     }
 
