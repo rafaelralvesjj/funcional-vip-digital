@@ -2,13 +2,21 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmail } from "@/lib/sendEmail";
 
-function getAppLoginUrl(): string {
+function getAppBaseUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     "https://funcional-vip-digital.vercel.app";
 
-  return `${appUrl.replace(/\/$/, "")}/auth/signin`;
+  return appUrl.replace(/\/$/, "");
+}
+
+function getAppLoginUrl(): string {
+  return `${getAppBaseUrl()}/auth/signin`;
+}
+
+function getVincularAlunosUrl(): string {
+  return `${getAppBaseUrl()}/dashboard/gestor/vincular-alunos`;
 }
 
 function escapeHtml(value: string): string {
@@ -84,6 +92,7 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
   });
 
   const loginUrl = getAppLoginUrl();
+  const vincularAlunosUrl = getVincularAlunosUrl();
   const safeStudentName = escapeHtml(studentName);
 
   const emailTasks: Promise<unknown>[] = [];
@@ -98,8 +107,21 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
     "Enquanto seu professor é vinculado e seu treino é preparado, fique atento ao mural do aluno e ao seu e-mail.",
   ].join("\n");
 
-  // Cria aviso específico no mural do aluno.
-  // Isso garante que o aviso apareça para o aluno novo, sem depender de aviso geral antigo.
+  const gestorNoticeTitle = "Novo aluno aguardando vínculo";
+
+  const gestorNoticeContent = [
+    `O aluno ${studentName} concluiu o cadastro e o formulário de bioimpedância.`,
+    "",
+    "Ação pendente: acessar a gestão para vincular o professor responsável e preencher a quantidade contratada de treinos/dias no mês.",
+    "",
+    `Acessar vínculo de alunos: ${vincularAlunosUrl}`,
+  ].join("\n");
+
+  // Cria registros automáticos na tabela de avisos:
+  // 1. aviso específico no mural do aluno;
+  // 2. registro de pendência operacional para a gestão.
+  // A gestão não marca este item como lido; a pendência some do dashboard
+  // quando o aluno tiver professor vinculado e dias contratados preenchidos.
   try {
     const noticeAuthorId = await getNoticeAuthorId();
 
@@ -116,13 +138,26 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
           },
         })
       );
+
+      emailTasks.push(
+        prisma.notice.create({
+          data: {
+            title: gestorNoticeTitle,
+            content: gestorNoticeContent,
+            type: "GESTAO_PENDENCIA",
+            targetRole: "GESTOR",
+            studentId: student.id,
+            authorId: noticeAuthorId,
+          },
+        })
+      );
     } else {
       console.warn(
-        "Aviso de boas-vindas não criado: nenhum usuário GESTOR/ADMIN encontrado para ser authorId."
+        "Avisos automáticos não criados: nenhum usuário GESTOR/ADMIN encontrado para ser authorId."
       );
     }
   } catch (noticeError) {
-    console.error("Erro ao preparar aviso de boas-vindas no mural:", noticeError);
+    console.error("Erro ao preparar avisos automáticos no mural:", noticeError);
   }
 
   if (studentEmail) {
@@ -195,7 +230,7 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
         "",
         "Acesse a gestão para vincular o professor responsável e preencher a quantidade contratada de treinos/dias no mês.",
         "",
-        `Entrar no sistema: ${loginUrl}`,
+        `Acessar vínculo de alunos: ${vincularAlunosUrl}`,
       ].join("\n");
 
       const html = `
@@ -215,7 +250,7 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
               Acesse a gestão para vincular o professor responsável e preencher a quantidade contratada de treinos/dias no mês.
             </p>
 
-            <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+            <a href="${vincularAlunosUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
               Acessar gestão
             </a>
 
