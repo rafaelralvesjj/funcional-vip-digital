@@ -51,6 +51,8 @@ interface WorkoutPlan {
 
 interface QuestionItem {
   id: string;
+  studentId?: string | null;
+  teacherId?: string | null;
   content?: string | null;
   answer?: string | null;
   senderRole?: string | null;
@@ -130,6 +132,8 @@ export default function AlunoDetalhePage() {
   const [activeTab, setActiveTab] = useState<TabKey>("avisos");
   const [loading, setLoading] = useState(true);
   const [questionLoadError, setQuestionLoadError] = useState(false);
+  const [replyContent, setReplyContent] = useState<Record<string, string>>({});
+  const [replyingQuestionId, setReplyingQuestionId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -228,6 +232,70 @@ export default function AlunoDetalhePage() {
       return dateB - dateA;
     });
   }, [questions]);
+
+  function getLastQuestionMessage(question: QuestionItem): QuestionItem {
+    const children = question.children || [];
+
+    if (children.length === 0) {
+      return question;
+    }
+
+    return children[children.length - 1];
+  }
+
+  function isQuestionWaitingTeacher(question: QuestionItem): boolean {
+    if (question.resolvedAt) return false;
+
+    const lastMessage = getLastQuestionMessage(question);
+    const lastRole = String(lastMessage.senderRole || "").toUpperCase();
+
+    return lastRole === "STUDENT" || lastRole === "ALUNO";
+  }
+
+  async function sendReply(question: QuestionItem) {
+    const content = (replyContent[question.id] || "").trim();
+
+    if (!content) {
+      alert("Digite uma resposta antes de enviar.");
+      return;
+    }
+
+    setReplyingQuestionId(question.id);
+
+    try {
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          parentId: question.id,
+          studentId: question.studentId || studentId,
+          teacherId: question.teacherId || null,
+          content,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        alert("Erro ao responder: " + (err?.error || "não foi possível enviar a resposta."));
+        return;
+      }
+
+      setReplyContent((prev) => ({
+        ...prev,
+        [question.id]: "",
+      }));
+
+      await loadStudentData(studentId);
+      setActiveTab("duvidas");
+    } catch (error) {
+      console.error("Erro ao responder dúvida:", error);
+      alert("Erro ao responder dúvida.");
+    } finally {
+      setReplyingQuestionId(null);
+    }
+  }
 
   if (!studentId) {
     return (
@@ -521,6 +589,48 @@ export default function AlunoDetalhePage() {
                           </p>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {!question.resolvedAt && (
+                    <div className="mt-4 bg-[#111111] border border-[#ffffff10] rounded-lg p-3">
+                      {isQuestionWaitingTeacher(question) ? (
+                        <>
+                          <label className="block text-xs text-[#D4A373] mb-2">
+                            Responder dúvida
+                          </label>
+
+                          <textarea
+                            value={replyContent[question.id] || ""}
+                            onChange={(event) =>
+                              setReplyContent((prev) => ({
+                                ...prev,
+                                [question.id]: event.target.value,
+                              }))
+                            }
+                            rows={3}
+                            placeholder="Digite sua resposta para o aluno..."
+                            className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none"
+                          />
+
+                          <div className="flex justify-end mt-3">
+                            <button
+                              type="button"
+                              onClick={() => sendReply(question)}
+                              disabled={replyingQuestionId === question.id}
+                              className="bg-[#D4A373] text-[#0a0a0a] text-xs font-bold px-4 py-2 rounded-lg hover:bg-[#c49563] transition disabled:opacity-50"
+                            >
+                              {replyingQuestionId === question.id
+                                ? "Enviando..."
+                                : "Enviar resposta"}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-xs text-[#6b6b6b]">
+                          A última mensagem é do professor. Aguardando retorno do aluno.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
