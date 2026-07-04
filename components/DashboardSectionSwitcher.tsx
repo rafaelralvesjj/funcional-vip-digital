@@ -6,12 +6,34 @@ type DashboardCard = {
   id: string;
   label: string;
   value: number;
+  tone?: string;
 };
 
 type Props = {
   cards: DashboardCard[];
   children: ReactNode;
 };
+
+function getDotClass(hasPending: boolean, tone?: string): string {
+  if (!hasPending) return "bg-zinc-600";
+  if (tone === "danger") return "bg-red-500";
+  if (tone === "warning") return "bg-amber-400";
+  return "bg-emerald-400";
+}
+
+function getStatusClass(hasPending: boolean, tone?: string): string {
+  if (!hasPending) return "bg-zinc-800 text-zinc-400";
+  if (tone === "danger") return "bg-red-500/10 text-red-400";
+  if (tone === "warning") return "bg-amber-500/10 text-amber-400";
+  return "bg-emerald-500/10 text-emerald-400";
+}
+
+function getStatusText(hasPending: boolean, tone?: string): string {
+  if (!hasPending) return "Sem itens";
+  if (tone === "danger") return "Prazo crítico";
+  if (tone === "warning") return "Com pendência";
+  return "Com itens";
+}
 
 export default function DashboardSectionSwitcher({ cards, children }: Props) {
   const sections = Children.toArray(children);
@@ -57,9 +79,9 @@ export default function DashboardSectionSwitcher({ cards, children }: Props) {
                 <span
                   className={
                     "mt-1 h-2.5 w-2.5 rounded-full shrink-0 " +
-                    (hasPending ? "bg-emerald-400" : "bg-zinc-600")
+                    getDotClass(hasPending, card.tone)
                   }
-                  title={hasPending ? "Há itens para verificar" : "Sem pendências"}
+                  title={getStatusText(hasPending, card.tone)}
                 />
               </div>
 
@@ -86,12 +108,10 @@ export default function DashboardSectionSwitcher({ cards, children }: Props) {
           <span
             className={
               "text-[11px] px-2 py-1 rounded-full " +
-              (activeCard.value > 0
-                ? "bg-emerald-500/10 text-emerald-400"
-                : "bg-zinc-800 text-zinc-400")
+              getStatusClass(activeCard.value > 0, activeCard.tone)
             }
           >
-            {activeCard.value > 0 ? "Com itens" : "Sem itens"}
+            {getStatusText(activeCard.value > 0, activeCard.tone)}
           </span>
         </div>
       )}
