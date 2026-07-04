@@ -1149,7 +1149,11 @@ export default async function DashboardPage() {
               </div>
 
               <a
-                href="/dashboard/montar-treino"
+                href={
+                  studentsMissingCurrentWeekWorkouts.length > 0
+                    ? `/dashboard/montar-treino?studentId=${studentsMissingCurrentWeekWorkouts[0].student.id}&date=${studentsMissingCurrentWeekWorkouts[0].weekStartDateInput}`
+                    : "/dashboard/montar-treino"
+                }
                 className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
               >
                 Montar treino
@@ -1254,7 +1258,11 @@ export default async function DashboardPage() {
               </div>
 
               <a
-                href="/dashboard/montar-treino"
+                href={
+                  studentsMissingNextWeekWorkouts.length > 0
+                    ? `/dashboard/montar-treino?studentId=${studentsMissingNextWeekWorkouts[0].student.id}&date=${studentsMissingNextWeekWorkouts[0].weekStartDateInput}`
+                    : "/dashboard/montar-treino"
+                }
                 className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
               >
                 Montar treino
@@ -1384,7 +1392,11 @@ export default async function DashboardPage() {
               </div>
 
               <a
-                href="/dashboard/montar-treino"
+                href={
+                  workoutPlanningDeadlineItems.length > 0
+                    ? `/dashboard/montar-treino?studentId=${workoutPlanningDeadlineItems[0].student.id}&date=${workoutPlanningDeadlineItems[0].weekStartDateInput}`
+                    : "/dashboard/montar-treino"
+                }
                 className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
               >
                 Montar treino
