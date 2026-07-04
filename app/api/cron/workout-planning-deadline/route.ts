@@ -4,17 +4,12 @@ import { sendEmail } from "@/lib/sendEmail";
 
 export const maxDuration = 60;
 
-type PendingStudent = {
+type PendingStudentItem = {
   id: string;
   name: string;
-  email: string | null;
-  userId: string | null;
-  contractedTrainingDaysPerMonth: number | null;
-  user: {
-    id: string;
-    name: string | null;
-    email: string | null;
-  } | null;
+  weeklyLimit: number;
+  createdCount: number;
+  missingCount: number;
 };
 
 type ProfessorPendingGroup = {
@@ -23,13 +18,7 @@ type ProfessorPendingGroup = {
     name: string | null;
     email: string | null;
   };
-  students: Array<{
-    id: string;
-    name: string;
-    weeklyLimit: number;
-    createdCount: number;
-    missingCount: number;
-  }>;
+  students: PendingStudentItem[];
 };
 
 function getAppDashboardUrl(): string {
@@ -104,31 +93,13 @@ function formatDatePtBr(date: Date): string {
   });
 }
 
-async function getNoticeAuthorId(): Promise<string | null> {
-  const gestor = await prisma.user.findFirst({
-    where: {
-      role: {
-        in: ["GESTOR", "ADMIN"],
-      },
-    },
-    select: {
-      id: true,
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
-
-  return gestor?.id || null;
-}
-
-function buildNoticeContent({
+function buildProfessorNoticeContent({
   professorName,
   students,
   weekLabel,
 }: {
   professorName: string;
-  students: ProfessorPendingGroup["students"];
+  students: PendingStudentItem[];
   weekLabel: string;
 }): string {
   const studentLines = students
@@ -150,30 +121,59 @@ function buildNoticeContent({
   ].join("\n");
 }
 
+function buildGestaoNoticeContent({
+  groups,
+  weekLabel,
+}: {
+  groups: ProfessorPendingGroup[];
+  weekLabel: string;
+}): string {
+  const lines = groups
+    .map((group) => {
+      const professorName = group.professor.name || "Professor";
+      const students = group.students
+        .map((student) => {
+          return `  - ${student.name}: ${student.createdCount}/${student.weeklyLimit} treino(s) criado(s). Falta(m) ${student.missingCount}.`;
+        })
+        .join("\n");
+
+      return `${professorName}\n${students}`;
+    })
+    .join("\n\n");
+
+  return [
+    "Resumo para gestão.",
+    "",
+    "Hoje é sábado e ainda existem alunos sem a quantidade completa de treinos para a próxima semana.",
+    `Semana alvo: ${weekLabel}.`,
+    "",
+    "Pendências por professor:",
+    lines,
+    "",
+    "Acompanhe o dashboard e cobre os responsáveis pela montagem dos treinos.",
+  ].join("\n");
+}
+
 async function notifyProfessorDeadline({
   group,
   authorId,
   weekLabel,
 }: {
   group: ProfessorPendingGroup;
-  authorId: string | null;
+  authorId: string;
   weekLabel: string;
 }) {
   const dashboardUrl = getAppDashboardUrl();
   const professorName = group.professor.name || "Professor";
   const professorEmail = group.professor.email;
 
-  const title = `Prazo vence hoje: treinos pendentes da próxima semana`;
-  const content = buildNoticeContent({
+  const title = "Prazo vence hoje: treinos pendentes da próxima semana";
+  const content = buildProfessorNoticeContent({
     professorName,
     students: group.students,
     weekLabel,
   });
 
-  /*
-   * O aviso é usado também como trava contra duplicidade.
-   * Se já existe aviso para este professor e esta semana alvo, não envia e-mail de novo.
-   */
   const existingNotice = await prisma.notice.findFirst({
     where: {
       professorId: group.professor.id,
@@ -200,18 +200,16 @@ async function notifyProfessorDeadline({
     };
   }
 
-  if (authorId) {
-    await prisma.notice.create({
-      data: {
-        title,
-        content,
-        type: "MANAGEMENT",
-        targetRole: "PROFESSOR",
-        professorId: group.professor.id,
-        authorId,
-      },
-    });
-  }
+  await prisma.notice.create({
+    data: {
+      title,
+      content,
+      type: "MANAGEMENT",
+      targetRole: "PROFESSOR",
+      professorId: group.professor.id,
+      authorId,
+    },
+  });
 
   if (professorEmail) {
     const safeProfessorName = escapeHtml(professorName);
@@ -291,7 +289,167 @@ async function notifyProfessorDeadline({
     professorId: group.professor.id,
     professorName,
     emailSent: Boolean(professorEmail),
-    noticeCreated: Boolean(authorId),
+    noticeCreated: true,
+    skipped: false,
+    reason: null,
+  };
+}
+
+async function notifyGestaoDeadline({
+  groups,
+  authorId,
+  weekLabel,
+}: {
+  groups: ProfessorPendingGroup[];
+  authorId: string;
+  weekLabel: string;
+}) {
+  if (groups.length === 0) {
+    return {
+      emailSentTo: 0,
+      noticeCreated: false,
+      skipped: true,
+      reason: "Sem pendências para gestão",
+    };
+  }
+
+  const dashboardUrl = getAppDashboardUrl();
+  const title = "Prazo vence hoje: alunos sem treino da próxima semana";
+  const content = buildGestaoNoticeContent({
+    groups,
+    weekLabel,
+  });
+
+  const existingNotice = await prisma.notice.findFirst({
+    where: {
+      targetRole: "GESTOR",
+      type: "MANAGEMENT",
+      title,
+      content: {
+        contains: weekLabel,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existingNotice) {
+    return {
+      emailSentTo: 0,
+      noticeCreated: false,
+      skipped: true,
+      reason: "Aviso de prazo já enviado para gestão nesta semana alvo",
+    };
+  }
+
+  await prisma.notice.create({
+    data: {
+      title,
+      content,
+      type: "MANAGEMENT",
+      targetRole: "GESTOR",
+      authorId,
+    },
+  });
+
+  const gestores = await prisma.user.findMany({
+    where: {
+      role: {
+        in: ["GESTOR", "ADMIN"],
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  });
+
+  const totalPendingStudents = groups.reduce((total, group) => total + group.students.length, 0);
+
+  const professorSectionsHtml = groups
+    .map((group) => {
+      const professorName = escapeHtml(group.professor.name || "Professor");
+      const studentsHtml = group.students
+        .map((student) => {
+          return `
+            <li style="margin-bottom:6px; color:#d4d4d4; font-size:14px; line-height:1.5;">
+              <strong style="color:#f5f5f5;">${escapeHtml(student.name)}</strong>:
+              ${student.createdCount}/${student.weeklyLimit} treino(s).
+              <span style="color:#f87171;">Falta(m) ${student.missingCount}.</span>
+            </li>
+          `;
+        })
+        .join("");
+
+      return `
+        <div style="margin-top:16px; padding-top:12px; border-top:1px solid #2a2a2a;">
+          <p style="color:#D4A373; font-size:14px; font-weight:bold; margin:0 0 8px;">${professorName}</p>
+          <ul style="padding-left:20px; margin:0;">
+            ${studentsHtml}
+          </ul>
+        </div>
+      `;
+    })
+    .join("");
+
+  const text = [
+    "Resumo para gestão.",
+    "",
+    "Hoje é sábado e ainda existem alunos sem a quantidade completa de treinos para a próxima semana.",
+    `Semana alvo: ${weekLabel}.`,
+    `Total de alunos pendentes: ${totalPendingStudents}.`,
+    "",
+    content,
+    "",
+    `Acesse o dashboard: ${dashboardUrl}`,
+  ].join("\n");
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+      <div style="max-width:720px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+        <h2 style="color:#D4A373; margin:0 0 16px;">Prazo vence hoje</h2>
+
+        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+          Ainda existem <strong>${totalPendingStudents}</strong> aluno(s) sem a quantidade completa de treinos para a próxima semana.
+        </p>
+
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+          Semana alvo: <strong style="color:#f5f5f5;">${escapeHtml(weekLabel)}</strong>.
+        </p>
+
+        ${professorSectionsHtml}
+
+        <a href="${dashboardUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:20px;">
+          Acessar dashboard
+        </a>
+
+        <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
+          Este é um aviso automático do Funcional Vip Digital.
+        </p>
+      </div>
+    </div>
+  `;
+
+  let emailSentTo = 0;
+
+  for (const gestor of gestores) {
+    if (!gestor.email) continue;
+
+    await sendEmail({
+      to: gestor.email,
+      subject: title,
+      text,
+      html,
+    });
+
+    emailSentTo += 1;
+  }
+
+  return {
+    emailSentTo,
+    noticeCreated: true,
     skipped: false,
     reason: null,
   };
@@ -305,11 +463,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const author = await prisma.user.findFirst({
+    where: {
+      role: {
+        in: ["GESTOR", "ADMIN"],
+      },
+    },
+    select: {
+      id: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  if (!author?.id) {
+    return NextResponse.json(
+      { error: "Nenhum gestor/admin encontrado para assinar os avisos." },
+      { status: 400 }
+    );
+  }
+
   const nextWeek = getNextWeekRange(new Date());
   const weekEndDisplay = new Date(nextWeek.endOfWeek.getTime() - 1);
   const weekLabel = `${formatDatePtBr(nextWeek.startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`;
-
-  const authorId = await getNoticeAuthorId();
 
   const allActiveStudents = await prisma.student.findMany({
     where: {
@@ -318,7 +495,6 @@ export async function GET(request: NextRequest) {
     select: {
       id: true,
       name: true,
-      email: true,
       userId: true,
       contractedTrainingDaysPerMonth: true,
       user: {
@@ -334,20 +510,17 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const eligibleStudents = allActiveStudents.filter((student) => {
-    const weeklyLimit = getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth);
-
-    return Boolean(student.userId) && Boolean(student.user) && Boolean(weeklyLimit);
-  }) as PendingStudent[];
-
   const groupsByProfessor = new Map<string, ProfessorPendingGroup>();
+  let eligibleStudents = 0;
 
-  for (const student of eligibleStudents) {
+  for (const student of allActiveStudents) {
     const weeklyLimit = getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth);
 
-    if (!weeklyLimit || !student.user) {
+    if (!student.userId || !student.user || !weeklyLimit) {
       continue;
     }
+
+    eligibleStudents += 1;
 
     const createdCount = await prisma.workoutPlan.count({
       where: {
@@ -384,33 +557,49 @@ export async function GET(request: NextRequest) {
 
   const professorGroups = Array.from(groupsByProfessor.values());
 
-  const notified: any[] = [];
-  const skipped: any[] = [];
+  const professorNotified: any[] = [];
+  const professorSkipped: any[] = [];
   const errors: any[] = [];
 
   for (const group of professorGroups) {
     try {
       const result = await notifyProfessorDeadline({
         group,
-        authorId,
+        authorId: author.id,
         weekLabel,
       });
 
       if (result.skipped) {
-        skipped.push(result);
+        professorSkipped.push(result);
       } else {
-        notified.push({
+        professorNotified.push({
           ...result,
           pendingStudents: group.students.length,
         });
       }
     } catch (error: any) {
       errors.push({
+        type: "PROFESSOR",
         professorId: group.professor.id,
         professorName: group.professor.name,
         message: error?.message || "Erro desconhecido",
       });
     }
+  }
+
+  let gestaoResult: any = null;
+
+  try {
+    gestaoResult = await notifyGestaoDeadline({
+      groups: professorGroups,
+      authorId: author.id,
+      weekLabel,
+    });
+  } catch (error: any) {
+    errors.push({
+      type: "GESTAO",
+      message: error?.message || "Erro desconhecido",
+    });
   }
 
   return NextResponse.json({
@@ -421,14 +610,17 @@ export async function GET(request: NextRequest) {
       label: weekLabel,
     },
     totals: {
-      eligibleStudents: eligibleStudents.length,
+      eligibleStudents,
       professorsWithPendingStudents: professorGroups.length,
-      notified: notified.length,
-      skipped: skipped.length,
+      pendingStudents: professorGroups.reduce((total, group) => total + group.students.length, 0),
+      professorNotified: professorNotified.length,
+      professorSkipped: professorSkipped.length,
+      gestaoEmailSentTo: gestaoResult?.emailSentTo || 0,
       errors: errors.length,
     },
-    notified,
-    skipped,
+    professorNotified,
+    professorSkipped,
+    gestao: gestaoResult,
     errors,
   });
 }
