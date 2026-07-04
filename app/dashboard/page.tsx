@@ -47,6 +47,10 @@ export default async function DashboardPage() {
       ? 'Alunos sem treino da próxima semana'
       : 'Meus alunos sem treino da próxima semana',
 
+    workoutPlanningDeadlineCard: isGestor
+      ? 'Prazo sábado: alunos sem treino da próxima semana'
+      : 'Prazo sábado: meus alunos sem treino da próxima semana',
+
     pendingWorkoutsCard: isGestor
       ? 'Treinos pendentes de todos os alunos'
       : 'Treinos pendentes dos meus alunos',
@@ -98,6 +102,10 @@ export default async function DashboardPage() {
     missingNextWeekWorkoutsList: isGestor
       ? 'Alunos sem treino da próxima semana'
       : 'Meus alunos sem treino da próxima semana',
+
+    workoutPlanningDeadlineList: isGestor
+      ? 'Prazo de sábado: alunos sem treino da próxima semana'
+      : 'Prazo de sábado: meus alunos sem treino da próxima semana',
   };
 
   function formatDate(date: Date): string {
@@ -167,6 +175,13 @@ export default async function DashboardPage() {
       month: '2-digit',
       year: 'numeric',
     });
+  }
+
+  function getWeekdayInSaoPaulo(referenceDate: Date): string {
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      timeZone: 'America/Sao_Paulo',
+    }).format(referenceDate);
   }
 
   function formatDateInput(date: Date): string {
@@ -337,6 +352,12 @@ export default async function DashboardPage() {
     nextWorkoutWeekLabel,
     formatDateInput(nextWorkoutWeek.startOfWeek)
   );
+
+  const isWorkoutPlanningDeadlineToday = getWeekdayInSaoPaulo(new Date()) === 'Sat';
+  const workoutPlanningDeadlineItems = studentsMissingNextWeekWorkouts;
+  const workoutPlanningDeadlineStatusLabel = isWorkoutPlanningDeadlineToday
+    ? 'Prazo vence hoje'
+    : 'Prazo final: sábado';
 
   const pendingWorkouts = await prisma.workout.findMany({
     where: {
@@ -911,6 +932,13 @@ export default async function DashboardPage() {
       value: studentsMissingNextWeekWorkouts.length,
     },
     {
+      id: 'workout-planning-deadline',
+      label: isWorkoutPlanningDeadlineToday
+        ? labels.workoutPlanningDeadlineCard.replace('Prazo sábado', 'Prazo vence hoje')
+        : labels.workoutPlanningDeadlineCard,
+      value: workoutPlanningDeadlineItems.length,
+    },
+    {
       id: 'pending-workouts',
       label: labels.pendingWorkoutsCard,
       value: pendingWorkouts.length,
@@ -1221,7 +1249,7 @@ export default async function DashboardPage() {
                 </h2>
 
                 <p className="text-sm text-[#a1a1a1] mt-1">
-                  Semana de referência: {nextWorkoutWeekLabel}. Pendência de planejamento: aluno ativo, com bioimpedância concluída, professor vinculado e dias contratados, mas ainda sem a quantidade de treinos prevista para a próxima semana.
+                  Semana de referência: {nextWorkoutWeekLabel}. Pendência de planejamento: aluno ativo, com professor vinculado e dias contratados, mas ainda sem a quantidade de treinos prevista para a próxima semana.
                 </p>
               </div>
 
@@ -1302,6 +1330,143 @@ export default async function DashboardPage() {
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <p className="text-xs text-[#a1a1a1]">
                           O aluno sai desta lista automaticamente quando atingir a quantidade de treinos prevista para a semana.
+                        </p>
+
+                        <a
+                          href={`/dashboard/montar-treino?studentId=${item.student.id}&date=${item.weekStartDateInput}`}
+                          className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                        >
+                          Montar treino deste aluno
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl font-semibold text-[#f5f5f5]">
+                    {labels.workoutPlanningDeadlineList}
+                  </h2>
+
+                  <span
+                    className={
+                      "text-[10px] px-2 py-0.5 rounded-full font-medium " +
+                      (isWorkoutPlanningDeadlineToday
+                        ? "bg-red-900/30 text-red-400 border border-red-500/20"
+                        : "bg-amber-900/30 text-amber-400 border border-amber-500/20")
+                    }
+                  >
+                    {workoutPlanningDeadlineStatusLabel}
+                  </span>
+                </div>
+
+                <p className="text-sm text-[#a1a1a1] mt-1">
+                  Controle de prazo: até sábado, os treinos da próxima semana precisam estar montados.
+                  Semana alvo: {nextWorkoutWeekLabel}.
+                </p>
+
+                {isWorkoutPlanningDeadlineToday ? (
+                  <p className="text-xs text-red-400 mt-2">
+                    Hoje é sábado: estes alunos ainda estão sem a quantidade completa de treinos para a próxima semana.
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-400 mt-2">
+                    Este card já mostra quem ainda está pendente para o prazo de sábado.
+                  </p>
+                )}
+              </div>
+
+              <a
+                href="/dashboard/montar-treino"
+                className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
+              >
+                Montar treino
+              </a>
+            </div>
+
+            {workoutPlanningDeadlineItems.length === 0 ? (
+              <p className="text-[#a1a1a1]">
+                Nenhum aluno pendente para o prazo de sábado.
+              </p>
+            ) : (
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
+                {workoutPlanningDeadlineItems.map((item) => (
+                  <div
+                    key={item.student.id}
+                    className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
+                  >
+                    <div className="p-4">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className={
+                              "text-[10px] px-2 py-0.5 rounded-full font-medium " +
+                              (isWorkoutPlanningDeadlineToday
+                                ? "bg-red-900/30 text-red-400 border border-red-500/20"
+                                : "bg-amber-900/30 text-amber-400 border border-amber-500/20")
+                            }
+                          >
+                            {isWorkoutPlanningDeadlineToday ? 'PRAZO HOJE' : 'PRAZO SÁBADO'}
+                          </span>
+
+                          <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                            {item.student.name}
+                          </span>
+                        </div>
+
+                        <span className={isWorkoutPlanningDeadlineToday ? "text-[10px] text-red-400 shrink-0" : "text-[10px] text-amber-400 shrink-0"}>
+                          Falta(m) {item.missingCount} treino(s)
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                        <div>
+                          <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                            Professor
+                          </p>
+                          <p className="text-xs text-[#D4A373] truncate" title={item.student.user?.name || 'Não vinculado'}>
+                            {item.student.user?.name || 'Não vinculado'}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                            Meta semanal
+                          </p>
+                          <p className="text-xs text-[#a1a1a1]">
+                            {item.weeklyLimit} treino(s)
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                            Criados
+                          </p>
+                          <p className="text-xs text-[#a1a1a1]">
+                            {item.createdCount}/{item.weeklyLimit}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                            Semana alvo
+                          </p>
+                          <p className="text-xs text-[#a1a1a1]">
+                            {item.weekLabel}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <p className="text-xs text-[#a1a1a1]">
+                          Esta pendência some automaticamente quando a meta semanal do aluno for atingida.
                         </p>
 
                         <a
