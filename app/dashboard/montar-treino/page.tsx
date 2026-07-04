@@ -102,23 +102,43 @@ export default function MontarTreinoPage() {
   const [showLibrary, setShowLibrary] = useState(false);
   const [weeklyPlansCount, setWeeklyPlansCount] = useState(0);
   const [weeklyInfoLoading, setWeeklyInfoLoading] = useState(false);
+  const [lockStudentSelection, setLockStudentSelection] = useState(false);
+  const [openedFromPendingList, setOpenedFromPendingList] = useState(false);
 
-  useEffect(() => {
+  function applyDashboardParams() {
+    if (typeof window === "undefined") return;
+
     const params = new URLSearchParams(window.location.search);
     const studentIdFromUrl = params.get("studentId");
     const dateFromUrl = params.get("date");
 
     if (studentIdFromUrl) {
       setSelectedStudent(studentIdFromUrl);
+      setLockStudentSelection(true);
+      setOpenedFromPendingList(true);
     }
 
     if (dateFromUrl) {
       setDate(dateFromUrl);
     }
+  }
 
+  useEffect(() => {
+    applyDashboardParams();
     fetchStudents();
     fetchLibrary();
   }, []);
+
+  useEffect(() => {
+    /*
+     * Reaplica os parâmetros depois que a lista de alunos carrega.
+     * Isso garante que o combo fique selecionado mesmo quando a tela veio
+     * do dashboard antes de os alunos terminarem de carregar.
+     */
+    if (students.length > 0) {
+      applyDashboardParams();
+    }
+  }, [students.length]);
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -321,7 +341,9 @@ export default function MontarTreinoPage() {
 
         setSuccess(weeklyMessage);
         setPlanName("");
-        setDate("");
+        if (!openedFromPendingList) {
+          setDate("");
+        }
         setDescription("");
         setNotes("");
         setExercises([]);
@@ -363,13 +385,41 @@ export default function MontarTreinoPage() {
                 value={selectedStudent}
                 onChange={(e) => setSelectedStudent(e.target.value)}
                 required
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                disabled={lockStudentSelection}
+                className={
+                  "w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] " +
+                  (lockStudentSelection ? "opacity-80 cursor-not-allowed" : "")
+                }
               >
                 <option value="">Selecione um aluno...</option>
+                {selectedStudent && !students.some((s) => s.id === selectedStudent) && (
+                  <option value={selectedStudent}>Aluno selecionado pelo dashboard</option>
+                )}
                 {students.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+
+              {openedFromPendingList && selectedStudent && (
+                <div className="mt-2 rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 p-2">
+                  <p className="text-[11px] text-[#D4A373] font-medium">
+                    Aluno selecionado automaticamente pelo dashboard:
+                    <span className="text-[#f5f5f5] ml-1">
+                      {selectedStudentInfo?.name || "carregando aluno..."}
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLockStudentSelection(false);
+                      setOpenedFromPendingList(false);
+                    }}
+                    className="text-[10px] text-[#a1a1a1] hover:text-white underline mt-1"
+                  >
+                    Trocar aluno manualmente
+                  </button>
+                </div>
+              )}
             </div>
 
             {selectedStudent && (
