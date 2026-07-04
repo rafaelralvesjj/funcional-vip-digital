@@ -1148,16 +1148,18 @@ export default async function DashboardPage() {
                 </p>
               </div>
 
-              <a
-                href={
-                  studentsMissingCurrentWeekWorkouts.length > 0
-                    ? `/dashboard/montar-treino?studentId=${studentsMissingCurrentWeekWorkouts[0].student.id}&date=${studentsMissingCurrentWeekWorkouts[0].weekStartDateInput}`
-                    : "/dashboard/montar-treino"
-                }
-                className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
-              >
-                Montar treino
-              </a>
+              {isTeacher && (
+                <a
+                  href={
+                    studentsMissingCurrentWeekWorkouts.length > 0
+                      ? `/dashboard/montar-treino?studentId=${studentsMissingCurrentWeekWorkouts[0].student.id}&date=${studentsMissingCurrentWeekWorkouts[0].weekStartDateInput}`
+                      : "/dashboard/montar-treino"
+                  }
+                  className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
+                >
+                  Montar treino
+                </a>
+              )}
             </div>
 
             {studentsMissingCurrentWeekWorkouts.length === 0 ? (
@@ -1228,15 +1230,17 @@ export default async function DashboardPage() {
 
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <p className="text-xs text-[#a1a1a1]">
-                          O aluno sai desta lista automaticamente quando atingir a quantidade de treinos prevista para a semana.
+                          {isGestor ? 'Acompanhe o professor responsável. O aluno sai desta lista automaticamente quando a meta semanal for atingida.' : 'O aluno sai desta lista automaticamente quando atingir a quantidade de treinos prevista para a semana.'}
                         </p>
 
-                        <a
-                          href={`/dashboard/montar-treino?studentId=${item.student.id}&date=${item.weekStartDateInput}`}
-                          className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
-                        >
-                          Montar treino deste aluno
-                        </a>
+                        {isTeacher && (
+                          <a
+                            href={`/dashboard/montar-treino?studentId=${item.student.id}&date=${item.weekStartDateInput}`}
+                            className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                          >
+                            Montar treino deste aluno
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1257,16 +1261,18 @@ export default async function DashboardPage() {
                 </p>
               </div>
 
-              <a
-                href={
-                  studentsMissingNextWeekWorkouts.length > 0
-                    ? `/dashboard/montar-treino?studentId=${studentsMissingNextWeekWorkouts[0].student.id}&date=${studentsMissingNextWeekWorkouts[0].weekStartDateInput}`
-                    : "/dashboard/montar-treino"
-                }
-                className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
-              >
-                Montar treino
-              </a>
+              {isTeacher && (
+                <a
+                  href={
+                    studentsMissingNextWeekWorkouts.length > 0
+                      ? `/dashboard/montar-treino?studentId=${studentsMissingNextWeekWorkouts[0].student.id}&date=${studentsMissingNextWeekWorkouts[0].weekStartDateInput}`
+                      : "/dashboard/montar-treino"
+                  }
+                  className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
+                >
+                  Montar treino
+                </a>
+              )}
             </div>
 
             {studentsMissingNextWeekWorkouts.length === 0 ? (
@@ -1337,15 +1343,17 @@ export default async function DashboardPage() {
 
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <p className="text-xs text-[#a1a1a1]">
-                          O aluno sai desta lista automaticamente quando atingir a quantidade de treinos prevista para a semana.
+                          {isGestor ? 'Acompanhe o professor responsável. O aluno sai desta lista automaticamente quando a meta semanal for atingida.' : 'O aluno sai desta lista automaticamente quando atingir a quantidade de treinos prevista para a semana.'}
                         </p>
 
-                        <a
-                          href={`/dashboard/montar-treino?studentId=${item.student.id}&date=${item.weekStartDateInput}`}
-                          className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
-                        >
-                          Montar treino deste aluno
-                        </a>
+                        {isTeacher && (
+                          <a
+                            href={`/dashboard/montar-treino?studentId=${item.student.id}&date=${item.weekStartDateInput}`}
+                            className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                          >
+                            Montar treino deste aluno
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1391,16 +1399,18 @@ export default async function DashboardPage() {
                 )}
               </div>
 
-              <a
-                href={
-                  workoutPlanningDeadlineItems.length > 0
-                    ? `/dashboard/montar-treino?studentId=${workoutPlanningDeadlineItems[0].student.id}&date=${workoutPlanningDeadlineItems[0].weekStartDateInput}`
-                    : "/dashboard/montar-treino"
-                }
-                className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
-              >
-                Montar treino
-              </a>
+              {isTeacher && (
+                <a
+                  href={
+                    workoutPlanningDeadlineItems.length > 0
+                      ? `/dashboard/montar-treino?studentId=${workoutPlanningDeadlineItems[0].student.id}&date=${workoutPlanningDeadlineItems[0].weekStartDateInput}`
+                      : "/dashboard/montar-treino"
+                  }
+                  className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
+                >
+                  Montar treino
+                </a>
+              )}
             </div>
 
             {workoutPlanningDeadlineItems.length === 0 ? (
@@ -1478,15 +1488,17 @@ export default async function DashboardPage() {
 
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <p className="text-xs text-[#a1a1a1]">
-                          Esta pendência some automaticamente quando a meta semanal do aluno for atingida.
+                          {isGestor ? 'Acompanhe o professor responsável. Esta pendência some automaticamente quando a meta semanal do aluno for atingida.' : 'Esta pendência some automaticamente quando a meta semanal do aluno for atingida.'}
                         </p>
 
-                        <a
-                          href={`/dashboard/montar-treino?studentId=${item.student.id}&date=${item.weekStartDateInput}`}
-                          className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
-                        >
-                          Montar treino deste aluno
-                        </a>
+                        {isTeacher && (
+                          <a
+                            href={`/dashboard/montar-treino?studentId=${item.student.id}&date=${item.weekStartDateInput}`}
+                            className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                          >
+                            Montar treino deste aluno
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>
