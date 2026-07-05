@@ -301,3 +301,21 @@ model DidYouKnowDelivery {
   @@index([contentId])
   @@map("did_you_know_deliveries")
 }
+
+model WorkoutEngagementNotification {
+  id        String   @id @default(uuid())
+  studentId String   @map("student_id")
+  workoutId String?  @map("workout_id")
+  noticeId  String?  @map("notice_id")
+  eventType String   @map("event_type")
+  eventKey  String   @map("event_key")
+  channel   String   @default("AVISO")
+  sentAt    DateTime @default(now()) @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([studentId, eventType, eventKey])
+  @@index([studentId])
+  @@index([workoutId])
+  @@index([eventType])
+  @@map("workout_engagement_notifications")
+}
