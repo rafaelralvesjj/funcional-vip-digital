@@ -676,7 +676,7 @@ export async function GET(request: NextRequest) {
     missedByStudent.get(workout.studentId)!.push(workout);
   }
 
-  for (const [studentId, workouts] of missedByStudent.entries()) {
+  for (const [studentId, workouts] of Array.from(missedByStudent.entries())) {
     try {
       const student = workouts[0].student;
       const missedCount = workouts.length;
