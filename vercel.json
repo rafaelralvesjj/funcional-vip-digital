@@ -6,6 +6,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/workout-engagement",
+      "schedule": "0 10 * * *"
+    },
+    {
       "path": "/api/cron/workout-planning-deadline",
       "schedule": "0 12 * * 6"
     },
