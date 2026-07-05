@@ -319,3 +319,30 @@ model WorkoutEngagementNotification {
   @@index([eventType])
   @@map("workout_engagement_notifications")
 }
+
+model EvolutionFeedback {
+  id                     String    @id @default(uuid())
+  studentId              String    @map("student_id")
+  professorId            String?   @map("professor_id")
+  milestone              Int
+  status                 String    @default("AGUARDANDO_BIOIMPEDANCIA")
+  completedWorkoutsCount Int       @default(0) @map("completed_workouts_count")
+  baselineAvaliacaoId    String?   @map("baseline_avaliacao_id")
+  currentAvaliacaoId     String?   @map("current_avaliacao_id")
+  bioRequestNoticeId     String?   @map("bio_request_notice_id")
+  professorNoticeId      String?   @map("professor_notice_id")
+  studentFeedbackNoticeId String?  @map("student_feedback_notice_id")
+  draft                  String?   @db.Text
+  finalContent           String?   @map("final_content") @db.Text
+  bioRequestedAt         DateTime? @map("bio_requested_at")
+  readyAt                DateTime? @map("ready_at")
+  sentAt                 DateTime? @map("sent_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  @@unique([studentId, milestone])
+  @@index([studentId])
+  @@index([professorId])
+  @@index([status])
+  @@map("evolution_feedbacks")
+}
