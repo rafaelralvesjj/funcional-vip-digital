@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/workout-planning-deadline",
       "schedule": "0 12 * * 6"
+    },
+    {
+      "path": "/api/cron/did-you-know",
+      "schedule": "0 12 * * 2"
     }
   ]
 }
