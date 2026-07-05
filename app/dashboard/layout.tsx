@@ -24,6 +24,7 @@ export default function DashboardLayout({
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
+    { href: "/dashboard/feedbacks-evolucao", label: "Feedbacks de Evolução", icon: "message" },
   ];
 
   // Itens do gestor
@@ -32,6 +33,7 @@ export default function DashboardLayout({
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/gestao", label: "Gestão", icon: "message" },
+    { href: "/dashboard/feedbacks-evolucao", label: "Feedbacks de Evolução", icon: "message" },
     { href: "/dashboard/gestor/voce-sabia", label: "Você Sabia", icon: "book" },
     { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
