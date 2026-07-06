@@ -447,7 +447,15 @@ export default async function DashboardPage() {
     },
   });
 
+  const now = new Date();
+
   const notices = await prisma.notice.findMany({
+    where: {
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gte: now } },
+      ],
+    },
     select: {
       id: true,
       title: true,
@@ -546,15 +554,10 @@ export default async function DashboardPage() {
     }
 
     /*
-     * "Avisos da gestão" mostra:
-     * - para professor: avisos enviados ao professor;
-     * - para gestor/admin: avisos enviados aos professores e avisos direcionados à própria gestão.
-     * Avisos enviados para alunos ficam no bloco de avisos pendentes dos alunos.
+     * Este card/lista mede somente avisos da gestão enviados aos professores.
+     * Avisos direcionados para a própria gestão não entram aqui, para não inflar
+     * o contador "Avisos da gestão de todos os professores".
      */
-    if (targetRole === 'GESTOR' || targetRole === 'ADMIN') {
-      return isGestor;
-    }
-
     if (targetRole !== 'TEACHER') {
       return false;
     }
@@ -582,8 +585,8 @@ export default async function DashboardPage() {
         .filter((professorId): professorId is string => Boolean(professorId))
     );
 
-    if (targetRole === 'GESTOR' || targetRole === 'ADMIN') {
-      return isGestor && !readProfessorIds.has(userId);
+    if (targetRole !== 'TEACHER') {
+      return false;
     }
 
     if (isTeacher) {
@@ -850,16 +853,12 @@ export default async function DashboardPage() {
         .filter((professorId): professorId is string => Boolean(professorId))
     );
 
-    if ((targetRole === 'GESTOR' || targetRole === 'ADMIN') && isGestor) {
-      const readByCurrentUser = readProfessorIds.has(userId);
-
+    if (targetRole !== 'TEACHER') {
       return {
-        readByCurrentUser,
-        readStatusLabel: readByCurrentUser ? 'Lido' : 'Pendente',
-        readStatusVariant: readByCurrentUser ? 'read' : 'pending',
-        readStatusDescription: readByCurrentUser
-          ? 'Você já leu este aviso.'
-          : 'Aguardando leitura da gestão.',
+        readByCurrentUser: false,
+        readStatusLabel: 'Não aplicável',
+        readStatusVariant: 'neutral',
+        readStatusDescription: 'Este aviso não é direcionado a professores.',
       };
     }
 
