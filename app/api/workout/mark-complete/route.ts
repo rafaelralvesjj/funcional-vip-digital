@@ -312,6 +312,7 @@ async function notifyWorkoutCompleted({
     id: string;
     date: Date;
     workoutPlanId: string | null;
+    contractId?: string | null;
   };
   authorId: string;
   completedCountAfter: number;
@@ -432,6 +433,33 @@ async function notifyWeekCompletedIfNeeded({
   const plannedCount = await prisma.workout.count({
     where: {
       studentId: student.id,
+      ...(workoutId ? {} : {}),
+      date: {
+        gte: startOfWeek,
+        lt: endOfWeek,
+      },
+    },
+  });
+
+  const workoutForContract = await prisma.workout.findUnique({
+    where: {
+      id: workoutId,
+    },
+    select: {
+      contractId: true,
+    },
+  });
+
+  const contractFilter = workoutForContract?.contractId
+    ? {
+        contractId: workoutForContract.contractId,
+      }
+    : {};
+
+  const plannedCountInCycle = await prisma.workout.count({
+    where: {
+      studentId: student.id,
+      ...contractFilter,
       date: {
         gte: startOfWeek,
         lt: endOfWeek,
@@ -442,6 +470,7 @@ async function notifyWeekCompletedIfNeeded({
   const completedCount = await prisma.workout.count({
     where: {
       studentId: student.id,
+      ...contractFilter,
       status: "CONCLUIDO",
       date: {
         gte: startOfWeek,
@@ -450,7 +479,7 @@ async function notifyWeekCompletedIfNeeded({
     },
   });
 
-  if (plannedCount < weeklyLimit || completedCount < weeklyLimit) {
+  if (plannedCountInCycle < weeklyLimit || completedCount < weeklyLimit) {
     return {
       sent: false,
       reason: `Semana ainda não completa: ${completedCount}/${weeklyLimit}`,
@@ -730,6 +759,16 @@ export async function POST(req: NextRequest) {
       select: {
         id: true,
         status: true,
+        contractId: true,
+      },
+    });
+
+    const workoutPlanForContract = await prisma.workoutPlan.findUnique({
+      where: {
+        id: workoutPlanId,
+      },
+      select: {
+        contractId: true,
       },
     });
 
@@ -739,11 +778,13 @@ export async function POST(req: NextRequest) {
           data: {
             status: "CONCLUIDO",
             date: workoutDate,
+            contractId: existingWorkout.contractId || workoutPlanForContract?.contractId || null,
           },
           select: {
             id: true,
             studentId: true,
             workoutPlanId: true,
+            contractId: true,
             date: true,
             status: true,
           },
@@ -752,6 +793,7 @@ export async function POST(req: NextRequest) {
           data: {
             studentId,
             workoutPlanId,
+            contractId: workoutPlanForContract?.contractId || null,
             date: workoutDate,
             status: "CONCLUIDO",
           },
@@ -759,6 +801,7 @@ export async function POST(req: NextRequest) {
             id: true,
             studentId: true,
             workoutPlanId: true,
+            contractId: true,
             date: true,
             status: true,
           },
@@ -768,6 +811,7 @@ export async function POST(req: NextRequest) {
       where: {
         studentId,
         status: "CONCLUIDO",
+        ...(workout.contractId ? { contractId: workout.contractId } : {}),
       },
     });
 
