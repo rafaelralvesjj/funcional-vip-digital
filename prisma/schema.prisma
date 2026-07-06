@@ -39,6 +39,8 @@ model User {
   careEventsAuthored  StudentCareEvent[] @relation("CareEventAuthor")
   careEventsProfessor StudentCareEvent[] @relation("CareEventProfessor")
   careEventsResolved  StudentCareEvent[] @relation("CareEventResolvedBy")
+  contractsProfessor  StudentContract[]  @relation("ContractProfessor")
+  contractsCreated    StudentContract[]  @relation("ContractCreatedBy")
 
   @@map("users")
 }
@@ -86,6 +88,7 @@ model Student {
   userAuthId                     String?  @unique @map("user_auth_id")
   onboardingCompleto             Boolean  @default(false) @map("onboarding_completo")
   contractedTrainingDaysPerMonth Int?     @map("contracted_training_days_per_month")
+  commercialStatus               String   @default("SEM_CONTRATO_ATIVO") @map("commercial_status")
   createdAt                      DateTime @default(now()) @map("created_at")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 
@@ -100,6 +103,7 @@ model Student {
   avaliacoes       Avaliacao[]
   noticeReads      NoticeRead[]
   careEvents      StudentCareEvent[]
+  contracts       StudentContract[]
 
   @@map("students")
 }
@@ -148,10 +152,12 @@ model WorkoutPlan {
   estimatedCaloriesMax     Int?     @map("estimated_calories_max")
   studentSummary           String?  @map("student_summary") @db.Text
   safetyNote               String?  @map("safety_note") @db.Text
+  contractId               String?  @map("contract_id")
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
 
-  student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  contract  StudentContract? @relation(fields: [contractId], references: [id])
   exercises Exercise[]
   workouts  Workout[]
   careEvents StudentCareEvent[]
@@ -186,11 +192,13 @@ model Workout {
   date          DateTime
   status        String   @default("PENDENTE")
   notes         String?
+  contractId    String?  @map("contract_id")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  workoutPlan WorkoutPlan? @relation(fields: [workoutPlanId], references: [id])
+  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  workoutPlan WorkoutPlan?     @relation(fields: [workoutPlanId], references: [id])
+  contract    StudentContract? @relation(fields: [contractId], references: [id])
   careEvents  StudentCareEvent[]
 
   @@map("workouts")
@@ -238,6 +246,7 @@ model StudentCareEvent {
   professorMessage     String?   @map("professor_message") @db.Text
   relatedWorkoutPlanId String?   @map("related_workout_plan_id")
   relatedWorkoutId     String?   @map("related_workout_id")
+  contractId           String?   @map("contract_id")
   weekStart            DateTime? @map("week_start")
   weekEnd              DateTime? @map("week_end")
   studentNoticeId      String?   @map("student_notice_id")
@@ -254,15 +263,86 @@ model StudentCareEvent {
   professor          User?        @relation("CareEventProfessor", fields: [professorId], references: [id])
   author             User?        @relation("CareEventAuthor", fields: [authorId], references: [id])
   resolvedBy         User?        @relation("CareEventResolvedBy", fields: [resolvedById], references: [id])
-  relatedWorkoutPlan WorkoutPlan? @relation(fields: [relatedWorkoutPlanId], references: [id])
-  relatedWorkout     Workout?     @relation(fields: [relatedWorkoutId], references: [id])
+  relatedWorkoutPlan WorkoutPlan?     @relation(fields: [relatedWorkoutPlanId], references: [id])
+  relatedWorkout     Workout?         @relation(fields: [relatedWorkoutId], references: [id])
+  contract           StudentContract? @relation(fields: [contractId], references: [id])
 
   @@index([studentId])
   @@index([professorId])
+  @@index([contractId])
   @@index([status])
   @@index([eventType])
   @@index([createdAt])
   @@map("student_care_events")
+}
+
+
+model ServicePlan {
+  id               String   @id @default(uuid())
+  name             String
+  description      String?  @db.Text
+  workoutsPerWeek  Int      @default(2) @map("workouts_per_week")
+  workoutsPerMonth Int      @default(8) @map("workouts_per_month")
+  durationMonths   Int?     @map("duration_months")
+  priceCents       Int      @default(0) @map("price_cents")
+  active           Boolean  @default(true)
+  trialDays        Int      @default(0) @map("trial_days")
+  allowTrial       Boolean  @default(false) @map("allow_trial")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  contracts StudentContract[]
+
+  @@index([active])
+  @@map("service_plans")
+}
+
+model StudentContract {
+  id                      String    @id @default(uuid())
+  studentId               String    @map("student_id")
+  planId                  String?   @map("plan_id")
+  professorId             String?   @map("professor_id")
+  contractNumber          String?   @map("contract_number")
+  type                    String    @default("PAID")
+  status                  String    @default("DRAFT")
+  commercialStatus        String    @default("AGUARDANDO_ACEITE") @map("commercial_status")
+  startDate               DateTime  @map("start_date")
+  endDate                 DateTime  @map("end_date")
+  durationMonths          Int       @default(1) @map("duration_months")
+  workoutsPerWeek         Int       @default(2) @map("workouts_per_week")
+  workoutsPerMonth        Int       @default(8) @map("workouts_per_month")
+  totalContractedWorkouts Int       @default(8) @map("total_contracted_workouts")
+  priceCents              Int       @default(0) @map("price_cents")
+  paymentMode             String?   @default("UNICO") @map("payment_mode")
+  source                  String?   @default("MANUAL")
+  notes                   String?   @db.Text
+  acceptedAt              DateTime? @map("accepted_at")
+  activatedAt             DateTime? @map("activated_at")
+  finalizedAt             DateTime? @map("finalized_at")
+  cancelledAt             DateTime? @map("cancelled_at")
+  suspendedAt             DateTime? @map("suspended_at")
+  renewedFromContractId   String?   @map("renewed_from_contract_id")
+  createdById             String?   @map("created_by_id")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  student             Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  plan                ServicePlan?      @relation(fields: [planId], references: [id])
+  professor           User?             @relation("ContractProfessor", fields: [professorId], references: [id])
+  createdBy           User?             @relation("ContractCreatedBy", fields: [createdById], references: [id])
+  renewedFromContract StudentContract?  @relation("ContractRenewal", fields: [renewedFromContractId], references: [id])
+  renewedContracts    StudentContract[] @relation("ContractRenewal")
+  workoutPlans        WorkoutPlan[]
+  workouts            Workout[]
+  careEvents          StudentCareEvent[]
+  evolutionFeedbacks  EvolutionFeedback[]
+
+  @@index([studentId])
+  @@index([status])
+  @@index([commercialStatus])
+  @@index([startDate, endDate])
+  @@map("student_contracts")
 }
 
 model Notice {
@@ -399,15 +479,19 @@ model EvolutionFeedback {
   studentFeedbackNoticeId String?  @map("student_feedback_notice_id")
   draft                  String?   @db.Text
   finalContent           String?   @map("final_content") @db.Text
+  contractId             String?   @map("contract_id")
   bioRequestedAt         DateTime? @map("bio_requested_at")
   readyAt                DateTime? @map("ready_at")
   sentAt                 DateTime? @map("sent_at")
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
 
-  @@unique([studentId, milestone])
+  contract               StudentContract? @relation(fields: [contractId], references: [id])
+
+  @@unique([studentId, contractId, milestone])
   @@index([studentId])
   @@index([professorId])
+  @@index([contractId])
   @@index([status])
   @@map("evolution_feedbacks")
 }
