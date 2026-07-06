@@ -55,26 +55,29 @@ function normalizeTeachers(data: any): Teacher[] {
   return [];
 }
 
-function getProfessorId(student: Student): string {
-  return String(
-    student.userId ||
-      student.professorId ||
-      student.user?.id ||
-      student.professor?.id ||
-      ""
-  );
+function getPossibleProfessorIds(student: Student): string[] {
+  return [
+    student.professorId,
+    student.user?.id,
+    student.professor?.id,
+    student.userId,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+function getValidProfessorId(student: Student, teachers: Teacher[]): string {
+  const teacherIds = new Set(teachers.map((teacher) => teacher.id));
+  const possibleIds = getPossibleProfessorIds(student);
+
+  return possibleIds.find((id) => teacherIds.has(id)) || "";
 }
 
 function getProfessorName(student: Student, teachers: Teacher[]): string {
-  const professorId = getProfessorId(student);
+  const professorId = getValidProfessorId(student, teachers);
   const teacher = teachers.find((item) => item.id === professorId);
 
-  return (
-    teacher?.name ||
-    student.user?.name ||
-    student.professor?.name ||
-    "Sem professor"
-  );
+  return teacher?.name || "Sem professor";
 }
 
 function getContractedDays(student: Student): string {
@@ -109,6 +112,21 @@ function getWeeklyLimit(monthlyDays?: string | number | null): string {
   if (value <= 16) return "3 treinos/semana";
 
   return `${Math.ceil(value / 4)} treinos/semana`;
+}
+
+function hasValidContractedDays(student: Student): boolean {
+  const value =
+    student.contractedTrainingDaysPerMonth ??
+    student.contracted_training_days_per_month ??
+    null;
+
+  return Number(value || 0) > 0;
+}
+
+function isPendingLink(student: Student, teachers: Teacher[]): boolean {
+  const validProfessorId = getValidProfessorId(student, teachers);
+
+  return !validProfessorId || !hasValidContractedDays(student);
 }
 
 export default function VincularAlunosPage() {
@@ -151,7 +169,7 @@ export default function VincularAlunosPage() {
       const daysMap: Record<string, string> = {};
 
       normalizedStudents.forEach((student) => {
-        professorMap[student.id] = getProfessorId(student);
+        professorMap[student.id] = getValidProfessorId(student, normalizedTeachers);
         daysMap[student.id] = getContractedDays(student);
       });
 
@@ -180,6 +198,14 @@ export default function VincularAlunosPage() {
   }
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const studentName = params.get("studentName");
+
+    if (studentName) {
+      setSearch(studentName);
+    }
+
+    setViewMode("unassigned");
     loadData();
   }, []);
 
@@ -187,10 +213,9 @@ export default function VincularAlunosPage() {
     const term = search.trim().toLowerCase();
 
     return students.filter((student) => {
-      const professorId = getProfessorId(student);
-      const isUnassigned = !professorId;
+      const isPending = isPendingLink(student, teachers);
 
-      if (viewMode === "unassigned" && !isUnassigned) return false;
+      if (viewMode === "unassigned" && !isPending) return false;
 
       if (!term) return true;
 
@@ -207,7 +232,7 @@ export default function VincularAlunosPage() {
     });
   }, [students, teachers, search, viewMode]);
 
-  const unassignedCount = students.filter((student) => !getProfessorId(student)).length;
+  const unassignedCount = students.filter((student) => isPendingLink(student, teachers)).length;
 
   function updateProfessor(studentId: string, professorId: string) {
     setSelectedProfessorByStudent((current) => ({
@@ -295,7 +320,7 @@ export default function VincularAlunosPage() {
           Vincular Alunos a Professores
         </h1>
         <p className="text-sm text-[#a1a1a1] mt-2">
-          Distribua os alunos entre os professores e registre os dias de treino contratados por mês.
+          Distribua os alunos entre os professores e registre os dias de treino contratados por mês. Um aluno só sai da lista de pendentes quando tiver professor ativo e dias contratados preenchidos.
         </p>
       </div>
 
@@ -327,7 +352,7 @@ export default function VincularAlunosPage() {
                   : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
               }
             >
-              Alunos sem professor ({unassignedCount})
+              Pendentes de vínculo ({unassignedCount})
             </button>
 
             <button
@@ -368,7 +393,7 @@ export default function VincularAlunosPage() {
           </div>
 
           <div className="bg-[#1a1a1a] rounded-xl p-4">
-            <p className="text-[10px] uppercase text-[#6b6b6b]">Sem professor</p>
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Pendentes</p>
             <p className="text-2xl font-bold text-yellow-400">{unassignedCount}</p>
           </div>
 
@@ -491,7 +516,7 @@ export default function VincularAlunosPage() {
                           disabled={isSaving || teachers.length === 0}
                           className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-4 py-2.5 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
                         >
-                          {isSaving ? "Salvando..." : getProfessorId(student) ? "Atualizar" : "Vincular"}
+                          {isSaving ? "Salvando..." : getValidProfessorId(student, teachers) ? "Atualizar" : "Vincular"}
                         </button>
                       </td>
                     </tr>
