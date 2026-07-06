@@ -328,6 +328,7 @@ export async function GET(request: NextRequest) {
           targetRole: "ALUNO",
           studentId: student.id,
           authorId,
+          expiresAt: addDays(30),
         },
       });
 
