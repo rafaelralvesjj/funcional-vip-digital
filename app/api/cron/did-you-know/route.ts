@@ -31,6 +31,12 @@ function getAppStudentUrl(): string {
   return `${appUrl.replace(/\/$/, "")}/aluno`;
 }
 
+function addDays(days: number): Date {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
 function escapeHtml(value: string): string {
   return String(value || "")
     .replaceAll("&", "&amp;")
