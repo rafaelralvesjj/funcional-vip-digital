@@ -25,6 +25,8 @@ export default function DashboardLayout({
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/feedbacks-evolucao", label: "Feedbacks de Evolução", icon: "message" },
+    { href: "/dashboard/resumo-aluno", label: "Resumo do Aluno IA", icon: "book" },
+    { href: "/dashboard/resumo-aluno", label: "Resumo do Aluno IA", icon: "book" },
   ];
 
   // Itens do gestor
