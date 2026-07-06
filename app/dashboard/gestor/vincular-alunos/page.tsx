@@ -449,7 +449,6 @@ export default function VincularAlunosPage() {
         ) : (
           filteredStudents.map((student) => {
             const selectedProfessor = selectedProfessorByStudent[student.id] || "";
-            const days = daysByStudent[student.id] || "";
             const isSaving = savingStudentId === student.id;
             const isPending = isPendingLink(student, teachers);
 
