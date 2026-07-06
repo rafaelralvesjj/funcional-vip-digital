@@ -48,6 +48,8 @@ interface AiWorkoutDraftBatch {
   studentId: string;
   studentName?: string;
   currentIndex?: number;
+  scheduleDescription?: string;
+  scheduleWarning?: string;
   workouts: AiWorkoutDraft[];
 }
 
@@ -524,6 +526,18 @@ export default function MontarTreinoPage() {
                 Treino {aiDraftIndex + 1} de {aiDraftBatch.workouts.length}. Revise aluno, data,
                 exercícios, séries, repetições, carga e observações antes de salvar.
               </p>
+
+              {aiDraftBatch.scheduleDescription && (
+                <p className="text-xs text-blue-200 mt-2">
+                  {aiDraftBatch.scheduleDescription}
+                </p>
+              )}
+
+              {aiDraftBatch.scheduleWarning && (
+                <p className="text-xs text-yellow-300 mt-2">
+                  {aiDraftBatch.scheduleWarning}
+                </p>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">
