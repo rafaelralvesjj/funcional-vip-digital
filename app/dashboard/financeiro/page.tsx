@@ -167,10 +167,11 @@ export default function FinanceiroPage() {
       if (res.ok) {
         setData(json);
       } else {
-        setMessage({ type: "error", text: json?.error || "Erro ao carregar financeiro." });
+        const detail = json?.message ? ` Detalhe: ${json.message}` : "";
+        setMessage({ type: "error", text: `${json?.error || "Erro ao carregar financeiro."}${detail}` });
       }
     } catch {
-      setMessage({ type: "error", text: "Erro ao carregar financeiro." });
+      setMessage({ type: "error", text: "Erro ao carregar financeiro. Abra a aba Network para ver a resposta da rota /api/student-contracts." });
     }
 
     setLoading(false);
