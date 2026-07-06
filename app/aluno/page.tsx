@@ -31,6 +31,9 @@ export default function AlunoPage() {
   const [imgError, setImgError] = useState(false);
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>({});
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
+  const [sendingCareEvent, setSendingCareEvent] = useState(false);
+  const [careEventDetail, setCareEventDetail] = useState("");
+  const [careEventSentForPlanId, setCareEventSentForPlanId] = useState<Record<string, boolean>>({});
 
   // Estados para o modal de dúvidas (thread)
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
@@ -198,6 +201,87 @@ export default function AlunoPage() {
   }
 
   // Envia nova dúvida (fora do modal) ou follow-up (dentro do modal)
+  function getCareEventFriendlyMessage(eventType: string): string {
+    if (eventType === "DOR_DESCONFORTO") {
+      return "Obrigado por avisar. Sua segurança vem primeiro. O professor foi sinalizado para revisar seu treino antes de qualquer progressão.";
+    }
+
+    if (eventType === "EXERCICIO_DIFICIL") {
+      return "Obrigado por contar. Vamos sinalizar o professor para ajustar carga, exercício ou volume. Treino bom precisa desafiar na medida certa.";
+    }
+
+    if (eventType === "NAO_ENTENDI") {
+      return "Obrigado por avisar. O professor será sinalizado para deixar a orientação mais clara.";
+    }
+
+    if (eventType === "FALTA_TEMPO") {
+      return "Obrigado por avisar. Vamos considerar isso para deixar sua próxima semana mais possível e realista.";
+    }
+
+    if (eventType === "DESMOTIVACAO") {
+      return "Obrigado por ser sincero. Vamos considerar isso para uma retomada mais leve, sem culpa e com constância.";
+    }
+
+    return "Obrigado por compartilhar. Sua resposta ajuda o professor a cuidar melhor do seu treino.";
+  }
+
+  async function reportCareEvent(eventType: string) {
+    if (!studentId || !selectedPlan) return;
+
+    setSendingCareEvent(true);
+    setMessage(null);
+
+    try {
+      const planDate =
+        selectedDay !== null
+          ? new Date(currentYear, currentMonth, selectedDay)
+          : selectedPlan?.date
+            ? new Date(selectedPlan.date)
+            : new Date();
+
+      const res = await fetch("/api/student-care-events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          studentId,
+          eventType,
+          description: careEventDetail || null,
+          relatedWorkoutPlanId: selectedPlan.id,
+          source: "APP_ALUNO_TREINO",
+          workoutDate: planDate.toISOString(),
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setCareEventSentForPlanId((current) => ({
+          ...current,
+          [selectedPlan.id]: true,
+        }));
+        setCareEventDetail("");
+        setMessage({
+          type: "success",
+          text: data?.message || getCareEventFriendlyMessage(eventType),
+        });
+      } else {
+        setMessage({
+          type: "error",
+          text: data?.error || "Não foi possível registrar sua resposta agora.",
+        });
+      }
+    } catch {
+      setMessage({
+        type: "error",
+        text: "Não foi possível registrar sua resposta agora.",
+      });
+    }
+
+    setSendingCareEvent(false);
+  }
+
   async function handleSendQuestion(parentId?: string) {
     const text = parentId ? followUpText : newQuestion;
     if (!text.trim() || !studentId) return;
@@ -457,6 +541,7 @@ export default function AlunoPage() {
     const plan = getPlanForDay(day);
     if (plan) {
       setSelectedPlan(plan);
+      setCareEventDetail("");
       setShowWorkoutModal(true);
     }
   }
@@ -914,6 +999,91 @@ export default function AlunoPage() {
                       Este treino pertence a uma semana já encerrada. Ele continua disponível para consulta,
                       mas não pode mais ser validado para não distorcer sua avaliação de adesão.
                     </p>
+                  </div>
+                )}
+
+                {!isCompleted(selectedDay) && (
+                  <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-3 space-y-2">
+                    <div>
+                      <p className="text-[11px] text-[#D4A373] font-semibold">
+                        Precisa de algum ajuste ou cuidado?
+                      </p>
+                      <p className="text-[10px] text-[#a1a1a1] leading-relaxed mt-0.5">
+                        Conte o que aconteceu. Isso ajuda o professor a ajustar sua próxima semana
+                        sem transformar dificuldade em cobrança.
+                      </p>
+                    </div>
+
+                    <textarea
+                      value={careEventDetail}
+                      onChange={(event) => setCareEventDetail(event.target.value)}
+                      placeholder="Opcional: explique em poucas palavras o que aconteceu."
+                      className="w-full min-h-[60px] bg-[#111] border border-[#ffffff10] rounded-lg px-3 py-2 text-[11px] text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                    />
+
+                    {careEventSentForPlanId[selectedPlan?.id] ? (
+                      <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2">
+                        <p className="text-[10px] text-green-400">
+                          Recebemos seu relato. Obrigado por avisar — isso ajuda o professor a cuidar melhor do seu treino.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          disabled={sendingCareEvent}
+                          onClick={() => reportCareEvent("FALTA_TEMPO")}
+                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
+                        >
+                          Falta de tempo
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={sendingCareEvent}
+                          onClick={() => reportCareEvent("EXERCICIO_DIFICIL")}
+                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
+                        >
+                          Exercício difícil
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={sendingCareEvent}
+                          onClick={() => reportCareEvent("NAO_ENTENDI")}
+                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
+                        >
+                          Não entendi
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={sendingCareEvent}
+                          onClick={() => reportCareEvent("DESMOTIVACAO")}
+                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
+                        >
+                          Desmotivação
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={sendingCareEvent}
+                          onClick={() => reportCareEvent("DOR_DESCONFORTO")}
+                          className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-red-500/10 text-red-300 hover:bg-red-500/20 border border-red-500/20 disabled:opacity-50"
+                        >
+                          Senti dor ou desconforto
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={sendingCareEvent}
+                          onClick={() => reportCareEvent("OUTRO")}
+                          className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
+                        >
+                          Outro motivo
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
