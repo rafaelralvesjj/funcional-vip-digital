@@ -65,55 +65,6 @@ async function getOptionalImage(source: BodySource): Promise<string | null> {
   return `data:${file.type};base64,${buffer.toString("base64")}`;
 }
 
-async function getResponsibleUserId(preferredProfessorId?: string | null): Promise<string | null> {
-  if (preferredProfessorId) {
-    const preferred = await prisma.user.findUnique({
-      where: {
-        id: preferredProfessorId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (preferred?.id) return preferred.id;
-  }
-
-  const teacher = await prisma.user.findFirst({
-    where: {
-      active: true,
-      role: {
-        in: ["PROFESSOR", "TEACHER"],
-      },
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (teacher?.id) return teacher.id;
-
-  const manager = await prisma.user.findFirst({
-    where: {
-      active: true,
-      role: {
-        in: ["GESTOR", "ADMIN"],
-      },
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  return manager?.id || null;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const contentType = req.headers.get("content-type") || "";
@@ -128,7 +79,6 @@ export async function POST(req: NextRequest) {
     const password = getString(body, ["password", "senha"]);
     const confirmPassword = getString(body, ["confirmPassword", "confirmarSenha", "passwordConfirmation"]);
     const notes = getString(body, ["notes", "observacoes", "observations"]) || null;
-    const professorId = getString(body, ["professorId", "teacherId", "userId"]) || null;
     const image = await getOptionalImage(body);
 
     if (!name) {
@@ -176,7 +126,6 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const responsibleUserId = await getResponsibleUserId(professorId);
 
     const result = await prisma.$transaction(async (tx) => {
       const authUser = await tx.user.create({
@@ -204,12 +153,14 @@ export async function POST(req: NextRequest) {
           contractedTrainingDaysPerMonth: null,
           userAuthId: authUser.id,
           /*
-           * Student.userId representa o professor/gestor responsável.
-           * Em cadastro público, usamos o primeiro professor ativo.
-           * Se ainda não existir equipe cadastrada, usamos o próprio usuário
-           * apenas para não bloquear o cadastro.
+           * Cadastro público NÃO deve vincular automaticamente a professor.
+           * Como student.userId é obrigatório no modelo atual, usamos o próprio
+           * usuário do aluno como responsável técnico temporário.
+           *
+           * O vínculo real com professor e o contrato ativo serão feitos depois,
+           * pelo Financeiro / Vincular Alunos.
            */
-          userId: responsibleUserId || authUser.id,
+          userId: authUser.id,
         },
       });
 
