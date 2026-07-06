@@ -32,13 +32,15 @@ function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): 
   // Regra comercial atual:
   // até 4 treinos/mês  -> 1 treino por semana
   // até 8 treinos/mês  -> 2 treinos por semana
-  // até 16 treinos/mês -> 3 treinos por semana
-  // acima disso, divide por 4 semanas arredondando para cima.
+  // até 12 treinos/mês -> 3 treinos por semana
+  // até 16 treinos/mês -> 4 treinos por semana
+  // acima disso        -> 5 treinos por semana, limitado a dias úteis.
   if (contracted <= 4) return 1;
   if (contracted <= 8) return 2;
-  if (contracted <= 16) return 3;
+  if (contracted <= 12) return 3;
+  if (contracted <= 16) return 4;
 
-  return Math.ceil(contracted / 4);
+  return 5;
 }
 
 function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
@@ -319,7 +321,22 @@ export async function POST(req: NextRequest) {
     const currentUserId = sessionUser?.id ? String(sessionUser.id) : null;
 
     const body = await req.json();
-    const { studentId, name, description, date, notes, exercises = [] } = body;
+    const {
+      studentId,
+      name,
+      description,
+      date,
+      notes,
+      objective,
+      focusAreas,
+      intensity,
+      estimatedDurationMinutes,
+      estimatedCaloriesMin,
+      estimatedCaloriesMax,
+      studentSummary,
+      safetyNote,
+      exercises = [],
+    } = body;
 
     if (!studentId || typeof studentId !== "string") {
       return NextResponse.json(
@@ -426,6 +443,23 @@ export async function POST(req: NextRequest) {
           description: description?.trim() || null,
           date: workoutDate,
           notes: notes?.trim() || null,
+          objective: objective ? String(objective).trim() : null,
+          focusAreas: focusAreas ? String(focusAreas).trim() : null,
+          intensity: intensity ? String(intensity).trim() : null,
+          estimatedDurationMinutes:
+            estimatedDurationMinutes === null || estimatedDurationMinutes === undefined || estimatedDurationMinutes === ""
+              ? null
+              : Number(estimatedDurationMinutes),
+          estimatedCaloriesMin:
+            estimatedCaloriesMin === null || estimatedCaloriesMin === undefined || estimatedCaloriesMin === ""
+              ? null
+              : Number(estimatedCaloriesMin),
+          estimatedCaloriesMax:
+            estimatedCaloriesMax === null || estimatedCaloriesMax === undefined || estimatedCaloriesMax === ""
+              ? null
+              : Number(estimatedCaloriesMax),
+          studentSummary: studentSummary ? String(studentSummary).trim() : null,
+          safetyNote: safetyNote ? String(safetyNote).trim() : null,
           exercises: {
             create: normalizedExercises,
           },
@@ -619,7 +653,22 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, name, description, date, notes, exercises } = body;
+    const {
+      id,
+      name,
+      description,
+      date,
+      notes,
+      objective,
+      focusAreas,
+      intensity,
+      estimatedDurationMinutes,
+      estimatedCaloriesMin,
+      estimatedCaloriesMax,
+      studentSummary,
+      safetyNote,
+      exercises,
+    } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -660,6 +709,29 @@ export async function PUT(req: NextRequest) {
     if (description !== undefined) data.description = description ? String(description).trim() : null;
     if (notes !== undefined) data.notes = notes ? String(notes).trim() : null;
     if (date !== undefined) data.date = date ? new Date(date + "T12:00:00") : null;
+    if (objective !== undefined) data.objective = objective ? String(objective).trim() : null;
+    if (focusAreas !== undefined) data.focusAreas = focusAreas ? String(focusAreas).trim() : null;
+    if (intensity !== undefined) data.intensity = intensity ? String(intensity).trim() : null;
+    if (estimatedDurationMinutes !== undefined) {
+      data.estimatedDurationMinutes =
+        estimatedDurationMinutes === null || estimatedDurationMinutes === ""
+          ? null
+          : Number(estimatedDurationMinutes);
+    }
+    if (estimatedCaloriesMin !== undefined) {
+      data.estimatedCaloriesMin =
+        estimatedCaloriesMin === null || estimatedCaloriesMin === ""
+          ? null
+          : Number(estimatedCaloriesMin);
+    }
+    if (estimatedCaloriesMax !== undefined) {
+      data.estimatedCaloriesMax =
+        estimatedCaloriesMax === null || estimatedCaloriesMax === ""
+          ? null
+          : Number(estimatedCaloriesMax);
+    }
+    if (studentSummary !== undefined) data.studentSummary = studentSummary ? String(studentSummary).trim() : null;
+    if (safetyNote !== undefined) data.safetyNote = safetyNote ? String(safetyNote).trim() : null;
 
     const normalizedExercises = Array.isArray(exercises)
       ? exercises.map((ex: any, index: number) => ({
