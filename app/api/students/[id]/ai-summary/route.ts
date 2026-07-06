@@ -268,6 +268,7 @@ export async function GET(
       feedbacks,
       didYouKnowDeliveries,
       engagementNotifications,
+      careEvents,
     ] = await Promise.all([
       prisma.avaliacao.findMany({
         where: {
@@ -426,6 +427,25 @@ export async function GET(
         },
         take: 20,
       }),
+
+      prisma.studentCareEvent.findMany({
+        where: {
+          studentId,
+        },
+        include: {
+          relatedWorkoutPlan: {
+            select: {
+              id: true,
+              name: true,
+              date: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 20,
+      }),
     ]);
 
     const contentIds = Array.from(
@@ -521,6 +541,22 @@ export async function GET(
       return `- ${formatDate(item.sentAt)} | ${item.eventType} | canal: ${item.channel}`;
     });
 
+    const careLines = careEvents.slice(0, 12).map((event) => {
+      return [
+        `- ${formatDate(event.createdAt)} | ${event.title} | tipo: ${event.eventType} | severidade: ${event.severity} | status: ${event.status}`,
+        `  Relato: ${normalizeText(event.description).slice(0, 350)}`,
+        `  Leitura para treino: ${normalizeText(event.professorMessage).slice(0, 500)}`,
+        event.relatedWorkoutPlan
+          ? `  Treino relacionado: ${event.relatedWorkoutPlan.name} (${formatDate(event.relatedWorkoutPlan.date)})`
+          : "  Treino relacionado: não informado",
+      ].join("\n");
+    });
+
+    const openCareEvents = careEvents.filter((event) => event.status !== "RESOLVIDO");
+    const hasInjuryCare = openCareEvents.some((event) => event.eventType === "DOR_DESCONFORTO");
+    const hasDifficultExercise = openCareEvents.some((event) => event.eventType === "EXERCICIO_DIFICIL");
+    const hasLowMotivation = openCareEvents.some((event) => event.eventType === "DESMOTIVACAO" || event.eventType === "FALTA_TEMPO");
+
     const summaryText = [
       "RESUMO COMPLETO DO ALUNO — FUNCIONAL VIP DIGITAL",
       "",
@@ -591,7 +627,22 @@ export async function GET(
       "8) Régua de engajamento/alertas automáticos recentes",
       engagementLines.length ? engagementLines.join("\n") : "Nenhum alerta automático recente encontrado.",
       "",
-      "9) Leitura operacional para montagem de treino",
+      "9) Sinais recentes de cuidado do aluno",
+      careLines.length ? careLines.join("\n") : "Nenhum sinal de cuidado registrado.",
+      "",
+      "10) Leitura operacional para montagem de treino",
+      openCareEvents.length > 0
+        ? `Existem ${openCareEvents.length} evento(s) de cuidado em aberto. Revisar antes de montar ou progredir treino.`
+        : "Não há eventos de cuidado em aberto.",
+      hasInjuryCare
+        ? "Atenção: há relato de dor/desconforto. Não gerar progressão agressiva. Priorizar segurança, regressão, revisão humana e, se necessário, orientação para avaliação profissional."
+        : "Sem relato aberto de dor/desconforto.",
+      hasDifficultExercise
+        ? "Atenção: aluno relatou exercício/treino difícil. Sugerir variações mais simples, menor volume, menor carga ou instruções mais claras."
+        : "Sem relato aberto de exercício difícil.",
+      hasLowMotivation
+        ? "Atenção: há sinal de falta de tempo/desmotivação. Priorizar treino curto, objetivo e aderente."
+        : "Sem sinal aberto de falta de tempo/desmotivação.",
       weeklyLimit
         ? `A sugestão de treino deve respeitar aproximadamente ${weeklyLimit} treino(s) por semana, conforme os dias contratados.`
         : "A meta semanal ainda não está configurada; confirmar quantidade de treinos antes de montar.",
@@ -628,6 +679,8 @@ export async function GET(
         nextWeekPlans: nextWeekPlans.length,
         feedbacks: feedbacks.length,
         questions: questions.length,
+        careEvents: careEvents.length,
+        openCareEvents: openCareEvents.length,
       },
       summaryText,
       aiPrompt,
