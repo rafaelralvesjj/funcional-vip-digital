@@ -19,6 +19,14 @@ function getVincularAlunosUrl(): string {
   return `${getAppBaseUrl()}/dashboard/gestor/vincular-alunos`;
 }
 
+function addDays(days: number): Date {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(23, 59, 59, 999);
+
+  return date;
+}
+
 function escapeHtml(value: string): string {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -135,6 +143,7 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
             targetRole: "STUDENT",
             studentId: student.id,
             authorId: noticeAuthorId,
+            expiresAt: addDays(30),
           },
         })
       );
