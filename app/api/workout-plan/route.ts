@@ -378,20 +378,50 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const workoutDate = date ? new Date(date + "T12:00:00") : new Date();
+
+    const activeContract = await prisma.studentContract.findFirst({
+      where: {
+        studentId,
+        status: "ACTIVE",
+        startDate: {
+          lte: workoutDate,
+        },
+        endDate: {
+          gte: workoutDate,
+        },
+      },
+      orderBy: {
+        endDate: "desc",
+      },
+    });
+
+    if (!activeContract) {
+      return NextResponse.json(
+        {
+          error:
+            "Este aluno não possui contrato ativo para a data do treino. Crie ou ative um contrato no Financeiro antes de montar novos treinos.",
+        },
+        { status: 400 }
+      );
+    }
+
     const existingWorkoutPlanCount = await prisma.workoutPlan.count({
-      where: { studentId },
+      where: {
+        studentId,
+        contractId: activeContract.id,
+      },
     });
 
     const isFirstWorkoutPlan = existingWorkoutPlanCount === 0;
 
-    const workoutDate = date ? new Date(date + "T12:00:00") : new Date();
-    const weeklyLimit = getWeeklyWorkoutLimit(studentExists.contractedTrainingDaysPerMonth);
+    const weeklyLimit = getWeeklyWorkoutLimit(activeContract.workoutsPerMonth);
 
     if (!weeklyLimit) {
       return NextResponse.json(
         {
           error:
-            "Este aluno ainda não tem quantidade contratada de treinos/dias no mês configurada. Vincule o aluno na gestão e preencha a quantidade contratada antes de montar o treino.",
+            "O contrato ativo do aluno não possui quantidade mensal de treinos configurada. Revise o contrato no Financeiro.",
         },
         { status: 400 }
       );
@@ -402,6 +432,7 @@ export async function POST(req: NextRequest) {
     const workoutPlansThisWeek = await prisma.workoutPlan.count({
       where: {
         studentId,
+        contractId: activeContract.id,
         date: {
           gte: startOfWeek,
           lt: endOfWeek,
@@ -439,6 +470,7 @@ export async function POST(req: NextRequest) {
       const plan = await tx.workoutPlan.create({
         data: {
           studentId,
+          contractId: activeContract.id,
           name: name.trim(),
           description: description?.trim() || null,
           date: workoutDate,
@@ -476,6 +508,7 @@ export async function POST(req: NextRequest) {
       await tx.workout.create({
         data: {
           studentId,
+          contractId: activeContract.id,
           workoutPlanId: plan.id,
           date: workoutDate,
           status: "PENDENTE",
