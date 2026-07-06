@@ -206,6 +206,7 @@ async function notifyWorkoutAvailable({
           targetRole: "STUDENT",
           studentId,
           authorId,
+          expiresAt: endOfWeek,
         },
       })
     );
