@@ -226,9 +226,16 @@ export default function ResumoAlunoPage() {
       "",
       "Com base no resumo do aluno abaixo, gere uma sugestão de treinos em JSON válido.",
       "",
+      "ENTREGA OBRIGATÓRIA:",
+      "- Gere um arquivo .txt para download contendo somente o JSON válido.",
+      "- Nome sugerido do arquivo: treino_" + summaryData.student.name.replaceAll(" ", "_").toLowerCase() + ".txt",
+      "- Não renderize o JSON longo diretamente na tela se conseguir entregar o arquivo .txt.",
+      "- O conteúdo do arquivo .txt deve começar com { e terminar com }.",
+      "- O arquivo .txt não pode ter markdown, comentários, explicações ou texto antes/depois do JSON.",
+      "- Se você não conseguir gerar arquivo .txt, responda somente com o JSON puro, sem markdown.",
+      "",
       "REGRAS IMPORTANTES:",
       "- Não gere SQL.",
-      "- Não escreva texto fora do JSON.",
       "- Não use markdown.",
       "- Não coloque comentários no JSON.",
       "- O professor vai revisar tudo antes de salvar.",
@@ -609,7 +616,7 @@ export default function ResumoAlunoPage() {
           <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-4 space-y-3">
             <div>
               <h3 className="text-sm font-semibold text-[#D4A373]">
-                Importar JSON gerado pela IA
+                Importar JSON do arquivo .txt gerado pela IA
               </h3>
               <p className="text-xs text-[#a1a1a1] mt-1">
                 Depois de copiar o Prompt JSON e pedir a sugestão para a IA, cole aqui o JSON retornado.
