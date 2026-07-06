@@ -64,9 +64,19 @@ export async function GET(
      * 3. Avisos gerais para alunos só aparecem para alunos que já existiam
      *    na data em que o aviso foi criado.
      */
+    const now = new Date();
+
     const notices = await prisma.notice.findMany({
       where: {
-        OR: [
+        AND: [
+          {
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gte: now } },
+            ],
+          },
+          {
+            OR: [
           {
             studentId,
             targetRole: {
@@ -92,6 +102,8 @@ export async function GET(
                 in: ["GESTAO_PENDENCIA", "MANAGEMENT_PENDING"],
               },
             },
+          },
+            ],
           },
         ],
       },
