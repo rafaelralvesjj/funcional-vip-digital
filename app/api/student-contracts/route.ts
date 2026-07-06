@@ -425,10 +425,33 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("GET /api/student-contracts error:", error);
 
+    const message = String(error?.message || "");
+    const code = String(error?.code || "");
+
+    if (
+      code === "P2021" ||
+      code === "P2022" ||
+      message.includes("student_contracts") ||
+      message.includes("service_plans") ||
+      message.includes("commercial_status") ||
+      message.includes("contract_id")
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "A estrutura de contratos ainda não está completa no banco de produção. Rode o SQL da Fase 1 no mesmo Neon usado pela Vercel.",
+          message,
+          code,
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: "Erro ao buscar contratos.",
-        message: error?.message,
+        message,
+        code,
       },
       { status: 500 }
     );
