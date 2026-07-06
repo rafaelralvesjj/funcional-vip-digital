@@ -133,15 +133,23 @@ model Avaliacao {
 }
 
 model WorkoutPlan {
-  id          String   @id @default(uuid())
-  studentId   String   @map("student_id")
-  name        String
-  description String?
-  active      Boolean  @default(true)
-  notes       String?
-  date        DateTime?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                       String   @id @default(uuid())
+  studentId                String   @map("student_id")
+  name                     String
+  description              String?
+  active                   Boolean  @default(true)
+  notes                    String?
+  date                     DateTime?
+  objective                String?  @db.Text
+  focusAreas               String?  @map("focus_areas") @db.Text
+  intensity                String?
+  estimatedDurationMinutes Int?     @map("estimated_duration_minutes")
+  estimatedCaloriesMin     Int?     @map("estimated_calories_min")
+  estimatedCaloriesMax     Int?     @map("estimated_calories_max")
+  studentSummary           String?  @map("student_summary") @db.Text
+  safetyNote               String?  @map("safety_note") @db.Text
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   exercises Exercise[]
