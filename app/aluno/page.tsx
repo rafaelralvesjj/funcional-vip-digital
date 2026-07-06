@@ -958,7 +958,85 @@ export default function AlunoPage() {
               <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }}
                 className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
             </div>
-            <div className="p-3 space-y-1.5">
+            <div className="p-3 space-y-2">
+              {(selectedPlan.objective ||
+                selectedPlan.focusAreas ||
+                selectedPlan.intensity ||
+                selectedPlan.estimatedDurationMinutes ||
+                selectedPlan.estimatedCaloriesMin ||
+                selectedPlan.estimatedCaloriesMax ||
+                selectedPlan.studentSummary ||
+                selectedPlan.safetyNote) && (
+                <div className="bg-[#0a0a0a] border border-[#D4A373]/20 rounded-xl p-3 space-y-2">
+                  <div>
+                    <p className="text-[10px] text-[#D4A373] uppercase tracking-[0.18em] font-semibold">
+                      Resumo do treino
+                    </p>
+                    {selectedPlan.studentSummary && (
+                      <p className="text-[11px] text-[#e5e5e5] leading-relaxed mt-1">
+                        {selectedPlan.studentSummary}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {selectedPlan.objective && (
+                      <div className="bg-[#111] rounded-lg p-2 border border-[#ffffff08] col-span-2">
+                        <p className="text-[9px] text-[#6b6b6b]">Objetivo</p>
+                        <p className="text-[11px] text-[#f5f5f5]">{selectedPlan.objective}</p>
+                      </div>
+                    )}
+
+                    {selectedPlan.focusAreas && (
+                      <div className="bg-[#111] rounded-lg p-2 border border-[#ffffff08] col-span-2">
+                        <p className="text-[9px] text-[#6b6b6b]">Você vai trabalhar</p>
+                        <p className="text-[11px] text-[#f5f5f5]">{selectedPlan.focusAreas}</p>
+                      </div>
+                    )}
+
+                    {selectedPlan.intensity && (
+                      <div className="bg-[#111] rounded-lg p-2 border border-[#ffffff08]">
+                        <p className="text-[9px] text-[#6b6b6b]">Intensidade</p>
+                        <p className="text-[11px] text-[#f5f5f5]">{selectedPlan.intensity}</p>
+                      </div>
+                    )}
+
+                    {selectedPlan.estimatedDurationMinutes && (
+                      <div className="bg-[#111] rounded-lg p-2 border border-[#ffffff08]">
+                        <p className="text-[9px] text-[#6b6b6b]">Tempo estimado</p>
+                        <p className="text-[11px] text-[#f5f5f5]">
+                          {selectedPlan.estimatedDurationMinutes} min
+                        </p>
+                      </div>
+                    )}
+
+                    {(selectedPlan.estimatedCaloriesMin || selectedPlan.estimatedCaloriesMax) && (
+                      <div className="bg-[#111] rounded-lg p-2 border border-[#ffffff08] col-span-2">
+                        <p className="text-[9px] text-[#6b6b6b]">Gasto energético estimado</p>
+                        <p className="text-[11px] text-[#f5f5f5]">
+                          {selectedPlan.estimatedCaloriesMin && selectedPlan.estimatedCaloriesMax
+                            ? `${selectedPlan.estimatedCaloriesMin} a ${selectedPlan.estimatedCaloriesMax} kcal`
+                            : selectedPlan.estimatedCaloriesMin
+                              ? `a partir de ${selectedPlan.estimatedCaloriesMin} kcal`
+                              : `até ${selectedPlan.estimatedCaloriesMax} kcal`}
+                        </p>
+                        <p className="text-[9px] text-[#6b6b6b] mt-0.5 leading-relaxed">
+                          Estimativa aproximada. Pode variar conforme ritmo, carga, execução, condicionamento e tempo real de treino.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedPlan.safetyNote && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2">
+                      <p className="text-[10px] text-amber-300 leading-relaxed">
+                        {selectedPlan.safetyNote}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
                 <div key={ex.id || idx}
                   onClick={() => { setSelectedExercise(ex); setImgError(false); }}
