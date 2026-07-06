@@ -1,297 +1,683 @@
 "use client";
-import { useEffect, useState } from "react";
 
-interface Gestor {
+import { useEffect, useMemo, useState } from "react";
+
+type ManagedUser = {
   id: string;
   name: string;
-  email?: string;
+  email: string;
+  phone?: string | null;
+  document?: string | null;
+  birthDate?: string | null;
+  cref?: string | null;
+  specialty?: string | null;
+  education?: string | null;
+  experience?: string | null;
+  bio?: string | null;
+  active?: boolean;
+  role?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+type FormState = {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  phone: string;
+  document: string;
+  birthDate: string;
+  cref: string;
+  specialty: string;
+  education: string;
+  experience: string;
+  bio: string;
+  active: boolean;
+};
+
+const emptyForm: FormState = {
+  id: "",
+  name: "",
+  email: "",
+  password: "",
+  phone: "",
+  document: "",
+  birthDate: "",
+  cref: "",
+  specialty: "",
+  education: "",
+  experience: "",
+  bio: "",
+  active: true,
+};
+
+function normalizeList(data: any): ManagedUser[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.managers)) return data.managers;
+  if (Array.isArray(data?.gestores)) return data.gestores;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
+
+  return [];
 }
 
-export default function GerenciarGestoresPage() {
-  const [gestores, setGestores] = useState<Gestor[]>([]);
+function formatDate(value?: string | null): string {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function userToForm(user: ManagedUser): FormState {
+  return {
+    id: user.id,
+    name: user.name || "",
+    email: user.email || "",
+    password: "",
+    phone: user.phone || "",
+    document: user.document || "",
+    birthDate: user.birthDate || "",
+    cref: user.cref || "",
+    specialty: user.specialty || "",
+    education: user.education || "",
+    experience: user.experience || "",
+    bio: user.bio || "",
+    active: user.active !== false,
+  };
+}
+
+export default function GerenciarGestorPage() {
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [form, setForm] = useState<FormState>(emptyForm);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [editGestor, setEditGestor] = useState<Gestor | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
   const [saving, setSaving] = useState(false);
-  const [addGestor, setAddGestor] = useState(false);
-  const [newGestorName, setNewGestorName] = useState("");
-  const [newGestorEmail, setNewGestorEmail] = useState("");
-  const [newGestorPassword, setNewGestorPassword] = useState("");
-  const [savingAdd, setSavingAdd] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [search, setSearch] = useState("");
+  const [showInactive, setShowInactive] = useState(true);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  useEffect(() => {
-    loadGestores();
-  }, []);
+  const isEditing = Boolean(form.id);
 
-  async function loadGestores() {
+  async function loadUsers() {
     setLoading(true);
-    try {
-      const res = await fetch("/api/gestores");
-      if (res.ok) {
-        const data = await res.json();
-        setGestores(Array.isArray(data) ? data : []);
-      }
-    } catch {
-      setMessage({ type: "error", text: "Erro ao carregar gestores" });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function excluirGestor(gestorId: string) {
-    setDeleting(gestorId);
-    setMessage(null);
 
     try {
-      const res = await fetch("/api/gestores/" + gestorId, {
-        method: "DELETE",
+      const res = await fetch("/api/managers?includeInactive=true", {
+        cache: "no-store",
       });
 
+      const data = await res.json().catch(() => null);
+
       if (res.ok) {
-        setMessage({ type: "success", text: "Gestor excluido com sucesso!" });
-        setGestores((prev) => prev.filter((g) => g.id !== gestorId));
-        setConfirmDelete(null);
+        setUsers(normalizeList(data));
       } else {
-        const err = await res.json();
-        setMessage({ type: "error", text: "Erro: " + err.error });
+        setMessage({ type: "error", text: data?.error || "Erro ao carregar dados." });
       }
     } catch {
-      setMessage({ type: "error", text: "Erro ao excluir gestor" });
-    } finally {
-      setDeleting(null);
+      setMessage({ type: "error", text: "Erro ao carregar dados." });
     }
+
+    setLoading(false);
   }
 
-  function abrirEditar(gestor: Gestor) {
-    setEditGestor(gestor);
-    setEditName(gestor.name);
-    setEditEmail(gestor.email || "");
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const filteredUsers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+
+    return users.filter((user) => {
+      if (!showInactive && user.active === false) return false;
+
+      if (!term) return true;
+
+      return [
+        user.name,
+        user.email,
+        user.phone,
+        user.document,
+        user.cref,
+        user.specialty,
+        user.education,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(term);
+    });
+  }, [users, search, showInactive]);
+
+  function openCreateModal() {
+    setForm(emptyForm);
+    setMessage(null);
+    setShowModal(true);
   }
 
-  async function salvarEdicao() {
-    if (!editGestor) return;
+  function openEditModal(user: ManagedUser) {
+    setForm(userToForm(user));
+    setMessage(null);
+    setShowModal(true);
+  }
+
+  function closeModal() {
+    if (saving) return;
+
+    setShowModal(false);
+    setForm(emptyForm);
+  }
+
+  function updateField(field: keyof FormState, value: string | boolean) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+
+    if (!form.name.trim()) {
+      setMessage({ type: "error", text: "Nome completo é obrigatório." });
+      return;
+    }
+
+    if (!form.email.trim()) {
+      setMessage({ type: "error", text: "E-mail é obrigatório." });
+      return;
+    }
+
+    if (!isEditing && form.password.trim().length < 6) {
+      setMessage({ type: "error", text: "Senha obrigatória com pelo menos 6 caracteres." });
+      return;
+    }
+
     setSaving(true);
     setMessage(null);
 
     try {
-      const res = await fetch("/api/gestores/" + editGestor.id, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName, email: editEmail }),
+      const payload = {
+        ...form,
+        password: form.password.trim(),
+      };
+
+      const res = await fetch("/api/managers", {
+        method: isEditing ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       });
 
+      const data = await res.json().catch(() => null);
+
       if (res.ok) {
-        setMessage({ type: "success", text: "Gestor atualizado com sucesso!" });
-        setEditGestor(null);
-        loadGestores();
+        setMessage({
+          type: "success",
+          text: isEditing ? "Gestor atualizado com sucesso." : "Gestor cadastrado com sucesso.",
+        });
+        setShowModal(false);
+        setForm(emptyForm);
+        await loadUsers();
       } else {
-        const err = await res.json();
-        setMessage({ type: "error", text: "Erro: " + err.error });
+        setMessage({ type: "error", text: data?.error || "Erro ao salvar cadastro." });
       }
     } catch {
-      setMessage({ type: "error", text: "Erro ao atualizar gestor" });
-    } finally {
-      setSaving(false);
+      setMessage({ type: "error", text: "Erro ao salvar cadastro." });
+    }
+
+    setSaving(false);
+  }
+
+  async function handleDeactivate(user: ManagedUser) {
+    const ok = window.confirm("Deseja desativar este gestor? O histórico será preservado.");
+
+    if (!ok) return;
+
+    setMessage(null);
+
+    try {
+      const res = await fetch(`/api/managers?id=${encodeURIComponent(user.id)}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setMessage({ type: "success", text: data?.message || "Gestor desativado com segurança." });
+        await loadUsers();
+      } else {
+        setMessage({ type: "error", text: data?.error || "Erro ao desativar cadastro." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao desativar cadastro." });
     }
   }
 
-  async function handleAddGestor() {
-    if (!newGestorName || !newGestorEmail || !newGestorPassword) {
-      setMessage({ type: "error", text: "Preencha todos os campos" });
-      return;
-    }
-    setSavingAdd(true);
+  async function handleReactivate(user: ManagedUser) {
     setMessage(null);
+
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newGestorName, email: newGestorEmail, password: newGestorPassword, role: "GESTOR" }),
+      const res = await fetch("/api/managers", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...user,
+          active: true,
+          password: "",
+        }),
       });
+
+      const data = await res.json().catch(() => null);
+
       if (res.ok) {
-        setMessage({ type: "success", text: "Gestor cadastrado com sucesso!" });
-        setAddGestor(false);
-        setNewGestorName("");
-        setNewGestorEmail("");
-        setNewGestorPassword("");
-        loadGestores();
+        setMessage({ type: "success", text: "Gestor reativado com sucesso." });
+        await loadUsers();
       } else {
-        const err = await res.json();
-        setMessage({ type: "error", text: "Erro: " + (err.error || "Erro ao cadastrar") });
+        setMessage({ type: "error", text: data?.error || "Erro ao reativar cadastro." });
       }
     } catch {
-      setMessage({ type: "error", text: "Erro ao cadastrar gestor" });
-    } finally {
-      setSavingAdd(false);
+      setMessage({ type: "error", text: "Erro ao reativar cadastro." });
     }
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#D4A373]">Gerenciar Gestores</h1>
-        <p className="text-[#a1a1a1] mt-1">
-          Cadastre, edite e exclua gestores do sistema
-        </p>
-      </div>
-
-      {message && (
-        <div className={"text-sm rounded-lg p-4 mb-6 " + (message.type === "success" ? "bg-green-500/10 border border-green-500/20 text-green-400" : "bg-red-500/10 border border-red-500/20 text-red-400")}>
-          {message.text}
+    <div className="p-4 md:p-8 space-y-6">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div>
+          <p className="text-xs text-[#D4A373] uppercase tracking-[0.3em] mb-2">
+            Gestão de acessos
+          </p>
+          <h1 className="text-2xl md:text-3xl font-bold text-[#D4A373]">
+            Gerenciar Gestores
+          </h1>
+          <p className="text-sm text-[#a1a1a1] mt-2">
+            Cadastre, edite e desative gestores do sistema.
+          </p>
         </div>
-      )}
 
-      <div className="mb-4">
-        <button onClick={() => setAddGestor(true)} className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#c49563]">
+        <button
+          onClick={openCreateModal}
+          className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition"
+        >
           + Cadastrar Gestor
         </button>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-[#525252]">Carregando...</div>
-      ) : gestores.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-[#525252] text-lg">Nenhum gestor cadastrado</p>
-        </div>
-      ) : (
-        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#ffffff10]">
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Gestor</th>
-                  <th className="text-left px-5 py-4 text-sm font-medium text-[#a1a1a1]">Email</th>
-                  <th className="text-right px-5 py-4 text-sm font-medium text-[#a1a1a1]">Acoes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gestores.map((gestor) => (
-                  <tr key={gestor.id} className="border-b border-[#ffffff10] hover:bg-white/5">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-sm">
-                          {gestor.name.charAt(0).toUpperCase()}
-                        </div>
-                        <p className="text-[#f5f5f5] text-sm font-medium">{gestor.name}</p>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-[#a1a1a1]">
-                      {gestor.email || "-"}
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => abrirEditar(gestor)}
-                          className="text-[#D4A373] hover:text-[#c49563] text-sm px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
-                        >
-                          Editar
-                        </button>
-                        {confirmDelete === gestor.id ? (
-                          <>
-                            <span className="text-xs text-red-400">Confirmar?</span>
-                            <button
-                              onClick={() => excluirGestor(gestor.id)}
-                              disabled={deleting === gestor.id}
-                              className="bg-red-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-red-600 transition disabled:opacity-50"
-                            >
-                              {deleting === gestor.id ? "..." : "Excluir"}
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(null)}
-                              className="text-[#a1a1a1] text-xs px-3 py-1.5 rounded-lg hover:bg-white/5 transition"
-                            >
-                              Cancelar
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmDelete(gestor.id)}
-                            className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg hover:bg-red-500/5 transition"
-                          >
-                            Excluir
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {message && (
+        <div
+          className={
+            "rounded-xl px-4 py-3 text-sm " +
+            (message.type === "success"
+              ? "bg-green-500/10 text-green-400 border border-green-500/20"
+              : "bg-red-500/10 text-red-400 border border-red-500/20")
+          }
+        >
+          {message.text}
         </div>
       )}
 
-      {editGestor && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setEditGestor(null)}>
-          <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-white font-medium mb-4">Editar Gestor</h2>
+      <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 md:items-center">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar por nome, e-mail, telefone, documento, registro ou especialidade..."
+            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+          />
+
+          <label className="flex items-center gap-2 text-xs text-[#a1a1a1]">
             <input
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              placeholder="Nome"
-              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
+              type="checkbox"
+              checked={showInactive}
+              onChange={(event) => setShowInactive(event.target.checked)}
+              className="accent-[#D4A373]"
             />
-            <input
-              value={editEmail}
-              onChange={(e) => setEditEmail(e.target.value)}
-              placeholder="Email"
-              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373]"
-            />
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setEditGestor(null)} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">
-                Cancelar
-              </button>
-              <button onClick={salvarEdicao} disabled={saving} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50">
-                {saving ? "Salvando..." : "Salvar"}
-              </button>
-            </div>
+            Mostrar inativos
+          </label>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-[#1a1a1a] rounded-xl p-4">
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Total</p>
+            <p className="text-2xl font-bold text-[#f5f5f5]">{users.length}</p>
+          </div>
+
+          <div className="bg-[#1a1a1a] rounded-xl p-4">
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Ativos</p>
+            <p className="text-2xl font-bold text-green-400">
+              {users.filter((user) => user.active !== false).length}
+            </p>
+          </div>
+
+          <div className="bg-[#1a1a1a] rounded-xl p-4">
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Inativos</p>
+            <p className="text-2xl font-bold text-red-400">
+              {users.filter((user) => user.active === false).length}
+            </p>
+          </div>
+
+          <div className="bg-[#1a1a1a] rounded-xl p-4">
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Exibidos</p>
+            <p className="text-2xl font-bold text-[#D4A373]">{filteredUsers.length}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[#111] border border-[#ffffff10] rounded-2xl overflow-hidden">
+        {loading ? (
+          <div className="p-8 text-sm text-[#a1a1a1] text-center">
+            Carregando cadastros...
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="p-8 text-sm text-[#a1a1a1] text-center">
+            Nenhum gestor cadastrado.
+          </div>
+        ) : (
+          <div className="divide-y divide-[#ffffff10]">
+            {filteredUsers.map((user) => (
+              <div key={user.id} className="p-5 hover:bg-[#ffffff05] transition">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-semibold text-[#f5f5f5]">
+                        {user.name}
+                      </h2>
+
+                      <span
+                        className={
+                          "text-[10px] px-2 py-1 rounded-full font-semibold " +
+                          (user.active === false
+                            ? "bg-red-500/10 text-red-400"
+                            : "bg-green-500/10 text-green-400")
+                        }
+                      >
+                        {user.active === false ? "Inativo" : "Ativo"}
+                      </span>
+
+                      {user.cref && (
+                        <span className="text-[10px] px-2 py-1 rounded-full bg-[#D4A373]/10 text-[#D4A373]">
+                          {user.cref}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1 text-xs text-[#a1a1a1]">
+                      <p>
+                        <span className="text-[#6b6b6b]">E-mail:</span> {user.email || "-"}
+                      </p>
+                      <p>
+                        <span className="text-[#6b6b6b]">Telefone:</span> {user.phone || "-"}
+                      </p>
+                      <p>
+                        <span className="text-[#6b6b6b]">Documento:</span> {user.document || "-"}
+                      </p>
+                      <p>
+                        <span className="text-[#6b6b6b]">Cargo/função:</span> {user.specialty || "-"}
+                      </p>
+                      <p>
+                        <span className="text-[#6b6b6b]">Área de atuação:</span> {user.education || "-"}
+                      </p>
+                      <p>
+                        <span className="text-[#6b6b6b]">Cadastro:</span> {formatDate(user.createdAt)}
+                      </p>
+                    </div>
+
+                    {user.experience && (
+                      <p className="text-xs text-[#a1a1a1] max-w-3xl">
+                        <span className="text-[#6b6b6b]">Responsabilidades:</span> {user.experience}
+                      </p>
+                    )}
+
+                    {user.bio && (
+                      <p className="text-xs text-[#a1a1a1] max-w-3xl">
+                        <span className="text-[#6b6b6b]">Observações:</span> {user.bio}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => openEditModal(user)}
+                      className="text-xs px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#a1a1a1] hover:text-white border border-[#ffffff10]"
+                    >
+                      Editar
+                    </button>
+
+                    {user.active === false ? (
+                      <button
+                        onClick={() => handleReactivate(user)}
+                        className="text-xs px-3 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20"
+                      >
+                        Reativar
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleDeactivate(user)}
+                        className="text-xs px-3 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                      >
+                        Desativar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] border border-[#ffffff10] rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto">
+            <form onSubmit={handleSubmit} className="p-5 md:p-6 space-y-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-[#f5f5f5]">
+                    {isEditing ? "Editar Gestor" : "Cadastrar Gestor"}
+                  </h2>
+                  <p className="text-xs text-[#a1a1a1] mt-1">
+                    Preencha os dados principais para deixar o cadastro mais completo e profissional.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="text-[#6b6b6b] hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Nome completo *
+                  </label>
+                  <input
+                    value={form.name}
+                    onChange={(event) => updateField("name", event.target.value)}
+                    placeholder="Nome completo"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    E-mail de acesso *
+                  </label>
+                  <input
+                    value={form.email}
+                    onChange={(event) => updateField("email", event.target.value)}
+                    placeholder="email@exemplo.com"
+                    type="email"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Senha {isEditing ? "(preencha somente se quiser alterar)" : "*"}
+                  </label>
+                  <input
+                    value={form.password}
+                    onChange={(event) => updateField("password", event.target.value)}
+                    placeholder={isEditing ? "Deixe em branco para manter a senha atual" : "Mínimo 6 caracteres"}
+                    type="password"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Telefone / WhatsApp
+                  </label>
+                  <input
+                    value={form.phone}
+                    onChange={(event) => updateField("phone", event.target.value)}
+                    placeholder="(00) 00000-0000"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    CPF / Documento
+                  </label>
+                  <input
+                    value={form.document}
+                    onChange={(event) => updateField("document", event.target.value)}
+                    placeholder="CPF ou documento"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Data de nascimento
+                  </label>
+                  <input
+                    value={form.birthDate}
+                    onChange={(event) => updateField("birthDate", event.target.value)}
+                    type="date"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Registro interno
+                  </label>
+                  <input
+                    value={form.cref}
+                    onChange={(event) => updateField("cref", event.target.value)}
+                    placeholder="Ex.: matrícula, código interno ou deixe em branco"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Cargo/função
+                  </label>
+                  <input
+                    value={form.specialty}
+                    onChange={(event) => updateField("specialty", event.target.value)}
+                    placeholder="Ex.: gestor operacional, administrador, coordenação"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Área de atuação
+                  </label>
+                  <input
+                    value={form.education}
+                    onChange={(event) => updateField("education", event.target.value)}
+                    placeholder="Ex.: gestão, atendimento, operação, administração"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Status
+                  </label>
+                  <label className="flex items-center gap-2 bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5]">
+                    <input
+                      type="checkbox"
+                      checked={form.active}
+                      onChange={(event) => updateField("active", event.target.checked)}
+                      className="accent-[#D4A373]"
+                    />
+                    Cadastro ativo
+                  </label>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Responsabilidades
+                  </label>
+                  <textarea
+                    value={form.experience}
+                    onChange={(event) => updateField("experience", event.target.value)}
+                    placeholder="Ex.: acompanhamento de professores, alunos, avisos e indicadores"
+                    className="w-full min-h-[90px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-xs text-[#a1a1a1] block mb-1">
+                    Observações internas
+                  </label>
+                  <textarea
+                    value={form.bio}
+                    onChange={(event) => updateField("bio", event.target.value)}
+                    placeholder="Observações internas sobre permissões, atuação e responsabilidades."
+                    className="w-full min-h-[110px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 p-4">
+                <p className="text-xs text-[#D4A373] font-semibold mb-1">
+                  Boa prática
+                </p>
+                <p className="text-xs text-[#a1a1a1] leading-relaxed">
+                  Prefira desativar em vez de excluir. Assim o sistema preserva histórico de alunos,
+                  treinos, dúvidas, avisos e ações já realizadas.
+                </p>
+              </div>
+
+              <div className="flex flex-col-reverse md:flex-row md:justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-5 py-3 rounded-xl text-sm text-[#a1a1a1] hover:text-white"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
+                >
+                  {saving ? "Salvando..." : isEditing ? "Salvar alterações" : "Cadastrar"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
-
-      {addGestor && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => { setAddGestor(false); setMessage(null); }}>
-          <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-white font-medium mb-4">Cadastrar Gestor</h2>
-            <input
-              value={newGestorName}
-              onChange={(e) => setNewGestorName(e.target.value)}
-              placeholder="Nome completo"
-              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
-            />
-            <input
-              value={newGestorEmail}
-              onChange={(e) => setNewGestorEmail(e.target.value)}
-              placeholder="Email"
-              type="email"
-              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
-            />
-            <input
-              value={newGestorPassword}
-              onChange={(e) => setNewGestorPassword(e.target.value)}
-              placeholder="Senha"
-              type="password"
-              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373]"
-            />
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => { setAddGestor(false); setMessage(null); }} className="text-xs text-[#6b6b6b] hover:text-white px-3 py-1.5 transition-colors">
-                Cancelar
-              </button>
-              <button onClick={handleAddGestor} disabled={savingAdd} className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50">
-                {savingAdd ? "Cadastrando..." : "Cadastrar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <p className="text-xs text-[#525252] text-center mt-6">
-        {gestores.length} gestor(es) no total
-      </p>
     </div>
   );
 }
