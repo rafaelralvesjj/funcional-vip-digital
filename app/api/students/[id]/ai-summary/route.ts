@@ -64,9 +64,10 @@ function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): 
 
   if (contracted <= 4) return 1;
   if (contracted <= 8) return 2;
-  if (contracted <= 16) return 3;
+  if (contracted <= 12) return 3;
+  if (contracted <= 16) return 4;
 
-  return Math.ceil(contracted / 4);
+  return 5;
 }
 
 function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
@@ -505,6 +506,17 @@ export async function GET(
       return [
         `- ${plan.name} (${formatDate(plan.date || plan.createdAt)})`,
         `  Descrição: ${normalizeText(plan.description)}`,
+        `  Objetivo para o aluno: ${normalizeText(plan.objective)}`,
+        `  Foco do treino: ${normalizeText(plan.focusAreas)}`,
+        `  Intensidade: ${normalizeText(plan.intensity)}`,
+        `  Duração estimada: ${plan.estimatedDurationMinutes || "não informada"} min`,
+        `  Gasto energético estimado: ${
+          plan.estimatedCaloriesMin || plan.estimatedCaloriesMax
+            ? `${plan.estimatedCaloriesMin || "?"} a ${plan.estimatedCaloriesMax || "?"} kcal`
+            : "não informado"
+        }`,
+        `  Resumo para o aluno: ${normalizeText(plan.studentSummary)}`,
+        `  Segurança: ${normalizeText(plan.safetyNote)}`,
         `  Observações: ${normalizeText(plan.notes)}`,
         `  Status/execução: ${statusLine}`,
         `  Exercícios:\n      ${exercises || "nenhum exercício cadastrado"}`,
@@ -654,6 +666,8 @@ export async function GET(
       latestAvaliacao?.lesoes
         ? `Considerar restrições/lesões informadas: ${latestAvaliacao.lesoes}.`
         : "Nenhuma lesão/restrição registrada na última avaliação; confirmar com o aluno se houver dúvida.",
+      "Ao sugerir resumo para o aluno, explicar objetivo, foco, intensidade e duração estimada em linguagem simples.",
+      "Gasto energético deve aparecer como faixa aproximada e conservadora, nunca como promessa de perda de calorias ou resultado corporal.",
     ].join("\n");
 
     const aiPrompt = buildAiPrompt(summaryText);
