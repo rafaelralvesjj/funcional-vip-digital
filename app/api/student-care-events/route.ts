@@ -458,6 +458,7 @@ export async function POST(request: NextRequest) {
     const relatedWorkoutPlanId = String(body?.relatedWorkoutPlanId || "").trim() || null;
     const relatedWorkoutId = String(body?.relatedWorkoutId || "").trim() || null;
     const source = String(body?.source || "APP_ALUNO").trim() || "APP_ALUNO";
+    const referenceDate = body?.workoutDate ? new Date(body.workoutDate) : new Date();
 
     if (!studentId) {
       return NextResponse.json({ error: "ID do aluno é obrigatório." }, { status: 400 });
@@ -481,15 +482,35 @@ export async function POST(request: NextRequest) {
       description,
     });
 
-    const week = getWeekRange(new Date());
+    const week = getWeekRange(referenceDate);
     const authorId = await getNoticeAuthorId(userId);
     const professorId = student.userId || null;
+
+    const activeContract = await prisma.studentContract.findFirst({
+      where: {
+        studentId,
+        status: "ACTIVE",
+        startDate: {
+          lte: referenceDate,
+        },
+        endDate: {
+          gte: referenceDate,
+        },
+      },
+      orderBy: {
+        endDate: "desc",
+      },
+      select: {
+        id: true,
+      },
+    });
 
     const careEvent = await prisma.studentCareEvent.create({
       data: {
         studentId,
         professorId,
         authorId,
+        contractId: activeContract?.id || null,
         eventType,
         severity: copy.severity,
         status: copy.status,
