@@ -38,6 +38,14 @@ interface AiWorkoutDraft {
   name?: string;
   date?: string;
   description?: string;
+  objective?: string;
+  focusAreas?: string;
+  intensity?: string;
+  estimatedDurationMinutes?: number | null;
+  estimatedCaloriesMin?: number | null;
+  estimatedCaloriesMax?: number | null;
+  studentSummary?: string;
+  safetyNote?: string;
   notes?: string;
   exercises?: Partial<ExerciseItem>[];
 }
@@ -62,9 +70,10 @@ function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): 
 
   if (contracted <= 4) return 1;
   if (contracted <= 8) return 2;
-  if (contracted <= 16) return 3;
+  if (contracted <= 12) return 3;
+  if (contracted <= 16) return 4;
 
-  return Math.ceil(contracted / 4);
+  return 5;
 }
 
 function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
@@ -113,6 +122,14 @@ export default function MontarTreinoPage() {
   const [planName, setPlanName] = useState("");
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
+  const [objective, setObjective] = useState("");
+  const [focusAreas, setFocusAreas] = useState("");
+  const [intensity, setIntensity] = useState("");
+  const [estimatedDurationMinutes, setEstimatedDurationMinutes] = useState("");
+  const [estimatedCaloriesMin, setEstimatedCaloriesMin] = useState("");
+  const [estimatedCaloriesMax, setEstimatedCaloriesMax] = useState("");
+  const [studentSummary, setStudentSummary] = useState("");
+  const [safetyNote, setSafetyNote] = useState("");
   const [notes, setNotes] = useState("");
   const [exercises, setExercises] = useState<ExerciseItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -158,6 +175,26 @@ export default function MontarTreinoPage() {
     setPlanName(String(workout.name || ""));
     setDate(String(workout.date || ""));
     setDescription(String(workout.description || ""));
+    setObjective(String(workout.objective || ""));
+    setFocusAreas(String(workout.focusAreas || ""));
+    setIntensity(String(workout.intensity || ""));
+    setEstimatedDurationMinutes(
+      workout.estimatedDurationMinutes === null || workout.estimatedDurationMinutes === undefined
+        ? ""
+        : String(workout.estimatedDurationMinutes)
+    );
+    setEstimatedCaloriesMin(
+      workout.estimatedCaloriesMin === null || workout.estimatedCaloriesMin === undefined
+        ? ""
+        : String(workout.estimatedCaloriesMin)
+    );
+    setEstimatedCaloriesMax(
+      workout.estimatedCaloriesMax === null || workout.estimatedCaloriesMax === undefined
+        ? ""
+        : String(workout.estimatedCaloriesMax)
+    );
+    setStudentSummary(String(workout.studentSummary || ""));
+    setSafetyNote(String(workout.safetyNote || ""));
     setNotes(String(workout.notes || ""));
     setExercises(
       Array.isArray(workout.exercises)
@@ -205,6 +242,14 @@ export default function MontarTreinoPage() {
     setPlanName("");
     setDate("");
     setDescription("");
+    setObjective("");
+    setFocusAreas("");
+    setIntensity("");
+    setEstimatedDurationMinutes("");
+    setEstimatedCaloriesMin("");
+    setEstimatedCaloriesMax("");
+    setStudentSummary("");
+    setSafetyNote("");
     setNotes("");
     setExercises([]);
   }
@@ -441,6 +486,14 @@ export default function MontarTreinoPage() {
           name: planName.trim(),
           description: description || null,
           date: date || null,
+          objective: objective || null,
+          focusAreas: focusAreas || null,
+          intensity: intensity || null,
+          estimatedDurationMinutes: estimatedDurationMinutes ? Number(estimatedDurationMinutes) : null,
+          estimatedCaloriesMin: estimatedCaloriesMin ? Number(estimatedCaloriesMin) : null,
+          estimatedCaloriesMax: estimatedCaloriesMax ? Number(estimatedCaloriesMax) : null,
+          studentSummary: studentSummary || null,
+          safetyNote: safetyNote || null,
           notes: notes || null,
           exercises: exercises.map((ex) => ({
             name: ex.name,
@@ -479,6 +532,14 @@ export default function MontarTreinoPage() {
             setDate("");
           }
           setDescription("");
+          setObjective("");
+          setFocusAreas("");
+          setIntensity("");
+          setEstimatedDurationMinutes("");
+          setEstimatedCaloriesMin("");
+          setEstimatedCaloriesMax("");
+          setStudentSummary("");
+          setSafetyNote("");
           setNotes("");
           setExercises([]);
 
@@ -749,6 +810,116 @@ export default function MontarTreinoPage() {
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
+          <h2 className="text-lg font-semibold text-[#D4A373] mb-2">
+            ✨ Resumo inteligente para o aluno
+          </h2>
+          <p className="text-xs text-[#a1a1a1] mb-4">
+            Esse bloco aparece para o aluno junto com o treino. Use linguagem simples e acolhedora.
+            O gasto energético deve ser uma faixa estimada, nunca uma promessa.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="text-sm text-[#e5e5e5] block mb-1">Objetivo da sessão</label>
+              <input
+                type="text"
+                value={objective}
+                onChange={(e) => setObjective(e.target.value)}
+                placeholder="Ex: melhorar resistência muscular e retomar consistência"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-[#e5e5e5] block mb-1">Foco do treino</label>
+              <input
+                type="text"
+                value={focusAreas}
+                onChange={(e) => setFocusAreas(e.target.value)}
+                placeholder="Ex: pernas, glúteos, core e condicionamento"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-[#e5e5e5] block mb-1">Intensidade esperada</label>
+              <select
+                value={intensity}
+                onChange={(e) => setIntensity(e.target.value)}
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="">Selecione...</option>
+                <option value="Leve">Leve</option>
+                <option value="Moderada">Moderada</option>
+                <option value="Alta">Alta</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm text-[#e5e5e5] block mb-1">Duração estimada em minutos</label>
+              <input
+                type="number"
+                min="5"
+                max="180"
+                value={estimatedDurationMinutes}
+                onChange={(e) => setEstimatedDurationMinutes(e.target.value)}
+                placeholder="Ex: 40"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-[#e5e5e5] block mb-1">Gasto estimado em kcal</label>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="2000"
+                  value={estimatedCaloriesMin}
+                  onChange={(e) => setEstimatedCaloriesMin(e.target.value)}
+                  placeholder="mín."
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="2000"
+                  value={estimatedCaloriesMax}
+                  onChange={(e) => setEstimatedCaloriesMax(e.target.value)}
+                  placeholder="máx."
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                />
+              </div>
+              <p className="text-[10px] text-[#6b6b6b] mt-1">
+                Exiba como faixa estimada. Evite número exato.
+              </p>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm text-[#e5e5e5] block mb-1">Resumo para o aluno</label>
+              <textarea
+                value={studentSummary}
+                onChange={(e) => setStudentSummary(e.target.value)}
+                rows={3}
+                placeholder="Ex: O foco de hoje é fazer bem feito, manter constância e terminar o treino com sensação de evolução."
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm text-[#e5e5e5] block mb-1">Observação de segurança</label>
+              <textarea
+                value={safetyNote}
+                onChange={(e) => setSafetyNote(e.target.value)}
+                rows={2}
+                placeholder="Ex: Se sentir dor ou desconforto fora do esperado, pare e avise o professor."
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-[#D4A373]">🏋️ Exercícios</h2>
             <button
@@ -874,6 +1045,7 @@ export default function MontarTreinoPage() {
           {selectedStudent && ` • Aluno: ${students.find((s) => s.id === selectedStudent)?.name || ""}`}
           {date && ` • Data: ${new Date(date).toLocaleDateString("pt-BR")}`}
           {weeklyWorkoutLimit && ` • Semana: ${weeklyPlansCount}/${weeklyWorkoutLimit}`}
+          {studentSummary && " • Resumo inteligente preenchido"}
         </p>
       </form>
     </div>
