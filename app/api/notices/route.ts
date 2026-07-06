@@ -29,6 +29,37 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
+function addDays(days: number): Date {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(23, 59, 59, 999);
+
+  return date;
+}
+
+function getDefaultExpiresAt(type?: string | null, rawExpiresAt?: string | null): Date | null {
+  if (rawExpiresAt) {
+    const parsed = new Date(rawExpiresAt);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  const normalizedType = String(type || "").toUpperCase();
+
+  if (normalizedType === "FEEDBACK_EVOLUCAO") return null;
+  if (normalizedType.includes("BIOIMPEDANCIA")) return null;
+  if (normalizedType.includes("PENDENCIA")) return null;
+
+  if (normalizedType === "VOCE_SABIA") return addDays(30);
+  if (normalizedType === "WORKOUT") return addDays(7);
+  if (normalizedType === "ENGAJAMENTO_TREINO") return addDays(15);
+
+  /*
+   * Aviso manual da gestão: por padrão expira em 30 dias.
+   * Se a gestão quiser manter permanente, depois podemos adicionar opção "sem expiração" na tela.
+   */
+  return addDays(30);
+}
+
 type NoticeEmailRecipient = {
   id: string;
   name: string | null;
@@ -198,7 +229,18 @@ export async function GET(req: Request) {
     const targetRole = searchParams.get("targetRole");
     const professorId = searchParams.get("professorId");
 
-    const where: any = {};
+    const now = new Date();
+
+    const where: any = {
+      AND: [
+        {
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gte: now } },
+          ],
+        },
+      ],
+    };
 
     if (authorId) {
       where.authorId = authorId;
@@ -223,25 +265,27 @@ export async function GET(req: Request) {
         return NextResponse.json([]);
       }
 
-      where.OR = [
-        {
-          studentId,
-        },
-        {
-          studentId: null,
-          targetRole: "STUDENT",
-          createdAt: {
-            gte: student.createdAt,
+      where.AND.push({
+        OR: [
+          {
+            studentId,
           },
-        },
-        {
-          studentId: null,
-          targetRole: "ALUNO",
-          createdAt: {
-            gte: student.createdAt,
+          {
+            studentId: null,
+            targetRole: "STUDENT",
+            createdAt: {
+              gte: student.createdAt,
+            },
           },
-        },
-      ];
+          {
+            studentId: null,
+            targetRole: "ALUNO",
+            createdAt: {
+              gte: student.createdAt,
+            },
+          },
+        ],
+      });
     }
 
     if (professorId) {
@@ -259,25 +303,27 @@ export async function GET(req: Request) {
         return NextResponse.json([]);
       }
 
-      where.OR = [
-        {
-          professorId,
-        },
-        {
-          professorId: null,
-          targetRole: "TEACHER",
-          createdAt: {
-            gte: professor.createdAt,
+      where.AND.push({
+        OR: [
+          {
+            professorId,
           },
-        },
-        {
-          professorId: null,
-          targetRole: "PROFESSOR",
-          createdAt: {
-            gte: professor.createdAt,
+          {
+            professorId: null,
+            targetRole: "TEACHER",
+            createdAt: {
+              gte: professor.createdAt,
+            },
           },
-        },
-      ];
+          {
+            professorId: null,
+            targetRole: "PROFESSOR",
+            createdAt: {
+              gte: professor.createdAt,
+            },
+          },
+        ],
+      });
     }
 
     const notices = await prisma.notice.findMany({
@@ -352,7 +398,7 @@ export async function POST(req: Request) {
         studentId: studentId || null,
         targetRole: targetRole || "ALUNO",
         professorId: professorId || null,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        expiresAt: getDefaultExpiresAt(type || "AVISO", expiresAt || null),
       },
       include: {
         author: {
@@ -408,7 +454,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { id, title, content } = body;
+    const { id, title, content, expiresAt } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -424,6 +470,9 @@ export async function PUT(req: Request) {
       data: {
         title: typeof title === "string" && title.trim() ? title.trim() : null,
         content: typeof content === "string" ? content.trim() : content,
+        ...(expiresAt !== undefined
+          ? { expiresAt: expiresAt ? new Date(expiresAt) : null }
+          : {}),
       },
       include: {
         author: {
