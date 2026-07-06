@@ -34,6 +34,23 @@ interface ExerciseItem {
   order: number;
 }
 
+interface AiWorkoutDraft {
+  name?: string;
+  date?: string;
+  description?: string;
+  notes?: string;
+  exercises?: Partial<ExerciseItem>[];
+}
+
+interface AiWorkoutDraftBatch {
+  source?: string;
+  createdAt?: string;
+  studentId: string;
+  studentName?: string;
+  currentIndex?: number;
+  workouts: AiWorkoutDraft[];
+}
+
 function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): number | null {
   const contracted = Number(contractedTrainingDaysPerMonth || 0);
 
@@ -104,6 +121,107 @@ export default function MontarTreinoPage() {
   const [weeklyInfoLoading, setWeeklyInfoLoading] = useState(false);
   const [lockStudentSelection, setLockStudentSelection] = useState(false);
   const [openedFromPendingList, setOpenedFromPendingList] = useState(false);
+  const [aiDraftBatch, setAiDraftBatch] = useState<AiWorkoutDraftBatch | null>(null);
+  const [aiDraftIndex, setAiDraftIndex] = useState(0);
+  const [openedFromAiDraft, setOpenedFromAiDraft] = useState(false);
+
+  function normalizeAiExercise(exercise: Partial<ExerciseItem>, index: number): ExerciseItem {
+    return {
+      name: String(exercise?.name || `Exercício ${index + 1}`),
+      description: String(exercise?.description || ""),
+      series: Number(exercise?.series || 3),
+      reps: String(exercise?.reps || "10"),
+      weight: String(exercise?.weight || ""),
+      restTime: String(exercise?.restTime || "60s"),
+      notes: String(exercise?.notes || ""),
+      order: index,
+    };
+  }
+
+  function applyAiWorkoutDraft(batch: AiWorkoutDraftBatch, index = 0) {
+    const workout = batch.workouts?.[index];
+
+    if (!workout) return;
+
+    setAiDraftBatch(batch);
+    setAiDraftIndex(index);
+    setOpenedFromAiDraft(true);
+    setOpenedFromPendingList(false);
+
+    if (batch.studentId) {
+      setSelectedStudent(batch.studentId);
+      setLockStudentSelection(true);
+    }
+
+    setPlanName(String(workout.name || ""));
+    setDate(String(workout.date || ""));
+    setDescription(String(workout.description || ""));
+    setNotes(String(workout.notes || ""));
+    setExercises(
+      Array.isArray(workout.exercises)
+        ? workout.exercises.map((exercise, exerciseIndex) =>
+            normalizeAiExercise(exercise, exerciseIndex)
+          )
+        : []
+    );
+  }
+
+  function loadAiWorkoutDraftFromStorage() {
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem("aiWorkoutDraftBatch");
+
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as AiWorkoutDraftBatch;
+
+      if (!parsed?.studentId || !Array.isArray(parsed.workouts) || parsed.workouts.length === 0) {
+        return;
+      }
+
+      const index = Math.min(
+        Math.max(Number(parsed.currentIndex || 0), 0),
+        parsed.workouts.length - 1
+      );
+
+      applyAiWorkoutDraft(parsed, index);
+    } catch (error) {
+      console.error("Erro ao carregar rascunho da IA:", error);
+    }
+  }
+
+  function clearAiWorkoutDraft() {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("aiWorkoutDraftBatch");
+    }
+
+    setAiDraftBatch(null);
+    setAiDraftIndex(0);
+    setOpenedFromAiDraft(false);
+    setLockStudentSelection(false);
+    setPlanName("");
+    setDate("");
+    setDescription("");
+    setNotes("");
+    setExercises([]);
+  }
+
+  function loadAiDraftByIndex(nextIndex: number) {
+    if (!aiDraftBatch) return;
+
+    const safeIndex = Math.min(Math.max(nextIndex, 0), aiDraftBatch.workouts.length - 1);
+    const updatedBatch = {
+      ...aiDraftBatch,
+      currentIndex: safeIndex,
+    };
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("aiWorkoutDraftBatch", JSON.stringify(updatedBatch));
+    }
+
+    applyAiWorkoutDraft(updatedBatch, safeIndex);
+  }
 
   function applyDashboardParams() {
     if (typeof window === "undefined") return;
@@ -125,6 +243,7 @@ export default function MontarTreinoPage() {
 
   useEffect(() => {
     applyDashboardParams();
+    loadAiWorkoutDraftFromStorage();
     fetchStudents();
     fetchLibrary();
   }, []);
@@ -135,10 +254,10 @@ export default function MontarTreinoPage() {
      * Isso garante que o combo fique selecionado mesmo quando a tela veio
      * do dashboard antes de os alunos terminarem de carregar.
      */
-    if (students.length > 0) {
+    if (students.length > 0 && !openedFromAiDraft) {
       applyDashboardParams();
     }
-  }, [students.length]);
+  }, [students.length, openedFromAiDraft]);
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -339,16 +458,35 @@ export default function MontarTreinoPage() {
           result?.weeklyNotification?.message ||
           "Treino salvo com sucesso.";
 
-        setSuccess(weeklyMessage);
-        setPlanName("");
-        if (!openedFromPendingList) {
-          setDate("");
+        const hasNextAiWorkout =
+          openedFromAiDraft &&
+          aiDraftBatch &&
+          aiDraftIndex + 1 < aiDraftBatch.workouts.length;
+
+        setSuccess(
+          hasNextAiWorkout
+            ? `${weeklyMessage} Próximo treino sugerido pela IA carregado para revisão.`
+            : weeklyMessage
+        );
+
+        if (hasNextAiWorkout && aiDraftBatch) {
+          loadAiDraftByIndex(aiDraftIndex + 1);
+        } else {
+          setPlanName("");
+          if (!openedFromPendingList && !openedFromAiDraft) {
+            setDate("");
+          }
+          setDescription("");
+          setNotes("");
+          setExercises([]);
+
+          if (openedFromAiDraft) {
+            clearAiWorkoutDraft();
+          }
         }
-        setDescription("");
-        setNotes("");
-        setExercises([]);
+
         setWeeklyPlansCount((current) => current + 1);
-        setTimeout(() => setSuccess(null), 5000);
+        setTimeout(() => setSuccess(null), 7000);
       } else {
         const err = await res.json();
         alert(`Erro ao salvar: ${err.error}`);
@@ -372,6 +510,54 @@ export default function MontarTreinoPage() {
       {success && (
         <div className="bg-green-500/10 border border-green-500/20 text-green-400 text-sm rounded-lg p-4 mb-6">
           ✅ {success}
+        </div>
+      )}
+
+      {openedFromAiDraft && aiDraftBatch && (
+        <div className="bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm rounded-lg p-4 mb-6">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+            <div>
+              <p className="font-semibold text-blue-300">
+                Rascunho importado da IA para revisão do professor
+              </p>
+              <p className="text-xs text-[#a1a1a1] mt-1">
+                Treino {aiDraftIndex + 1} de {aiDraftBatch.workouts.length}. Revise aluno, data,
+                exercícios, séries, repetições, carga e observações antes de salvar.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {aiDraftBatch.workouts.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => loadAiDraftByIndex(aiDraftIndex - 1)}
+                    disabled={aiDraftIndex === 0}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-[#1a1a1a] text-[#a1a1a1] hover:text-white disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => loadAiDraftByIndex(aiDraftIndex + 1)}
+                    disabled={aiDraftIndex >= aiDraftBatch.workouts.length - 1}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-[#1a1a1a] text-[#a1a1a1] hover:text-white disabled:opacity-40"
+                  >
+                    Próximo
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={clearAiWorkoutDraft}
+                className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
+              >
+                Limpar rascunho IA
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -400,10 +586,10 @@ export default function MontarTreinoPage() {
                 ))}
               </select>
 
-              {openedFromPendingList && selectedStudent && (
+              {(openedFromPendingList || openedFromAiDraft) && selectedStudent && (
                 <div className="mt-2 rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 p-2">
                   <p className="text-[11px] text-[#D4A373] font-medium">
-                    Aluno selecionado automaticamente pelo dashboard:
+                    Aluno selecionado automaticamente {openedFromAiDraft ? "pelo rascunho da IA" : "pelo dashboard"}:
                     <span className="text-[#f5f5f5] ml-1">
                       {selectedStudentInfo?.name || "carregando aluno..."}
                     </span>
@@ -413,6 +599,7 @@ export default function MontarTreinoPage() {
                     onClick={() => {
                       setLockStudentSelection(false);
                       setOpenedFromPendingList(false);
+                      setOpenedFromAiDraft(false);
                     }}
                     className="text-[10px] text-[#a1a1a1] hover:text-white underline mt-1"
                   >
