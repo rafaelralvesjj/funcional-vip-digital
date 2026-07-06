@@ -31,7 +31,8 @@ export default function ResumoAlunoPage() {
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [viewMode, setViewMode] = useState<"prompt" | "summary">("prompt");
+  const [viewMode, setViewMode] = useState<"prompt" | "summary" | "jsonPrompt">("jsonPrompt");
+  const [aiJsonText, setAiJsonText] = useState("");
 
   async function loadStudents(preselectId?: string | null) {
     setLoadingStudents(true);
@@ -73,6 +74,123 @@ export default function ResumoAlunoPage() {
     return students.find((student) => student.id === selectedStudentId) || null;
   }, [students, selectedStudentId]);
 
+  function getJsonPrompt(summaryData: SummaryResponse): string {
+    return [
+      "Você é um professor de educação física apoiando a montagem de treino.",
+      "",
+      "Com base no resumo do aluno abaixo, gere uma sugestão de treinos em JSON válido.",
+      "",
+      "REGRAS IMPORTANTES:",
+      "- Não gere SQL.",
+      "- Não escreva texto fora do JSON.",
+      "- Não use markdown.",
+      "- Não coloque comentários no JSON.",
+      "- O professor vai revisar tudo antes de salvar.",
+      "- Respeite a quantidade semanal sugerida no resumo.",
+      "- Se a adesão estiver baixa, priorize retomada, simplicidade, segurança e consistência.",
+      "- Se faltarem dados, use observações para o professor confirmar antes de aplicar.",
+      "",
+      "FORMATO OBRIGATÓRIO DO JSON:",
+      "{",
+      '  "studentId": "' + summaryData.student.id + '",',
+      '  "studentName": "' + summaryData.student.name.replaceAll('"', "'") + '",',
+      '  "workouts": [',
+      "    {",
+      '      "name": "Treino A - nome do treino",',
+      '      "date": "AAAA-MM-DD",',
+      '      "description": "objetivo geral do treino",',
+      '      "notes": "observações para o professor revisar",',
+      '      "exercises": [',
+      "        {",
+      '          "name": "Nome do exercício",',
+      '          "description": "como executar ou foco técnico",',
+      '          "series": 3,',
+      '          "reps": "10-12",',
+      '          "weight": "carga leve/moderada ou a definir",',
+      '          "restTime": "60s",',
+      '          "notes": "observações de segurança/progressão",',
+      '          "order": 0',
+      "        }",
+      "      ]",
+      "    }",
+      "  ]",
+      "}",
+      "",
+      "RESUMO DO ALUNO:",
+      summaryData.summaryText,
+    ].join("\\n");
+  }
+
+  function extractJsonFromText(rawText: string): any {
+    const raw = rawText.trim();
+
+    if (!raw) {
+      throw new Error("Cole o JSON gerado pela IA.");
+    }
+
+    const codeBlockMatch = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);
+    const candidate = codeBlockMatch ? codeBlockMatch[1].trim() : raw;
+
+    return JSON.parse(candidate);
+  }
+
+  function normalizeAiWorkoutPayload(payload: any): any {
+    const workouts = Array.isArray(payload?.workouts)
+      ? payload.workouts
+      : Array.isArray(payload?.treinos)
+        ? payload.treinos
+        : [];
+
+    if (!payload?.studentId && !selectedStudentId) {
+      throw new Error("O JSON precisa ter studentId.");
+    }
+
+    if (workouts.length === 0) {
+      throw new Error("O JSON precisa ter pelo menos um treino em workouts.");
+    }
+
+    return {
+      source: "ai-summary",
+      createdAt: new Date().toISOString(),
+      studentId: String(payload?.studentId || selectedStudentId),
+      studentName: payload?.studentName || selectedStudent?.name || "",
+      currentIndex: 0,
+      workouts: workouts.map((workout: any, workoutIndex: number) => ({
+        name: String(workout?.name || workout?.nome || `Treino ${workoutIndex + 1}`),
+        date: String(workout?.date || workout?.data || ""),
+        description: String(workout?.description || workout?.descricao || ""),
+        notes: String(workout?.notes || workout?.observacoes || ""),
+        exercises: (Array.isArray(workout?.exercises) ? workout.exercises : workout?.exercicios || []).map((exercise: any, index: number) => ({
+          name: String(exercise?.name || exercise?.nome || `Exercício ${index + 1}`),
+          description: String(exercise?.description || exercise?.descricao || ""),
+          series: Number(exercise?.series || exercise?.serie || exercise?.sets || 3),
+          reps: String(exercise?.reps || exercise?.repeticoes || exercise?.repetições || "10"),
+          weight: String(exercise?.weight || exercise?.carga || ""),
+          restTime: String(exercise?.restTime || exercise?.descanso || "60s"),
+          notes: String(exercise?.notes || exercise?.observacoes || ""),
+          order: Number.isFinite(Number(exercise?.order)) ? Number(exercise.order) : index,
+        })),
+      })),
+    };
+  }
+
+  function openJsonInWorkoutBuilder() {
+    try {
+      const parsed = extractJsonFromText(aiJsonText);
+      const normalized = normalizeAiWorkoutPayload(parsed);
+
+      localStorage.setItem("aiWorkoutDraftBatch", JSON.stringify(normalized));
+      setMessage({ type: "success", text: "JSON validado. Abrindo tela de montar treino com os dados preenchidos." });
+
+      window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(normalized.studentId)}&source=ai-json`;
+    } catch (error: any) {
+      setMessage({
+        type: "error",
+        text: error?.message || "JSON inválido. Copie novamente a resposta da IA.",
+      });
+    }
+  }
+
   async function generateSummary() {
     if (!selectedStudentId) {
       setMessage({ type: "error", text: "Selecione um aluno." });
@@ -92,7 +210,7 @@ export default function ResumoAlunoPage() {
 
       if (res.ok && data?.ok) {
         setSummary(data);
-        setViewMode("prompt");
+        setViewMode("jsonPrompt");
         setMessage({ type: "success", text: "Resumo gerado com sucesso." });
       } else {
         setMessage({ type: "error", text: data?.error || "Erro ao gerar resumo." });
@@ -130,9 +248,11 @@ export default function ResumoAlunoPage() {
   }
 
   const textToShow = summary
-    ? viewMode === "prompt"
-      ? summary.aiPrompt
-      : summary.summaryText
+    ? viewMode === "jsonPrompt"
+      ? getJsonPrompt(summary)
+      : viewMode === "prompt"
+        ? summary.aiPrompt
+        : summary.summaryText
     : "";
 
   return (
@@ -241,6 +361,18 @@ export default function ResumoAlunoPage() {
 
             <div className="flex flex-wrap gap-2">
               <button
+                onClick={() => setViewMode("jsonPrompt")}
+                className={
+                  "px-3 py-2 rounded-lg text-xs transition " +
+                  (viewMode === "jsonPrompt"
+                    ? "bg-[#D4A373] text-[#0a0a0a] font-semibold"
+                    : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
+                }
+              >
+                Prompt JSON
+              </button>
+
+              <button
                 onClick={() => setViewMode("prompt")}
                 className={
                   "px-3 py-2 rounded-lg text-xs transition " +
@@ -249,7 +381,7 @@ export default function ResumoAlunoPage() {
                     : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
                 }
               >
-                Prompt para IA
+                Prompt texto
               </button>
 
               <button
@@ -312,6 +444,40 @@ export default function ResumoAlunoPage() {
             readOnly
             className="w-full min-h-[560px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-xs md:text-sm text-[#e5e5e5] font-mono leading-relaxed outline-none"
           />
+
+          <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[#D4A373]">
+                Importar JSON gerado pela IA
+              </h3>
+              <p className="text-xs text-[#a1a1a1] mt-1">
+                Depois de copiar o Prompt JSON e pedir a sugestão para a IA, cole aqui o JSON retornado.
+                O sistema vai validar e abrir a tela de montar treino já preenchida para o professor revisar.
+              </p>
+            </div>
+
+            <textarea
+              value={aiJsonText}
+              onChange={(event) => setAiJsonText(event.target.value)}
+              placeholder='Cole aqui o JSON gerado pela IA, começando com {"studentId": "...", "workouts": [...]}'
+              className="w-full min-h-[220px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-xs md:text-sm text-[#e5e5e5] font-mono leading-relaxed outline-none focus:border-[#D4A373]"
+            />
+
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <p className="text-xs text-[#6b6b6b]">
+                Segurança: o JSON não grava nada sozinho. Ele apenas pré-preenche a tela. O professor revisa e salva.
+              </p>
+
+              <button
+                type="button"
+                onClick={openJsonInWorkoutBuilder}
+                disabled={!aiJsonText.trim()}
+                className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
+              >
+                Abrir em Montar Treino
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
