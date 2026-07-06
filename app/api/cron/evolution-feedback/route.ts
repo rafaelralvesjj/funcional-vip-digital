@@ -296,9 +296,45 @@ async function processStudent({
   student: StudentForFeedback;
   authorId: string;
 }) {
+  const now = new Date();
+
+  const activeContract = await prisma.studentContract.findFirst({
+    where: {
+      studentId: student.id,
+      status: "ACTIVE",
+      startDate: {
+        lte: now,
+      },
+      endDate: {
+        gte: now,
+      },
+    },
+    orderBy: {
+      endDate: "desc",
+    },
+    select: {
+      id: true,
+      contractNumber: true,
+      startDate: true,
+      endDate: true,
+      totalContractedWorkouts: true,
+    },
+  });
+
+  if (!activeContract) {
+    return {
+      studentId: student.id,
+      studentName: student.name,
+      skipped: true,
+      reason: "Aluno sem contrato ativo. Feedback de evolução não deve considerar contrato antigo.",
+      completedWorkouts: 0,
+    };
+  }
+
   const completedWorkouts = await prisma.workout.count({
     where: {
       studentId: student.id,
+      contractId: activeContract.id,
       status: "CONCLUIDO",
     },
   });
@@ -315,12 +351,11 @@ async function processStudent({
     };
   }
 
-  const existingFeedback = await prisma.evolutionFeedback.findUnique({
+  const existingFeedback = await prisma.evolutionFeedback.findFirst({
     where: {
-      studentId_milestone: {
-        studentId: student.id,
-        milestone,
-      },
+      studentId: student.id,
+      contractId: activeContract.id,
+      milestone,
     },
   });
 
@@ -366,6 +401,7 @@ async function processStudent({
   const lastSentFeedback = await prisma.evolutionFeedback.findFirst({
     where: {
       studentId: student.id,
+      contractId: activeContract.id,
       status: "ENVIADO",
       milestone: {
         lt: milestone,
@@ -390,8 +426,10 @@ async function processStudent({
       data: {
         studentId: student.id,
         professorId: student.userId,
+        contractId: activeContract.id,
         milestone,
         status: "AGUARDANDO_BIOIMPEDANCIA",
+        contractId: activeContract.id,
         completedWorkoutsCount: completedWorkouts,
         baselineAvaliacaoId: previousAvaliacao?.id || null,
         currentAvaliacaoId: latestAvaliacao?.id || null,
@@ -455,6 +493,7 @@ async function processStudent({
       },
       data: {
         status: "AGUARDANDO_BIOIMPEDANCIA",
+        contractId: activeContract.id,
         completedWorkoutsCount: completedWorkouts,
         bioRequestNoticeId: notice.id,
         bioRequestedAt: new Date(),
@@ -492,6 +531,7 @@ async function processStudent({
         },
         data: {
           status: "PRONTO_REVISAO",
+          contractId: activeContract.id,
           completedWorkoutsCount: completedWorkouts,
           professorId: student.userId,
           baselineAvaliacaoId: baseline.id,
@@ -504,8 +544,10 @@ async function processStudent({
         data: {
           studentId: student.id,
           professorId: student.userId,
+          contractId: activeContract.id,
           milestone,
           status: "PRONTO_REVISAO",
+          contractId: activeContract.id,
           completedWorkoutsCount: completedWorkouts,
           baselineAvaliacaoId: baseline.id,
           currentAvaliacaoId: current.id,
