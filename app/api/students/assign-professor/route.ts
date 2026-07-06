@@ -38,6 +38,14 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
+function addDays(days: number): Date {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(23, 59, 59, 999);
+
+  return date;
+}
+
 async function getCurrentUser() {
   const session = await getServerSession(authOptions);
   const sessionUser = session?.user as any;
@@ -126,6 +134,7 @@ async function notifyProfessorAboutNewStudent({
         targetRole: "TEACHER",
         professorId: professor.id,
         authorId,
+        expiresAt: addDays(30),
       },
     })
   );
