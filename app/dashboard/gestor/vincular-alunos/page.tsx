@@ -35,6 +35,8 @@ type Teacher = {
   specialty?: string | null;
 };
 
+type ViewMode = "pending" | "linked";
+
 function normalizeStudents(data: any): Student[] {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.students)) return data.students;
@@ -134,7 +136,7 @@ export default function VincularAlunosPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedProfessorByStudent, setSelectedProfessorByStudent] = useState<Record<string, string>>({});
   const [daysByStudent, setDaysByStudent] = useState<Record<string, string>>({});
-  const [viewMode, setViewMode] = useState<"unassigned" | "all">("unassigned");
+  const [viewMode, setViewMode] = useState<ViewMode>("pending");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingStudentId, setSavingStudentId] = useState<string | null>(null);
@@ -205,18 +207,23 @@ export default function VincularAlunosPage() {
       setSearch(studentName);
     }
 
-    setViewMode("unassigned");
+    setViewMode("pending");
     loadData();
   }, []);
 
+  const pendingStudents = useMemo(() => {
+    return students.filter((student) => isPendingLink(student, teachers));
+  }, [students, teachers]);
+
+  const linkedStudents = useMemo(() => {
+    return students.filter((student) => !isPendingLink(student, teachers));
+  }, [students, teachers]);
+
   const filteredStudents = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const source = viewMode === "pending" ? pendingStudents : linkedStudents;
 
-    return students.filter((student) => {
-      const isPending = isPendingLink(student, teachers);
-
-      if (viewMode === "unassigned" && !isPending) return false;
-
+    return source.filter((student) => {
       if (!term) return true;
 
       return [
@@ -230,9 +237,7 @@ export default function VincularAlunosPage() {
         .toLowerCase()
         .includes(term);
     });
-  }, [students, teachers, search, viewMode]);
-
-  const unassignedCount = students.filter((student) => isPendingLink(student, teachers)).length;
+  }, [pendingStudents, linkedStudents, teachers, search, viewMode]);
 
   function updateProfessor(studentId: string, professorId: string) {
     setSelectedProfessorByStudent((current) => ({
@@ -291,9 +296,10 @@ export default function VincularAlunosPage() {
       if (res.ok) {
         setMessage({
           type: "success",
-          text: "Aluno vinculado com sucesso. O professor será notificado quando aplicável.",
+          text: "Aluno vinculado com sucesso. Agora ele aparece em Alunos vinculados.",
         });
         await loadData();
+        setViewMode("linked");
       } else {
         setMessage({
           type: "error",
@@ -320,7 +326,8 @@ export default function VincularAlunosPage() {
           Vincular Alunos a Professores
         </h1>
         <p className="text-sm text-[#a1a1a1] mt-2">
-          Distribua os alunos entre os professores e registre os dias de treino contratados por mês. Um aluno só sai da lista de pendentes quando tiver professor ativo e dias contratados preenchidos.
+          Distribua os alunos entre os professores e registre os dias de treino contratados por mês.
+          O aluno só aparece em <strong>Alunos vinculados</strong> depois de ter professor ativo e dias contratados preenchidos.
         </p>
       </div>
 
@@ -344,28 +351,28 @@ export default function VincularAlunosPage() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setViewMode("unassigned")}
+              onClick={() => setViewMode("pending")}
               className={
                 "px-4 py-2 rounded-xl text-sm font-medium transition " +
-                (viewMode === "unassigned"
+                (viewMode === "pending"
                   ? "bg-[#D4A373] text-[#0a0a0a]"
                   : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
               }
             >
-              Pendentes de vínculo ({unassignedCount})
+              Pendentes de vínculo ({pendingStudents.length})
             </button>
 
             <button
               type="button"
-              onClick={() => setViewMode("all")}
+              onClick={() => setViewMode("linked")}
               className={
                 "px-4 py-2 rounded-xl text-sm font-medium transition " +
-                (viewMode === "all"
+                (viewMode === "linked"
                   ? "bg-[#D4A373] text-[#0a0a0a]"
                   : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
               }
             >
-              Todos os alunos ({students.length})
+              Alunos vinculados ({linkedStudents.length})
             </button>
           </div>
 
@@ -394,137 +401,140 @@ export default function VincularAlunosPage() {
 
           <div className="bg-[#1a1a1a] rounded-xl p-4">
             <p className="text-[10px] uppercase text-[#6b6b6b]">Pendentes</p>
-            <p className="text-2xl font-bold text-yellow-400">{unassignedCount}</p>
+            <p className="text-2xl font-bold text-yellow-400">{pendingStudents.length}</p>
+          </div>
+
+          <div className="bg-[#1a1a1a] rounded-xl p-4">
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Vinculados</p>
+            <p className="text-2xl font-bold text-green-400">{linkedStudents.length}</p>
           </div>
 
           <div className="bg-[#1a1a1a] rounded-xl p-4">
             <p className="text-[10px] uppercase text-[#6b6b6b]">Professores ativos</p>
             <p className="text-2xl font-bold text-[#D4A373]">{teachers.length}</p>
           </div>
-
-          <div className="bg-[#1a1a1a] rounded-xl p-4">
-            <p className="text-[10px] uppercase text-[#6b6b6b]">Exibidos</p>
-            <p className="text-2xl font-bold text-[#f5f5f5]">{filteredStudents.length}</p>
-          </div>
         </div>
       </div>
 
-      <div className="bg-[#111] border border-[#ffffff10] rounded-2xl overflow-hidden">
+      <div className="space-y-3">
         {loading ? (
-          <div className="p-8 text-sm text-[#a1a1a1] text-center">
+          <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-8 text-sm text-[#a1a1a1] text-center">
             Carregando alunos e professores...
           </div>
         ) : filteredStudents.length === 0 ? (
-          <div className="p-8 text-sm text-[#a1a1a1] text-center">
-            Nenhum aluno encontrado para este filtro.
+          <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-8 text-sm text-[#a1a1a1] text-center">
+            {viewMode === "pending"
+              ? "Nenhum aluno pendente de vínculo."
+              : "Nenhum aluno vinculado encontrado."}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left">
-              <thead className="bg-[#151515] border-b border-[#ffffff10]">
-                <tr>
-                  <th className="px-5 py-4 text-xs font-semibold text-[#a1a1a1]">
-                    Aluno
-                  </th>
-                  <th className="px-5 py-4 text-xs font-semibold text-[#a1a1a1]">
-                    Professor atual
-                  </th>
-                  <th className="px-5 py-4 text-xs font-semibold text-[#a1a1a1]">
-                    Vincular / Trocar
-                  </th>
-                  <th className="px-5 py-4 text-xs font-semibold text-[#a1a1a1]">
-                    Dias contratados/mês
-                  </th>
-                  <th className="px-5 py-4 text-xs font-semibold text-[#a1a1a1]">
-                    Meta semanal
-                  </th>
-                  <th className="px-5 py-4 text-xs font-semibold text-[#a1a1a1] text-right">
-                    Ação
-                  </th>
-                </tr>
-              </thead>
+          filteredStudents.map((student) => {
+            const selectedProfessor = selectedProfessorByStudent[student.id] || "";
+            const days = daysByStudent[student.id] || "";
+            const isSaving = savingStudentId === student.id;
+            const isPending = isPendingLink(student, teachers);
 
-              <tbody className="divide-y divide-[#ffffff10]">
-                {filteredStudents.map((student) => {
-                  const selectedProfessor = selectedProfessorByStudent[student.id] || "";
-                  const days = daysByStudent[student.id] || "";
-                  const isSaving = savingStudentId === student.id;
+            return (
+              <div
+                key={student.id}
+                className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4"
+              >
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center text-sm font-bold shrink-0">
+                      {getInitials(student.name)}
+                    </div>
 
-                  return (
-                    <tr key={student.id} className="hover:bg-[#ffffff05] transition">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center text-sm font-bold">
-                            {getInitials(student.name)}
-                          </div>
-
-                          <div>
-                            <p className="text-sm font-semibold text-[#f5f5f5]">
-                              {student.name}
-                            </p>
-                            <p className="text-xs text-[#6b6b6b]">
-                              {student.email || "Sem e-mail"}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <p className="text-sm text-[#a1a1a1]">
-                          {getProfessorName(student, teachers)}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-[#f5f5f5] truncate">
+                          {student.name}
                         </p>
-                      </td>
 
-                      <td className="px-5 py-4">
-                        <select
-                          value={selectedProfessor}
-                          onChange={(event) => updateProfessor(student.id, event.target.value)}
-                          className="w-full min-w-[220px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                        <span
+                          className={
+                            "text-[10px] px-2 py-1 rounded-full font-semibold " +
+                            (isPending
+                              ? "bg-yellow-500/10 text-yellow-400"
+                              : "bg-green-500/10 text-green-400")
+                          }
                         >
-                          <option value="">Selecione um professor...</option>
-
-                          {teachers.map((teacher) => (
-                            <option key={teacher.id} value={teacher.id}>
-                              {teacher.name}
-                              {teacher.specialty ? ` · ${teacher.specialty}` : ""}
-                              {teacher.cref ? ` · ${teacher.cref}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <input
-                          value={days}
-                          onChange={(event) => updateDays(student.id, event.target.value)}
-                          placeholder="Ex.: 8, 12, 16, 20"
-                          inputMode="numeric"
-                          className="w-full min-w-[150px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-                        />
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span className="text-xs px-3 py-1 rounded-full bg-[#D4A373]/10 text-[#D4A373]">
-                          {getWeeklyLimit(days)}
+                          {isPending ? "Pendente" : "Vinculado"}
                         </span>
-                      </td>
+                      </div>
 
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleAssign(student)}
-                          disabled={isSaving || teachers.length === 0}
-                          className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-4 py-2.5 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
-                        >
-                          {isSaving ? "Salvando..." : getValidProfessorId(student, teachers) ? "Atualizar" : "Vincular"}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      <p className="text-xs text-[#6b6b6b] truncate">
+                        {student.email || "Sem e-mail"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="lg:text-right">
+                    <p className="text-[10px] uppercase text-[#6b6b6b]">
+                      Professor atual
+                    </p>
+                    <p className="text-sm text-[#a1a1a1]">
+                      {getProfessorName(student, teachers)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,1.3fr)_minmax(140px,0.7fr)_minmax(130px,0.6fr)_auto] gap-3 lg:items-end">
+                  <div>
+                    <label className="block text-xs text-[#a1a1a1] mb-1">
+                      Vincular / Trocar professor
+                    </label>
+                    <select
+                      value={selectedProfessor}
+                      onChange={(event) => updateProfessor(student.id, event.target.value)}
+                      className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    >
+                      <option value="">Selecione um professor...</option>
+
+                      {teachers.map((teacher) => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.name}
+                          {teacher.specialty ? ` · ${teacher.specialty}` : ""}
+                          {teacher.cref ? ` · ${teacher.cref}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-[#a1a1a1] mb-1">
+                      Dias contratados/mês
+                    </label>
+                    <input
+                      value={days}
+                      onChange={(event) => updateDays(student.id, event.target.value)}
+                      placeholder="Ex.: 8, 12, 16"
+                      inputMode="numeric"
+                      className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-[#a1a1a1] mb-1">
+                      Meta semanal
+                    </label>
+                    <div className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#D4A373]">
+                      {getWeeklyLimit(days)}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleAssign(student)}
+                    disabled={isSaving || teachers.length === 0}
+                    className="w-full lg:w-auto bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-2.5 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
+                  >
+                    {isSaving ? "Salvando..." : isPending ? "Vincular" : "Atualizar"}
+                  </button>
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -535,13 +545,12 @@ export default function VincularAlunosPage() {
           </p>
           <p className="text-xs text-[#a1a1a1] mt-1">
             Cadastre um professor em <strong>Gerenciar Professores</strong> e confirme se o status está ativo.
-            Esta tela busca os professores pela API <code>/api/teachers?includeInactive=true</code>.
           </p>
         </div>
       )}
 
       <p className="text-xs text-[#6b6b6b] text-center">
-        {students.length} aluno(s) · {teachers.length} professor(es) ativo(s) disponíveis
+        {students.length} aluno(s) · {pendingStudents.length} pendente(s) · {linkedStudents.length} vinculado(s) · {teachers.length} professor(es) ativo(s)
       </p>
     </div>
   );
