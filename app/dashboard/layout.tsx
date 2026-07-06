@@ -21,6 +21,7 @@ export default function DashboardLayout({
   // Regra: professor não vê o menu Mural.
   const professorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
+    { href: "/dashboard/cuidado-aluno", label: "Cuidado do Aluno", icon: "heart" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
@@ -32,6 +33,7 @@ export default function DashboardLayout({
   // Regra: gestor não vê os menus Montar Treino e Mural.
   const gestorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
+    { href: "/dashboard/cuidado-aluno", label: "Cuidado do Aluno", icon: "heart" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/gestao", label: "Gestão", icon: "message" },
     { href: "/dashboard/feedbacks-evolucao", label: "Feedbacks de Evolução", icon: "message" },
@@ -86,6 +88,11 @@ export default function DashboardLayout({
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      ),
+      heart: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
         </svg>
       ),
     };
