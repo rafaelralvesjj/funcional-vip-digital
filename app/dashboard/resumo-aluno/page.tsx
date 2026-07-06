@@ -24,6 +24,144 @@ type SummaryResponse = {
   aiPrompt: string;
 };
 
+function getNextMonday(referenceDate = new Date()): Date {
+  const date = new Date(referenceDate);
+  date.setHours(12, 0, 0, 0);
+
+  const day = date.getDay();
+  const daysUntilNextMonday = day === 0 ? 1 : 8 - day;
+
+  date.setDate(date.getDate() + daysUntilNextMonday);
+  return date;
+}
+
+function formatIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(date: Date, days: number): Date {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function getTrainingWeekdayOffsets(contractedTrainingDaysPerMonth?: number | null): number[] {
+  const contracted = Number(contractedTrainingDaysPerMonth || 0);
+
+  if (!Number.isFinite(contracted) || contracted <= 0) return [];
+
+  if (contracted <= 4) return [0]; // segunda
+  if (contracted <= 8) return [0, 2]; // segunda e quarta
+  if (contracted <= 12) return [0, 2, 4]; // segunda, quarta e sexta
+  if (contracted <= 16) return [0, 1, 3, 4]; // segunda, terça, quinta e sexta; quarta livre
+
+  return [0, 1, 2, 3, 4]; // segunda a sexta
+}
+
+function getWeekdayName(offset: number): string {
+  const names: Record<number, string> = {
+    0: "segunda-feira",
+    1: "terça-feira",
+    2: "quarta-feira",
+    3: "quinta-feira",
+    4: "sexta-feira",
+  };
+
+  return names[offset] || "dia útil";
+}
+
+function getTrainingSchedule(contractedTrainingDaysPerMonth?: number | null) {
+  const nextMonday = getNextMonday();
+  const offsets = getTrainingWeekdayOffsets(contractedTrainingDaysPerMonth);
+
+  return offsets.map((offset) => ({
+    offset,
+    weekday: getWeekdayName(offset),
+    date: formatIsoDate(addDays(nextMonday, offset)),
+  }));
+}
+
+function getTrainingScheduleDescription(contractedTrainingDaysPerMonth?: number | null): string {
+  const contracted = Number(contractedTrainingDaysPerMonth || 0);
+
+  if (!Number.isFinite(contracted) || contracted <= 0) {
+    return "Quantidade contratada não configurada. Confirmar antes de montar treino.";
+  }
+
+  const schedule = getTrainingSchedule(contractedTrainingDaysPerMonth);
+
+  if (contracted <= 4) {
+    return `Contrato de ${contracted} dia(s)/mês: gerar 1 treino por semana, preferencialmente na segunda-feira.`;
+  }
+
+  if (contracted <= 8) {
+    return `Contrato de ${contracted} dias/mês: gerar 2 treinos por semana, intercalados em segunda-feira e quarta-feira.`;
+  }
+
+  if (contracted <= 12) {
+    return `Contrato de ${contracted} dias/mês: gerar 3 treinos por semana, em segunda-feira, quarta-feira e sexta-feira.`;
+  }
+
+  if (contracted <= 16) {
+    return `Contrato de ${contracted} dias/mês: gerar 4 treinos por semana, em segunda-feira, terça-feira, quinta-feira e sexta-feira. Quarta-feira fica sem treino.`;
+  }
+
+  return `Contrato de ${contracted} dias/mês: gerar 5 treinos por semana, de segunda-feira a sexta-feira, sem folga em dia útil.`;
+}
+
+function applyContractScheduleToWorkouts(workouts: any[], contractedTrainingDaysPerMonth?: number | null): {
+  workouts: any[];
+  scheduleDescription: string;
+  scheduleWarning?: string;
+} {
+  const schedule = getTrainingSchedule(contractedTrainingDaysPerMonth);
+  const scheduleDescription = getTrainingScheduleDescription(contractedTrainingDaysPerMonth);
+
+  if (schedule.length === 0) {
+    return {
+      workouts,
+      scheduleDescription,
+      scheduleWarning: "Não foi possível aplicar calendário automático porque a quantidade contratada não está configurada.",
+    };
+  }
+
+  const originalCount = workouts.length;
+  const limitedWorkouts = workouts.slice(0, schedule.length);
+
+  const scheduledWorkouts = limitedWorkouts.map((workout, index) => {
+    const scheduledDay = schedule[index];
+
+    return {
+      ...workout,
+      date: scheduledDay?.date || workout.date || "",
+      notes: [
+        workout.notes,
+        scheduledDay
+          ? `Calendário automático aplicado: ${scheduledDay.weekday}, ${scheduledDay.date}.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    };
+  });
+
+  let scheduleWarning: string | undefined;
+
+  if (originalCount > schedule.length) {
+    scheduleWarning = `A IA gerou ${originalCount} treinos, mas o contrato permite ${schedule.length} treino(s) na semana. O sistema importou apenas os ${schedule.length} primeiros.`;
+  }
+
+  if (originalCount < schedule.length) {
+    scheduleWarning = `A IA gerou ${originalCount} treino(s), mas o contrato sugere ${schedule.length} treino(s) na semana. Gere novamente ou complemente manualmente.`;
+  }
+
+  return {
+    workouts: scheduledWorkouts,
+    scheduleDescription,
+    scheduleWarning,
+  };
+}
+
 export default function ResumoAlunoPage() {
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState("");
@@ -75,6 +213,14 @@ export default function ResumoAlunoPage() {
   }, [students, selectedStudentId]);
 
   function getJsonPrompt(summaryData: SummaryResponse): string {
+    const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || null;
+    const schedule = getTrainingSchedule(contractedDays);
+    const scheduleDescription = getTrainingScheduleDescription(contractedDays);
+    const expectedWorkoutCount = schedule.length || summaryData.student.weeklyLimit || 1;
+    const scheduleLines = schedule.length
+      ? schedule.map((item, index) => `- Treino ${index + 1}: ${item.weekday}, ${item.date}`)
+      : ["- Sem calendário automático porque a quantidade contratada não está configurada."];
+
     return [
       "Você é um professor de educação física apoiando a montagem de treino.",
       "",
@@ -86,9 +232,14 @@ export default function ResumoAlunoPage() {
       "- Não use markdown.",
       "- Não coloque comentários no JSON.",
       "- O professor vai revisar tudo antes de salvar.",
-      "- Respeite a quantidade semanal sugerida no resumo.",
       "- Se a adesão estiver baixa, priorize retomada, simplicidade, segurança e consistência.",
       "- Se faltarem dados, use observações para o professor confirmar antes de aplicar.",
+      "",
+      "REGRA DE CALENDÁRIO DO CONTRATO:",
+      scheduleDescription,
+      `Quantidade exata esperada no JSON: ${expectedWorkoutCount} treino(s).`,
+      "Datas obrigatórias para a próxima semana:",
+      ...scheduleLines,
       "",
       "FORMATO OBRIGATÓRIO DO JSON:",
       "{",
@@ -97,7 +248,7 @@ export default function ResumoAlunoPage() {
       '  "workouts": [',
       "    {",
       '      "name": "Treino A - nome do treino",',
-      '      "date": "AAAA-MM-DD",',
+      '      "date": "' + (schedule[0]?.date || "AAAA-MM-DD") + '",',
       '      "description": "objetivo geral do treino",',
       '      "notes": "observações para o professor revisar",',
       '      "exercises": [',
@@ -149,28 +300,37 @@ export default function ResumoAlunoPage() {
       throw new Error("O JSON precisa ter pelo menos um treino em workouts.");
     }
 
+    const normalizedWorkouts = workouts.map((workout: any, workoutIndex: number) => ({
+      name: String(workout?.name || workout?.nome || `Treino ${workoutIndex + 1}`),
+      date: String(workout?.date || workout?.data || ""),
+      description: String(workout?.description || workout?.descricao || ""),
+      notes: String(workout?.notes || workout?.observacoes || ""),
+      exercises: (Array.isArray(workout?.exercises) ? workout.exercises : workout?.exercicios || []).map((exercise: any, index: number) => ({
+        name: String(exercise?.name || exercise?.nome || `Exercício ${index + 1}`),
+        description: String(exercise?.description || exercise?.descricao || ""),
+        series: Number(exercise?.series || exercise?.serie || exercise?.sets || 3),
+        reps: String(exercise?.reps || exercise?.repeticoes || exercise?.repetições || "10"),
+        weight: String(exercise?.weight || exercise?.carga || ""),
+        restTime: String(exercise?.restTime || exercise?.descanso || "60s"),
+        notes: String(exercise?.notes || exercise?.observacoes || ""),
+        order: Number.isFinite(Number(exercise?.order)) ? Number(exercise.order) : index,
+      })),
+    }));
+
+    const scheduled = applyContractScheduleToWorkouts(
+      normalizedWorkouts,
+      selectedStudent?.contractedTrainingDaysPerMonth || null
+    );
+
     return {
       source: "ai-summary",
       createdAt: new Date().toISOString(),
       studentId: String(payload?.studentId || selectedStudentId),
       studentName: payload?.studentName || selectedStudent?.name || "",
       currentIndex: 0,
-      workouts: workouts.map((workout: any, workoutIndex: number) => ({
-        name: String(workout?.name || workout?.nome || `Treino ${workoutIndex + 1}`),
-        date: String(workout?.date || workout?.data || ""),
-        description: String(workout?.description || workout?.descricao || ""),
-        notes: String(workout?.notes || workout?.observacoes || ""),
-        exercises: (Array.isArray(workout?.exercises) ? workout.exercises : workout?.exercicios || []).map((exercise: any, index: number) => ({
-          name: String(exercise?.name || exercise?.nome || `Exercício ${index + 1}`),
-          description: String(exercise?.description || exercise?.descricao || ""),
-          series: Number(exercise?.series || exercise?.serie || exercise?.sets || 3),
-          reps: String(exercise?.reps || exercise?.repeticoes || exercise?.repetições || "10"),
-          weight: String(exercise?.weight || exercise?.carga || ""),
-          restTime: String(exercise?.restTime || exercise?.descanso || "60s"),
-          notes: String(exercise?.notes || exercise?.observacoes || ""),
-          order: Number.isFinite(Number(exercise?.order)) ? Number(exercise.order) : index,
-        })),
-      })),
+      scheduleDescription: scheduled.scheduleDescription,
+      scheduleWarning: scheduled.scheduleWarning,
+      workouts: scheduled.workouts,
     };
   }
 
@@ -332,7 +492,8 @@ export default function ResumoAlunoPage() {
           </p>
           <p className="text-xs text-[#a1a1a1] leading-relaxed">
             1. Gere o resumo. 2. Copie o prompt para IA. 3. Peça uma sugestão estruturada de treino.
-            4. O professor revisa. 5. O professor cadastra o treino no sistema.
+            4. O sistema aplica automaticamente os dias da semana conforme o contrato.
+            5. O professor revisa e cadastra o treino no sistema.
             Evite rodar SQL direto no banco para não cadastrar treino no aluno errado ou quebrar histórico.
           </p>
         </div>
