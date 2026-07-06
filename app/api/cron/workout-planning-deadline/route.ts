@@ -158,10 +158,12 @@ async function notifyProfessorDeadline({
   group,
   authorId,
   weekLabel,
+  expiresAt,
 }: {
   group: ProfessorPendingGroup;
   authorId: string;
   weekLabel: string;
+  expiresAt: Date;
 }) {
   const dashboardUrl = getAppDashboardUrl();
   const professorName = group.professor.name || "Professor";
@@ -208,6 +210,7 @@ async function notifyProfessorDeadline({
       targetRole: "PROFESSOR",
       professorId: group.professor.id,
       authorId,
+      expiresAt,
     },
   });
 
@@ -299,10 +302,12 @@ async function notifyGestaoDeadline({
   groups,
   authorId,
   weekLabel,
+  expiresAt,
 }: {
   groups: ProfessorPendingGroup[];
   authorId: string;
   weekLabel: string;
+  expiresAt: Date;
 }) {
   if (groups.length === 0) {
     return {
@@ -350,6 +355,7 @@ async function notifyGestaoDeadline({
       type: "MANAGEMENT",
       targetRole: "GESTOR",
       authorId,
+      expiresAt,
     },
   });
 
@@ -567,6 +573,7 @@ export async function GET(request: NextRequest) {
         group,
         authorId: author.id,
         weekLabel,
+        expiresAt: nextWeek.startOfWeek,
       });
 
       if (result.skipped) {
@@ -594,6 +601,7 @@ export async function GET(request: NextRequest) {
       groups: professorGroups,
       authorId: author.id,
       weekLabel,
+      expiresAt: nextWeek.startOfWeek,
     });
   } catch (error: any) {
     errors.push({
