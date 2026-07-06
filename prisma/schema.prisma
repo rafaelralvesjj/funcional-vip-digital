@@ -15,6 +15,14 @@ model User {
   image         String?
   password      String?   @map("password")
   phone         String?   @map("phone")
+  document      String?   @map("document")
+  birthDate     DateTime? @map("birth_date")
+  cref          String?   @map("cref")
+  specialty     String?   @map("specialty")
+  education     String?   @map("education")
+  experience    String?   @map("experience")
+  bio           String?   @db.Text
+  active        Boolean   @default(true)
   role          String    @default("GESTOR")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
