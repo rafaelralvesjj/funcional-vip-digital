@@ -67,6 +67,14 @@ function formatDatePtBr(date: Date): string {
   });
 }
 
+function addDays(days: number): Date {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(23, 59, 59, 999);
+
+  return date;
+}
+
 function getTodayRange(): { start: Date; end: Date } {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -75,6 +83,24 @@ function getTodayRange(): { start: Date; end: Date } {
   end.setDate(start.getDate() + 1);
 
   return { start, end };
+}
+
+function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
+  const date = new Date(referenceDate);
+  date.setHours(0, 0, 0, 0);
+
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+
+  const startOfWeek = new Date(date);
+  startOfWeek.setDate(date.getDate() + diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+  endOfWeek.setHours(0, 0, 0, 0);
+
+  return { startOfWeek, endOfWeek };
 }
 
 async function getNoticeAuthorId(): Promise<string | null> {
@@ -122,6 +148,39 @@ async function alreadySent({
   return Boolean(existing);
 }
 
+async function hasOpenCareEventInCurrentWeek(studentId: string): Promise<boolean> {
+  const week = getWeekRange(new Date());
+
+  const existing = await prisma.studentCareEvent.findFirst({
+    where: {
+      studentId,
+      status: {
+        not: "RESOLVIDO",
+      },
+      createdAt: {
+        gte: week.startOfWeek,
+        lt: week.endOfWeek,
+      },
+      eventType: {
+        in: [
+          "EXERCICIO_DIFICIL",
+          "DOR_DESCONFORTO",
+          "NAO_ENTENDI",
+          "FALTA_TEMPO",
+          "DESMOTIVACAO",
+          "OUTRO",
+        ],
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return Boolean(existing);
+}
+
+
 async function registerSent({
   studentId,
   workoutId,
@@ -163,6 +222,7 @@ async function createNotice({
   authorId,
   studentId,
   professorId,
+  expiresAt,
 }: {
   title: string;
   content: string;
@@ -171,6 +231,7 @@ async function createNotice({
   authorId: string;
   studentId?: string | null;
   professorId?: string | null;
+  expiresAt?: Date | null;
 }) {
   return prisma.notice.create({
     data: {
@@ -181,6 +242,7 @@ async function createNotice({
       authorId,
       studentId: studentId || null,
       professorId: professorId || null,
+      expiresAt: expiresAt || null,
     },
     select: {
       id: true,
@@ -341,6 +403,7 @@ async function notifyTodayWorkout({
     targetRole: "ALUNO",
     authorId,
     studentId: workout.studentId,
+    expiresAt: addDays(1),
   });
 
   await registerSent({
@@ -379,6 +442,19 @@ async function notifyMissedWorkoutLevel({
 
   if (await alreadySent({ studentId: student.id, eventType, eventKey })) {
     return { sent: false, reason: "Já enviado" };
+  }
+
+  /*
+   * Governança anti-spam:
+   * se o aluno já sinalizou nesta semana que teve dor, dificuldade, falta de tempo,
+   * desmotivação ou dúvida, não mandamos cobrança genérica de treino perdido.
+   * O caso passa a ser tratado pela Central de Cuidado do Aluno.
+   */
+  if (await hasOpenCareEventInCurrentWeek(student.id)) {
+    return {
+      sent: false,
+      reason: "Aluno já possui evento de cuidado aberto nesta semana. Régua genérica pausada.",
+    };
   }
 
   const studentName = student.name || "Aluno";
@@ -422,6 +498,7 @@ async function notifyMissedWorkoutLevel({
     targetRole: "ALUNO",
     authorId,
     studentId: student.id,
+    expiresAt: addDays(level === 1 ? 7 : 15),
   });
 
   let studentEmailSent = false;
@@ -467,6 +544,7 @@ async function notifyMissedWorkoutLevel({
       targetRole: "PROFESSOR",
       authorId,
       professorId: student.user.id,
+      expiresAt: addDays(15),
     });
 
     professorNoticeCreated = true;
@@ -503,6 +581,7 @@ async function notifyMissedWorkoutLevel({
       content: gestaoContent,
       targetRole: "GESTOR",
       authorId,
+      expiresAt: addDays(15),
     });
 
     gestaoNoticeCreated = true;
