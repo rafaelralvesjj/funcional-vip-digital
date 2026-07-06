@@ -12,6 +12,8 @@ type Student = {
   professorId?: string | null;
   contractedTrainingDaysPerMonth?: number | null;
   contracted_training_days_per_month?: number | null;
+  commercialStatus?: string | null;
+  commercial_status?: string | null;
   user?: {
     id?: string | null;
     name?: string | null;
@@ -125,10 +127,29 @@ function hasValidContractedDays(student: Student): boolean {
   return Number(value || 0) > 0;
 }
 
+function hasCurrentContractOrTrial(student: Student): boolean {
+  const status = String(
+    student.commercialStatus ||
+      student.commercial_status ||
+      ""
+  ).toUpperCase();
+
+  /*
+   * Depois da Fase 1, aluno vinculado precisa ter ciclo ativo.
+   * Se a API ainda não retornar commercialStatus, mantemos fallback para
+   * não quebrar bases antigas, mas o ideal é usar contrato ativo.
+   */
+  if (!status) {
+    return hasValidContractedDays(student);
+  }
+
+  return status === "CONTRATO_ATIVO" || status === "EXPERIENCIA_ATIVA";
+}
+
 function isPendingLink(student: Student, teachers: Teacher[]): boolean {
   const validProfessorId = getValidProfessorId(student, teachers);
 
-  return !validProfessorId || !hasValidContractedDays(student);
+  return !validProfessorId || !hasValidContractedDays(student) || !hasCurrentContractOrTrial(student);
 }
 
 export default function VincularAlunosPage() {
@@ -296,7 +317,7 @@ export default function VincularAlunosPage() {
       if (res.ok) {
         setMessage({
           type: "success",
-          text: "Aluno vinculado com sucesso. Agora ele aparece em Alunos vinculados.",
+          text: "Aluno vinculado com sucesso. Agora ele aparece em Alunos com contrato ativo.",
         });
         await loadData();
         setViewMode("linked");
@@ -327,7 +348,7 @@ export default function VincularAlunosPage() {
         </h1>
         <p className="text-sm text-[#a1a1a1] mt-2">
           Distribua os alunos entre os professores e registre os dias de treino contratados por mês.
-          O aluno só aparece em <strong>Alunos vinculados</strong> depois de ter professor ativo e dias contratados preenchidos.
+          O aluno só aparece em <strong>Alunos com contrato ativo</strong> depois de ter professor ativo e dias contratados preenchidos.
         </p>
       </div>
 
@@ -359,7 +380,7 @@ export default function VincularAlunosPage() {
                   : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
               }
             >
-              Pendentes de vínculo ({pendingStudents.length})
+              Pendentes de vínculo/contrato ({pendingStudents.length})
             </button>
 
             <button
@@ -372,7 +393,7 @@ export default function VincularAlunosPage() {
                   : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
               }
             >
-              Alunos vinculados ({linkedStudents.length})
+              Alunos com contrato ativo ({linkedStudents.length})
             </button>
           </div>
 
