@@ -118,30 +118,33 @@ function getWeeklyLimit(monthlyDays?: string | number | null): string {
   return `${Math.ceil(value / 4)} treinos/semana`;
 }
 
-function hasValidContractedDays(student: Student): boolean {
-  const value =
-    student.contractedTrainingDaysPerMonth ??
-    student.contracted_training_days_per_month ??
-    null;
+function getCommercialStatus(student: Student): string {
+  return String(
+    student.commercialStatus ||
+      student.commercial_status ||
+      "SEM_CONTRATO_ATIVO"
+  ).toUpperCase();
+}
 
-  return Number(value || 0) > 0;
+function commercialStatusLabel(student: Student): string {
+  const status = getCommercialStatus(student);
+
+  const labels: Record<string, string> = {
+    LEAD: "Lead",
+    EXPERIENCIA_ATIVA: "Experiência ativa",
+    CONTRATO_ATIVO: "Contrato ativo",
+    SEM_CONTRATO_ATIVO: "Sem contrato ativo",
+    SUSPENSO_POR_PAGAMENTO: "Suspenso por pagamento",
+    AGUARDANDO_PAGAMENTO: "Aguardando pagamento",
+    AGUARDANDO_ACEITE: "Aguardando aceite",
+    INATIVO: "Inativo",
+  };
+
+  return labels[status] || status;
 }
 
 function hasCurrentContractOrTrial(student: Student): boolean {
-  const status = String(
-    student.commercialStatus ||
-      student.commercial_status ||
-      ""
-  ).toUpperCase();
-
-  /*
-   * Depois da Fase 1, aluno vinculado precisa ter ciclo ativo.
-   * Se a API ainda não retornar commercialStatus, mantemos fallback para
-   * não quebrar bases antigas, mas o ideal é usar contrato ativo.
-   */
-  if (!status) {
-    return hasValidContractedDays(student);
-  }
+  const status = getCommercialStatus(student);
 
   return status === "CONTRATO_ATIVO" || status === "EXPERIENCIA_ATIVA";
 }
@@ -149,14 +152,20 @@ function hasCurrentContractOrTrial(student: Student): boolean {
 function isPendingLink(student: Student, teachers: Teacher[]): boolean {
   const validProfessorId = getValidProfessorId(student, teachers);
 
-  return !validProfessorId || !hasValidContractedDays(student) || !hasCurrentContractOrTrial(student);
+  /*
+   * Depois da Fase 1, "vinculado" significa:
+   * professor válido + contrato/experiência ativo.
+   *
+   * A quantidade de treinos não é mais digitada aqui.
+   * Ela vem do Financeiro/Contrato.
+   */
+  return !validProfessorId || !hasCurrentContractOrTrial(student);
 }
 
 export default function VincularAlunosPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedProfessorByStudent, setSelectedProfessorByStudent] = useState<Record<string, string>>({});
-  const [daysByStudent, setDaysByStudent] = useState<Record<string, string>>({});
   const [viewMode, setViewMode] = useState<ViewMode>("pending");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -189,15 +198,12 @@ export default function VincularAlunosPage() {
       setTeachers(normalizedTeachers);
 
       const professorMap: Record<string, string> = {};
-      const daysMap: Record<string, string> = {};
 
       normalizedStudents.forEach((student) => {
         professorMap[student.id] = getValidProfessorId(student, normalizedTeachers);
-        daysMap[student.id] = getContractedDays(student);
       });
 
       setSelectedProfessorByStudent(professorMap);
-      setDaysByStudent(daysMap);
 
       if (!teachersRes.ok) {
         setMessage({
@@ -267,31 +273,13 @@ export default function VincularAlunosPage() {
     }));
   }
 
-  function updateDays(studentId: string, value: string) {
-    const onlyNumbers = value.replace(/\D/g, "");
-
-    setDaysByStudent((current) => ({
-      ...current,
-      [studentId]: onlyNumbers,
-    }));
-  }
-
   async function handleAssign(student: Student) {
     const professorId = selectedProfessorByStudent[student.id] || "";
-    const days = daysByStudent[student.id] || "";
 
     if (!professorId) {
       setMessage({
         type: "error",
         text: "Selecione um professor para vincular o aluno.",
-      });
-      return;
-    }
-
-    if (!days || Number(days) <= 0) {
-      setMessage({
-        type: "error",
-        text: "Informe os dias contratados por mês antes de vincular.",
       });
       return;
     }
@@ -308,7 +296,6 @@ export default function VincularAlunosPage() {
         body: JSON.stringify({
           studentId: student.id,
           professorId,
-          contractedTrainingDaysPerMonth: Number(days),
         }),
       });
 
@@ -317,24 +304,35 @@ export default function VincularAlunosPage() {
       if (res.ok) {
         setMessage({
           type: "success",
-          text: "Aluno vinculado com sucesso. Agora ele aparece em Alunos com contrato ativo.",
+          text:
+            data?.message ||
+            "Professor vinculado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro.",
         });
         await loadData();
-        setViewMode("linked");
+        setViewMode("pending");
       } else {
         setMessage({
           type: "error",
-          text: data?.error || "Erro ao vincular aluno.",
+          text: data?.error || "Erro ao vincular professor.",
         });
       }
     } catch {
       setMessage({
         type: "error",
-        text: "Erro ao vincular aluno.",
+        text: "Erro ao vincular professor.",
       });
     }
 
     setSavingStudentId(null);
+  }
+
+  function goToFinanceiro(student: Student) {
+    const params = new URLSearchParams({
+      studentId: student.id,
+      studentName: student.name || "",
+    });
+
+    window.location.href = `/dashboard/financeiro?${params.toString()}`;
   }
 
   return (
@@ -524,34 +522,31 @@ export default function VincularAlunosPage() {
 
                   <div>
                     <label className="block text-xs text-[#a1a1a1] mb-1">
-                      Dias contratados/mês
-                    </label>
-                    <input
-                      value={days}
-                      onChange={(event) => updateDays(student.id, event.target.value)}
-                      placeholder="Ex.: 8, 12, 16"
-                      inputMode="numeric"
-                      className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-[#a1a1a1] mb-1">
-                      Meta semanal
+                      Status comercial
                     </label>
                     <div className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#D4A373]">
-                      {getWeeklyLimit(days)}
+                      {commercialStatusLabel(student)}
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleAssign(student)}
-                    disabled={isSaving || teachers.length === 0}
-                    className="w-full lg:w-auto bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-2.5 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
-                  >
-                    {isSaving ? "Salvando..." : isPending ? "Vincular" : "Atualizar"}
-                  </button>
+                  <div className="flex flex-col sm:flex-row lg:flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAssign(student)}
+                      disabled={isSaving || teachers.length === 0}
+                      className="w-full lg:w-auto bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-2.5 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
+                    >
+                      {isSaving ? "Salvando..." : isPending ? "Vincular professor" : "Trocar professor"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => goToFinanceiro(student)}
+                      className="w-full lg:w-auto bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] rounded-xl px-5 py-2.5 font-semibold text-sm hover:border-[#D4A373] transition"
+                    >
+                      Criar contrato
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -571,7 +566,7 @@ export default function VincularAlunosPage() {
       )}
 
       <p className="text-xs text-[#6b6b6b] text-center">
-        {students.length} aluno(s) · {pendingStudents.length} pendente(s) · {linkedStudents.length} vinculado(s) · {teachers.length} professor(es) ativo(s)
+        {students.length} aluno(s) · {pendingStudents.length} pendente(s) · {linkedStudents.length} com contrato ativo · {teachers.length} professor(es) ativo(s)
       </p>
     </div>
   );
