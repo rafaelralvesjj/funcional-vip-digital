@@ -146,6 +146,7 @@ export default function FinanceiroPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [studentId, setStudentId] = useState("");
+  const [pendingStudentIdFromUrl, setPendingStudentIdFromUrl] = useState("");
   const [planId, setPlanId] = useState("");
   const [type, setType] = useState("PAID");
   const [durationMonths, setDurationMonths] = useState("1");
@@ -178,8 +179,31 @@ export default function FinanceiroPage() {
   }
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const initialStudentId = params.get("studentId") || "";
+
+    if (initialStudentId) {
+      setPendingStudentIdFromUrl(initialStudentId);
+      setStudentId(initialStudentId);
+      setFilter("TODOS");
+    }
+
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!data || !pendingStudentIdFromUrl) return;
+
+    const exists = data.students.some((student) => student.id === pendingStudentIdFromUrl);
+
+    if (exists) {
+      setStudentId(pendingStudentIdFromUrl);
+      setMessage({
+        type: "success",
+        text: "Aluno selecionado. Agora escolha o plano e crie a experiência grátis ou contrato.",
+      });
+    }
+  }, [data, pendingStudentIdFromUrl]);
 
   const selectedPlan = useMemo(() => {
     return data?.plans.find((plan) => plan.id === planId) || null;
