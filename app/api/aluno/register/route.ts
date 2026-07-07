@@ -49,6 +49,60 @@ function addMonthsMinusOneDay(startDate: Date, months: number): Date {
   return endDate;
 }
 
+function getAppLoginUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/auth/signin`;
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDatePtBr(date: Date | string): string {
+  return new Date(date).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function buildTrialWelcomeContent({
+  studentName,
+  endDateText,
+  workoutsPerWeek,
+  workoutsPerMonth,
+}: {
+  studentName: string;
+  endDateText: string;
+  workoutsPerWeek: number;
+  workoutsPerMonth: number;
+}): string {
+  return [
+    `Olá, ${studentName}!`,
+    "",
+    "Seu cadastro no Funcional Vip Digital foi criado com sucesso e sua experiência gratuita já está ativa.",
+    `Validade da experiência: até ${endDateText}.`,
+    "",
+    `Nesta experiência, seu plano prevê ${workoutsPerWeek} treino(s) por semana, totalizando ${workoutsPerMonth} treino(s) no ciclo.`,
+    "",
+    "Agora a equipe fará o vínculo com um professor responsável. Assim que os primeiros treinos forem preparados e liberados, você receberá um novo aviso por aqui e por e-mail.",
+    "",
+    "Você já pode acessar seu painel com o e-mail e senha cadastrados para acompanhar os avisos e sua evolução.",
+    "",
+    "Este é um ciclo gratuito de experiência. Para continuar após o período experimental, será necessário contratar um plano.",
+  ].join("\n");
+}
+
+
 async function getOptionalImage(source: BodySource): Promise<string | null> {
   if (!(source instanceof FormData)) return null;
 
@@ -372,6 +426,39 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      const notificationAuthor = await tx.user.findFirst({
+        where: {
+          role: {
+            in: ["GESTOR", "ADMIN"],
+          },
+        },
+        select: {
+          id: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      });
+
+      const endDateText = formatDatePtBr(contract.endDate);
+
+      const notice = await tx.notice.create({
+        data: {
+          title: "Sua experiência gratuita foi ativada",
+          content: buildTrialWelcomeContent({
+            studentName: student.name,
+            endDateText,
+            workoutsPerWeek: contract.workoutsPerWeek,
+            workoutsPerMonth: contract.workoutsPerMonth,
+          }),
+          type: "COMERCIAL",
+          targetRole: "STUDENT",
+          studentId: student.id,
+          authorId: notificationAuthor?.id || authUser.id,
+          expiresAt: contract.endDate,
+        },
+      });
+
       return {
         userId: authUser.id,
         studentId: student.id,
@@ -382,37 +469,74 @@ export async function POST(req: NextRequest) {
         commercialStatus: student.commercialStatus,
         startDate: contract.startDate,
         endDate: contract.endDate,
+        workoutsPerWeek: contract.workoutsPerWeek,
         workoutsPerMonth: contract.workoutsPerMonth,
         totalContractedWorkouts: contract.totalContractedWorkouts,
+        welcomeNoticeId: notice.id,
       };
     });
 
     try {
-      const endDateText = new Date(result.endDate).toLocaleDateString("pt-BR");
+      const endDateText = formatDatePtBr(result.endDate);
+      const loginUrl = getAppLoginUrl();
+      const safeName = escapeHtml(name);
+      const safeEndDateText = escapeHtml(endDateText);
+      const safeLoginUrl = escapeHtml(loginUrl);
 
       await sendEmail({
         to: email,
         subject: "Sua experiência gratuita foi ativada",
-        text: `Olá, ${name}! Sua experiência gratuita no Funcional Vip Digital foi ativada até ${endDateText}. A equipe irá vincular um professor para liberar seus primeiros treinos. Acesse o painel com seu e-mail e senha cadastrados.`,
+        text: [
+          `Olá, ${name}!`,
+          "",
+          "Sua experiência gratuita no Funcional Vip Digital foi ativada.",
+          `Validade da experiência: até ${endDateText}.`,
+          "",
+          `Seu plano de experiência prevê ${result.workoutsPerWeek} treino(s) por semana, totalizando ${result.workoutsPerMonth} treino(s) no ciclo.`,
+          "",
+          "Agora a equipe irá vincular um professor responsável. Assim que seus primeiros treinos forem preparados, você receberá um novo aviso.",
+          "",
+          `Acesse o painel com seu e-mail e senha cadastrados: ${loginUrl}`,
+          "",
+          "Este é um ciclo gratuito de experiência. Para continuar após o período experimental, será necessário contratar um plano.",
+        ].join("\n"),
         html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #222;">
-            <h2>Sua experiência gratuita foi ativada</h2>
-            <p>Olá, <strong>${name}</strong>!</p>
-            <p>Seu cadastro no <strong>Funcional Vip Digital</strong> foi criado com sucesso.</p>
-            <p>
-              Sua experiência gratuita está ativa até
-              <strong>${endDateText}</strong>.
-            </p>
-            <p>
-              Agora a equipe irá vincular um professor para liberar seus primeiros treinos.
-            </p>
-            <p>
-              Você já pode acessar o painel com o e-mail e a senha cadastrados.
-            </p>
-            <p style="font-size: 12px; color: #666;">
-              Este é um ciclo gratuito de experiência. Para continuar após o período experimental,
-              será necessário contratar um plano.
-            </p>
+          <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+            <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+              <h2 style="color:#D4A373; margin:0 0 16px;">Sua experiência gratuita foi ativada</h2>
+
+              <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+                Olá, <strong>${safeName}</strong>!
+              </p>
+
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                Seu cadastro no <strong style="color:#f5f5f5;">Funcional Vip Digital</strong> foi criado com sucesso.
+              </p>
+
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                Sua experiência gratuita está ativa até
+                <strong style="color:#f5f5f5;">${safeEndDateText}</strong>.
+              </p>
+
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                Seu plano de experiência prevê <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong>,
+                totalizando <strong style="color:#f5f5f5;">${result.workoutsPerMonth} treino(s)</strong> no ciclo.
+              </p>
+
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                Agora a equipe irá vincular um professor responsável. Assim que seus primeiros treinos forem preparados,
+                você receberá um novo aviso por aqui e por e-mail.
+              </p>
+
+              <a href="${safeLoginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+                Acessar meu painel
+              </a>
+
+              <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:20px;">
+                Este é um ciclo gratuito de experiência. Para continuar após o período experimental,
+                será necessário contratar um plano.
+              </p>
+            </div>
           </div>
         `,
       });
@@ -423,7 +547,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       message:
-        "Cadastro criado e experiência gratuita ativada. Agora a equipe irá vincular um professor para liberar os primeiros treinos.",
+        "Cadastro criado, experiência gratuita ativada e aviso enviado ao aluno. Agora a equipe irá vincular um professor para liberar os primeiros treinos.",
       ...result,
     });
   } catch (error: any) {
