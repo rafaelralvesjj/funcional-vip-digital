@@ -345,3 +345,7 @@ export async function getStudentDashboardSummary(
     actionLabel: text.actionLabel,
   };
 }
+
+export async function getStudentDashboardSummaryForSessionUser(input?: DashboardInput) {
+  return getStudentDashboardSummary(input);
+}
