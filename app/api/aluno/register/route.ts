@@ -173,11 +173,29 @@ async function findExistingStudentOrUser({
       };
     }
 
+    /*
+     * Importante:
+     * Não bloqueamos telefone existente em professor/gestor.
+     * Bloqueamos apenas telefone usado por login de aluno ou por usuário
+     * que já tenha vínculo StudentAuth.
+     */
     const users = await prisma.user.findMany({
       where: {
         phone: {
           contains: phoneDigits,
         },
+        OR: [
+          {
+            role: {
+              in: ["ALUNO", "STUDENT"],
+            },
+          },
+          {
+            studentAuths: {
+              some: {},
+            },
+          },
+        ],
       },
       select: {
         id: true,
