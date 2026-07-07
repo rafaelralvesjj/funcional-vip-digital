@@ -22,23 +22,28 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
-function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): number | null {
-  const contracted = Number(contractedTrainingDaysPerMonth || 0);
+function getWeeklyWorkoutLimitFromContract(contract?: {
+  workoutsPerWeek?: number | null;
+  workoutsPerMonth?: number | null;
+} | null): number | null {
+  if (!contract) return null;
 
-  if (!Number.isFinite(contracted) || contracted <= 0) {
+  const directWeekly = Number(contract.workoutsPerWeek || 0);
+
+  if (Number.isFinite(directWeekly) && directWeekly > 0) {
+    return directWeekly;
+  }
+
+  const monthly = Number(contract.workoutsPerMonth || 0);
+
+  if (!Number.isFinite(monthly) || monthly <= 0) {
     return null;
   }
 
-  // Regra comercial atual:
-  // até 4 treinos/mês  -> 1 treino por semana
-  // até 8 treinos/mês  -> 2 treinos por semana
-  // até 12 treinos/mês -> 3 treinos por semana
-  // até 16 treinos/mês -> 4 treinos por semana
-  // acima disso        -> 5 treinos por semana, limitado a dias úteis.
-  if (contracted <= 4) return 1;
-  if (contracted <= 8) return 2;
-  if (contracted <= 12) return 3;
-  if (contracted <= 16) return 4;
+  if (monthly <= 4) return 1;
+  if (monthly <= 8) return 2;
+  if (monthly <= 12) return 3;
+  if (monthly <= 16) return 4;
 
   return 5;
 }
@@ -87,6 +92,61 @@ function normalizeRole(role?: string | null): string {
 
   return value;
 }
+
+function serializeWorkoutContract(contract: any) {
+  if (!contract) return null;
+
+  return {
+    id: contract.id,
+    type: contract.type,
+    status: contract.status,
+    commercialStatus: contract.commercialStatus,
+    startDate: contract.startDate?.toISOString?.() || contract.startDate,
+    endDate: contract.endDate?.toISOString?.() || contract.endDate,
+    workoutsPerWeek: contract.workoutsPerWeek,
+    workoutsPerMonth: contract.workoutsPerMonth,
+    totalContractedWorkouts: contract.totalContractedWorkouts,
+    planId: contract.planId || null,
+    planName: contract.plan?.name || null,
+  };
+}
+
+async function findActiveWorkoutContract(studentId: string, workoutDate: Date) {
+  const contracts = await prisma.studentContract.findMany({
+    where: {
+      studentId,
+      status: "ACTIVE",
+      startDate: {
+        lte: workoutDate,
+      },
+      endDate: {
+        gte: workoutDate,
+      },
+    },
+    include: {
+      plan: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (contracts.length === 0) return null;
+
+  return contracts.sort((a, b) => {
+    const aPriority = a.type === "PAID" ? 0 : 1;
+    const bPriority = b.type === "PAID" ? 0 : 1;
+
+    if (aPriority !== bPriority) {
+      return aPriority - bPriority;
+    }
+
+    return b.endDate.getTime() - a.endDate.getTime();
+  })[0];
+}
+
 
 async function getStudentEmail(student: {
   email?: string | null;
@@ -380,21 +440,7 @@ export async function POST(req: NextRequest) {
 
     const workoutDate = date ? new Date(date + "T12:00:00") : new Date();
 
-    const activeContract = await prisma.studentContract.findFirst({
-      where: {
-        studentId,
-        status: "ACTIVE",
-        startDate: {
-          lte: workoutDate,
-        },
-        endDate: {
-          gte: workoutDate,
-        },
-      },
-      orderBy: {
-        endDate: "desc",
-      },
-    });
+    const activeContract = await findActiveWorkoutContract(studentId, workoutDate);
 
     if (!activeContract) {
       return NextResponse.json(
@@ -415,13 +461,13 @@ export async function POST(req: NextRequest) {
 
     const isFirstWorkoutPlan = existingWorkoutPlanCount === 0;
 
-    const weeklyLimit = getWeeklyWorkoutLimit(activeContract.workoutsPerMonth);
+    const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
 
     if (!weeklyLimit) {
       return NextResponse.json(
         {
           error:
-            "O contrato ativo do aluno não possui quantidade mensal de treinos configurada. Revise o contrato no Financeiro.",
+            "O contrato ativo do aluno não possui quantidade de treinos por semana configurada. Revise o contrato/plano no Financeiro.",
         },
         { status: 400 }
       );
@@ -447,7 +493,7 @@ export async function POST(req: NextRequest) {
             startOfWeek
           )} a ${formatDatePtBr(
             new Date(endOfWeek.getTime() - 1)
-          )}. O limite atual é de ${weeklyLimit} treino(s) por semana, conforme a quantidade contratada no mês.`,
+          )}. O limite atual é de ${weeklyLimit} treino(s) por semana, conforme o contrato ativo.`,
         },
         { status: 400 }
       );
@@ -591,6 +637,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     const studentId = searchParams.get("studentId");
+    const includeSummary = searchParams.get("summary") === "1";
+    const referenceDateParam = searchParams.get("date");
+    const referenceDate = referenceDateParam
+      ? new Date(`${referenceDateParam}T12:00:00`)
+      : new Date();
     const startOfNextWeek = getStartOfNextWeek();
     const isStudentUser = role === "STUDENT";
 
@@ -667,7 +718,46 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
       });
 
-      return NextResponse.json(plans);
+      if (!includeSummary) {
+        return NextResponse.json(plans);
+      }
+
+      const activeContract = await findActiveWorkoutContract(studentId, referenceDate);
+      const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
+      const { startOfWeek, endOfWeek } = getWeekRange(referenceDate);
+      const weekEndDisplay = new Date(endOfWeek.getTime() - 1);
+
+      const weeklyPlansCount = activeContract
+        ? await prisma.workoutPlan.count({
+            where: {
+              studentId,
+              contractId: activeContract.id,
+              date: {
+                gte: startOfWeek,
+                lt: endOfWeek,
+              },
+            },
+          })
+        : 0;
+
+      return NextResponse.json({
+        plans,
+        activeContract: serializeWorkoutContract(activeContract),
+        weeklyLimit,
+        weeklyPlansCount,
+        weeklyRemaining:
+          weeklyLimit == null ? null : Math.max(weeklyLimit - weeklyPlansCount, 0),
+        week: {
+          startOfWeek: startOfWeek.toISOString(),
+          endOfWeek: endOfWeek.toISOString(),
+          label: `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`,
+          futureWeek: isFutureWeek(startOfWeek),
+        },
+        canCreateWorkout: Boolean(activeContract && weeklyLimit && weeklyPlansCount < weeklyLimit),
+        message: activeContract
+          ? null
+          : "Este aluno não possui contrato ativo para a data selecionada.",
+      });
     }
 
     return NextResponse.json(
@@ -712,7 +802,11 @@ export async function PUT(req: NextRequest) {
 
     const planExists = await prisma.workoutPlan.findUnique({
       where: { id },
-      select: { id: true },
+      select: {
+        id: true,
+        studentId: true,
+        contractId: true,
+      },
     });
 
     if (!planExists) {
@@ -742,6 +836,25 @@ export async function PUT(req: NextRequest) {
     if (description !== undefined) data.description = description ? String(description).trim() : null;
     if (notes !== undefined) data.notes = notes ? String(notes).trim() : null;
     if (date !== undefined) data.date = date ? new Date(date + "T12:00:00") : null;
+
+    let nextContractId: string | null = null;
+
+    if (data.date) {
+      const activeContract = await findActiveWorkoutContract(planExists.studentId, data.date);
+
+      if (!activeContract) {
+        return NextResponse.json(
+          {
+            error:
+              "Este aluno não possui contrato ativo para a nova data do treino. Ajuste a data ou regularize o contrato no Financeiro.",
+          },
+          { status: 400 }
+        );
+      }
+
+      data.contractId = activeContract.id;
+      nextContractId = activeContract.id;
+    }
     if (objective !== undefined) data.objective = objective ? String(objective).trim() : null;
     if (focusAreas !== undefined) data.focusAreas = focusAreas ? String(focusAreas).trim() : null;
     if (intensity !== undefined) data.intensity = intensity ? String(intensity).trim() : null;
@@ -794,6 +907,7 @@ export async function PUT(req: NextRequest) {
           where: { workoutPlanId: id },
           data: {
             date: data.date,
+            ...(nextContractId ? { contractId: nextContractId } : {}),
           },
         });
       }
