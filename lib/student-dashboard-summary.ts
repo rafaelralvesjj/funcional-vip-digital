@@ -51,6 +51,7 @@ export type StudentDashboardSummary = {
     paidAt: string | null;
     amountCents: number;
     method: string | null;
+    paymentLinkUrl: string | null;
   } | null;
   uiState: StudentDashboardUiState;
   hasActiveAccess: boolean;
@@ -335,6 +336,7 @@ export async function getStudentDashboardSummary(
           paidAt: payment.paidAt ? toDateOnlyISOString(payment.paidAt) : null,
           amountCents: payment.amountCents,
           method: payment.method,
+          paymentLinkUrl: payment.paymentLinkUrl || null,
         }
       : null,
     uiState,
