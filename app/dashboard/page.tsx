@@ -195,11 +195,13 @@ export default async function DashboardPage() {
       userAuthId: true,
       onboardingCompleto: true,
       contractedTrainingDaysPerMonth: true,
+      commercialStatus: true,
       createdAt: true,
       user: {
         select: {
           id: true,
           name: true,
+          role: true,
         },
       },
     },
@@ -228,18 +230,30 @@ export default async function DashboardPage() {
 
   const professorIds = professors.map((professor) => professor.id);
 
+  function getCommercialStatus(student: { commercialStatus?: string | null }) {
+    return String(student.commercialStatus || 'SEM_CONTRATO_ATIVO').toUpperCase();
+  }
+
+  function hasActiveCommercialCycle(student: { commercialStatus?: string | null }) {
+    const status = getCommercialStatus(student);
+
+    return status === 'EXPERIENCIA_ATIVA' || status === 'CONTRATO_ATIVO';
+  }
+
   const studentsAwaitingAssignment = isGestor
     ? students.filter((student) => {
-        if (!student.onboardingCompleto) return false;
+        if (student.active === false) return false;
 
         const hasProfessorLinked =
-          Boolean(student.userId) && professorIds.includes(student.userId);
+          Boolean(student.userId) && professorIds.includes(student.userId || '');
 
-        const hasContractedDays =
-          typeof student.contractedTrainingDaysPerMonth === 'number' &&
-          student.contractedTrainingDaysPerMonth > 0;
-
-        return !hasProfessorLinked || !hasContractedDays;
+        /*
+         * Depois do fluxo experimental automático, o aluno pode ainda não ter
+         * preenchido avaliação/bioimpedância. Mesmo assim, se já tem experiência
+         * ativa ou contrato ativo e não tem professor, precisa aparecer no card
+         * "Alunos aguardando vínculo".
+         */
+        return hasActiveCommercialCycle(student) && !hasProfessorLinked;
       })
     : [];
 
@@ -266,7 +280,7 @@ export default async function DashboardPage() {
     const hasProfessorLinked = Boolean(student.userId) && professorIds.includes(student.userId || '');
     const weeklyLimit = getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth);
 
-    return hasProfessorLinked && Boolean(weeklyLimit);
+    return hasActiveCommercialCycle(student) && hasProfessorLinked && Boolean(weeklyLimit);
   });
 
   const eligibleStudentIds = studentsEligibleForWeeklyWorkout.map((student) => student.id);
