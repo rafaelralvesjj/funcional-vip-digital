@@ -1,41 +1,58 @@
 "use client";
+
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
 export default function AlunoRegisterPage() {
   const router = useRouter();
+
   const [form, setForm] = useState({
     name: "",
     email: "",
     phone: "",
     password: "",
     confirmPassword: "",
+    acceptedTerms: false,
   });
+
   const [imageUrl, setImageUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const { name, value, type, checked } = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  }
+
+  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
     if (!file) return;
+
     setUploading(true);
+
     const formData = new FormData();
     formData.append("file", file);
+
     try {
       const res = await fetch("/api/upload-image", {
         method: "POST",
         body: formData,
       });
+
       if (res.ok) {
         const data = await res.json();
         setImageUrl(data.url);
       } else {
-        const err = await res.json();
-        alert(`Erro ao enviar imagem: ${err.error}`);
+        const err = await res.json().catch(() => null);
+        alert(`Erro ao enviar imagem: ${err?.error || "tente novamente."}`);
       }
     } catch {
       alert("Erro ao conectar com o servidor");
@@ -43,169 +60,236 @@ export default function AlunoRegisterPage() {
       setUploading(false);
     }
   }
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     setError("");
-    if (!form.name || !form.email || !form.password) {
-      setError("Preencha todos os campos obrigatórios.");
+
+    if (!form.name || !form.email || !form.phone || !form.password) {
+      setError("Preencha nome, e-mail, telefone e senha.");
       return;
     }
+
     if (form.password.length < 6) {
       setError("A senha deve ter no mínimo 6 caracteres.");
       return;
     }
+
     if (form.password !== form.confirmPassword) {
       setError("As senhas não conferem.");
       return;
     }
+
+    if (!form.acceptedTerms) {
+      setError("Para iniciar a experiência gratuita, aceite o termo de experiência.");
+      return;
+    }
+
     setLoading(true);
+
     try {
       const res = await fetch("/api/aluno/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           name: form.name,
           email: form.email,
           phone: form.phone,
           password: form.password,
+          confirmPassword: form.confirmPassword,
           imageUrl: imageUrl || null,
+          acceptedTerms: form.acceptedTerms,
+          source: "LANDING_PAGE",
         }),
       });
-      const data = await res.json();
+
+      const data = await res.json().catch(() => null);
+
       if (!res.ok) {
-        setError(data.error || "Erro ao criar conta.");
+        setError(data?.error || "Erro ao criar conta.");
         setLoading(false);
         return;
       }
-      if (data.studentId) {
-        router.push(`/onboarding/${data.studentId}`);
+
+      const result = await signIn("credentials", {
+        email: form.email,
+        password: form.password,
+        redirect: false,
+      });
+
+      if (result?.ok) {
+        router.push("/aluno");
       } else {
-        const result = await signIn("credentials", {
-          email: form.email,
-          password: form.password,
-          redirect: false,
-        });
-        if (result?.ok) {
-          router.push("/aluno");
-        } else {
-          setError("Conta criada, mas erro ao fazer login. Faça login manualmente.");
-          router.push("/auth/signin");
-        }
+        setError("Conta criada, mas houve erro ao fazer login. Faça login manualmente.");
+        router.push("/auth/signin");
       }
     } catch {
       setError("Erro interno do servidor. Tente novamente.");
     } finally {
       setLoading(false);
     }
-  };
+  }
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+    <main className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-[#D4A373]">Funcional Vip Digital</h1>
-          <p className="text-[#a1a1a1] mt-1">Crie sua conta de aluno</p>
+          <h1 className="text-2xl font-bold text-[#D4A373]">
+            Funcional Vip Digital
+          </h1>
+          <p className="text-sm text-[#a1a1a1] mt-2">
+            Crie sua conta para iniciar sua experiência gratuita
+          </p>
         </div>
-        <form onSubmit={handleSubmit} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-6 space-y-4">
+
+        <form
+          onSubmit={handleSubmit}
+          className="bg-[#111] border border-[#ffffff10] rounded-2xl p-6 space-y-4"
+        >
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg p-3">
+            <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
               {error}
             </div>
           )}
 
-          {/* 🔥 Foto do aluno */}
+          <div className="rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 px-4 py-3">
+            <p className="text-sm text-[#D4A373] font-semibold">
+              Experiência gratuita de 1 mês
+            </p>
+            <p className="text-xs text-[#a1a1a1] mt-1">
+              Seu cadastro ativa uma experiência grátis. Depois disso, a equipe irá vincular um professor para liberar seus primeiros treinos.
+            </p>
+          </div>
+
           <div>
-            <label className="block text-sm text-[#e5e5e5] mb-1">
-              📸 Sua foto <span className="text-[#525252]">(opcional)</span>
+            <label className="block text-sm text-[#d6d6d6] mb-1">
+              Sua foto <span className="text-[#6b6b6b]">(opcional)</span>
             </label>
+
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/*"
               onChange={handleImageUpload}
-              className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-xs hover:file:bg-[#b88a5e]"
+              className="block w-full text-sm text-[#a1a1a1] file:mr-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#0a0a0a]"
             />
-            {uploading && <p className="text-xs text-[#D4A373] mt-1">Enviando foto...</p>}
+
+            {uploading && (
+              <p className="text-xs text-[#D4A373] mt-1">Enviando foto...</p>
+            )}
+
             {imageUrl && !uploading && (
-              <p className="text-xs text-green-500 mt-1">✅ Foto enviada!</p>
+              <p className="text-xs text-green-400 mt-1">✅ Foto enviada!</p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm text-[#a1a1a1] mb-1">Nome completo *</label>
+            <label className="block text-sm text-[#d6d6d6] mb-1">
+              Nome completo *
+            </label>
             <input
-              type="text"
               name="name"
               value={form.name}
               onChange={handleChange}
+              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
               placeholder="Seu nome"
-              required
-              className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
+              autoComplete="name"
             />
           </div>
+
           <div>
-            <label className="block text-sm text-[#a1a1a1] mb-1">E-mail *</label>
+            <label className="block text-sm text-[#d6d6d6] mb-1">
+              E-mail *
+            </label>
             <input
-              type="email"
               name="email"
+              type="email"
               value={form.email}
               onChange={handleChange}
-              placeholder="seu@email.com"
-              required
-              className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
+              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+              placeholder="voce@email.com"
+              autoComplete="email"
             />
           </div>
+
           <div>
-            <label className="block text-sm text-[#a1a1a1] mb-1">Telefone</label>
+            <label className="block text-sm text-[#d6d6d6] mb-1">
+              WhatsApp *
+            </label>
             <input
-              type="tel"
               name="phone"
               value={form.phone}
               onChange={handleChange}
+              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
               placeholder="(61) 99999-9999"
-              className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
+              autoComplete="tel"
             />
           </div>
+
           <div>
-            <label className="block text-sm text-[#a1a1a1] mb-1">Senha *</label>
+            <label className="block text-sm text-[#d6d6d6] mb-1">
+              Senha *
+            </label>
             <input
-              type="password"
               name="password"
+              type="password"
               value={form.password}
               onChange={handleChange}
+              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
               placeholder="Mínimo 6 caracteres"
-              required
-              minLength={6}
-              className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
+              autoComplete="new-password"
             />
           </div>
+
           <div>
-            <label className="block text-sm text-[#a1a1a1] mb-1">Confirmar senha *</label>
+            <label className="block text-sm text-[#d6d6d6] mb-1">
+              Confirmar senha *
+            </label>
             <input
-              type="password"
               name="confirmPassword"
+              type="password"
               value={form.confirmPassword}
               onChange={handleChange}
-              placeholder="Repita a senha"
-              required
-              className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#D4A373] transition"
+              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+              placeholder="Repita sua senha"
+              autoComplete="new-password"
             />
           </div>
+
+          <label className="flex gap-3 rounded-xl bg-[#1a1a1a] border border-[#ffffff10] px-4 py-3 cursor-pointer">
+            <input
+              name="acceptedTerms"
+              type="checkbox"
+              checked={form.acceptedTerms}
+              onChange={handleChange}
+              className="mt-1 h-4 w-4 accent-[#D4A373]"
+            />
+            <span className="text-xs text-[#d6d6d6] leading-relaxed">
+              Li e aceito o{" "}
+              <strong className="text-[#D4A373]">
+                Termo de Experiência Gratuita
+              </strong>
+              . Entendo que o período experimental tem duração limitada, não gera cobrança automática e que, para continuar após o período gratuito, será necessário contratar um plano.
+            </span>
+          </label>
+
           <button
             type="submit"
-            disabled={loading || uploading}
-            className="w-full bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg py-3 hover:bg-[#c49463] transition disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading || !form.acceptedTerms}
+            className="w-full rounded-xl bg-[#D4A373] px-4 py-3 font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Criando conta..." : "Criar conta"}
+            {loading ? "Criando experiência..." : "Começar experiência gratuita"}
           </button>
-          <div className="text-center pt-2">
-            <p className="text-sm text-[#a1a1a1]">
-              Já tem conta?{" "}
-              <Link href="/auth/signin" className="text-[#D4A373] hover:underline">
-                Fazer login
-              </Link>
-            </p>
-          </div>
+
+          <p className="text-center text-sm text-[#a1a1a1]">
+            Já tem conta?{" "}
+            <Link href="/auth/signin" className="text-[#D4A373] hover:underline">
+              Fazer login
+            </Link>
+          </p>
         </form>
       </div>
-    </div>
+    </main>
   );
 }
