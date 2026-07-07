@@ -270,7 +270,7 @@ export default function FinanceiroPage() {
     if (initialStudentId) {
       setPendingStudentIdFromUrl(initialStudentId);
       setStudentId(initialStudentId);
-      setFilter("TODOS");
+      setFilter("EXPERIENCIA");
     }
 
     loadData();
@@ -279,15 +279,49 @@ export default function FinanceiroPage() {
   useEffect(() => {
     if (!contractsData || !pendingStudentIdFromUrl) return;
 
-    const exists = contractsData.students.some((student) => student.id === pendingStudentIdFromUrl);
+    const selectedStudent = contractsData.students.find(
+      (student) => student.id === pendingStudentIdFromUrl
+    );
 
-    if (exists) {
-      setStudentId(pendingStudentIdFromUrl);
+    if (!selectedStudent) {
+      setMessage({
+        type: "error",
+        text: "Aluno recebido pela URL, mas não encontrado no Financeiro.",
+      });
+      return;
+    }
+
+    setStudentId(pendingStudentIdFromUrl);
+
+    const activeTrialContract = contractsData.contracts.find(
+      (contract) =>
+        contract.studentId === pendingStudentIdFromUrl &&
+        contract.type === "TRIAL" &&
+        contract.status === "ACTIVE"
+    );
+
+    if (activeTrialContract) {
+      setConversionTrialContractId(activeTrialContract.id);
+      setFilter("EXPERIENCIA");
       setMessage({
         type: "success",
-        text: "Aluno selecionado. Agora escolha o plano e crie a experiência grátis ou contrato.",
+        text: `Experiência de ${selectedStudent.name} selecionada. Agora escolha o plano pago e conclua a conversão.`,
       });
+
+      window.setTimeout(() => {
+        document.getElementById("converter-experiencia")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 150);
+
+      return;
     }
+
+    setMessage({
+      type: "error",
+      text: `Aluno ${selectedStudent.name} selecionado, mas não encontramos uma experiência ativa para converter. Verifique se a experiência já foi finalizada, vencida ou convertida.`,
+    });
   }, [contractsData, pendingStudentIdFromUrl]);
 
   const selectedPlan = useMemo(() => {
@@ -729,12 +763,18 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
+      <section id="converter-experiencia" className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4 scroll-mt-6">
         <div>
           <h2 className="text-lg font-semibold text-[#D4A373]">Converter experiência para plano pago</h2>
           <p className="text-xs text-[#a1a1a1] mt-1">
             Use quando o aluno em experiência decidiu continuar. Se já pagou, marque como Pago para ativar o contrato imediatamente.
           </p>
+
+          {pendingStudentIdFromUrl && (
+            <div className="mt-3 rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 p-3 text-xs text-[#f5f5f5]">
+              Você veio da fila de alunos interessados em continuar. Quando houver uma experiência ativa para esse aluno, ela já fica selecionada aqui.
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleConvertTrial} className="space-y-4">
