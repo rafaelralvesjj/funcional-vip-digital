@@ -1,4 +1,5 @@
 import type { StudentDashboardSummary } from "@/lib/student-dashboard-summary";
+import { ContinueTrialButton } from "@/components/ContinueTrialButton";
 
 type Props = {
   summary: NonNullable<StudentDashboardSummary>;
@@ -95,6 +96,11 @@ export function StudentDashboardStatusCard({ summary }: Props) {
   const professor = summary.professor;
   const payment = summary.payment;
   const statusContent = getStatusContent(summary);
+  const canRequestTrialContinuation =
+    summary.flags.isTrial &&
+    Boolean(cycle) &&
+    summary.uiState !== "SEM_CONTRATO_ATIVO" &&
+    summary.uiState !== "SUSPENSO_POR_PAGAMENTO";
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -174,14 +180,15 @@ export function StudentDashboardStatusCard({ summary }: Props) {
         </div>
       )}
 
-      {summary.flags.isTrial && (
-        <div className="mt-5 rounded-2xl border border-zinc-200 p-4">
-          <h3 className="text-sm font-semibold text-zinc-950">
+      {canRequestTrialContinuation && (
+        <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <h3 className="text-sm font-semibold text-emerald-950">
             Gostou da experiência?
           </h3>
-          <p className="mt-1 text-sm leading-6 text-zinc-600">
-            Para continuar com o acompanhamento após o período experimental, fale com a equipe e escolha o melhor plano para você.
+          <p className="mt-1 text-sm leading-6 text-emerald-900">
+            Clique em “Quero continuar” para avisar nossa equipe que deseja seguir com um plano pago após o período experimental.
           </p>
+          <ContinueTrialButton />
         </div>
       )}
     </section>
