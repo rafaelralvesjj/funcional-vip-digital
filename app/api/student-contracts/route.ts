@@ -130,6 +130,7 @@ function normalizeContract(contract: any) {
     paymentMode: contract.paymentMode,
     source: contract.source,
     notes: contract.notes,
+    renewedFromContractId: contract.renewedFromContractId || null,
     acceptedAt: contract.acceptedAt,
     activatedAt: contract.activatedAt,
     finalizedAt: contract.finalizedAt,
@@ -287,7 +288,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const [contracts, students, plans] = await Promise.all([
+    const [contracts, students, plans, trialContinuationRequests] = await Promise.all([
       prisma.studentContract.findMany({
         where,
         include: {
@@ -383,6 +384,58 @@ export async function GET(request: NextRequest) {
           },
         ],
       }),
+
+      canManage(role)
+        ? prisma.studentCareEvent.findMany({
+            where: {
+              eventType: "TRIAL_CONTINUATION_REQUEST",
+              status: {
+                in: ["ABERTO", "EM_ANDAMENTO", "PENDENTE"],
+              },
+            },
+            select: {
+              id: true,
+              studentId: true,
+              status: true,
+              severity: true,
+              title: true,
+              description: true,
+              createdAt: true,
+              updatedAt: true,
+              student: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                  commercialStatus: true,
+                  userId: true,
+                  user: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+              contract: {
+                select: {
+                  id: true,
+                  type: true,
+                  status: true,
+                  startDate: true,
+                  endDate: true,
+                  contractNumber: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 50,
+          })
+        : Promise.resolve([]),
     ]);
 
     const normalizedContracts = contracts.map(normalizeContract);
@@ -390,36 +443,139 @@ export async function GET(request: NextRequest) {
     const normalizedPlans = plans.map(normalizePlan);
 
     const activeContracts = normalizedContracts.filter((contract) => contract.status === "ACTIVE");
+    const activeTrialContracts = activeContracts.filter((contract) => contract.type === "TRIAL");
+    const activePaidContracts = activeContracts.filter((contract) => contract.type === "PAID");
+
     const endingSoonContracts = normalizedContracts.filter((contract) => {
       const endDate = new Date(contract.endDate);
       return contract.status === "ACTIVE" && endDate >= now && endDate <= in7Days;
     });
+
+    const trialEndingSoonContracts = endingSoonContracts.filter((contract) => contract.type === "TRIAL");
+    const paidEndingSoonContracts = endingSoonContracts.filter((contract) => contract.type === "PAID");
+
     const expiredContracts = normalizedContracts.filter((contract) => {
       const endDate = new Date(contract.endDate);
       return contract.status === "ACTIVE" && endDate < now;
     });
-    const trialContracts = normalizedContracts.filter((contract) => contract.type === "TRIAL" && contract.status === "ACTIVE");
+
+    const expiredTrialContracts = expiredContracts.filter((contract) => contract.type === "TRIAL");
+    const expiredPaidContracts = expiredContracts.filter((contract) => contract.type === "PAID");
+
+    const awaitingPaymentContracts = normalizedContracts.filter(
+      (contract) => contract.status === "AWAITING_PAYMENT"
+    );
+
+    const suspendedContracts = normalizedContracts.filter(
+      (contract) => contract.status === "SUSPENDED"
+    );
+
+    const finalizedContracts = normalizedContracts.filter(
+      (contract) => contract.status === "FINALIZED"
+    );
+
+    const cancelledContracts = normalizedContracts.filter(
+      (contract) => contract.status === "CANCELLED"
+    );
+
+    const convertedFromTrialContracts = normalizedContracts.filter((contract) => {
+      return (
+        contract.type === "PAID" &&
+        (contract.source === "CONVERSAO_EXPERIENCIA" || Boolean(contract.renewedFromContractId))
+      );
+    });
+
     const noContractStudents = normalizedStudents.filter((student) => {
       return !activeContracts.some((contract) => contract.studentId === student.id);
     });
 
+    const awaitingPaymentStudents = normalizedStudents.filter((student) => {
+      return awaitingPaymentContracts.some((contract) => contract.studentId === student.id);
+    });
+
+    const studentCommercialStatusCounts = normalizedStudents.reduce<Record<string, number>>(
+      (acc, student) => {
+        const key = student.commercialStatus || "SEM_CONTRATO_ATIVO";
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      },
+      {}
+    );
+
     const expectedRevenueCents = normalizedContracts
       .filter((contract) => contract.status === "ACTIVE" || contract.status === "AWAITING_PAYMENT")
       .reduce((sum, contract) => sum + Number(contract.priceCents || 0), 0);
+
+    const activePaidRevenueCents = activePaidContracts.reduce(
+      (sum, contract) => sum + Number(contract.priceCents || 0),
+      0
+    );
+
+    const awaitingPaymentRevenueCents = awaitingPaymentContracts.reduce(
+      (sum, contract) => sum + Number(contract.priceCents || 0),
+      0
+    );
+
+    const conversionBase = activeTrialContracts.length + convertedFromTrialContracts.length;
+    const trialConversionRatePercent =
+      conversionBase > 0
+        ? Math.round((convertedFromTrialContracts.length / conversionBase) * 100)
+        : 0;
+
+    const normalizedTrialContinuationRequests = trialContinuationRequests.map((event: any) => ({
+      id: event.id,
+      studentId: event.studentId,
+      studentName: event.student?.name || "Aluno",
+      studentEmail: event.student?.email || null,
+      studentPhone: event.student?.phone || null,
+      studentCommercialStatus: event.student?.commercialStatus || null,
+      professorId: event.student?.userId || null,
+      professorName: event.student?.user?.name || null,
+      contractId: event.contract?.id || null,
+      contractNumber: event.contract?.contractNumber || null,
+      contractType: event.contract?.type || null,
+      contractStatus: event.contract?.status || null,
+      contractEndDate: event.contract?.endDate || null,
+      status: event.status,
+      severity: event.severity,
+      title: event.title,
+      description: event.description,
+      createdAt: event.createdAt,
+      updatedAt: event.updatedAt,
+    }));
 
     return NextResponse.json({
       contracts: normalizedContracts,
       students: normalizedStudents,
       plans: normalizedPlans,
       noContractStudents,
+      awaitingPaymentStudents,
+      trialContinuationRequests: normalizedTrialContinuationRequests,
       metrics: {
         totalContracts: normalizedContracts.length,
         activeContracts: activeContracts.length,
+        activePaidContracts: activePaidContracts.length,
+        activeTrialContracts: activeTrialContracts.length,
         endingSoonContracts: endingSoonContracts.length,
+        trialEndingSoonContracts: trialEndingSoonContracts.length,
+        paidEndingSoonContracts: paidEndingSoonContracts.length,
         expiredContracts: expiredContracts.length,
-        trialContracts: trialContracts.length,
+        expiredTrialContracts: expiredTrialContracts.length,
+        expiredPaidContracts: expiredPaidContracts.length,
+        trialContracts: activeTrialContracts.length,
+        awaitingPaymentContracts: awaitingPaymentContracts.length,
+        suspendedContracts: suspendedContracts.length,
+        finalizedContracts: finalizedContracts.length,
+        cancelledContracts: cancelledContracts.length,
         noContractStudents: noContractStudents.length,
+        awaitingPaymentStudents: awaitingPaymentStudents.length,
+        openTrialContinuationRequests: normalizedTrialContinuationRequests.length,
+        convertedFromTrialContracts: convertedFromTrialContracts.length,
+        trialConversionRatePercent,
         expectedRevenueCents,
+        activePaidRevenueCents,
+        awaitingPaymentRevenueCents,
+        studentCommercialStatusCounts,
       },
     });
   } catch (error: any) {
