@@ -205,6 +205,18 @@ export default function FinanceiroPage() {
   const [paymentNotes, setPaymentNotes] = useState("");
   const [activateContractOnPaid, setActivateContractOnPaid] = useState(true);
 
+  const [conversionTrialContractId, setConversionTrialContractId] = useState("");
+  const [conversionPlanId, setConversionPlanId] = useState("");
+  const [conversionDurationMonths, setConversionDurationMonths] = useState("1");
+  const [conversionStartDate, setConversionStartDate] = useState(todayIso());
+  const [conversionDueDate, setConversionDueDate] = useState(todayIso());
+  const [conversionPriceReais, setConversionPriceReais] = useState("");
+  const [conversionPaymentMethod, setConversionPaymentMethod] = useState("PIX");
+  const [conversionPaymentStatus, setConversionPaymentStatus] = useState("EM_ABERTO");
+  const [conversionPaymentLinkUrl, setConversionPaymentLinkUrl] = useState("");
+  const [conversionNotes, setConversionNotes] = useState("");
+  const [convertingTrial, setConvertingTrial] = useState(false);
+
   async function loadData() {
     setLoading(true);
     setMessage(null);
@@ -302,6 +314,29 @@ export default function FinanceiroPage() {
       setPaymentAmountReais(String(selectedPaymentContract.priceCents / 100));
     }
   }, [selectedPaymentContract?.id]);
+
+  const activeTrialContracts = useMemo(() => {
+    return (contractsData?.contracts || []).filter(
+      (contract) => contract.type === "TRIAL" && contract.status === "ACTIVE"
+    );
+  }, [contractsData]);
+
+  const paidPlans = useMemo(() => {
+    return (contractsData?.plans || []).filter((plan) => !plan.allowTrial && plan.active !== false);
+  }, [contractsData]);
+
+  const selectedConversionPlan = useMemo(() => {
+    return paidPlans.find((plan) => plan.id === conversionPlanId) || null;
+  }, [paidPlans, conversionPlanId]);
+
+  useEffect(() => {
+    if (!selectedConversionPlan) return;
+
+    setConversionDurationMonths(String(selectedConversionPlan.durationMonths || 1));
+    setConversionPriceReais(
+      selectedConversionPlan.priceCents ? String(selectedConversionPlan.priceCents / 100) : ""
+    );
+  }, [selectedConversionPlan?.id]);
 
   const calculatedPreview = useMemo(() => {
     const months = Number(durationMonths || selectedPlan?.durationMonths || 1);
@@ -555,6 +590,84 @@ export default function FinanceiroPage() {
     }
   }
 
+  async function handleConvertTrial(event: React.FormEvent) {
+    event.preventDefault();
+
+    if (!conversionTrialContractId || !conversionPlanId) {
+      setMessage({
+        type: "error",
+        text: "Selecione a experiência e o plano pago.",
+      });
+      return;
+    }
+
+    const priceCents = moneyToCents(conversionPriceReais);
+
+    if (priceCents <= 0) {
+      setMessage({
+        type: "error",
+        text: "Informe o valor do contrato pago.",
+      });
+      return;
+    }
+
+    setConvertingTrial(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/student-contracts/convert-trial", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          trialContractId: conversionTrialContractId,
+          planId: conversionPlanId,
+          durationMonths: Number(conversionDurationMonths || 1),
+          startDate: conversionStartDate,
+          dueDate: conversionDueDate,
+          priceCents,
+          paymentMethod: conversionPaymentMethod,
+          paymentStatus: conversionPaymentStatus,
+          paymentLinkUrl: conversionPaymentLinkUrl,
+          paymentNotes: conversionNotes,
+          notes: conversionNotes,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text:
+            json?.message ||
+            "Experiência convertida para contrato pago.",
+        });
+
+        setConversionPaymentLinkUrl("");
+        setConversionNotes("");
+        setConversionPaymentStatus("EM_ABERTO");
+        setConversionTrialContractId("");
+        setConversionPlanId("");
+
+        await loadData();
+      } else {
+        setMessage({
+          type: "error",
+          text: json?.error || "Erro ao converter experiência.",
+        });
+      }
+    } catch {
+      setMessage({
+        type: "error",
+        text: "Erro ao converter experiência.",
+      });
+    }
+
+    setConvertingTrial(false);
+  }
+
   const metrics = contractsData?.metrics;
   const paymentMetrics = paymentsData?.metrics;
 
@@ -615,6 +728,154 @@ export default function FinanceiroPage() {
           <p className="text-2xl font-bold text-[#D4A373]">{metrics?.noContractStudents || 0}</p>
         </div>
       </div>
+
+      <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-[#D4A373]">Converter experiência para plano pago</h2>
+          <p className="text-xs text-[#a1a1a1] mt-1">
+            Use quando o aluno em experiência decidiu continuar. Se já pagou, marque como Pago para ativar o contrato imediatamente.
+          </p>
+        </div>
+
+        <form onSubmit={handleConvertTrial} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Experiência ativa</label>
+              <select
+                value={conversionTrialContractId}
+                onChange={(event) => setConversionTrialContractId(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="">Selecione...</option>
+                {activeTrialContracts.map((contract) => (
+                  <option key={contract.id} value={contract.id}>
+                    {contract.studentName} · vence em {formatDate(contract.endDate)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Plano pago</label>
+              <select
+                value={conversionPlanId}
+                onChange={(event) => setConversionPlanId(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="">Selecione...</option>
+                {paidPlans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name} · {formatMoney(plan.priceCents)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Duração</label>
+              <select
+                value={conversionDurationMonths}
+                onChange={(event) => setConversionDurationMonths(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                {[1, 2, 3, 6, 12].map((month) => (
+                  <option key={month} value={month}>
+                    {month} {month === 1 ? "mês" : "meses"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Início do contrato pago</label>
+              <input
+                type="date"
+                value={conversionStartDate}
+                onChange={(event) => setConversionStartDate(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Vencimento do pagamento</label>
+              <input
+                type="date"
+                value={conversionDueDate}
+                onChange={(event) => setConversionDueDate(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Valor</label>
+              <input
+                value={conversionPriceReais}
+                onChange={(event) => setConversionPriceReais(event.target.value)}
+                placeholder="Ex.: 297,00"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Forma</label>
+              <select
+                value={conversionPaymentMethod}
+                onChange={(event) => setConversionPaymentMethod(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="PIX">Pix</option>
+                <option value="CARTAO">Cartão</option>
+                <option value="TRANSFERENCIA">Transferência</option>
+                <option value="DINHEIRO">Dinheiro</option>
+                <option value="LINK_EXTERNO">Link externo</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Status do pagamento</label>
+              <select
+                value={conversionPaymentStatus}
+                onChange={(event) => setConversionPaymentStatus(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="EM_ABERTO">Em aberto</option>
+                <option value="PAGO">Pago</option>
+                <option value="PARCIAL">Parcial</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Link de pagamento</label>
+              <input
+                value={conversionPaymentLinkUrl}
+                onChange={(event) => setConversionPaymentLinkUrl(event.target.value)}
+                placeholder="Cole o link, se houver"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+          </div>
+
+          <textarea
+            value={conversionNotes}
+            onChange={(event) => setConversionNotes(event.target.value)}
+            placeholder="Observações da conversão..."
+            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+          />
+
+          <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-xs text-[#a1a1a1]">
+            Se o status for <strong className="text-green-300">Pago</strong>, o sistema finaliza a experiência e ativa o contrato pago.
+            Se ficar <strong className="text-yellow-300">Em aberto</strong>, o contrato pago fica aguardando pagamento e a experiência continua ativa.
+          </div>
+
+          <button
+            type="submit"
+            disabled={convertingTrial || activeTrialContracts.length === 0}
+            className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
+          >
+            {convertingTrial ? "Convertendo..." : "Converter experiência"}
+          </button>
+        </form>
+      </section>
 
       <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div>
