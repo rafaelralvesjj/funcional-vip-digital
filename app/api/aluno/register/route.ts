@@ -510,7 +510,7 @@ export async function POST(req: NextRequest) {
           title: "Novo aluno em experiência aguardando professor",
           content: buildManagementNewTrialStudentContent({
             studentName: student.name,
-            studentEmail: authUser.email,
+            studentEmail: email,
             studentPhone: student.phone,
             endDateText,
             workoutsPerWeek: contract.workoutsPerWeek,
@@ -529,7 +529,7 @@ export async function POST(req: NextRequest) {
         userId: authUser.id,
         studentId: student.id,
         studentName: student.name,
-        email: authUser.email,
+        email,
         phone: student.phone,
         contractId: contract.id,
         contractType: contract.type,
