@@ -58,6 +58,15 @@ function getAppLoginUrl(): string {
   return `${appUrl.replace(/\/$/, "")}/auth/signin`;
 }
 
+function getAppManagementAssignmentUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/dashboard/gestor/vincular-alunos`;
+}
+
 function escapeHtml(value: string): string {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -100,6 +109,38 @@ function buildTrialWelcomeContent({
     "",
     "Este é um ciclo gratuito de experiência. Para continuar após o período experimental, será necessário contratar um plano.",
   ].join("\n");
+}
+
+function buildManagementNewTrialStudentContent({
+  studentName,
+  studentEmail,
+  studentPhone,
+  endDateText,
+  workoutsPerWeek,
+  workoutsPerMonth,
+  source,
+}: {
+  studentName: string;
+  studentEmail: string;
+  studentPhone?: string | null;
+  endDateText: string;
+  workoutsPerWeek: number;
+  workoutsPerMonth: number;
+  source: string;
+}): string {
+  return [
+    `Novo aluno iniciou experiência gratuita: ${studentName}.`,
+    "",
+    `E-mail: ${studentEmail}`,
+    studentPhone ? `WhatsApp: ${studentPhone}` : null,
+    `Origem: ${source}.`,
+    `Experiência válida até: ${endDateText}.`,
+    `Plano da experiência: ${workoutsPerWeek} treino(s)/semana e ${workoutsPerMonth} treino(s)/mês.`,
+    "",
+    "Ação recomendada: acessar Vincular Alunos, definir o professor responsável e orientar a montagem dos primeiros treinos.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 
@@ -426,20 +467,25 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      const notificationAuthor = await tx.user.findFirst({
+      const managementRecipients = await tx.user.findMany({
         where: {
           role: {
             in: ["GESTOR", "ADMIN"],
           },
+          active: true,
         },
         select: {
           id: true,
+          name: true,
+          email: true,
         },
         orderBy: {
           createdAt: "asc",
         },
       });
 
+      const notificationAuthor = managementRecipients[0] || null;
+      const managementAuthorId = notificationAuthor?.id || authUser.id;
       const endDateText = formatDatePtBr(contract.endDate);
 
       const notice = await tx.notice.create({
@@ -454,7 +500,27 @@ export async function POST(req: NextRequest) {
           type: "COMERCIAL",
           targetRole: "STUDENT",
           studentId: student.id,
-          authorId: notificationAuthor?.id || authUser.id,
+          authorId: managementAuthorId,
+          expiresAt: contract.endDate,
+        },
+      });
+
+      const managementNotice = await tx.notice.create({
+        data: {
+          title: "Novo aluno em experiência aguardando professor",
+          content: buildManagementNewTrialStudentContent({
+            studentName: student.name,
+            studentEmail: authUser.email,
+            studentPhone: student.phone,
+            endDateText,
+            workoutsPerWeek: contract.workoutsPerWeek,
+            workoutsPerMonth: contract.workoutsPerMonth,
+            source,
+          }),
+          type: "COMERCIAL",
+          targetRole: "GESTOR",
+          studentId: student.id,
+          authorId: authUser.id,
           expiresAt: contract.endDate,
         },
       });
@@ -464,6 +530,7 @@ export async function POST(req: NextRequest) {
         studentId: student.id,
         studentName: student.name,
         email: authUser.email,
+        phone: student.phone,
         contractId: contract.id,
         contractType: contract.type,
         commercialStatus: student.commercialStatus,
@@ -473,6 +540,12 @@ export async function POST(req: NextRequest) {
         workoutsPerMonth: contract.workoutsPerMonth,
         totalContractedWorkouts: contract.totalContractedWorkouts,
         welcomeNoticeId: notice.id,
+        managementNoticeId: managementNotice.id,
+        managementRecipients: managementRecipients.map((item) => ({
+          id: item.id,
+          name: item.name,
+          email: item.email,
+        })),
       };
     });
 
@@ -544,10 +617,80 @@ export async function POST(req: NextRequest) {
       console.error("Erro ao enviar e-mail da experiência gratuita:", emailError);
     }
 
+    try {
+      const managementEmails = Array.from(
+        new Set(
+          (result.managementRecipients || [])
+            .map((item: { email?: string | null }) => item.email)
+            .filter((item: string | null | undefined): item is string => Boolean(item))
+        )
+      );
+
+      if (managementEmails.length > 0) {
+        const assignmentUrl = getAppManagementAssignmentUrl();
+        const endDateText = formatDatePtBr(result.endDate);
+        const safeStudentName = escapeHtml(result.studentName);
+        const safeStudentEmail = escapeHtml(result.email);
+        const safeStudentPhone = escapeHtml(result.phone || "-");
+        const safeEndDateText = escapeHtml(endDateText);
+        const safeAssignmentUrl = escapeHtml(assignmentUrl);
+
+        await Promise.allSettled(
+          managementEmails.map((to) =>
+            sendEmail({
+              to,
+              subject: "Novo aluno em experiência aguardando professor",
+              text: [
+                `Novo aluno iniciou experiência gratuita: ${result.studentName}.`,
+                "",
+                `E-mail: ${result.email}`,
+                result.phone ? `WhatsApp: ${result.phone}` : null,
+                `Experiência válida até: ${endDateText}.`,
+                `Plano da experiência: ${result.workoutsPerWeek} treino(s)/semana e ${result.workoutsPerMonth} treino(s)/mês.`,
+                "",
+                "Ação recomendada: acessar Vincular Alunos, definir o professor responsável e orientar a montagem dos primeiros treinos.",
+                "",
+                `Abrir Vincular Alunos: ${assignmentUrl}`,
+              ]
+                .filter(Boolean)
+                .join("\n"),
+              html: `
+                <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+                  <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+                    <h2 style="color:#D4A373; margin:0 0 16px;">Novo aluno em experiência</h2>
+
+                    <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+                      <strong>${safeStudentName}</strong> iniciou uma experiência gratuita no Funcional Vip Digital.
+                    </p>
+
+                    <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                      E-mail: <strong style="color:#f5f5f5;">${safeStudentEmail}</strong><br />
+                      WhatsApp: <strong style="color:#f5f5f5;">${safeStudentPhone}</strong><br />
+                      Experiência válida até: <strong style="color:#f5f5f5;">${safeEndDateText}</strong>
+                    </p>
+
+                    <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                      Ação recomendada: vincular um professor responsável para que os primeiros treinos possam ser preparados.
+                    </p>
+
+                    <a href="${safeAssignmentUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+                      Abrir Vincular Alunos
+                    </a>
+                  </div>
+                </div>
+              `,
+            })
+          )
+        );
+      }
+    } catch (managementEmailError) {
+      console.error("Erro ao enviar e-mail para gestão sobre novo aluno:", managementEmailError);
+    }
+
     return NextResponse.json({
       ok: true,
       message:
-        "Cadastro criado, experiência gratuita ativada e aviso enviado ao aluno. Agora a equipe irá vincular um professor para liberar os primeiros treinos.",
+        "Cadastro criado, experiência gratuita ativada, aluno avisado e gestão notificada para vincular professor.",
       ...result,
     });
   } catch (error: any) {
