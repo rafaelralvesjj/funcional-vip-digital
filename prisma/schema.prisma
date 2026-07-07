@@ -39,8 +39,9 @@ model User {
   careEventsAuthored  StudentCareEvent[] @relation("CareEventAuthor")
   careEventsProfessor StudentCareEvent[] @relation("CareEventProfessor")
   careEventsResolved  StudentCareEvent[] @relation("CareEventResolvedBy")
-  contractsProfessor  StudentContract[]  @relation("ContractProfessor")
-  contractsCreated    StudentContract[]  @relation("ContractCreatedBy")
+  contractsProfessor      StudentContract[]  @relation("ContractProfessor")
+  contractsCreated        StudentContract[]  @relation("ContractCreatedBy")
+  contractPaymentsCreated ContractPayment[]   @relation("PaymentCreatedBy")
 
   @@map("users")
 }
@@ -102,8 +103,9 @@ model Student {
   workouts         Workout[]
   avaliacoes       Avaliacao[]
   noticeReads      NoticeRead[]
-  careEvents      StudentCareEvent[]
-  contracts       StudentContract[]
+  careEvents       StudentCareEvent[]
+  contracts        StudentContract[]
+  contractPayments ContractPayment[]
 
   @@map("students")
 }
@@ -337,12 +339,43 @@ model StudentContract {
   workouts            Workout[]
   careEvents          StudentCareEvent[]
   evolutionFeedbacks  EvolutionFeedback[]
+  payments            ContractPayment[]
 
   @@index([studentId])
   @@index([status])
   @@index([commercialStatus])
   @@index([startDate, endDate])
   @@map("student_contracts")
+}
+
+
+model ContractPayment {
+  id                String    @id @default(uuid())
+  contractId        String    @map("contract_id")
+  studentId         String    @map("student_id")
+  amountCents       Int       @default(0) @map("amount_cents")
+  dueDate           DateTime  @map("due_date")
+  paidAt            DateTime? @map("paid_at")
+  status            String    @default("EM_ABERTO")
+  method            String?   @default("PIX")
+  provider          String?
+  paymentLinkUrl    String?   @map("payment_link_url") @db.Text
+  externalReference String?   @map("external_reference")
+  receiptUrl        String?   @map("receipt_url") @db.Text
+  notes             String?   @db.Text
+  createdById       String?   @map("created_by_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  contract  StudentContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  student   Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy User?           @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+
+  @@index([contractId])
+  @@index([studentId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("contract_payments")
 }
 
 model Notice {
