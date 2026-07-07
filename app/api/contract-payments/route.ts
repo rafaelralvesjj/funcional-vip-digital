@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { sendEmail } from "@/lib/sendEmail";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -151,6 +152,237 @@ async function activateContractAfterPayment(tx: any, contractId: string) {
   });
 
   return updatedContract;
+}
+
+function getAppLoginUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/auth/signin`;
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDatePtBr(value?: Date | string | null): string {
+  if (!value) return "-";
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatMoney(cents?: number | null): string {
+  const value = Number(cents || 0) / 100;
+
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+async function getStudentAuthEmail(student: {
+  email?: string | null;
+  userAuthId?: string | null;
+}): Promise<string | null> {
+  if (student.email) return student.email;
+
+  if (!student.userAuthId) return null;
+
+  const authUser = await prisma.user.findUnique({
+    where: {
+      id: student.userAuthId,
+    },
+    select: {
+      email: true,
+    },
+  });
+
+  return authUser?.email || null;
+}
+
+async function notifyPaymentStatusChange({
+  paymentId,
+  status,
+  authorId,
+  contractActivated,
+}: {
+  paymentId: string;
+  status: string;
+  authorId: string;
+  contractActivated: boolean;
+}) {
+  if (!paymentId || !authorId) return;
+
+  const normalizedStatus = String(status || "").toUpperCase();
+
+  if (normalizedStatus !== "PAGO" && normalizedStatus !== "ATRASADO") {
+    return;
+  }
+
+  const payment = await prisma.contractPayment.findUnique({
+    where: {
+      id: paymentId,
+    },
+    include: {
+      student: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          userAuthId: true,
+        },
+      },
+      contract: {
+        include: {
+          plan: true,
+          student: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              userAuthId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!payment) return;
+
+  const student = payment.student || payment.contract?.student;
+
+  if (!student?.id) return;
+
+  const studentName = student.name || "Aluno";
+  const studentEmail = await getStudentAuthEmail(student);
+  const planName = payment.contract?.plan?.name || "seu plano";
+  const amountText = formatMoney(payment.amountCents);
+  const dueDateText = formatDatePtBr(payment.dueDate);
+  const paidAtText = formatDatePtBr(payment.paidAt || new Date());
+  const loginUrl = getAppLoginUrl();
+  const paymentLinkUrl = payment.paymentLinkUrl || null;
+
+  const title =
+    normalizedStatus === "PAGO"
+      ? contractActivated
+        ? "Pagamento confirmado e contrato ativo"
+        : "Pagamento confirmado"
+      : "Pagamento em atraso";
+
+  const content =
+    normalizedStatus === "PAGO"
+      ? [
+          `Olá, ${studentName}!`,
+          "",
+          `Confirmamos o pagamento de ${amountText} referente ao plano ${planName}.`,
+          `Data da confirmação: ${paidAtText}.`,
+          contractActivated
+            ? "Seu contrato está ativo e seu acesso aos treinos segue liberado."
+            : "O pagamento foi registrado pela gestão.",
+          "",
+          "Acesse seu painel para acompanhar seus treinos e avisos.",
+        ].join("\n")
+      : [
+          `Olá, ${studentName}!`,
+          "",
+          `Identificamos que há um pagamento em atraso referente ao plano ${planName}.`,
+          `Valor: ${amountText}.`,
+          `Vencimento: ${dueDateText}.`,
+          paymentLinkUrl ? `Link de pagamento: ${paymentLinkUrl}.` : null,
+          "",
+          "Regularize o pagamento para manter seu acompanhamento ativo e evitar bloqueios no acesso aos treinos.",
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+  await prisma.notice.create({
+    data: {
+      title,
+      content,
+      type: "PAYMENT",
+      targetRole: "STUDENT",
+      studentId: student.id,
+      authorId,
+      expiresAt: normalizedStatus === "PAGO" ? null : payment.dueDate,
+    },
+  });
+
+  if (!studentEmail) return;
+
+  const safeTitle = escapeHtml(title);
+  const safeStudentName = escapeHtml(studentName);
+  const safePlanName = escapeHtml(planName);
+  const safeAmountText = escapeHtml(amountText);
+  const safeDueDateText = escapeHtml(dueDateText);
+  const safePaidAtText = escapeHtml(paidAtText);
+  const safePaymentLinkUrl = paymentLinkUrl ? escapeHtml(paymentLinkUrl) : null;
+
+  const html =
+    normalizedStatus === "PAGO"
+      ? `
+        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+            <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
+            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Olá, <strong>${safeStudentName}</strong>!</p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Confirmamos o pagamento de <strong style="color:#f5f5f5;">${safeAmountText}</strong> referente ao plano <strong style="color:#f5f5f5;">${safePlanName}</strong>.
+            </p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Data da confirmação: <strong style="color:#f5f5f5;">${safePaidAtText}</strong>.
+            </p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              ${contractActivated ? "Seu contrato está ativo e seu acesso aos treinos segue liberado." : "O pagamento foi registrado pela gestão."}
+            </p>
+            <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+              Acessar meu painel
+            </a>
+            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">Este é um aviso automático do Funcional Vip Digital.</p>
+          </div>
+        </div>
+      `
+      : `
+        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+            <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
+            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Olá, <strong>${safeStudentName}</strong>!</p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Identificamos que há um pagamento em atraso referente ao plano <strong style="color:#f5f5f5;">${safePlanName}</strong>.
+            </p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Valor: <strong style="color:#f5f5f5;">${safeAmountText}</strong><br />
+              Vencimento: <strong style="color:#f5f5f5;">${safeDueDateText}</strong>
+            </p>
+            ${safePaymentLinkUrl ? `<p><a href="${safePaymentLinkUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Regularizar pagamento</a></p>` : ""}
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Regularize o pagamento para manter seu acompanhamento ativo e evitar bloqueios no acesso aos treinos.
+            </p>
+            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">Este é um aviso automático do Funcional Vip Digital.</p>
+          </div>
+        </div>
+      `;
+
+  await sendEmail({
+    to: studentEmail,
+    subject: title,
+    text: `${content}\n\nAcessar painel: ${loginUrl}`,
+    html,
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -439,6 +671,19 @@ export async function POST(request: NextRequest) {
       return created;
     });
 
+    if (status === "PAGO" || status === "ATRASADO") {
+      try {
+        await notifyPaymentStatusChange({
+          paymentId: payment.id,
+          status,
+          authorId: userId,
+          contractActivated: status === "PAGO" && activateContract,
+        });
+      } catch (notificationError) {
+        console.error("Erro ao notificar aluno sobre pagamento:", notificationError);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       payment: normalizePayment(payment),
@@ -494,6 +739,7 @@ export async function PUT(request: NextRequest) {
         id: true,
         contractId: true,
         studentId: true,
+        status: true,
       },
     });
 
@@ -556,6 +802,19 @@ export async function PUT(request: NextRequest) {
 
       return updated;
     });
+
+    if ((status === "PAGO" || status === "ATRASADO") && existing.status !== status) {
+      try {
+        await notifyPaymentStatusChange({
+          paymentId: payment.id,
+          status,
+          authorId: userId,
+          contractActivated: status === "PAGO" && activateContract,
+        });
+      } catch (notificationError) {
+        console.error("Erro ao notificar aluno sobre atualização de pagamento:", notificationError);
+      }
+    }
 
     return NextResponse.json({
       ok: true,
