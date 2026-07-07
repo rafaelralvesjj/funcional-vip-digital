@@ -6,6 +6,7 @@ import DashboardConversationList from '@/components/DashboardConversationList';
 import ManagementNoticeModalList from '@/components/ManagementNoticeModalList';
 import DashboardAutoRefresh from '@/components/DashboardAutoRefresh';
 import DashboardSectionSwitcher from '@/components/DashboardSectionSwitcher';
+import TrialContinuationDashboardShortcut from '@/components/gestor/TrialContinuationDashboardShortcut';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -1011,6 +1012,8 @@ export default async function DashboardPage() {
             Bem-vindo ao painel administrativo. Aqui está o resumo das atividades pendentes.
           </p>
         </div>
+
+        {isGestor && <TrialContinuationDashboardShortcut />}
 
         <DashboardSectionSwitcher cards={summaryCards}>
           <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
