@@ -18,8 +18,13 @@ function isAuthorized(request: NextRequest): boolean {
 
   const headerSecret = request.headers.get("x-cron-secret");
   const querySecret = request.nextUrl.searchParams.get("secret");
+  const authorization = request.headers.get("authorization");
 
-  return headerSecret === configuredSecret || querySecret === configuredSecret;
+  return (
+    headerSecret === configuredSecret ||
+    querySecret === configuredSecret ||
+    authorization === `Bearer ${configuredSecret}`
+  );
 }
 
 function startOfToday(): Date {
