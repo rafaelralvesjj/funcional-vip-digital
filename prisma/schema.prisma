@@ -105,7 +105,8 @@ model Student {
   noticeReads      NoticeRead[]
   careEvents       StudentCareEvent[]
   contracts        StudentContract[]
-  contractPayments ContractPayment[]
+  contractPayments        ContractPayment[]
+  contractLifecycleEvents ContractLifecycleEvent[]
 
   @@map("students")
 }
@@ -340,6 +341,7 @@ model StudentContract {
   careEvents          StudentCareEvent[]
   evolutionFeedbacks  EvolutionFeedback[]
   payments            ContractPayment[]
+  lifecycleEvents     ContractLifecycleEvent[]
 
   @@index([studentId])
   @@index([status])
@@ -376,6 +378,28 @@ model ContractPayment {
   @@index([status])
   @@index([dueDate])
   @@map("contract_payments")
+}
+
+
+model ContractLifecycleEvent {
+  id          String    @id @default(uuid())
+  contractId  String    @map("contract_id")
+  studentId   String    @map("student_id")
+  eventType   String    @map("event_type")
+  eventKey    String    @map("event_key")
+  channel     String    @default("AVISO_EMAIL")
+  noticeId    String?   @map("notice_id")
+  emailSentAt DateTime? @map("email_sent_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  contract StudentContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  student  Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, eventType, eventKey])
+  @@index([contractId])
+  @@index([studentId])
+  @@index([eventType])
+  @@map("contract_lifecycle_events")
 }
 
 model Notice {
