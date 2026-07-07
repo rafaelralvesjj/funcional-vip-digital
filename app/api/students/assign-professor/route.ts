@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { sendEmail } from "@/lib/sendEmail";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -14,6 +15,176 @@ function normalizeRole(role?: string | null): string {
 
 function canManage(role: string): boolean {
   return role === "GESTOR" || role === "ADMIN";
+}
+
+function getAppLoginUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/auth/signin`;
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function buildProfessorAssignmentContent({
+  professorName,
+  studentName,
+  studentEmail,
+  commercialStatus,
+}: {
+  professorName?: string | null;
+  studentName: string;
+  studentEmail?: string | null;
+  commercialStatus?: string | null;
+}): string {
+  const status = String(commercialStatus || "SEM_CONTRATO_ATIVO").toUpperCase();
+
+  const statusLabel: Record<string, string> = {
+    EXPERIENCIA_ATIVA: "experiência ativa",
+    CONTRATO_ATIVO: "contrato ativo",
+    AGUARDANDO_PAGAMENTO: "aguardando pagamento",
+    SUSPENSO_POR_PAGAMENTO: "suspenso por pagamento",
+    SEM_CONTRATO_ATIVO: "sem contrato ativo",
+  };
+
+  return [
+    `Olá, ${professorName || "professor(a)"}.`,
+    "",
+    `Um novo aluno foi vinculado a você: ${studentName}.`,
+    studentEmail ? `E-mail do aluno: ${studentEmail}.` : null,
+    `Status comercial atual: ${statusLabel[status] || status}.`,
+    "",
+    status === "EXPERIENCIA_ATIVA" || status === "CONTRATO_ATIVO"
+      ? "Você já pode acessar o painel e montar os treinos da semana deste aluno."
+      : "Acompanhe o aluno no painel. Para liberar novos treinos, a gestão precisa manter uma experiência ou contrato ativo no Financeiro.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function notifyProfessorAssignment({
+  authorId,
+  professor,
+  student,
+}: {
+  authorId: string;
+  professor: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+  };
+  student: {
+    id: string;
+    name: string;
+    email?: string | null;
+    commercialStatus?: string | null;
+  };
+}) {
+  const title = "Novo aluno vinculado a você";
+  const content = buildProfessorAssignmentContent({
+    professorName: professor.name,
+    studentName: student.name,
+    studentEmail: student.email,
+    commercialStatus: student.commercialStatus,
+  });
+
+  const existingNotice = await prisma.notice.findFirst({
+    where: {
+      title,
+      type: "MANAGEMENT",
+      targetRole: "TEACHER",
+      professorId: professor.id,
+      studentId: student.id,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!existingNotice) {
+    await prisma.notice.create({
+      data: {
+        title,
+        content,
+        type: "MANAGEMENT",
+        targetRole: "TEACHER",
+        authorId,
+        professorId: professor.id,
+        studentId: student.id,
+      },
+    });
+  }
+
+  if (!professor.email) {
+    return {
+      noticeCreated: !existingNotice,
+      emailSent: false,
+      emailSkippedReason: "Professor sem e-mail cadastrado.",
+    };
+  }
+
+  const loginUrl = getAppLoginUrl();
+  const safeProfessorName = escapeHtml(professor.name || "professor(a)");
+  const safeStudentName = escapeHtml(student.name);
+  const safeStudentEmail = escapeHtml(student.email || "Não informado");
+  const safeContent = escapeHtml(content).replaceAll("\n", "<br />");
+
+  await sendEmail({
+    to: professor.email,
+    subject: title,
+    text: `${content}\n\nAcessar o sistema: ${loginUrl}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+        <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+          <h2 style="color:#D4A373; margin:0 0 16px;">${escapeHtml(title)}</h2>
+
+          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+            Olá, <strong>${safeProfessorName}</strong>.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Um novo aluno foi vinculado a você no Funcional Vip Digital.
+          </p>
+
+          <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
+            <p style="color:#f5f5f5; margin:0 0 8px; font-size:14px;">
+              <strong>Aluno:</strong> ${safeStudentName}
+            </p>
+            <p style="color:#d4d4d4; margin:0; font-size:13px;">
+              <strong>E-mail:</strong> ${safeStudentEmail}
+            </p>
+          </div>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            ${safeContent}
+          </p>
+
+          <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:8px;">
+            Acessar painel e montar treino
+          </a>
+
+          <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
+            Este é um aviso automático do Funcional Vip Digital.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+
+  return {
+    noticeCreated: !existingNotice,
+    emailSent: true,
+    emailSkippedReason: null,
+  };
 }
 
 export async function PUT(request: NextRequest) {
@@ -51,6 +222,8 @@ export async function PUT(request: NextRequest) {
         select: {
           id: true,
           name: true,
+          email: true,
+          userId: true,
           commercialStatus: true,
         },
       }),
@@ -61,6 +234,7 @@ export async function PUT(request: NextRequest) {
         select: {
           id: true,
           name: true,
+          email: true,
           role: true,
           active: true,
         },
@@ -83,6 +257,9 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const previousProfessorId = student.userId || null;
+    const isNewProfessorAssignment = previousProfessorId !== professorId;
 
     const result = await prisma.$transaction(async (tx) => {
       const updatedStudent = await tx.student.update({
@@ -126,12 +303,51 @@ export async function PUT(request: NextRequest) {
       return updatedStudent;
     });
 
+    let professorNotification: {
+      noticeCreated: boolean;
+      emailSent: boolean;
+      emailSkippedReason?: string | null;
+      error?: string | null;
+    } | null = null;
+
+    if (isNewProfessorAssignment) {
+      try {
+        professorNotification = await notifyProfessorAssignment({
+          authorId: String(user.id),
+          professor: {
+            id: professor.id,
+            name: professor.name,
+            email: professor.email,
+          },
+          student: {
+            id: result.id,
+            name: result.name,
+            email: result.email,
+            commercialStatus: result.commercialStatus,
+          },
+        });
+      } catch (notificationError: any) {
+        console.error("Erro ao notificar professor vinculado:", notificationError);
+
+        professorNotification = {
+          noticeCreated: false,
+          emailSent: false,
+          error: notificationError?.message || "Erro ao notificar professor.",
+        };
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       message:
         result.commercialStatus === "CONTRATO_ATIVO" || result.commercialStatus === "EXPERIENCIA_ATIVA"
-          ? "Professor vinculado ao aluno e ao contrato ativo."
-          : "Professor vinculado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro.",
+          ? isNewProfessorAssignment
+            ? "Professor vinculado ao aluno e ao contrato ativo. Professor notificado no mural e por e-mail, quando houver e-mail cadastrado."
+            : "Professor já estava vinculado ao aluno e ao contrato ativo."
+          : isNewProfessorAssignment
+            ? "Professor vinculado e notificado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro."
+            : "Professor já estava vinculado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro.",
+      professorNotification,
       student: {
         id: result.id,
         name: result.name,
