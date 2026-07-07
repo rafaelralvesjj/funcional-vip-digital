@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import * as bcrypt from "bcryptjs";
+import { sendEmail } from "@/lib/sendEmail";
 
 type BodySource = FormData | Record<string, any>;
 
@@ -225,7 +226,8 @@ export async function POST(req: NextRequest) {
       acceptedTermsRaw === "on" ||
       acceptedTermsRaw === "1";
     const notesFromBody = getString(body, ["notes", "observacoes", "observations"]);
-    const image = await getOptionalImage(body);
+    const uploadedImageUrl = getString(body, ["imageUrl", "fotoUrl", "photoUrl"]);
+    const image = uploadedImageUrl || (await getOptionalImage(body));
 
     if (!name) {
       return NextResponse.json({ error: "Informe o nome do aluno." }, { status: 400 });
@@ -366,6 +368,39 @@ export async function POST(req: NextRequest) {
         totalContractedWorkouts: contract.totalContractedWorkouts,
       };
     });
+
+    try {
+      const endDateText = new Date(result.endDate).toLocaleDateString("pt-BR");
+
+      await sendEmail({
+        to: email,
+        subject: "Sua experiência gratuita foi ativada",
+        text: `Olá, ${name}! Sua experiência gratuita no Funcional Vip Digital foi ativada até ${endDateText}. A equipe irá vincular um professor para liberar seus primeiros treinos. Acesse o painel com seu e-mail e senha cadastrados.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #222;">
+            <h2>Sua experiência gratuita foi ativada</h2>
+            <p>Olá, <strong>${name}</strong>!</p>
+            <p>Seu cadastro no <strong>Funcional Vip Digital</strong> foi criado com sucesso.</p>
+            <p>
+              Sua experiência gratuita está ativa até
+              <strong>${endDateText}</strong>.
+            </p>
+            <p>
+              Agora a equipe irá vincular um professor para liberar seus primeiros treinos.
+            </p>
+            <p>
+              Você já pode acessar o painel com o e-mail e a senha cadastrados.
+            </p>
+            <p style="font-size: 12px; color: #666;">
+              Este é um ciclo gratuito de experiência. Para continuar após o período experimental,
+              será necessário contratar um plano.
+            </p>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.error("Erro ao enviar e-mail da experiência gratuita:", emailError);
+    }
 
     return NextResponse.json({
       ok: true,
