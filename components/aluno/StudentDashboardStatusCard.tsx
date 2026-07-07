@@ -1,21 +1,21 @@
 import type { StudentDashboardSummary } from "@/lib/student-dashboard-summary";
 
 type Props = {
-  summary: NonNullable<StudentDashboardSummary>;
+  summary: StudentDashboardSummary;
 };
 
-function formatDate(date: Date | string | null | undefined) {
-  if (!date) return "—";
+function formatDate(value?: string | null) {
+  if (!value) return "-";
 
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-  }).format(new Date(date));
+  }).format(new Date(value));
 }
 
-function formatCurrency(valueInCents: number | null | undefined) {
-  if (typeof valueInCents !== "number") return "—";
+function formatMoney(valueInCents?: number | null) {
+  if (typeof valueInCents !== "number") return "-";
 
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -23,178 +23,124 @@ function formatCurrency(valueInCents: number | null | undefined) {
   }).format(valueInCents / 100);
 }
 
-function getStatusContent(summary: NonNullable<StudentDashboardSummary>) {
-  const cycle = summary.currentCycle;
-
-  if (!cycle || summary.uiState === "SEM_CONTRATO_ATIVO") {
-    return {
-      title: "Você está sem contrato ativo no momento",
-      description:
-        "Para continuar treinando com acompanhamento, fale com a equipe ou escolha um novo plano.",
-      tone: "warning",
-    };
-  }
-
-  if (summary.uiState === "AGUARDANDO_PAGAMENTO") {
-    return {
-      title: "Seu plano está aguardando pagamento",
-      description:
-        "Assim que o pagamento for confirmado, seu contrato será ativado e o acompanhamento seguirá normalmente.",
-      tone: "warning",
-    };
-  }
-
-  if (summary.uiState === "AGUARDANDO_VINCULO_PROFESSOR") {
-    return {
-      title:
-        cycle.type === "TRIAL"
-          ? "Sua experiência gratuita está ativa"
-          : "Seu ciclo está ativo, aguardando professor",
-      description:
-        "Estamos vinculando um professor ao seu acompanhamento. Em breve seus treinos serão organizados.",
-      tone: "info",
-    };
-  }
-
-  if (summary.uiState === "EXPERIENCIA_ATIVA") {
-    return {
-      title: "Sua experiência gratuita está ativa",
-      description:
-        "Aproveite este período para conhecer o acompanhamento e testar a rotina de treinos.",
-      tone: "success",
-    };
-  }
-
-  if (summary.uiState === "CONTRATO_ATIVO") {
-    return {
-      title: "Seu plano está ativo",
-      description:
-        "Seu acompanhamento está liberado conforme a quantidade de treinos contratada no ciclo atual.",
-      tone: "success",
-    };
-  }
-
-  if (summary.uiState === "SUSPENSO_POR_PAGAMENTO") {
-    return {
-      title: "Seu acompanhamento está suspenso",
-      description:
-        "Identificamos uma pendência de pagamento. Regularize para retomar o acompanhamento.",
-      tone: "warning",
-    };
-  }
-
-  return {
-    title: "Acompanhamento em atualização",
-    description: "Estamos atualizando as informações do seu ciclo.",
-    tone: "info",
+function getBadge(summary: StudentDashboardSummary) {
+  const badgeByState: Record<string, string> = {
+    EXPERIENCIA_ATIVA: "Experiência ativa",
+    CONTRATO_ATIVO: "Plano ativo",
+    AGUARDANDO_PAGAMENTO: "Pagamento pendente",
+    AGUARDANDO_VINCULO_PROFESSOR: "Aguardando professor",
+    SUSPENSO_POR_PAGAMENTO: "Acesso suspenso",
+    SEM_CONTRATO_ATIVO: "Sem contrato ativo",
   };
+
+  return badgeByState[summary.uiState] || "Status do aluno";
+}
+
+function getCardStyle(summary: StudentDashboardSummary) {
+  if (summary.uiState === "SEM_CONTRATO_ATIVO" || summary.uiState === "SUSPENSO_POR_PAGAMENTO") {
+    return "border-red-200 bg-red-50 text-red-950";
+  }
+
+  if (summary.uiState === "AGUARDANDO_PAGAMENTO" || summary.uiState === "AGUARDANDO_VINCULO_PROFESSOR") {
+    return "border-amber-200 bg-amber-50 text-amber-950";
+  }
+
+  return "border-emerald-200 bg-emerald-50 text-emerald-950";
 }
 
 export function StudentDashboardStatusCard({ summary }: Props) {
   const cycle = summary.currentCycle;
-  const professor = summary.professor;
   const payment = summary.payment;
-  const statusContent = getStatusContent(summary);
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="mb-5">
-        <p className="text-sm font-medium text-zinc-500">Meu acompanhamento</p>
-        <h1 className="mt-1 text-2xl font-semibold text-zinc-950">
-          Olá, {summary.student.name}
-        </h1>
+    <section className={`rounded-2xl border p-5 shadow-sm ${getCardStyle(summary)}`}>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <span className="inline-flex rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+            {getBadge(summary)}
+          </span>
+
+          <h2 className="mt-3 text-2xl font-bold">{summary.title}</h2>
+
+          <p className="mt-2 max-w-3xl text-sm leading-6 opacity-90">{summary.message}</p>
+        </div>
+
+        {summary.shouldBlockTraining ? (
+          <div className="rounded-xl bg-white/80 px-4 py-3 text-sm font-semibold shadow-sm">
+            Treinos bloqueados até regularização
+          </div>
+        ) : (
+          <div className="rounded-xl bg-white/80 px-4 py-3 text-sm font-semibold shadow-sm">
+            Acesso liberado
+          </div>
+        )}
       </div>
 
-      <div className="rounded-2xl bg-zinc-50 p-4">
-        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-950">
-              {statusContent.title}
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-zinc-600">
-              {statusContent.description}
+      <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl bg-white/70 p-4">
+          <p className="text-xs font-semibold uppercase opacity-70">Ciclo</p>
+          <p className="mt-1 font-bold">
+            {cycle?.type === "TRIAL" ? "Experiência gratuita" : cycle?.planName || "Plano"}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-white/70 p-4">
+          <p className="text-xs font-semibold uppercase opacity-70">Vencimento</p>
+          <p className="mt-1 font-bold">{formatDate(cycle?.endDate)}</p>
+        </div>
+
+        <div className="rounded-xl bg-white/70 p-4">
+          <p className="text-xs font-semibold uppercase opacity-70">Professor</p>
+          <p className="mt-1 font-bold">{summary.professor?.name || "Aguardando vínculo"}</p>
+        </div>
+
+        <div className="rounded-xl bg-white/70 p-4">
+          <p className="text-xs font-semibold uppercase opacity-70">Treinos do ciclo</p>
+          <p className="mt-1 font-bold">
+            {cycle ? `${cycle.totalContractedWorkouts} treinos` : "Não definido"}
+          </p>
+        </div>
+      </div>
+
+      {cycle ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl bg-white/60 p-4 text-sm">
+            <p className="font-semibold">Frequência contratada</p>
+            <p className="mt-1 opacity-80">
+              {cycle.workoutsPerWeek} por semana / {cycle.workoutsPerMonth} por mês
             </p>
           </div>
 
-          {cycle?.daysLeft !== null && cycle?.daysLeft !== undefined && (
-            <span className="rounded-full bg-white px-3 py-1 text-sm font-medium text-zinc-700 ring-1 ring-zinc-200">
-              {cycle.daysLeft >= 0
-                ? `${cycle.daysLeft} dia(s) restante(s)`
-                : "Ciclo vencido"}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <InfoItem
-          label="Tipo de ciclo"
-          value={
-            cycle?.type === "TRIAL"
-              ? "Experiência gratuita"
-              : cycle?.type === "PAID"
-                ? "Plano pago"
-                : "—"
-          }
-        />
-        <InfoItem label="Vencimento" value={formatDate(cycle?.endDate)} />
-        <InfoItem
-          label="Professor"
-          value={professor?.name ?? "Aguardando vínculo"}
-        />
-        <InfoItem
-          label="Treinos do ciclo"
-          value={
-            cycle
-              ? `${cycle.totalContractedWorkouts} no ciclo · ${cycle.workoutsPerWeek}/semana`
-              : "—"
-          }
-        />
-      </div>
-
-      {payment && (
-        <div className="mt-5 rounded-2xl border border-zinc-200 p-4">
-          <h3 className="text-sm font-semibold text-zinc-950">Pagamento</h3>
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <InfoItem label="Status" value={payment.status} />
-            <InfoItem label="Vencimento" value={formatDate(payment.dueDate)} />
-            <InfoItem label="Valor" value={formatCurrency(payment.amountCents)} />
+          <div className="rounded-xl bg-white/60 p-4 text-sm">
+            <p className="font-semibold">Status do contrato</p>
+            <p className="mt-1 opacity-80">{cycle.status}</p>
           </div>
 
-          {payment.paymentLinkUrl && payment.status !== "PAGO" && (
-            <a
-              href={payment.paymentLinkUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-4 inline-flex rounded-xl bg-zinc-950 px-4 py-2 text-sm font-medium text-white"
-            >
-              Ir para pagamento
-            </a>
-          )}
+          <div className="rounded-xl bg-white/60 p-4 text-sm">
+            <p className="font-semibold">Pagamento</p>
+            <p className="mt-1 opacity-80">
+              {payment
+                ? `${payment.status} • ${formatMoney(payment.amountCents)} • venc. ${formatDate(payment.dueDate)}`
+                : "Sem pagamento pendente"}
+            </p>
+          </div>
         </div>
-      )}
-
-      {summary.flags.isTrial && (
-        <div className="mt-5 rounded-2xl border border-zinc-200 p-4">
-          <h3 className="text-sm font-semibold text-zinc-950">
-            Gostou da experiência?
-          </h3>
-          <p className="mt-1 text-sm leading-6 text-zinc-600">
-            Para continuar com o acompanhamento após o período experimental, fale com a equipe e escolha o melhor plano para você.
+      ) : (
+        <div className="mt-4 rounded-xl bg-white/75 p-4 text-sm">
+          <p className="font-semibold">Próximo passo</p>
+          <p className="mt-1 leading-6 opacity-85">
+            Fale com a equipe para ativar uma experiência ou contratar um plano. Enquanto não houver contrato ativo, o painel mantém a orientação visível e evita que o aluno siga como se estivesse regularizado.
           </p>
         </div>
       )}
-    </section>
-  );
-}
 
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-zinc-200 p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-        {label}
-      </p>
-      <p className="mt-1 text-sm font-semibold text-zinc-950">{value}</p>
-    </div>
+      {summary.actionLabel ? (
+        <div className="mt-5">
+          <span className="inline-flex rounded-xl bg-white px-4 py-2 text-sm font-bold shadow-sm">
+            {summary.actionLabel}
+          </span>
+        </div>
+      ) : null}
+    </section>
   );
 }
