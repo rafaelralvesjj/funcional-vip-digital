@@ -74,19 +74,60 @@ type PaymentItem = {
   createdAt: string;
 };
 
+type TrialContinuationRequestItem = {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string | null;
+  studentPhone?: string | null;
+  studentCommercialStatus?: string | null;
+  professorId?: string | null;
+  professorName?: string | null;
+  contractId?: string | null;
+  contractNumber?: string | null;
+  contractType?: string | null;
+  contractStatus?: string | null;
+  contractEndDate?: string | null;
+  status: string;
+  severity?: string | null;
+  title?: string | null;
+  description?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+};
+
 type ContractsResponse = {
   contracts: ContractItem[];
   students: StudentOption[];
   plans: PlanOption[];
   noContractStudents: StudentOption[];
+  awaitingPaymentStudents?: StudentOption[];
+  trialContinuationRequests?: TrialContinuationRequestItem[];
   metrics: {
     totalContracts: number;
     activeContracts: number;
+    activePaidContracts?: number;
+    activeTrialContracts?: number;
     endingSoonContracts: number;
+    trialEndingSoonContracts?: number;
+    paidEndingSoonContracts?: number;
     expiredContracts: number;
+    expiredTrialContracts?: number;
+    expiredPaidContracts?: number;
     trialContracts: number;
+    awaitingPaymentContracts?: number;
+    suspendedContracts?: number;
+    finalizedContracts?: number;
+    cancelledContracts?: number;
     noContractStudents: number;
+    awaitingPaymentStudents?: number;
+    openTrialContinuationRequests?: number;
+    convertedFromTrialContracts?: number;
+    trialConversionRatePercent?: number;
     expectedRevenueCents: number;
+    activePaidRevenueCents?: number;
+    awaitingPaymentRevenueCents?: number;
+    studentCommercialStatusCounts?: Record<string, number>;
   };
 };
 
@@ -126,6 +167,14 @@ function formatMoney(cents?: number | null): string {
     style: "currency",
     currency: "BRL",
   });
+}
+
+function formatPercent(value?: number | null): string {
+  const parsed = Number(value || 0);
+
+  if (!Number.isFinite(parsed)) return "0%";
+
+  return `${parsed}%`;
 }
 
 function moneyToCents(value: string): number {
@@ -405,6 +454,10 @@ export default function FinanceiroPage() {
       return contracts.filter((contract) => contract.status === "ACTIVE");
     }
 
+    if (filter === "PAGOS_ATIVOS") {
+      return contracts.filter((contract) => contract.type === "PAID" && contract.status === "ACTIVE");
+    }
+
     if (filter === "VENCENDO") {
       return contracts.filter((contract) => {
         const endDate = new Date(contract.endDate);
@@ -423,6 +476,17 @@ export default function FinanceiroPage() {
       return contracts.filter((contract) => contract.type === "TRIAL");
     }
 
+    if (filter === "EXPERIENCIA_VENCENDO") {
+      return contracts.filter((contract) => {
+        const endDate = new Date(contract.endDate);
+        return contract.type === "TRIAL" && contract.status === "ACTIVE" && endDate >= now && endDate <= in7Days;
+      });
+    }
+
+    if (filter === "CONVERTIDOS") {
+      return contracts.filter((contract) => contract.type === "PAID" && contract.source === "CONVERSAO_EXPERIENCIA");
+    }
+
     if (filter === "PAGAMENTO") {
       return contracts.filter((contract) => contract.status === "AWAITING_PAYMENT" || contract.status === "SUSPENDED");
     }
@@ -437,6 +501,22 @@ export default function FinanceiroPage() {
 
     return payments.filter((payment) => payment.status === paymentFilter);
   }, [paymentsData, paymentFilter]);
+
+  function contractFilterLabel(item: string): string {
+    const labels: Record<string, string> = {
+      VENCENDO: "Vencendo",
+      VENCIDOS: "Vencidos",
+      ATIVOS: "Ativos",
+      PAGOS_ATIVOS: "Pagos ativos",
+      EXPERIENCIA: "Experiências",
+      EXPERIENCIA_VENCENDO: "Exp. vencendo",
+      CONVERTIDOS: "Convertidos",
+      PAGAMENTO: "Aguardando pagamento",
+      TODOS: "Todos",
+    };
+
+    return labels[item] || item;
+  }
 
   async function handleCreateContract(event: React.FormEvent) {
     event.preventDefault();
@@ -736,32 +816,110 @@ export default function FinanceiroPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Contratos ativos</p>
-          <p className="text-2xl font-bold text-green-400">{metrics?.activeContracts || 0}</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Contratos pagos ativos</p>
+          <p className="text-2xl font-bold text-green-400">{metrics?.activePaidContracts ?? metrics?.activeContracts ?? 0}</p>
+          <p className="text-[11px] text-[#6b6b6b] mt-1">Receita ativa: {formatMoney(metrics?.activePaidRevenueCents || 0)}</p>
         </div>
+
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Experiência</p>
-          <p className="text-2xl font-bold text-blue-400">{metrics?.trialContracts || 0}</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Experiências ativas</p>
+          <p className="text-2xl font-bold text-blue-400">{metrics?.activeTrialContracts ?? metrics?.trialContracts ?? 0}</p>
+          <p className="text-[11px] text-[#6b6b6b] mt-1">Vencendo: {metrics?.trialEndingSoonContracts ?? 0}</p>
         </div>
+
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Recebido</p>
-          <p className="text-2xl font-bold text-green-400">{formatMoney(paymentMetrics?.receivedCents || 0)}</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Interesses em continuar</p>
+          <p className="text-2xl font-bold text-[#D4A373]">{metrics?.openTrialContinuationRequests ?? 0}</p>
+          <a
+            href="/dashboard/gestor/interesses-experiencia"
+            className="text-[11px] text-[#D4A373] underline mt-1 inline-block"
+          >
+            Abrir fila
+          </a>
         </div>
+
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Em aberto</p>
-          <p className="text-2xl font-bold text-yellow-400">{formatMoney(paymentMetrics?.openCents || 0)}</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Taxa de conversão</p>
+          <p className="text-2xl font-bold text-[#D4A373]">{formatPercent(metrics?.trialConversionRatePercent)}</p>
+          <p className="text-[11px] text-[#6b6b6b] mt-1">Convertidos: {metrics?.convertedFromTrialContracts ?? 0}</p>
         </div>
+
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Atrasado</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Aguardando pagamento</p>
+          <p className="text-2xl font-bold text-yellow-400">{metrics?.awaitingPaymentContracts ?? 0}</p>
+          <p className="text-[11px] text-[#6b6b6b] mt-1">Alunos: {metrics?.awaitingPaymentStudents ?? 0}</p>
+        </div>
+
+        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
+          <p className="text-xs uppercase text-[#6b6b6b]">Receita em aberto</p>
+          <p className="text-2xl font-bold text-yellow-400">{formatMoney(metrics?.awaitingPaymentRevenueCents ?? paymentMetrics?.openCents ?? 0)}</p>
+          <p className="text-[11px] text-[#6b6b6b] mt-1">Pagamentos: {paymentMetrics?.openPayments || 0}</p>
+        </div>
+
+        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
+          <p className="text-xs uppercase text-[#6b6b6b]">Pagamentos atrasados</p>
           <p className="text-2xl font-bold text-red-400">{formatMoney(paymentMetrics?.overdueCents || 0)}</p>
+          <p className="text-[11px] text-[#6b6b6b] mt-1">Qtd.: {paymentMetrics?.overduePayments || 0}</p>
         </div>
+
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Sem contrato</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Sem contrato ativo</p>
           <p className="text-2xl font-bold text-[#D4A373]">{metrics?.noContractStudents || 0}</p>
+          <p className="text-[11px] text-[#6b6b6b] mt-1">Acompanhar para não perder aluno</p>
         </div>
       </div>
+
+      <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-[#D4A373]">Visão executiva do funil</h2>
+          <p className="text-xs text-[#a1a1a1] mt-1">
+            Leitura rápida da jornada: experiência, interesse, conversão e pagamento.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
+            <p className="text-xs uppercase text-[#6b6b6b]">Experiência</p>
+            <p className="text-sm text-[#f5f5f5] mt-2">
+              Ativas: <strong className="text-blue-300">{metrics?.activeTrialContracts ?? metrics?.trialContracts ?? 0}</strong>
+            </p>
+            <p className="text-sm text-[#f5f5f5] mt-1">
+              Vencendo: <strong className="text-yellow-300">{metrics?.trialEndingSoonContracts ?? 0}</strong>
+            </p>
+            <p className="text-sm text-[#f5f5f5] mt-1">
+              Vencidas: <strong className="text-red-300">{metrics?.expiredTrialContracts ?? 0}</strong>
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
+            <p className="text-xs uppercase text-[#6b6b6b]">Conversão</p>
+            <p className="text-sm text-[#f5f5f5] mt-2">
+              Interessados: <strong className="text-[#D4A373]">{metrics?.openTrialContinuationRequests ?? 0}</strong>
+            </p>
+            <p className="text-sm text-[#f5f5f5] mt-1">
+              Convertidos: <strong className="text-green-300">{metrics?.convertedFromTrialContracts ?? 0}</strong>
+            </p>
+            <p className="text-sm text-[#f5f5f5] mt-1">
+              Taxa simples: <strong className="text-[#D4A373]">{formatPercent(metrics?.trialConversionRatePercent)}</strong>
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
+            <p className="text-xs uppercase text-[#6b6b6b]">Contrato pago</p>
+            <p className="text-sm text-[#f5f5f5] mt-2">
+              Ativos: <strong className="text-green-300">{metrics?.activePaidContracts ?? 0}</strong>
+            </p>
+            <p className="text-sm text-[#f5f5f5] mt-1">
+              Vencendo: <strong className="text-yellow-300">{metrics?.paidEndingSoonContracts ?? 0}</strong>
+            </p>
+            <p className="text-sm text-[#f5f5f5] mt-1">
+              Suspensos: <strong className="text-red-300">{metrics?.suspendedContracts ?? 0}</strong>
+            </p>
+          </div>
+        </div>
+      </section>
 
       <section id="converter-experiencia" className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4 scroll-mt-6">
         <div>
@@ -1289,7 +1447,7 @@ export default function FinanceiroPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {["VENCENDO", "VENCIDOS", "ATIVOS", "EXPERIENCIA", "PAGAMENTO", "TODOS"].map((item) => (
+            {["VENCENDO", "VENCIDOS", "ATIVOS", "PAGOS_ATIVOS", "EXPERIENCIA", "EXPERIENCIA_VENCENDO", "CONVERTIDOS", "PAGAMENTO", "TODOS"].map((item) => (
               <button
                 key={item}
                 type="button"
@@ -1300,7 +1458,7 @@ export default function FinanceiroPage() {
                     : "bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10]"
                 }`}
               >
-                {item === "PAGAMENTO" ? "Aguardando pagamento" : item.toLowerCase()}
+                {contractFilterLabel(item)}
               </button>
             ))}
           </div>
