@@ -1,46 +1,241 @@
 import { prisma } from "@/lib/prisma";
 
-type SessionUserInput = {
-  userId?: string | null;
-  email?: string | null;
+export type StudentDashboardUiState =
+  | "EXPERIENCIA_ATIVA"
+  | "CONTRATO_ATIVO"
+  | "AGUARDANDO_PAGAMENTO"
+  | "AGUARDANDO_VINCULO_PROFESSOR"
+  | "SUSPENSO_POR_PAGAMENTO"
+  | "SEM_CONTRATO_ATIVO";
+
+type DashboardInput =
+  | {
+      userId?: string | null;
+      email?: string | null;
+    }
+  | string
+  | null
+  | undefined;
+
+export type StudentDashboardSummary = {
+  student: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    commercialStatus: string;
+  };
+  currentCycle: {
+    id: string;
+    type: string;
+    status: string;
+    commercialStatus: string;
+    startDate: string;
+    endDate: string;
+    daysLeft: number;
+    workoutsPerWeek: number;
+    workoutsPerMonth: number;
+    totalContractedWorkouts: number;
+    priceCents: number;
+    planName: string | null;
+  } | null;
+  professor: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  } | null;
+  payment: {
+    id: string;
+    status: string;
+    dueDate: string;
+    paidAt: string | null;
+    amountCents: number;
+    method: string | null;
+  } | null;
+  uiState: StudentDashboardUiState;
+  hasActiveAccess: boolean;
+  shouldBlockTraining: boolean;
+  title: string;
+  message: string;
+  actionLabel: string | null;
 };
 
-const ACTIVE_CYCLE_STATUSES = ["ACTIVE", "AWAITING_PAYMENT", "SUSPENDED"];
-const OPEN_PAYMENT_STATUSES = ["EM_ABERTO", "ATRASADO", "PARCIAL"];
+function toDateOnlyISOString(date: Date | string | null | undefined) {
+  if (!date) return "";
+  return new Date(date).toISOString();
+}
 
-type ContractWithRelations = NonNullable<
-  Awaited<ReturnType<typeof getStudentWithContracts>>
->["contracts"][number];
+function startOfDay(date: Date) {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
 
-async function getStudentWithContracts({ userId, email }: SessionUserInput) {
-  const orFilters = [];
+function getDaysLeft(endDate: Date) {
+  const today = startOfDay(new Date());
+  const end = startOfDay(new Date(endDate));
+  const diff = end.getTime() - today.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+function normalizeEmail(email?: string | null) {
+  return email?.trim().toLowerCase() || null;
+}
+
+function moneyRelevantPayment(payments: any[]) {
+  if (!payments?.length) return null;
+
+  const priority = ["ATRASADO", "EM_ABERTO", "PARCIAL", "PAGO"];
+
+  return [...payments].sort((a, b) => {
+    const aPriority = priority.indexOf(a.status);
+    const bPriority = priority.indexOf(b.status);
+
+    if (aPriority !== bPriority) {
+      return (aPriority === -1 ? 99 : aPriority) - (bPriority === -1 ? 99 : bPriority);
+    }
+
+    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+  })[0];
+}
+
+function pickCurrentContract(contracts: any[]) {
+  if (!contracts?.length) return null;
+
+  const today = startOfDay(new Date());
+
+  const activeOrAwaiting = contracts.find((contract) => {
+    const endDate = startOfDay(new Date(contract.endDate));
+    const isNotExpired = endDate.getTime() >= today.getTime();
+
+    return (
+      isNotExpired &&
+      ["ACTIVE", "AWAITING_PAYMENT", "SUSPENDED"].includes(contract.status)
+    );
+  });
+
+  if (activeOrAwaiting) return activeOrAwaiting;
+
+  const trialStillValid = contracts.find((contract) => {
+    const endDate = startOfDay(new Date(contract.endDate));
+    return contract.type === "TRIAL" && endDate.getTime() >= today.getTime();
+  });
+
+  if (trialStillValid) return trialStillValid;
+
+  return contracts[0] || null;
+}
+
+function buildUiState(params: {
+  contract: any | null;
+  payment: any | null;
+  professor: any | null;
+}): StudentDashboardUiState {
+  const { contract, payment, professor } = params;
+
+  if (!contract) return "SEM_CONTRATO_ATIVO";
+
+  const daysLeft = getDaysLeft(contract.endDate);
+  const isExpired = daysLeft < 0;
+  const inactiveContractStatus = ["FINALIZED", "CANCELLED"].includes(contract.status);
+
+  if (isExpired || inactiveContractStatus) return "SEM_CONTRATO_ATIVO";
+
+  if (contract.status === "SUSPENDED") return "SUSPENSO_POR_PAGAMENTO";
+
+  if (payment?.status === "ATRASADO") return "SUSPENSO_POR_PAGAMENTO";
+
+  if (contract.status === "AWAITING_PAYMENT") return "AGUARDANDO_PAGAMENTO";
+
+  if (["EM_ABERTO", "PARCIAL"].includes(payment?.status)) return "AGUARDANDO_PAGAMENTO";
+
+  if (!professor) return "AGUARDANDO_VINCULO_PROFESSOR";
+
+  if (contract.type === "TRIAL") return "EXPERIENCIA_ATIVA";
+
+  return "CONTRATO_ATIVO";
+}
+
+function buildText(uiState: StudentDashboardUiState, daysLeft?: number) {
+  const safeDaysLeft = typeof daysLeft === "number" ? Math.max(daysLeft, 0) : null;
+
+  const endingText =
+    safeDaysLeft === null
+      ? ""
+      : safeDaysLeft === 0
+        ? " O ciclo vence hoje."
+        : ` Faltam ${safeDaysLeft} dia${safeDaysLeft === 1 ? "" : "s"} para o vencimento.`;
+
+  const texts: Record<
+    StudentDashboardUiState,
+    { title: string; message: string; actionLabel: string | null }
+  > = {
+    EXPERIENCIA_ATIVA: {
+      title: "Experiência gratuita ativa",
+      message: `Sua experiência gratuita está ativa.${endingText} Aproveite esse período para conhecer seu treino e acompanhar as orientações do professor.`,
+      actionLabel: "Ver meu treino",
+    },
+    CONTRATO_ATIVO: {
+      title: "Plano ativo",
+      message: `Seu contrato está ativo.${endingText} Você já pode seguir seu ciclo de treinos normalmente.`,
+      actionLabel: "Continuar treinando",
+    },
+    AGUARDANDO_PAGAMENTO: {
+      title: "Pagamento pendente",
+      message:
+        "Seu plano foi registrado, mas ainda existe pagamento pendente. Assim que o pagamento for confirmado, o acesso fica regularizado.",
+      actionLabel: "Ver situação do pagamento",
+    },
+    AGUARDANDO_VINCULO_PROFESSOR: {
+      title: "Aguardando vínculo com professor",
+      message:
+        "Seu cadastro está ativo, mas ainda falta o vínculo com um professor. A equipe está organizando isso para liberar o acompanhamento corretamente.",
+      actionLabel: "Aguardar liberação",
+    },
+    SUSPENSO_POR_PAGAMENTO: {
+      title: "Acesso suspenso por pagamento",
+      message:
+        "Existe uma pendência de pagamento no seu ciclo. Para voltar a acessar os treinos normalmente, regularize a situação com a equipe.",
+      actionLabel: "Regularizar pagamento",
+    },
+    SEM_CONTRATO_ATIVO: {
+      title: "Você está sem contrato ativo",
+      message:
+        "No momento, não encontramos uma experiência ou contrato ativo para o seu cadastro. Para continuar treinando, fale com a equipe e escolha o próximo plano.",
+      actionLabel: "Falar com a equipe",
+    },
+  };
+
+  return texts[uiState];
+}
+
+export async function getStudentDashboardSummary(
+  input?: DashboardInput,
+  fallbackEmail?: string | null,
+): Promise<StudentDashboardSummary | null> {
+  const userId = typeof input === "string" ? input : input?.userId || null;
+  const email = normalizeEmail(typeof input === "string" ? fallbackEmail : input?.email || fallbackEmail);
+
+  const orWhere: any[] = [];
 
   if (userId) {
-    orFilters.push({ userAuthId: userId });
+    orWhere.push({ userAuthId: userId });
+    orWhere.push({ userId });
   }
 
   if (email) {
-    orFilters.push({ email });
-    orFilters.push({ userAuth: { email } });
+    orWhere.push({ email: { equals: email, mode: "insensitive" } });
+    orWhere.push({ userAuth: { email: { equals: email, mode: "insensitive" } } });
   }
 
-  if (orFilters.length === 0) {
-    return null;
-  }
+  if (!orWhere.length) return null;
 
-  return prisma.student.findFirst({
+  const student = await prisma.student.findFirst({
     where: {
       active: true,
-      OR: orFilters,
+      OR: orWhere,
     },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      commercialStatus: true,
-      onboardingCompleto: true,
-      createdAt: true,
+    include: {
       user: {
         select: {
           id: true,
@@ -54,40 +249,15 @@ async function getStudentWithContracts({ userId, email }: SessionUserInput) {
           id: true,
           name: true,
           email: true,
-          role: true,
         },
       },
       contracts: {
-        where: {
-          status: {
-            in: ACTIVE_CYCLE_STATUSES,
-          },
-        },
         orderBy: [{ endDate: "desc" }, { createdAt: "desc" }],
-        select: {
-          id: true,
-          contractNumber: true,
-          type: true,
-          status: true,
-          commercialStatus: true,
-          startDate: true,
-          endDate: true,
-          durationMonths: true,
-          workoutsPerWeek: true,
-          workoutsPerMonth: true,
-          totalContractedWorkouts: true,
-          priceCents: true,
-          paymentMode: true,
+        include: {
           plan: {
             select: {
               id: true,
               name: true,
-              description: true,
-              workoutsPerWeek: true,
-              workoutsPerMonth: true,
-              priceCents: true,
-              trialDays: true,
-              allowTrial: true,
             },
           },
           professor: {
@@ -95,159 +265,36 @@ async function getStudentWithContracts({ userId, email }: SessionUserInput) {
               id: true,
               name: true,
               email: true,
-              role: true,
             },
           },
           payments: {
             orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-            select: {
-              id: true,
-              amountCents: true,
-              dueDate: true,
-              paidAt: true,
-              status: true,
-              method: true,
-              paymentLinkUrl: true,
-              receiptUrl: true,
-            },
           },
         },
       },
     },
   });
-}
 
-function diffDaysInclusive(endDate: Date, referenceDate = new Date()) {
-  const end = new Date(endDate);
-  const ref = new Date(referenceDate);
+  if (!student) return null;
 
-  end.setHours(0, 0, 0, 0);
-  ref.setHours(0, 0, 0, 0);
+  const contract = pickCurrentContract(student.contracts);
+  const payment = moneyRelevantPayment(contract?.payments || []);
 
-  return Math.ceil((end.getTime() - ref.getTime()) / (1000 * 60 * 60 * 24));
-}
+  const fallbackProfessor = ["PROFESSOR", "TEACHER"].includes(student.user?.role)
+    ? student.user
+    : null;
 
-function pickCurrentContract(contracts: ContractWithRelations[]) {
-  const now = new Date();
+  const professor = contract?.professor || fallbackProfessor || null;
+  const uiState = buildUiState({ contract, payment, professor });
+  const daysLeft = contract ? getDaysLeft(contract.endDate) : undefined;
+  const text = buildText(uiState, daysLeft);
 
-  const activeInWindow = contracts.find(
-    (contract) =>
-      contract.status === "ACTIVE" &&
-      contract.startDate.getTime() <= now.getTime() &&
-      contract.endDate.getTime() >= now.getTime()
-  );
-
-  if (activeInWindow) return activeInWindow;
-
-  const trialActive = contracts.find(
-    (contract) =>
-      contract.type === "TRIAL" &&
-      contract.status === "ACTIVE" &&
-      contract.endDate.getTime() >= now.getTime()
-  );
-
-  if (trialActive) return trialActive;
-
-  const awaitingPayment = contracts.find(
-    (contract) =>
-      contract.status === "AWAITING_PAYMENT" &&
-      contract.endDate.getTime() >= now.getTime()
-  );
-
-  if (awaitingPayment) return awaitingPayment;
-
-  const suspended = contracts.find((contract) => contract.status === "SUSPENDED");
-  if (suspended) return suspended;
-
-  return contracts[0] ?? null;
-}
-
-function pickRelevantPayment(contract: ContractWithRelations | null) {
-  if (!contract?.payments?.length) return null;
-
-  const openPayment = contract.payments.find((payment) =>
-    OPEN_PAYMENT_STATUSES.includes(payment.status)
-  );
-
-  if (openPayment) return openPayment;
-
-  return contract.payments[0] ?? null;
-}
-
-function resolveProfessor(student: NonNullable<Awaited<ReturnType<typeof getStudentWithContracts>>>, contract: ContractWithRelations | null) {
-  if (contract?.professor) return contract.professor;
-
-  const legacyStudentUser = student.user;
-  const legacyRole = legacyStudentUser?.role;
-
-  if (legacyStudentUser && ["PROFESSOR", "TEACHER"].includes(legacyRole)) {
-    return legacyStudentUser;
-  }
-
-  return null;
-}
-
-function resolveUiState({
-  commercialStatus,
-  contract,
-  professor,
-}: {
-  commercialStatus: string;
-  contract: ContractWithRelations | null;
-  professor: ReturnType<typeof resolveProfessor>;
-}) {
-  if (!contract || commercialStatus === "SEM_CONTRATO_ATIVO") {
-    return "SEM_CONTRATO_ATIVO" as const;
-  }
-
-  if (contract.status === "AWAITING_PAYMENT") {
-    return "AGUARDANDO_PAGAMENTO" as const;
-  }
-
-  if (!professor) {
-    return "AGUARDANDO_VINCULO_PROFESSOR" as const;
-  }
-
-  if (contract.type === "TRIAL" && contract.status === "ACTIVE") {
-    return "EXPERIENCIA_ATIVA" as const;
-  }
-
-  if (contract.type === "PAID" && contract.status === "ACTIVE") {
-    return "CONTRATO_ATIVO" as const;
-  }
-
-  if (contract.status === "SUSPENDED") {
-    return "SUSPENSO_POR_PAGAMENTO" as const;
-  }
-
-  return commercialStatus as
-    | "EXPERIENCIA_ATIVA"
-    | "CONTRATO_ATIVO"
-    | "AGUARDANDO_PAGAMENTO"
-    | "AGUARDANDO_VINCULO_PROFESSOR"
-    | "SUSPENSO_POR_PAGAMENTO"
-    | "SEM_CONTRATO_ATIVO";
-}
-
-export async function getStudentDashboardSummaryForSessionUser({ userId, email }: SessionUserInput) {
-  const student = await getStudentWithContracts({ userId, email });
-
-  if (!student) {
-    return null;
-  }
-
-  const currentContract = pickCurrentContract(student.contracts);
-  const professor = resolveProfessor(student, currentContract);
-  const payment = pickRelevantPayment(currentContract);
-  const daysLeft = currentContract ? diffDaysInclusive(currentContract.endDate) : null;
-  const isExpired = typeof daysLeft === "number" ? daysLeft < 0 : false;
-  const needsProfessorAssignment = Boolean(currentContract && !professor);
-
-  const uiState = resolveUiState({
-    commercialStatus: student.commercialStatus,
-    contract: currentContract,
-    professor,
-  });
+  const shouldBlockTraining = [
+    "SEM_CONTRATO_ATIVO",
+    "SUSPENSO_POR_PAGAMENTO",
+    "AGUARDANDO_PAGAMENTO",
+    "AGUARDANDO_VINCULO_PROFESSOR",
+  ].includes(uiState);
 
   return {
     student: {
@@ -256,37 +303,21 @@ export async function getStudentDashboardSummaryForSessionUser({ userId, email }
       email: student.email,
       phone: student.phone,
       commercialStatus: student.commercialStatus,
-      onboardingCompleto: student.onboardingCompleto,
     },
-    currentCycle: currentContract
+    currentCycle: contract
       ? {
-          id: currentContract.id,
-          contractNumber: currentContract.contractNumber,
-          type: currentContract.type,
-          status: currentContract.status,
-          commercialStatus: currentContract.commercialStatus,
-          startDate: currentContract.startDate,
-          endDate: currentContract.endDate,
-          daysLeft,
-          isExpired,
-          durationMonths: currentContract.durationMonths,
-          workoutsPerWeek: currentContract.workoutsPerWeek,
-          workoutsPerMonth: currentContract.workoutsPerMonth,
-          totalContractedWorkouts: currentContract.totalContractedWorkouts,
-          priceCents: currentContract.priceCents,
-          paymentMode: currentContract.paymentMode,
-          plan: currentContract.plan
-            ? {
-                id: currentContract.plan.id,
-                name: currentContract.plan.name,
-                description: currentContract.plan.description,
-                workoutsPerWeek: currentContract.plan.workoutsPerWeek,
-                workoutsPerMonth: currentContract.plan.workoutsPerMonth,
-                priceCents: currentContract.plan.priceCents,
-                trialDays: currentContract.plan.trialDays,
-                allowTrial: currentContract.plan.allowTrial,
-              }
-            : null,
+          id: contract.id,
+          type: contract.type,
+          status: contract.status,
+          commercialStatus: contract.commercialStatus,
+          startDate: toDateOnlyISOString(contract.startDate),
+          endDate: toDateOnlyISOString(contract.endDate),
+          daysLeft: getDaysLeft(contract.endDate),
+          workoutsPerWeek: contract.workoutsPerWeek,
+          workoutsPerMonth: contract.workoutsPerMonth,
+          totalContractedWorkouts: contract.totalContractedWorkouts,
+          priceCents: contract.priceCents,
+          planName: contract.plan?.name || null,
         }
       : null,
     professor: professor
@@ -294,33 +325,23 @@ export async function getStudentDashboardSummaryForSessionUser({ userId, email }
           id: professor.id,
           name: professor.name,
           email: professor.email,
-          role: professor.role,
         }
       : null,
     payment: payment
       ? {
           id: payment.id,
-          amountCents: payment.amountCents,
-          dueDate: payment.dueDate,
-          paidAt: payment.paidAt,
           status: payment.status,
+          dueDate: toDateOnlyISOString(payment.dueDate),
+          paidAt: payment.paidAt ? toDateOnlyISOString(payment.paidAt) : null,
+          amountCents: payment.amountCents,
           method: payment.method,
-          paymentLinkUrl: payment.paymentLinkUrl,
-          receiptUrl: payment.receiptUrl,
         }
       : null,
-    flags: {
-      needsProfessorAssignment,
-      isTrial: currentContract?.type === "TRIAL",
-      isPaidContract: currentContract?.type === "PAID",
-      isAwaitingPayment: currentContract?.status === "AWAITING_PAYMENT",
-      isSuspended: currentContract?.status === "SUSPENDED",
-      isExpired,
-    },
     uiState,
+    hasActiveAccess: !shouldBlockTraining,
+    shouldBlockTraining,
+    title: text.title,
+    message: text.message,
+    actionLabel: text.actionLabel,
   };
 }
-
-export type StudentDashboardSummary = Awaited<
-  ReturnType<typeof getStudentDashboardSummaryForSessionUser>
->;
