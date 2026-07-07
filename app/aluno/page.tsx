@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
+import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
 interface LibraryExercise {
   id: string;
   name: string;
@@ -586,6 +587,9 @@ export default function AlunoPage() {
           {message.text}
         </div>
       )}
+
+      <AlunoCommercialStatusPanel />
+
       <div className="flex flex-col lg:flex-row gap-3">
         {/* AVISOS E FEEDBACKS */}
         <div className="lg:w-[30%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
