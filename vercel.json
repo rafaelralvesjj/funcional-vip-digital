@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/did-you-know",
       "schedule": "0 12 * * 2"
+    },
+    {
+      "path": "/api/cron/contracts-lifecycle",
+      "schedule": "0 12 * * *"
     }
   ]
 }
