@@ -52,7 +52,29 @@ type ContractItem = {
   createdAt: string;
 };
 
-type ApiResponse = {
+type PaymentItem = {
+  id: string;
+  contractId: string;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string | null;
+  contractNumber?: string | null;
+  contractType?: string | null;
+  contractStatus?: string | null;
+  planName: string;
+  professorName?: string | null;
+  amountCents: number;
+  dueDate: string;
+  paidAt?: string | null;
+  status: string;
+  method?: string | null;
+  provider?: string | null;
+  paymentLinkUrl?: string | null;
+  notes?: string | null;
+  createdAt: string;
+};
+
+type ContractsResponse = {
   contracts: ContractItem[];
   students: StudentOption[];
   plans: PlanOption[];
@@ -65,6 +87,21 @@ type ApiResponse = {
     trialContracts: number;
     noContractStudents: number;
     expectedRevenueCents: number;
+  };
+};
+
+type PaymentsResponse = {
+  payments: PaymentItem[];
+  metrics: {
+    totalPayments: number;
+    paidPayments: number;
+    openPayments: number;
+    overduePayments: number;
+    partialPayments: number;
+    cancelledPayments: number;
+    receivedCents: number;
+    openCents: number;
+    overdueCents: number;
   };
 };
 
@@ -91,6 +128,19 @@ function formatMoney(cents?: number | null): string {
   });
 }
 
+function moneyToCents(value: string): number {
+  const normalized = String(value || "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .replace(/[^\d.]/g, "");
+
+  const parsed = Number(normalized);
+
+  if (!Number.isFinite(parsed)) return 0;
+
+  return Math.round(parsed * 100);
+}
+
 function statusLabel(status: string): string {
   const labels: Record<string, string> = {
     DRAFT: "Rascunho",
@@ -105,44 +155,35 @@ function statusLabel(status: string): string {
   return labels[status] || status;
 }
 
-function commercialStatusLabel(status: string): string {
+function typeLabel(type: string): string {
   const labels: Record<string, string> = {
-    LEAD: "Lead",
-    EXPERIENCIA_ATIVA: "Experiência ativa",
-    CONTRATO_ATIVO: "Contrato ativo",
-    SEM_CONTRATO_ATIVO: "Sem contrato ativo",
-    SUSPENSO_POR_PAGAMENTO: "Suspenso por pagamento",
-    AGUARDANDO_PAGAMENTO: "Aguardando pagamento",
-    AGUARDANDO_ACEITE: "Aguardando aceite",
-    INATIVO: "Inativo",
+    PAID: "Pago",
+    TRIAL: "Experiência grátis",
+  };
+
+  return labels[type] || type;
+}
+
+function paymentStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    EM_ABERTO: "Em aberto",
+    PAGO: "Pago",
+    ATRASADO: "Atrasado",
+    PARCIAL: "Parcial",
+    CANCELADO: "Cancelado",
   };
 
   return labels[status] || status;
 }
 
-function daysUntil(value: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-
-  return Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function statusStyle(status: string): string {
-  if (status === "ACTIVE") return "bg-green-500/10 text-green-400 border-green-500/20";
-  if (status === "SUSPENDED") return "bg-red-500/10 text-red-400 border-red-500/20";
-  if (status === "AWAITING_PAYMENT") return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20";
-  if (status === "FINALIZED") return "bg-[#1a1a1a] text-[#a1a1a1] border-[#ffffff10]";
-  return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-}
-
 export default function FinanceiroPage() {
-  const [data, setData] = useState<ApiResponse | null>(null);
+  const [contractsData, setContractsData] = useState<ContractsResponse | null>(null);
+  const [paymentsData, setPaymentsData] = useState<PaymentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingContract, setSavingContract] = useState(false);
+  const [savingPayment, setSavingPayment] = useState(false);
   const [filter, setFilter] = useState("VENCENDO");
+  const [paymentFilter, setPaymentFilter] = useState("TODOS");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [studentId, setStudentId] = useState("");
@@ -152,27 +193,59 @@ export default function FinanceiroPage() {
   const [durationMonths, setDurationMonths] = useState("1");
   const [startDate, setStartDate] = useState(todayIso());
   const [priceReais, setPriceReais] = useState("");
-  const [activateNow, setActivateNow] = useState(true);
+  const [activateNow, setActivateNow] = useState(false);
   const [notes, setNotes] = useState("");
+
+  const [paymentContractId, setPaymentContractId] = useState("");
+  const [paymentAmountReais, setPaymentAmountReais] = useState("");
+  const [paymentDueDate, setPaymentDueDate] = useState(todayIso());
+  const [paymentMethod, setPaymentMethod] = useState("PIX");
+  const [paymentStatus, setPaymentStatus] = useState("EM_ABERTO");
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [activateContractOnPaid, setActivateContractOnPaid] = useState(true);
 
   async function loadData() {
     setLoading(true);
     setMessage(null);
 
     try {
-      const res = await fetch("/api/student-contracts", {
-        cache: "no-store",
-      });
-      const json = await res.json().catch(() => null);
+      const [contractsRes, paymentsRes] = await Promise.all([
+        fetch("/api/student-contracts", {
+          cache: "no-store",
+        }),
+        fetch("/api/contract-payments", {
+          cache: "no-store",
+        }),
+      ]);
 
-      if (res.ok) {
-        setData(json);
+      const contractsJson = await contractsRes.json().catch(() => null);
+      const paymentsJson = await paymentsRes.json().catch(() => null);
+
+      if (contractsRes.ok) {
+        setContractsData(contractsJson);
       } else {
-        const detail = json?.message ? ` Detalhe: ${json.message}` : "";
-        setMessage({ type: "error", text: `${json?.error || "Erro ao carregar financeiro."}${detail}` });
+        const detail = contractsJson?.message ? ` Detalhe: ${contractsJson.message}` : "";
+        setMessage({
+          type: "error",
+          text: `${contractsJson?.error || "Erro ao carregar contratos."}${detail}`,
+        });
+      }
+
+      if (paymentsRes.ok) {
+        setPaymentsData(paymentsJson);
+      } else {
+        const detail = paymentsJson?.message ? ` Detalhe: ${paymentsJson.message}` : "";
+        setMessage({
+          type: "error",
+          text: `${paymentsJson?.error || "Erro ao carregar pagamentos."}${detail}`,
+        });
       }
     } catch {
-      setMessage({ type: "error", text: "Erro ao carregar financeiro. Abra a aba Network para ver a resposta da rota /api/student-contracts." });
+      setMessage({
+        type: "error",
+        text: "Erro ao carregar financeiro. Verifique se o SQL TXT da Fase 2 foi rodado no Neon.",
+      });
     }
 
     setLoading(false);
@@ -192,9 +265,9 @@ export default function FinanceiroPage() {
   }, []);
 
   useEffect(() => {
-    if (!data || !pendingStudentIdFromUrl) return;
+    if (!contractsData || !pendingStudentIdFromUrl) return;
 
-    const exists = data.students.some((student) => student.id === pendingStudentIdFromUrl);
+    const exists = contractsData.students.some((student) => student.id === pendingStudentIdFromUrl);
 
     if (exists) {
       setStudentId(pendingStudentIdFromUrl);
@@ -203,11 +276,11 @@ export default function FinanceiroPage() {
         text: "Aluno selecionado. Agora escolha o plano e crie a experiência grátis ou contrato.",
       });
     }
-  }, [data, pendingStudentIdFromUrl]);
+  }, [contractsData, pendingStudentIdFromUrl]);
 
   const selectedPlan = useMemo(() => {
-    return data?.plans.find((plan) => plan.id === planId) || null;
-  }, [data, planId]);
+    return contractsData?.plans.find((plan) => plan.id === planId) || null;
+  }, [contractsData, planId]);
 
   useEffect(() => {
     if (!selectedPlan) return;
@@ -215,33 +288,46 @@ export default function FinanceiroPage() {
     setDurationMonths(String(selectedPlan.durationMonths || 1));
     setPriceReais(selectedPlan.priceCents ? String(selectedPlan.priceCents / 100) : "");
     setType(selectedPlan.allowTrial ? "TRIAL" : "PAID");
+    setActivateNow(Boolean(selectedPlan.allowTrial));
   }, [selectedPlan?.id]);
+
+  const selectedPaymentContract = useMemo(() => {
+    return contractsData?.contracts.find((contract) => contract.id === paymentContractId) || null;
+  }, [contractsData, paymentContractId]);
+
+  useEffect(() => {
+    if (!selectedPaymentContract) return;
+
+    if (selectedPaymentContract.priceCents > 0) {
+      setPaymentAmountReais(String(selectedPaymentContract.priceCents / 100));
+    }
+  }, [selectedPaymentContract?.id]);
 
   const calculatedPreview = useMemo(() => {
     const months = Number(durationMonths || selectedPlan?.durationMonths || 1);
     const workoutsPerMonth = selectedPlan?.workoutsPerMonth || 0;
     const workoutsPerWeek = selectedPlan?.workoutsPerWeek || 0;
-    const totalWorkouts = workoutsPerMonth * Math.max(months, 1);
 
-    const start = new Date(`${startDate}T12:00:00`);
-    const end = new Date(start);
+    if (!selectedPlan) {
+      return null;
+    }
+
+    const end = new Date(`${startDate}T12:00:00`);
     end.setMonth(end.getMonth() + Math.max(months, 1));
     end.setDate(end.getDate() - 1);
 
     return {
-      months,
-      workoutsPerMonth,
       workoutsPerWeek,
-      totalWorkouts,
-      endDate: Number.isNaN(end.getTime()) ? null : end,
+      workoutsPerMonth,
+      total: workoutsPerMonth * Math.max(months, 1),
+      endDate: end.toISOString(),
     };
-  }, [durationMonths, selectedPlan, startDate]);
-
-  const contracts = data?.contracts || [];
+  }, [selectedPlan, durationMonths, startDate]);
 
   const filteredContracts = useMemo(() => {
+    const contracts = contractsData?.contracts || [];
     const now = new Date();
-    const in7Days = new Date();
+    const in7Days = new Date(now);
     in7Days.setDate(in7Days.getDate() + 7);
 
     if (filter === "TODOS") return contracts;
@@ -265,7 +351,7 @@ export default function FinanceiroPage() {
     }
 
     if (filter === "EXPERIENCIA") {
-      return contracts.filter((contract) => contract.type === "TRIAL" && contract.status === "ACTIVE");
+      return contracts.filter((contract) => contract.type === "TRIAL");
     }
 
     if (filter === "PAGAMENTO") {
@@ -273,22 +359,29 @@ export default function FinanceiroPage() {
     }
 
     return contracts;
-  }, [contracts, filter]);
+  }, [contractsData, filter]);
 
-  async function createContract() {
-    if (!studentId || !selectedPlan) {
-      setMessage({ type: "error", text: "Selecione aluno e plano antes de criar o contrato." });
+  const filteredPayments = useMemo(() => {
+    const payments = paymentsData?.payments || [];
+
+    if (paymentFilter === "TODOS") return payments;
+
+    return payments.filter((payment) => payment.status === paymentFilter);
+  }, [paymentsData, paymentFilter]);
+
+  async function handleCreateContract(event: React.FormEvent) {
+    event.preventDefault();
+
+    if (!studentId || !planId) {
+      setMessage({ type: "error", text: "Selecione o aluno e o plano." });
       return;
     }
 
-    setSaving(true);
+    setSavingContract(true);
     setMessage(null);
 
     try {
-      const priceCents =
-        priceReais.trim() === ""
-          ? selectedPlan.priceCents
-          : Math.round(Number(priceReais.replace(",", ".")) * 100);
+      const status = type === "PAID" && !activateNow ? "AWAITING_PAYMENT" : activateNow ? "ACTIVE" : "DRAFT";
 
       const res = await fetch("/api/student-contracts", {
         method: "POST",
@@ -299,11 +392,12 @@ export default function FinanceiroPage() {
           studentId,
           planId,
           type,
+          status,
+          activate: activateNow,
           durationMonths: Number(durationMonths || 1),
           startDate,
-          priceCents,
-          activate: activateNow,
-          status: activateNow ? "ACTIVE" : "DRAFT",
+          priceCents: moneyToCents(priceReais),
+          paymentMode: type === "TRIAL" ? "GRATUITO" : "UNICO",
           source: "MANUAL",
           notes,
         }),
@@ -312,8 +406,20 @@ export default function FinanceiroPage() {
       const json = await res.json().catch(() => null);
 
       if (res.ok) {
-        setMessage({ type: "success", text: "Contrato criado com sucesso." });
-        setStudentId("");
+        setMessage({
+          type: "success",
+          text:
+            type === "PAID" && !activateNow
+              ? "Contrato criado aguardando pagamento. Agora gere ou registre o pagamento manual."
+              : "Contrato criado com sucesso.",
+        });
+
+        const createdId = json?.contract?.id;
+        if (createdId) {
+          setPaymentContractId(createdId);
+          setPaymentAmountReais(priceReais);
+        }
+
         setNotes("");
         await loadData();
       } else {
@@ -323,11 +429,10 @@ export default function FinanceiroPage() {
       setMessage({ type: "error", text: "Erro ao criar contrato." });
     }
 
-    setSaving(false);
+    setSavingContract(false);
   }
 
-  async function updateContractStatus(contract: ContractItem, status: string) {
-    setSaving(true);
+  async function handleUpdateContractStatus(contractId: string, status: string) {
     setMessage(null);
 
     try {
@@ -337,7 +442,7 @@ export default function FinanceiroPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          id: contract.id,
+          id: contractId,
           status,
         }),
       });
@@ -353,387 +458,644 @@ export default function FinanceiroPage() {
     } catch {
       setMessage({ type: "error", text: "Erro ao atualizar contrato." });
     }
-
-    setSaving(false);
   }
 
-  const metrics = data?.metrics;
+  async function handleCreatePayment(event: React.FormEvent) {
+    event.preventDefault();
+
+    if (!paymentContractId) {
+      setMessage({ type: "error", text: "Selecione um contrato." });
+      return;
+    }
+
+    const amountCents = moneyToCents(paymentAmountReais);
+
+    if (amountCents <= 0) {
+      setMessage({ type: "error", text: "Informe um valor maior que zero." });
+      return;
+    }
+
+    setSavingPayment(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/contract-payments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contractId: paymentContractId,
+          amountCents,
+          dueDate: paymentDueDate,
+          method: paymentMethod,
+          status: paymentStatus,
+          paymentLinkUrl,
+          notes: paymentNotes,
+          activateContract: paymentStatus === "PAGO" && activateContractOnPaid,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text:
+            paymentStatus === "PAGO" && activateContractOnPaid
+              ? "Pagamento registrado como pago e contrato ativado."
+              : "Pagamento registrado.",
+        });
+        setPaymentLinkUrl("");
+        setPaymentNotes("");
+        setPaymentStatus("EM_ABERTO");
+        await loadData();
+      } else {
+        setMessage({ type: "error", text: json?.error || "Erro ao registrar pagamento." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao registrar pagamento." });
+    }
+
+    setSavingPayment(false);
+  }
+
+  async function handleUpdatePaymentStatus(paymentId: string, status: string) {
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/contract-payments", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: paymentId,
+          status,
+          activateContract: status === "PAGO",
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text:
+            status === "PAGO"
+              ? "Pagamento marcado como pago e contrato ativado."
+              : "Pagamento atualizado.",
+        });
+        await loadData();
+      } else {
+        setMessage({ type: "error", text: json?.error || "Erro ao atualizar pagamento." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao atualizar pagamento." });
+    }
+  }
+
+  const metrics = contractsData?.metrics;
+  const paymentMetrics = paymentsData?.metrics;
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <main className="p-6 space-y-6 bg-[#0a0a0a] min-h-screen text-[#f5f5f5]">
       <div>
-        <p className="text-xs text-[#D4A373] uppercase tracking-[0.3em] mb-2">
-          Contratos e ciclos
+        <p className="text-xs uppercase tracking-[0.35em] text-[#D4A373] mb-2">
+          Contratos, ciclos e pagamentos
         </p>
-        <h1 className="text-2xl md:text-3xl font-bold text-[#D4A373]">
-          Financeiro
-        </h1>
+        <h1 className="text-3xl font-bold text-[#D4A373]">Financeiro</h1>
         <p className="text-sm text-[#a1a1a1] mt-2 max-w-5xl">
-          Controle o ciclo comercial do aluno: experiência, contrato ativo, vencimento,
-          pausa, suspensão por pagamento e reativação. Os treinos e contadores operacionais
-          devem olhar o contrato atual, não o histórico antigo.
+          Controle manual de contratos, experiência gratuita, vencimentos e pagamentos. Nesta fase,
+          você registra quando o aluno pagou e o sistema ativa o contrato/ciclo correspondente.
         </p>
       </div>
 
       {message && (
         <div
-          className={
-            "rounded-xl px-4 py-3 text-sm " +
-            (message.type === "success"
-              ? "bg-green-500/10 text-green-400 border border-green-500/20"
-              : "bg-red-500/10 text-red-400 border border-red-500/20")
-          }
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            message.type === "success"
+              ? "bg-green-500/10 border-green-500/20 text-green-300"
+              : "bg-red-500/10 border-red-500/20 text-red-300"
+          }`}
         >
           {message.text}
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      {loading && (
+        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-6 text-sm text-[#a1a1a1]">
+          Carregando financeiro...
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-[10px] text-[#6b6b6b] uppercase">Contratos ativos</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Contratos ativos</p>
           <p className="text-2xl font-bold text-green-400">{metrics?.activeContracts || 0}</p>
         </div>
-
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-[10px] text-[#6b6b6b] uppercase">Vencendo</p>
-          <p className="text-2xl font-bold text-yellow-400">{metrics?.endingSoonContracts || 0}</p>
-        </div>
-
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-[10px] text-[#6b6b6b] uppercase">Vencidos</p>
-          <p className="text-2xl font-bold text-red-400">{metrics?.expiredContracts || 0}</p>
-        </div>
-
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-[10px] text-[#6b6b6b] uppercase">Experiência</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Experiência</p>
           <p className="text-2xl font-bold text-blue-400">{metrics?.trialContracts || 0}</p>
         </div>
-
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-[10px] text-[#6b6b6b] uppercase">Sem contrato</p>
-          <p className="text-2xl font-bold text-[#f5f5f5]">{metrics?.noContractStudents || 0}</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Recebido</p>
+          <p className="text-2xl font-bold text-green-400">{formatMoney(paymentMetrics?.receivedCents || 0)}</p>
         </div>
-
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-[10px] text-[#6b6b6b] uppercase">Previsto</p>
-          <p className="text-xl font-bold text-[#D4A373]">{formatMoney(metrics?.expectedRevenueCents || 0)}</p>
+          <p className="text-xs uppercase text-[#6b6b6b]">Em aberto</p>
+          <p className="text-2xl font-bold text-yellow-400">{formatMoney(paymentMetrics?.openCents || 0)}</p>
+        </div>
+        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
+          <p className="text-xs uppercase text-[#6b6b6b]">Atrasado</p>
+          <p className="text-2xl font-bold text-red-400">{formatMoney(paymentMetrics?.overdueCents || 0)}</p>
+        </div>
+        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
+          <p className="text-xs uppercase text-[#6b6b6b]">Sem contrato</p>
+          <p className="text-2xl font-bold text-[#D4A373]">{metrics?.noContractStudents || 0}</p>
         </div>
       </div>
 
-      <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
+      <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-[#D4A373]">
-            Criar contrato / ciclo
-          </h2>
+          <h2 className="text-lg font-semibold text-[#D4A373]">Criar contrato / ciclo</h2>
           <p className="text-xs text-[#a1a1a1] mt-1">
-            Selecione o aluno, escolha o plano e a duração. O sistema calcula automaticamente
-            o total de treinos do contrato.
+            Para plano pago, deixe desmarcado “Ativar agora” quando ainda estiver aguardando pagamento.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="text-xs text-[#a1a1a1] block mb-1">Aluno</label>
-            <select
-              value={studentId}
-              onChange={(event) => setStudentId(event.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-            >
-              <option value="">Selecione...</option>
-              {(data?.students || []).map((student) => (
-                <option key={student.id} value={student.id}>
-                  {student.name} · {commercialStatusLabel(student.commercialStatus)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-[#a1a1a1] block mb-1">Plano</label>
-            <select
-              value={planId}
-              onChange={(event) => setPlanId(event.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-            >
-              <option value="">Selecione...</option>
-              {(data?.plans || []).map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name} · {plan.workoutsPerMonth} treinos/mês
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-[#a1a1a1] block mb-1">Tipo</label>
-            <select
-              value={type}
-              onChange={(event) => setType(event.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-            >
-              <option value="PAID">Pago</option>
-              <option value="TRIAL">Experiência grátis</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-[#a1a1a1] block mb-1">Duração em meses</label>
-            <select
-              value={durationMonths}
-              onChange={(event) => setDurationMonths(event.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-            >
-              <option value="1">1 mês</option>
-              <option value="2">2 meses</option>
-              <option value="3">3 meses</option>
-              <option value="6">6 meses</option>
-              <option value="12">12 meses</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-[#a1a1a1] block mb-1">Data de início</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-[#a1a1a1] block mb-1">Valor total do contrato</label>
-            <input
-              value={priceReais}
-              onChange={(event) => setPriceReais(event.target.value)}
-              placeholder="Ex.: 297,00"
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-            />
-          </div>
-        </div>
-
-        {selectedPlan && (
-          <div className="bg-[#0a0a0a] border border-[#D4A373]/20 rounded-xl p-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+        <form onSubmit={handleCreateContract} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <p className="text-[10px] text-[#6b6b6b] uppercase">Treinos/semana</p>
-              <p className="text-lg font-semibold text-[#f5f5f5]">{calculatedPreview.workoutsPerWeek}</p>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Aluno</label>
+              <select
+                value={studentId}
+                onChange={(event) => setStudentId(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="">Selecione...</option>
+                {(contractsData?.students || []).map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.name} {student.commercialStatus ? `· ${student.commercialStatus}` : ""}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
-              <p className="text-[10px] text-[#6b6b6b] uppercase">Treinos/mês</p>
-              <p className="text-lg font-semibold text-[#f5f5f5]">{calculatedPreview.workoutsPerMonth}</p>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Plano</label>
+              <select
+                value={planId}
+                onChange={(event) => setPlanId(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="">Selecione...</option>
+                {(contractsData?.plans || []).map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name} · {formatMoney(plan.priceCents)}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
-              <p className="text-[10px] text-[#6b6b6b] uppercase">Duração</p>
-              <p className="text-lg font-semibold text-[#f5f5f5]">{calculatedPreview.months} mês(es)</p>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Tipo</label>
+              <select
+                value={type}
+                onChange={(event) => {
+                  const nextType = event.target.value;
+                  setType(nextType);
+                  setActivateNow(nextType === "TRIAL");
+                }}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="PAID">Pago</option>
+                <option value="TRIAL">Experiência grátis</option>
+              </select>
             </div>
 
             <div>
-              <p className="text-[10px] text-[#6b6b6b] uppercase">Total contrato</p>
-              <p className="text-lg font-semibold text-[#D4A373]">{calculatedPreview.totalWorkouts} treinos</p>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Duração em meses</label>
+              <select
+                value={durationMonths}
+                onChange={(event) => setDurationMonths(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                {[1, 2, 3, 6, 12].map((month) => (
+                  <option key={month} value={month}>
+                    {month} {month === 1 ? "mês" : "meses"}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
-              <p className="text-[10px] text-[#6b6b6b] uppercase">Fim previsto</p>
-              <p className="text-lg font-semibold text-[#f5f5f5]">
-                {calculatedPreview.endDate ? formatDate(calculatedPreview.endDate.toISOString()) : "-"}
-              </p>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Data de início</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Valor total do contrato</label>
+              <input
+                value={priceReais}
+                onChange={(event) => setPriceReais(event.target.value)}
+                placeholder="Ex.: 297,00"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              />
             </div>
           </div>
-        )}
 
-        <div>
-          <label className="text-xs text-[#a1a1a1] block mb-1">Observações internas</label>
+          {calculatedPreview && (
+            <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-sm text-[#d6d6d6]">
+              <strong className="text-[#D4A373]">Prévia:</strong>{" "}
+              {calculatedPreview.workoutsPerWeek} treino(s)/semana · {calculatedPreview.workoutsPerMonth} treino(s)/mês · total de{" "}
+              {calculatedPreview.total} treino(s) · fim em {formatDate(calculatedPreview.endDate)}
+            </div>
+          )}
+
           <textarea
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
-            placeholder="Ex.: aluno veio do Instagram, fechou pelo WhatsApp, aguardando comprovante..."
-            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+            placeholder="Observações internas..."
+            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
           />
+
+          <label className="flex items-start gap-2 text-xs text-[#a1a1a1]">
+            <input
+              type="checkbox"
+              checked={activateNow}
+              onChange={(event) => setActivateNow(event.target.checked)}
+              className="mt-0.5 accent-[#D4A373]"
+            />
+            <span>
+              Ativar contrato agora. Para contrato pago, marque apenas se o pagamento já foi confirmado.
+              Se desmarcado, ficará como aguardando pagamento.
+            </span>
+          </label>
+
+          <button
+            type="submit"
+            disabled={savingContract}
+            className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
+          >
+            {savingContract ? "Criando..." : "Criar contrato"}
+          </button>
+        </form>
+      </section>
+
+      <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-[#D4A373]">Registrar pagamento manual</h2>
+          <p className="text-xs text-[#a1a1a1] mt-1">
+            Use quando o aluno pagar por Pix, transferência, cartão fora do sistema ou link externo.
+          </p>
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-[#a1a1a1]">
-          <input
-            type="checkbox"
-            checked={activateNow}
-            onChange={(event) => setActivateNow(event.target.checked)}
+        <form onSubmit={handleCreatePayment} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Contrato</label>
+              <select
+                value={paymentContractId}
+                onChange={(event) => setPaymentContractId(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="">Selecione...</option>
+                {(contractsData?.contracts || []).map((contract) => (
+                  <option key={contract.id} value={contract.id}>
+                    {contract.studentName} · {contract.planName} · {statusLabel(contract.status)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Valor</label>
+              <input
+                value={paymentAmountReais}
+                onChange={(event) => setPaymentAmountReais(event.target.value)}
+                placeholder="Ex.: 297,00"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Vencimento</label>
+              <input
+                type="date"
+                value={paymentDueDate}
+                onChange={(event) => setPaymentDueDate(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Forma</label>
+              <select
+                value={paymentMethod}
+                onChange={(event) => setPaymentMethod(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="PIX">Pix</option>
+                <option value="CARTAO">Cartão</option>
+                <option value="TRANSFERENCIA">Transferência</option>
+                <option value="DINHEIRO">Dinheiro</option>
+                <option value="LINK_EXTERNO">Link externo</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Status</label>
+              <select
+                value={paymentStatus}
+                onChange={(event) => setPaymentStatus(event.target.value)}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              >
+                <option value="EM_ABERTO">Em aberto</option>
+                <option value="PAGO">Pago</option>
+                <option value="ATRASADO">Atrasado</option>
+                <option value="PARCIAL">Parcial</option>
+                <option value="CANCELADO">Cancelado</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-[#a1a1a1] block mb-1">Link de pagamento</label>
+              <input
+                value={paymentLinkUrl}
+                onChange={(event) => setPaymentLinkUrl(event.target.value)}
+                placeholder="Cole aqui o link externo, se houver"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              />
+            </div>
+          </div>
+
+          <textarea
+            value={paymentNotes}
+            onChange={(event) => setPaymentNotes(event.target.value)}
+            placeholder="Observações do pagamento..."
+            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
           />
-          Ativar contrato agora. Se desmarcar, ficará como rascunho.
-        </label>
 
-        <button
-          type="button"
-          onClick={createContract}
-          disabled={saving || loading}
-          className="w-full md:w-auto px-5 py-3 rounded-xl bg-[#D4A373] text-[#0a0a0a] font-semibold text-sm hover:bg-[#c8945f] disabled:opacity-50"
-        >
-          {saving ? "Salvando..." : "Criar contrato"}
-        </button>
-      </div>
+          <label className="flex items-start gap-2 text-xs text-[#a1a1a1]">
+            <input
+              type="checkbox"
+              checked={activateContractOnPaid}
+              onChange={(event) => setActivateContractOnPaid(event.target.checked)}
+              className="mt-0.5 accent-[#D4A373]"
+            />
+            <span>
+              Se o pagamento for marcado como pago, ativar automaticamente o contrato e substituir o ciclo anterior.
+            </span>
+          </label>
 
-      <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <button
+            type="submit"
+            disabled={savingPayment}
+            className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
+          >
+            {savingPayment ? "Registrando..." : "Registrar pagamento"}
+          </button>
+        </form>
+      </section>
+
+      <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-[#D4A373]">
-              Listas para tomada de decisão
-            </h2>
+            <h2 className="text-lg font-semibold text-[#D4A373]">Pagamentos</h2>
             <p className="text-xs text-[#a1a1a1] mt-1">
-              Use os filtros para acompanhar contratos vencendo, experiência grátis,
-              pagamentos pendentes e alunos sem contrato.
+              Marque como pago quando confirmar o recebimento. Isso ativa o contrato vinculado.
             </p>
           </div>
 
-          <select
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            className="bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
-          >
-            <option value="VENCENDO">Contratos vencendo em 7 dias</option>
-            <option value="VENCIDOS">Contratos vencidos</option>
-            <option value="ATIVOS">Contratos ativos</option>
-            <option value="EXPERIENCIA">Experiência grátis</option>
-            <option value="PAGAMENTO">Aguardando/suspenso por pagamento</option>
-            <option value="TODOS">Todos os contratos</option>
-          </select>
-        </div>
-
-        {loading ? (
-          <div className="p-8 text-center text-sm text-[#a1a1a1]">
-            Carregando contratos...
-          </div>
-        ) : filteredContracts.length === 0 ? (
-          <div className="p-8 text-center text-sm text-[#a1a1a1]">
-            Nenhum contrato nesta lista.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredContracts.map((contract) => {
-              const days = daysUntil(contract.endDate);
-
-              return (
-                <div
-                  key={contract.id}
-                  className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-4 space-y-3"
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className={`text-[10px] px-2 py-1 rounded-full border ${statusStyle(contract.status)}`}>
-                          {statusLabel(contract.status)}
-                        </span>
-
-                        <span className="text-[10px] px-2 py-1 rounded-full bg-[#D4A373]/10 text-[#D4A373]">
-                          {contract.type === "TRIAL" ? "Experiência" : "Pago"}
-                        </span>
-
-                        {contract.status === "ACTIVE" && days >= 0 && days <= 7 && (
-                          <span className="text-[10px] px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-400">
-                            vence em {days} dia(s)
-                          </span>
-                        )}
-
-                        {contract.status === "ACTIVE" && days < 0 && (
-                          <span className="text-[10px] px-2 py-1 rounded-full bg-red-500/10 text-red-400">
-                            vencido há {Math.abs(days)} dia(s)
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 className="text-base font-semibold text-[#f5f5f5]">
-                        {contract.studentName}
-                      </h3>
-
-                      <p className="text-xs text-[#a1a1a1] mt-1">
-                        {contract.planName} · {contract.workoutsPerMonth} treinos/mês · {contract.durationMonths} mês(es) · {contract.totalContractedWorkouts} treinos no ciclo
-                      </p>
-
-                      <p className="text-xs text-[#6b6b6b] mt-1">
-                        Período: {formatDate(contract.startDate)} a {formatDate(contract.endDate)} · Professor: {contract.professorName || "Não informado"} · Valor: {formatMoney(contract.priceCents)}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {contract.status !== "ACTIVE" && (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => updateContractStatus(contract, "ACTIVE")}
-                          className="text-xs px-3 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20"
-                        >
-                          Ativar
-                        </button>
-                      )}
-
-                      {contract.status !== "SUSPENDED" && contract.status !== "FINALIZED" && (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => updateContractStatus(contract, "SUSPENDED")}
-                          className="text-xs px-3 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                        >
-                          Suspender
-                        </button>
-                      )}
-
-                      {contract.status !== "FINALIZED" && (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => updateContractStatus(contract, "FINALIZED")}
-                          className="text-xs px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#a1a1a1] hover:text-white border border-[#ffffff10]"
-                        >
-                          Finalizar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {contract.notes && (
-                    <div className="bg-[#111] rounded-lg p-3 border border-[#ffffff08]">
-                      <p className="text-[10px] text-[#6b6b6b] uppercase mb-1">
-                        Observação
-                      </p>
-                      <p className="text-xs text-[#e5e5e5] whitespace-pre-wrap">
-                        {contract.notes}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-3">
-        <h2 className="text-lg font-semibold text-[#D4A373]">
-          Alunos sem contrato ativo
-        </h2>
-        <p className="text-xs text-[#a1a1a1]">
-          Esses alunos mantêm histórico, mas não devem receber treino novo, cobrança de treino perdido
-          nem contador de evolução do ciclo atual.
-        </p>
-
-        {(data?.noContractStudents || []).length === 0 ? (
-          <p className="text-sm text-[#a1a1a1]">Nenhum aluno sem contrato ativo.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(data?.noContractStudents || []).slice(0, 30).map((student) => (
-              <div
-                key={student.id}
-                className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-4"
+          <div className="flex flex-wrap gap-2">
+            {["TODOS", "EM_ABERTO", "PAGO", "ATRASADO", "PARCIAL", "CANCELADO"].map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setPaymentFilter(item)}
+                className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                  paymentFilter === item
+                    ? "bg-[#D4A373] text-[#0a0a0a]"
+                    : "bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10]"
+                }`}
               >
-                <p className="text-sm font-semibold text-[#f5f5f5]">{student.name}</p>
-                <p className="text-xs text-[#a1a1a1] mt-1">{student.email || "sem e-mail"}</p>
-                <p className="text-[10px] text-[#D4A373] mt-2">
-                  {commercialStatusLabel(student.commercialStatus)}
-                </p>
-              </div>
+                {item === "TODOS" ? "Todos" : paymentStatusLabel(item)}
+              </button>
             ))}
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+
+        <div className="space-y-3">
+          {filteredPayments.length === 0 ? (
+            <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-sm text-[#a1a1a1]">
+              Nenhum pagamento encontrado.
+            </div>
+          ) : (
+            filteredPayments.map((payment) => (
+              <div
+                key={payment.id}
+                className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-4 space-y-3"
+              >
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-[#f5f5f5]">{payment.studentName}</h3>
+                      <span className="rounded-full bg-[#D4A373]/15 text-[#D4A373] px-2 py-1 text-[11px] font-semibold">
+                        {paymentStatusLabel(payment.status)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#a1a1a1] mt-1">
+                      {payment.planName} · {typeLabel(payment.contractType || "")} · {payment.method || "-"}
+                    </p>
+                    <p className="text-xs text-[#6b6b6b] mt-1">
+                      Vencimento: {formatDate(payment.dueDate)}
+                      {payment.paidAt ? ` · Pago em: ${formatDate(payment.paidAt)}` : ""}
+                    </p>
+                    {payment.paymentLinkUrl && (
+                      <a
+                        href={payment.paymentLinkUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-[#D4A373] underline mt-1 inline-block"
+                      >
+                        Abrir link de pagamento
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="text-left lg:text-right">
+                    <p className="text-xl font-bold text-[#D4A373]">{formatMoney(payment.amountCents)}</p>
+                    <p className="text-xs text-[#6b6b6b]">{payment.contractNumber || "Sem número"}</p>
+                  </div>
+                </div>
+
+                {payment.notes && (
+                  <p className="text-xs text-[#a1a1a1] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl p-3">
+                    {payment.notes}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  {payment.status !== "PAGO" && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdatePaymentStatus(payment.id, "PAGO")}
+                      className="rounded-xl bg-green-500/15 border border-green-500/20 text-green-300 px-3 py-2 text-xs font-semibold"
+                    >
+                      Marcar pago e ativar contrato
+                    </button>
+                  )}
+
+                  {payment.status !== "ATRASADO" && payment.status !== "PAGO" && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdatePaymentStatus(payment.id, "ATRASADO")}
+                      className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 px-3 py-2 text-xs font-semibold"
+                    >
+                      Marcar atrasado
+                    </button>
+                  )}
+
+                  {payment.status !== "CANCELADO" && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdatePaymentStatus(payment.id, "CANCELADO")}
+                      className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#a1a1a1] px-3 py-2 text-xs font-semibold"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-[#D4A373]">Contratos e ciclos</h2>
+            <p className="text-xs text-[#a1a1a1] mt-1">
+              Acompanhe experiências, contratos pagos, vencimentos e suspensões.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {["VENCENDO", "VENCIDOS", "ATIVOS", "EXPERIENCIA", "PAGAMENTO", "TODOS"].map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setFilter(item)}
+                className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                  filter === item
+                    ? "bg-[#D4A373] text-[#0a0a0a]"
+                    : "bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10]"
+                }`}
+              >
+                {item === "PAGAMENTO" ? "Aguardando pagamento" : item.toLowerCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {filteredContracts.length === 0 ? (
+            <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-sm text-[#a1a1a1]">
+              Nenhum contrato encontrado.
+            </div>
+          ) : (
+            filteredContracts.map((contract) => (
+              <div
+                key={contract.id}
+                className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-4 space-y-3"
+              >
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-[#f5f5f5]">{contract.studentName}</h3>
+                      <span className="rounded-full bg-[#D4A373]/15 text-[#D4A373] px-2 py-1 text-[11px] font-semibold">
+                        {statusLabel(contract.status)}
+                      </span>
+                      <span className="rounded-full bg-[#ffffff08] text-[#a1a1a1] px-2 py-1 text-[11px]">
+                        {typeLabel(contract.type)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#a1a1a1] mt-1">
+                      {contract.planName} · Professor: {contract.professorName || "Sem professor"}
+                    </p>
+                    <p className="text-xs text-[#6b6b6b] mt-1">
+                      {formatDate(contract.startDate)} até {formatDate(contract.endDate)} · {contract.totalContractedWorkouts} treino(s)
+                    </p>
+                  </div>
+
+                  <div className="text-left lg:text-right">
+                    <p className="text-xl font-bold text-[#D4A373]">{formatMoney(contract.priceCents)}</p>
+                    <p className="text-xs text-[#6b6b6b]">{contract.contractNumber || "Sem número"}</p>
+                  </div>
+                </div>
+
+                {contract.notes && (
+                  <p className="text-xs text-[#a1a1a1] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl p-3">
+                    {contract.notes}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  {contract.status !== "ACTIVE" && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateContractStatus(contract.id, "ACTIVE")}
+                      className="rounded-xl bg-green-500/15 border border-green-500/20 text-green-300 px-3 py-2 text-xs font-semibold"
+                    >
+                      Ativar
+                    </button>
+                  )}
+
+                  {contract.status !== "SUSPENDED" && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateContractStatus(contract.id, "SUSPENDED")}
+                      className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 px-3 py-2 text-xs font-semibold"
+                    >
+                      Suspender
+                    </button>
+                  )}
+
+                  {contract.status !== "FINALIZED" && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateContractStatus(contract.id, "FINALIZED")}
+                      className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#a1a1a1] px-3 py-2 text-xs font-semibold"
+                    >
+                      Finalizar
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentContractId(contract.id);
+                      setPaymentAmountReais(contract.priceCents ? String(contract.priceCents / 100) : "");
+                      setPaymentDueDate(todayIso());
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="rounded-xl bg-[#1a1a1a] border border-[#D4A373]/30 text-[#D4A373] px-3 py-2 text-xs font-semibold"
+                  >
+                    Registrar pagamento
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </main>
   );
 }
