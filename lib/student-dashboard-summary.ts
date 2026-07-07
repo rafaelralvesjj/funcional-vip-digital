@@ -53,6 +53,15 @@ export type StudentDashboardSummary = {
     method: string | null;
     paymentLinkUrl: string | null;
   } | null;
+  flags: {
+    isTrial: boolean;
+    isPaid: boolean;
+    isAwaitingPayment: boolean;
+    isWithoutActiveContract: boolean;
+    isTrainingBlocked: boolean;
+    hasProfessor: boolean;
+    hasPaymentIssue: boolean;
+  };
   uiState: StudentDashboardUiState;
   hasActiveAccess: boolean;
   shouldBlockTraining: boolean;
@@ -297,6 +306,16 @@ export async function getStudentDashboardSummary(
     "AGUARDANDO_VINCULO_PROFESSOR",
   ].includes(uiState);
 
+  const flags = {
+    isTrial: contract?.type === "TRIAL",
+    isPaid: contract?.type === "PAID",
+    isAwaitingPayment: uiState === "AGUARDANDO_PAGAMENTO",
+    isWithoutActiveContract: uiState === "SEM_CONTRATO_ATIVO",
+    isTrainingBlocked: shouldBlockTraining,
+    hasProfessor: Boolean(professor),
+    hasPaymentIssue: ["ATRASADO", "EM_ABERTO", "PARCIAL"].includes(payment?.status || ""),
+  };
+
   return {
     student: {
       id: student.id,
@@ -339,6 +358,7 @@ export async function getStudentDashboardSummary(
           paymentLinkUrl: payment.paymentLinkUrl || null,
         }
       : null,
+    flags,
     uiState,
     hasActiveAccess: !shouldBlockTraining,
     shouldBlockTraining,
