@@ -23,6 +23,30 @@ interface WorkoutPlanSummary {
   createdAt?: string | null;
 }
 
+interface ActiveWorkoutContract {
+  id: string;
+  type: string;
+  status: string;
+  commercialStatus?: string | null;
+  startDate: string;
+  endDate: string;
+  workoutsPerWeek: number;
+  workoutsPerMonth: number;
+  totalContractedWorkouts: number;
+  planId?: string | null;
+  planName?: string | null;
+}
+
+interface WorkoutWeekSummary {
+  plans?: WorkoutPlanSummary[];
+  activeContract?: ActiveWorkoutContract | null;
+  weeklyLimit?: number | null;
+  weeklyPlansCount?: number;
+  weeklyRemaining?: number | null;
+  canCreateWorkout?: boolean;
+  message?: string | null;
+}
+
 interface ExerciseItem {
   name: string;
   description: string;
@@ -61,21 +85,6 @@ interface AiWorkoutDraftBatch {
   workouts: AiWorkoutDraft[];
 }
 
-function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): number | null {
-  const contracted = Number(contractedTrainingDaysPerMonth || 0);
-
-  if (!Number.isFinite(contracted) || contracted <= 0) {
-    return null;
-  }
-
-  if (contracted <= 4) return 1;
-  if (contracted <= 8) return 2;
-  if (contracted <= 12) return 3;
-  if (contracted <= 16) return 4;
-
-  return 5;
-}
-
 function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
   const date = new Date(referenceDate);
   date.setHours(0, 0, 0, 0);
@@ -100,17 +109,6 @@ function formatDatePtBr(date: Date): string {
     month: "2-digit",
     year: "numeric",
   });
-}
-
-function normalizeWorkoutPlans(data: any): WorkoutPlanSummary[] {
-  if (Array.isArray(data)) return data;
-
-  if (Array.isArray(data?.plans)) return data.plans;
-  if (Array.isArray(data?.workoutPlans)) return data.workoutPlans;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.data)) return data.data;
-
-  return [];
 }
 
 export default function MontarTreinoPage() {
@@ -138,6 +136,8 @@ export default function MontarTreinoPage() {
   const [showLibrary, setShowLibrary] = useState(false);
   const [weeklyPlansCount, setWeeklyPlansCount] = useState(0);
   const [weeklyInfoLoading, setWeeklyInfoLoading] = useState(false);
+  const [activeWorkoutContract, setActiveWorkoutContract] = useState<ActiveWorkoutContract | null>(null);
+  const [contractWarning, setContractWarning] = useState<string | null>(null);
   const [lockStudentSelection, setLockStudentSelection] = useState(false);
   const [openedFromPendingList, setOpenedFromPendingList] = useState(false);
   const [aiDraftBatch, setAiDraftBatch] = useState<AiWorkoutDraftBatch | null>(null);
@@ -322,9 +322,7 @@ export default function MontarTreinoPage() {
   }, [searchTerm, library]);
 
   const selectedStudentInfo = students.find((student) => student.id === selectedStudent);
-  const weeklyWorkoutLimit = getWeeklyWorkoutLimit(
-    selectedStudentInfo?.contractedTrainingDaysPerMonth
-  );
+  const weeklyWorkoutLimit = activeWorkoutContract?.workoutsPerWeek || null;
   const weeklyRemaining =
     weeklyWorkoutLimit == null ? null : Math.max(weeklyWorkoutLimit - weeklyPlansCount, 0);
   const nextWeeklyCount =
@@ -346,40 +344,45 @@ export default function MontarTreinoPage() {
     async function fetchWeeklyWorkoutInfo() {
       if (!selectedStudent) {
         setWeeklyPlansCount(0);
+        setActiveWorkoutContract(null);
+        setContractWarning(null);
         return;
       }
 
       setWeeklyInfoLoading(true);
+      setContractWarning(null);
 
       try {
-        const res = await fetch(`/api/workout-plan?studentId=${selectedStudent}`, {
+        const query = new URLSearchParams({
+          studentId: selectedStudent,
+          summary: "1",
+        });
+
+        if (date) {
+          query.set("date", date);
+        }
+
+        const res = await fetch(`/api/workout-plan?${query.toString()}`, {
           cache: "no-store",
         });
 
         if (!res.ok) {
           setWeeklyPlansCount(0);
+          setActiveWorkoutContract(null);
+          setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
           return;
         }
 
-        const data = await res.json();
-        const plans = normalizeWorkoutPlans(data);
-        const { startOfWeek, endOfWeek } = getWeekRange(
-          date ? new Date(date + "T12:00:00") : new Date()
-        );
+        const data = (await res.json()) as WorkoutWeekSummary;
 
-        const countThisWeek = plans.filter((plan) => {
-          const rawDate = plan.date || plan.createdAt;
-          if (!rawDate) return false;
-
-          const planDate = new Date(rawDate);
-
-          return planDate >= startOfWeek && planDate < endOfWeek;
-        }).length;
-
-        setWeeklyPlansCount(countThisWeek);
+        setWeeklyPlansCount(Number(data.weeklyPlansCount || 0));
+        setActiveWorkoutContract(data.activeContract || null);
+        setContractWarning(data.message || null);
       } catch (error) {
         console.error("Erro ao buscar treinos da semana:", error);
         setWeeklyPlansCount(0);
+        setActiveWorkoutContract(null);
+        setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
       } finally {
         setWeeklyInfoLoading(false);
       }
@@ -462,9 +465,10 @@ export default function MontarTreinoPage() {
     e.preventDefault();
     if (!selectedStudent || !planName.trim() || exercises.length === 0) return;
 
-    if (!weeklyWorkoutLimit) {
+    if (!activeWorkoutContract || !weeklyWorkoutLimit) {
       alert(
-        "Este aluno ainda não tem quantidade contratada de treinos/dias no mês configurada. A gestão precisa preencher essa informação antes de montar o treino."
+        contractWarning ||
+          "Este aluno não possui contrato ativo para a data do treino. Regularize o ciclo no Financeiro antes de montar novos treinos."
       );
       return;
     }
@@ -723,15 +727,14 @@ export default function MontarTreinoPage() {
                 {weeklyWorkoutLimit ? (
                   <>
                     <p className="text-xs text-[#a1a1a1] mt-3">
-                    Este aluno contratou{" "}
+                    Contrato ativo:{" "}
                     <span className="text-[#f5f5f5] font-semibold">
-                      {selectedStudentInfo?.contractedTrainingDaysPerMonth}
+                      {activeWorkoutContract?.planName ||
+                        (activeWorkoutContract?.type === "TRIAL" ? "Experiência gratuita" : "Plano pago")}
                     </span>{" "}
-                    treino(s)/dia(s) no mês. Para esta semana, o professor deve deixar{" "}
-                    <span className="text-[#f5f5f5] font-semibold">
-                      {weeklyWorkoutLimit}
-                    </span>{" "}
-                    treino(s) pronto(s). Ainda falta(m){" "}
+                    · {activeWorkoutContract?.workoutsPerWeek || weeklyWorkoutLimit} treino(s)/semana ·{" "}
+                    {activeWorkoutContract?.totalContractedWorkouts || "-"} treino(s) no ciclo. Para esta semana,
+                    ainda falta(m){" "}
                     <span className="text-[#f5f5f5] font-semibold">
                       {weeklyRemaining}
                     </span>{" "}
@@ -763,8 +766,8 @@ export default function MontarTreinoPage() {
                   </>
                 ) : (
                   <p className="text-xs text-red-400 mt-3">
-                    A gestão precisa vincular o aluno e preencher a quantidade contratada
-                    de treinos/dias no mês antes do professor montar o treino.
+                    {contractWarning ||
+                      "Este aluno não possui contrato ativo para a data selecionada. Regularize o ciclo no Financeiro antes de montar novos treinos."}
                   </p>
                 )}
               </div>
@@ -1027,7 +1030,7 @@ export default function MontarTreinoPage() {
           {saving
             ? "💾 Salvando treino..."
             : !weeklyWorkoutLimit && selectedStudent
-              ? "⚠️ Quantidade contratada não configurada"
+              ? "⚠️ Sem contrato ativo para a data"
               : isWeeklyLimitReached
                 ? "🚫 Limite semanal atingido"
                 : willCompleteWeekOnSave
