@@ -35,6 +35,19 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+function addMonthsMinusOneDay(startDate: Date, months: number): Date {
+  const endDate = new Date(startDate);
+  endDate.setMonth(endDate.getMonth() + Math.max(months, 1));
+  endDate.setDate(endDate.getDate() - 1);
+  endDate.setHours(23, 59, 59, 999);
+
+  return endDate;
+}
+
 async function getOptionalImage(source: BodySource): Promise<string | null> {
   if (!(source instanceof FormData)) return null;
 
@@ -50,11 +63,6 @@ async function getOptionalImage(source: BodySource): Promise<string | null> {
 
   if (!file.size || !file.type?.startsWith("image/")) return null;
 
-  /*
-   * Evita quebrar o cadastro por upload grande.
-   * Na primeira versão, guardamos uma imagem pequena como data URL.
-   * Depois podemos evoluir para storage próprio.
-   */
   const maxBytes = 1.5 * 1024 * 1024;
 
   if (file.size > maxBytes) {
@@ -63,6 +71,133 @@ async function getOptionalImage(source: BodySource): Promise<string | null> {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   return `data:${file.type};base64,${buffer.toString("base64")}`;
+}
+
+async function getTrialPlan() {
+  let plan = await prisma.servicePlan.findFirst({
+    where: {
+      allowTrial: true,
+      active: true,
+    },
+    orderBy: [
+      {
+        sortOrder: "asc",
+      },
+      {
+        createdAt: "asc",
+      },
+    ],
+  });
+
+  if (plan) return plan;
+
+  plan = await prisma.servicePlan.create({
+    data: {
+      name: "Experiência grátis - 1 mês",
+      description:
+        "Ciclo de experiência para o aluno conhecer a plataforma e testar o acompanhamento.",
+      workoutsPerWeek: 2,
+      workoutsPerMonth: 8,
+      durationMonths: 1,
+      priceCents: 0,
+      active: true,
+      trialDays: 30,
+      allowTrial: true,
+      sortOrder: 1,
+    },
+  });
+
+  return plan;
+}
+
+function getClientIp(req: NextRequest): string | null {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    null
+  );
+}
+
+async function findExistingStudentOrUser({
+  email,
+  phoneDigits,
+}: {
+  email: string;
+  phoneDigits: string;
+}) {
+  const existingUserByEmail = await prisma.user.findUnique({
+    where: {
+      email,
+    },
+    select: {
+      id: true,
+      email: true,
+      phone: true,
+      role: true,
+      active: true,
+      studentAuths: {
+        select: {
+          id: true,
+          name: true,
+          active: true,
+        },
+      },
+    },
+  });
+
+  if (existingUserByEmail) {
+    return {
+      reason: "EMAIL_EXISTS",
+      studentIds: existingUserByEmail.studentAuths.map((student) => student.id),
+    };
+  }
+
+  if (phoneDigits) {
+    const students = await prisma.student.findMany({
+      where: {
+        phone: {
+          contains: phoneDigits,
+        },
+      },
+      select: {
+        id: true,
+      },
+      take: 5,
+    });
+
+    if (students.length > 0) {
+      return {
+        reason: "PHONE_EXISTS",
+        studentIds: students.map((student) => student.id),
+      };
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        phone: {
+          contains: phoneDigits,
+        },
+      },
+      select: {
+        id: true,
+        studentAuths: {
+          select: {
+            id: true,
+          },
+        },
+      },
+      take: 5,
+    });
+
+    if (users.length > 0) {
+      return {
+        reason: "PHONE_EXISTS",
+        studentIds: users.flatMap((item) => item.studentAuths.map((student) => student.id)),
+      };
+    }
+  }
+
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -76,56 +211,75 @@ export async function POST(req: NextRequest) {
     const name = getString(body, ["name", "nome", "fullName", "aluno"]);
     const email = normalizeEmail(getString(body, ["email", "mail"]));
     const phone = getString(body, ["phone", "telefone", "whatsapp", "celular"]);
+    const phoneDigits = normalizePhone(phone);
     const password = getString(body, ["password", "senha"]);
     const confirmPassword = getString(body, ["confirmPassword", "confirmarSenha", "passwordConfirmation"]);
-    const notes = getString(body, ["notes", "observacoes", "observations"]) || null;
+    const objective = getString(body, ["objective", "objetivo"]);
+    const restrictions = getString(body, ["restrictions", "restricoes", "lesoes", "dores"]);
+    const activityLevel = getString(body, ["activityLevel", "nivelAtividade"]);
+    const source = getString(body, ["source", "origem"]) || "LANDING_PAGE";
+    const acceptedTermsRaw = getValue(body, ["acceptedTerms", "aceiteTermos", "termsAccepted"]);
+    const acceptedTerms =
+      acceptedTermsRaw === true ||
+      acceptedTermsRaw === "true" ||
+      acceptedTermsRaw === "on" ||
+      acceptedTermsRaw === "1";
+    const notesFromBody = getString(body, ["notes", "observacoes", "observations"]);
     const image = await getOptionalImage(body);
 
     if (!name) {
-      return NextResponse.json(
-        { error: "Informe o nome do aluno." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Informe o nome do aluno." }, { status: 400 });
     }
 
     if (!email) {
-      return NextResponse.json(
-        { error: "Informe o e-mail do aluno." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Informe o e-mail do aluno." }, { status: 400 });
+    }
+
+    if (!phoneDigits) {
+      return NextResponse.json({ error: "Informe o WhatsApp do aluno." }, { status: 400 });
     }
 
     if (!password || password.length < 6) {
-      return NextResponse.json(
-        { error: "A senha precisa ter pelo menos 6 caracteres." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "A senha precisa ter pelo menos 6 caracteres." }, { status: 400 });
     }
 
     if (confirmPassword && password !== confirmPassword) {
+      return NextResponse.json({ error: "As senhas não conferem." }, { status: 400 });
+    }
+
+    if (!acceptedTerms) {
       return NextResponse.json(
-        { error: "As senhas não conferem." },
+        { error: "Para iniciar a experiência gratuita, aceite o termo de experiência." },
         { status: 400 }
       );
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: {
-        email,
-      },
-      select: {
-        id: true,
-      },
+    const existing = await findExistingStudentOrUser({
+      email,
+      phoneDigits,
     });
 
-    if (existingUser) {
+    if (existing) {
       return NextResponse.json(
-        { error: "Já existe uma conta cadastrada com este e-mail." },
+        {
+          error:
+            "Identificamos que você já possui ou já possuiu cadastro conosco. Para retomar seu acompanhamento, fale com a equipe pelo WhatsApp.",
+          code: existing.reason,
+        },
         { status: 409 }
       );
     }
 
+    const trialPlan = await getTrialPlan();
+    const startDate = new Date();
+    startDate.setHours(12, 0, 0, 0);
+
+    const durationMonths = trialPlan.durationMonths || 1;
+    const endDate = addMonthsMinusOneDay(startDate, durationMonths);
     const passwordHash = await bcrypt.hash(password, 10);
+    const ip = getClientIp(req);
+    const userAgent = req.headers.get("user-agent") || null;
+    const termsVersion = "trial-v1";
 
     const result = await prisma.$transaction(async (tx) => {
       const authUser = await tx.user.create({
@@ -140,6 +294,17 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      const notes = [
+        "Cadastro criado pelo fluxo de experiência gratuita.",
+        `Origem: ${source}.`,
+        objective ? `Objetivo informado: ${objective}.` : null,
+        activityLevel ? `Nível de atividade: ${activityLevel}.` : null,
+        restrictions ? `Restrições/dores/lesões informadas: ${restrictions}.` : null,
+        notesFromBody ? `Observações: ${notesFromBody}.` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
       const student = await tx.student.create({
         data: {
           name,
@@ -149,18 +314,41 @@ export async function POST(req: NextRequest) {
           notes,
           active: true,
           onboardingCompleto: false,
-          commercialStatus: "SEM_CONTRATO_ATIVO",
-          contractedTrainingDaysPerMonth: null,
+          commercialStatus: "EXPERIENCIA_ATIVA",
+          contractedTrainingDaysPerMonth: trialPlan.workoutsPerMonth,
           userAuthId: authUser.id,
-          /*
-           * Cadastro público NÃO deve vincular automaticamente a professor.
-           * Como student.userId é obrigatório no modelo atual, usamos o próprio
-           * usuário do aluno como responsável técnico temporário.
-           *
-           * O vínculo real com professor e o contrato ativo serão feitos depois,
-           * pelo Financeiro / Vincular Alunos.
-           */
           userId: authUser.id,
+        },
+      });
+
+      const contract = await tx.studentContract.create({
+        data: {
+          studentId: student.id,
+          planId: trialPlan.id,
+          professorId: null,
+          contractNumber: `EXP-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+          type: "TRIAL",
+          status: "ACTIVE",
+          commercialStatus: "EXPERIENCIA_ATIVA",
+          startDate,
+          endDate,
+          durationMonths,
+          workoutsPerWeek: trialPlan.workoutsPerWeek,
+          workoutsPerMonth: trialPlan.workoutsPerMonth,
+          totalContractedWorkouts: trialPlan.workoutsPerMonth * durationMonths,
+          priceCents: 0,
+          paymentMode: "GRATUITO",
+          source,
+          acceptedAt: new Date(),
+          activatedAt: new Date(),
+          notes: [
+            "Termo de experiência gratuita aceito digitalmente.",
+            `Versão do termo: ${termsVersion}.`,
+            ip ? `IP: ${ip}.` : null,
+            userAgent ? `User-Agent: ${userAgent}.` : null,
+          ]
+            .filter(Boolean)
+            .join("\n"),
         },
       });
 
@@ -169,12 +357,20 @@ export async function POST(req: NextRequest) {
         studentId: student.id,
         studentName: student.name,
         email: authUser.email,
+        contractId: contract.id,
+        contractType: contract.type,
+        commercialStatus: student.commercialStatus,
+        startDate: contract.startDate,
+        endDate: contract.endDate,
+        workoutsPerMonth: contract.workoutsPerMonth,
+        totalContractedWorkouts: contract.totalContractedWorkouts,
       };
     });
 
     return NextResponse.json({
       ok: true,
-      message: "Conta de aluno criada com sucesso.",
+      message:
+        "Cadastro criado e experiência gratuita ativada. Agora a equipe irá vincular um professor para liberar os primeiros treinos.",
       ...result,
     });
   } catch (error: any) {
@@ -182,11 +378,15 @@ export async function POST(req: NextRequest) {
 
     const message = String(error?.message || "");
 
-    if (message.includes("commercial_status")) {
+    if (
+      message.includes("commercial_status") ||
+      message.includes("student_contracts") ||
+      message.includes("service_plans")
+    ) {
       return NextResponse.json(
         {
           error:
-            "A base de dados ainda não recebeu a coluna commercial_status. Rode o SQL da Fase 1 no mesmo banco usado pela Vercel.",
+            "A base de dados ainda não está preparada para experiência gratuita. Rode o SQL da Fase 1 no mesmo banco usado pela Vercel.",
           message,
         },
         { status: 500 }
