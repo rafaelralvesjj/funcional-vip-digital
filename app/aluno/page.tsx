@@ -35,6 +35,8 @@ export default function AlunoPage() {
   const [sendingCareEvent, setSendingCareEvent] = useState(false);
   const [careEventDetail, setCareEventDetail] = useState("");
   const [careEventSentForPlanId, setCareEventSentForPlanId] = useState<Record<string, boolean>>({});
+  const [dashboardSummary, setDashboardSummary] = useState<any>(null);
+  const [loadingDashboardSummary, setLoadingDashboardSummary] = useState(true);
 
   // Estados para o modal de dúvidas (thread)
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
@@ -72,7 +74,10 @@ export default function AlunoPage() {
     const key = exerciseName.toLowerCase();
     return exerciseImages[key] || null;
   }
-  useEffect(() => { fetchStudentInfo(); }, []);
+  useEffect(() => {
+    fetchStudentInfo();
+    fetchDashboardSummary();
+  }, []);
   useEffect(() => {
     if (studentId) {
       fetchPlans(studentId); fetchWorkouts(studentId);
@@ -97,6 +102,24 @@ export default function AlunoPage() {
       }
     } catch {}
     setLoading(false);
+  }
+
+  async function fetchDashboardSummary() {
+    setLoadingDashboardSummary(true);
+
+    try {
+      const res = await fetch("/api/aluno/dashboard-summary", {
+        cache: "no-store",
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.summary) {
+        setDashboardSummary(data.summary);
+      }
+    } catch {}
+
+    setLoadingDashboardSummary(false);
   }
   async function fetchPlans(id: string) {
     try {
@@ -161,6 +184,16 @@ export default function AlunoPage() {
   }
   async function markAsComplete() {
     if (!selectedPlan || !studentId || selectedDay === null) return;
+
+    if (isStudentTrainingBlocked()) {
+      setMessage({
+        type: "error",
+        text: getTrainingBlockedMessage(),
+      });
+      setShowWorkoutModal(false);
+      setTimeout(() => setMessage(null), 5000);
+      return;
+    }
 
     if (!canValidateWorkoutDay(selectedDay)) {
       setMessage({
@@ -528,6 +561,15 @@ export default function AlunoPage() {
     }) || null;
   }
   function handleDayClick(day: number) {
+    if (isStudentTrainingBlocked()) {
+      setMessage({
+        type: "error",
+        text: getTrainingBlockedMessage(),
+      });
+      setTimeout(() => setMessage(null), 5000);
+      return;
+    }
+
     const selectedDate = new Date(currentYear, currentMonth, day);
     selectedDate.setHours(0, 0, 0, 0);
 
@@ -568,6 +610,40 @@ export default function AlunoPage() {
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
   }
+  function getCommercialUiState(): string {
+    return String(dashboardSummary?.uiState || "").toUpperCase();
+  }
+
+  function isStudentTrainingBlocked(): boolean {
+    const uiState = getCommercialUiState();
+
+    return uiState === "SEM_CONTRATO_ATIVO" || uiState === "SUSPENSO_POR_PAGAMENTO";
+  }
+
+  function getTrainingBlockedTitle(): string {
+    const uiState = getCommercialUiState();
+
+    if (uiState === "SUSPENSO_POR_PAGAMENTO") {
+      return "Acesso aos treinos pausado";
+    }
+
+    return "Treinos indisponíveis no momento";
+  }
+
+  function getTrainingBlockedMessage(): string {
+    const uiState = getCommercialUiState();
+
+    if (uiState === "SUSPENSO_POR_PAGAMENTO") {
+      return "Existe uma pendência de pagamento no seu ciclo. Fale com a equipe para regularizar e voltar a acessar os treinos.";
+    }
+
+    if (uiState === "SEM_CONTRATO_ATIVO") {
+      return "Você está sem experiência ou contrato ativo no momento. Fale com a equipe para continuar seu acompanhamento.";
+    }
+
+    return "Seu acesso aos treinos está temporariamente indisponível. Fale com a equipe para regularizar.";
+  }
+
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const nomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
@@ -633,6 +709,27 @@ export default function AlunoPage() {
                     className="text-[#a1a1a1] hover:text-white text-[8px] px-0.5">▶</button>
                 </div>
               </div>
+              {loadingDashboardSummary ? (
+                <div className="rounded-xl border border-[#ffffff10] bg-[#1a1a1a] p-4 text-[11px] text-[#a1a1a1]">
+                  Verificando seu acesso aos treinos...
+                </div>
+              ) : isStudentTrainingBlocked() ? (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+                  <p className="text-xs font-semibold text-amber-300">
+                    {getTrainingBlockedTitle()}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-amber-100/80">
+                    {getTrainingBlockedMessage()}
+                  </p>
+                  <a
+                    href="/aluno"
+                    className="mt-3 inline-flex rounded-lg border border-amber-500/30 px-3 py-2 text-[10px] font-semibold text-amber-200"
+                  >
+                    Ver meu acompanhamento
+                  </a>
+                </div>
+              ) : (
+                <>
               <div className="grid grid-cols-7 gap-px">
                 {nomes.map((d) => <div key={d} className="text-center text-[6px] text-[#525252] py-px">{d}</div>)}
                 {Array.from({ length: firstDay }).map((_, i) => <div key={"e" + i} />)}
@@ -667,6 +764,8 @@ export default function AlunoPage() {
               <p className="text-[8px] text-[#6b6b6b] mt-1 leading-relaxed">
                 Treinos de semanas anteriores ficam disponíveis para consulta, mas a validação só pode ser feita na semana vigente, até domingo.
               </p>
+                </>
+              )}
             </div>
             {/* SEÇÃO DE DÚVIDAS - LADO DIREITO */}
             <div className="sm:w-[45%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
