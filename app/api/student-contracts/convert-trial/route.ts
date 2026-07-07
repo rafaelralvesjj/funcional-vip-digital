@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { sendEmail } from "@/lib/sendEmail";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -50,6 +51,263 @@ function addMonthsMinusOneDay(startDate: Date, months: number): Date {
 
 function contractNumber(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
+
+function getAppAlunoUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/aluno`;
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDatePtBr(value?: Date | string | null): string {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatMoneyPtBr(cents?: number | null): string {
+  const value = Number(cents || 0) / 100;
+
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+function paymentStatusLabel(status?: string | null): string {
+  const value = String(status || "").toUpperCase();
+
+  const labels: Record<string, string> = {
+    EM_ABERTO: "em aberto",
+    PAGO: "pago",
+    PARCIAL: "parcial",
+    ATRASADO: "atrasado",
+    CANCELADO: "cancelado",
+  };
+
+  return labels[value] || value.toLowerCase();
+}
+
+async function getStudentEmail(student: {
+  email?: string | null;
+  userAuthId?: string | null;
+}): Promise<string | null> {
+  if (student.email) return student.email;
+
+  if (!student.userAuthId) return null;
+
+  const userAuth = await prisma.user.findUnique({
+    where: {
+      id: student.userAuthId,
+    },
+    select: {
+      email: true,
+    },
+  });
+
+  return userAuth?.email || null;
+}
+
+async function notifyStudentAboutConversion({
+  paidContract,
+  payment,
+  authorId,
+}: {
+  paidContract: any;
+  payment: any;
+  authorId: string;
+}) {
+  const isPaid = String(payment?.status || "").toUpperCase() === "PAGO";
+  const student = paidContract.student;
+  const studentName = student?.name || "aluno";
+  const planName = paidContract.plan?.name || "plano pago";
+  const alunoUrl = getAppAlunoUrl();
+  const paymentLinkUrl = payment?.paymentLinkUrl || null;
+  const studentEmail = await getStudentEmail({
+    email: student?.email,
+    userAuthId: student?.userAuthId,
+  });
+
+  const title = isPaid
+    ? "Seu contrato pago está ativo"
+    : "Seu plano pago foi gerado e aguarda pagamento";
+
+  const content = isPaid
+    ? [
+        `Olá, ${studentName}!`,
+        "",
+        `Sua experiência gratuita foi convertida para o plano ${planName}.`,
+        "Seu contrato pago já está ativo no Funcional Vip Digital.",
+        `Período do contrato: ${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}.`,
+        `Treinos previstos: ${paidContract.workoutsPerWeek} por semana e ${paidContract.workoutsPerMonth} por mês.`,
+        "",
+        "Você já pode continuar acompanhando seus treinos pelo painel do aluno.",
+      ].join("\n")
+    : [
+        `Olá, ${studentName}!`,
+        "",
+        `Seu plano ${planName} foi gerado no Funcional Vip Digital.`,
+        `O pagamento está ${paymentStatusLabel(payment?.status)} e vence em ${formatDatePtBr(payment?.dueDate)}.`,
+        `Valor: ${formatMoneyPtBr(payment?.amountCents)}.`,
+        paymentLinkUrl ? `Link de pagamento: ${paymentLinkUrl}.` : null,
+        "",
+        "Assim que o pagamento for confirmado, seu contrato pago será ativado.",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+  const notificationTasks: Promise<unknown>[] = [
+    prisma.notice.create({
+      data: {
+        title,
+        content,
+        type: "FINANCEIRO",
+        targetRole: "STUDENT",
+        authorId,
+        studentId: student.id,
+      },
+    }),
+  ];
+
+  if (studentEmail) {
+    const safeStudentName = escapeHtml(studentName);
+    const safeTitle = escapeHtml(title);
+    const safePlanName = escapeHtml(planName);
+    const safeAlunoUrl = escapeHtml(alunoUrl);
+    const safePaymentLinkUrl = paymentLinkUrl ? escapeHtml(paymentLinkUrl) : null;
+
+    const subject = title;
+
+    const text = isPaid
+      ? [
+          `Olá, ${studentName}!`,
+          "",
+          `Sua experiência gratuita foi convertida para o plano ${planName}.`,
+          "Seu contrato pago já está ativo no Funcional Vip Digital.",
+          `Período: ${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}.`,
+          `Treinos: ${paidContract.workoutsPerWeek} por semana e ${paidContract.workoutsPerMonth} por mês.`,
+          "",
+          `Acesse seu painel: ${alunoUrl}`,
+        ].join("\n")
+      : [
+          `Olá, ${studentName}!`,
+          "",
+          `Seu plano ${planName} foi gerado no Funcional Vip Digital.`,
+          `Pagamento: ${paymentStatusLabel(payment?.status)}.`,
+          `Vencimento: ${formatDatePtBr(payment?.dueDate)}.`,
+          `Valor: ${formatMoneyPtBr(payment?.amountCents)}.`,
+          paymentLinkUrl ? `Link de pagamento: ${paymentLinkUrl}` : null,
+          "",
+          "Assim que o pagamento for confirmado, seu contrato pago será ativado.",
+          `Acesse seu painel: ${alunoUrl}`,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+    const html = isPaid
+      ? `
+        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+            <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
+
+            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+              Olá, <strong>${safeStudentName}</strong>!
+            </p>
+
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Sua experiência gratuita foi convertida para o plano <strong style="color:#f5f5f5;">${safePlanName}</strong>.
+              Seu contrato pago já está ativo no Funcional Vip Digital.
+            </p>
+
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Período: <strong style="color:#f5f5f5;">${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}</strong>.
+            </p>
+
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Treinos previstos: <strong style="color:#f5f5f5;">${paidContract.workoutsPerWeek} por semana</strong> e
+              <strong style="color:#f5f5f5;">${paidContract.workoutsPerMonth} por mês</strong>.
+            </p>
+
+            <a href="${safeAlunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+              Acessar painel do aluno
+            </a>
+
+            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
+              Este é um aviso automático do Funcional Vip Digital.
+            </p>
+          </div>
+        </div>
+      `
+      : `
+        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+            <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
+
+            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+              Olá, <strong>${safeStudentName}</strong>!
+            </p>
+
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Seu plano <strong style="color:#f5f5f5;">${safePlanName}</strong> foi gerado no Funcional Vip Digital.
+            </p>
+
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Status do pagamento: <strong style="color:#f5f5f5;">${paymentStatusLabel(payment?.status)}</strong>.<br />
+              Vencimento: <strong style="color:#f5f5f5;">${formatDatePtBr(payment?.dueDate)}</strong>.<br />
+              Valor: <strong style="color:#f5f5f5;">${formatMoneyPtBr(payment?.amountCents)}</strong>.
+            </p>
+
+            ${
+              safePaymentLinkUrl
+                ? `<p style="color:#d4d4d4; font-size:14px; line-height:1.5;">Para facilitar, acesse o link de pagamento abaixo:</p>
+                   <a href="${safePaymentLinkUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-bottom:12px;">
+                     Abrir link de pagamento
+                   </a>`
+                : ""
+            }
+
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+              Assim que o pagamento for confirmado, seu contrato pago será ativado.
+            </p>
+
+            <a href="${safeAlunoUrl}" style="display:inline-block; color:#D4A373; font-weight:bold; font-size:13px; margin-top:8px;">
+              Acessar painel do aluno
+            </a>
+
+            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
+              Este é um aviso automático do Funcional Vip Digital.
+            </p>
+          </div>
+        </div>
+      `;
+
+    notificationTasks.push(
+      sendEmail({
+        to: studentEmail,
+        subject,
+        text,
+        html,
+      })
+    );
+  }
+
+  await Promise.allSettled(notificationTasks);
 }
 
 export async function POST(request: NextRequest) {
@@ -219,6 +477,7 @@ export async function POST(request: NextRequest) {
               name: true,
               email: true,
               phone: true,
+              userAuthId: true,
             },
           },
           plan: true,
@@ -260,6 +519,24 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      await tx.studentCareEvent.updateMany({
+        where: {
+          studentId: trial.studentId,
+          eventType: "TRIAL_CONTINUATION_REQUEST",
+          status: {
+            in: ["ABERTO", "EM_ANDAMENTO", "PENDENTE"],
+          },
+        },
+        data: {
+          status: "RESOLVIDO",
+          resolvedAt: new Date(),
+          resolvedById: userId,
+          resolutionNotes: shouldActivateNow
+            ? "Experiência convertida para contrato pago ativo."
+            : "Contrato pago criado e aguardando pagamento.",
+        },
+      });
+
       return {
         paidContract,
         payment,
@@ -267,11 +544,21 @@ export async function POST(request: NextRequest) {
       };
     });
 
+    try {
+      await notifyStudentAboutConversion({
+        paidContract: result.paidContract,
+        payment: result.payment,
+        authorId: userId,
+      });
+    } catch (notificationError) {
+      console.error("Erro ao notificar aluno sobre conversão da experiência:", notificationError);
+    }
+
     return NextResponse.json({
       ok: true,
       message: result.activatedNow
-        ? "Experiência convertida em contrato pago e pagamento marcado como pago."
-        : "Contrato pago criado aguardando pagamento. A experiência permanece ativa até o pagamento ser confirmado ou até vencer.",
+        ? "Experiência convertida em contrato pago, pagamento marcado como pago e aluno notificado."
+        : "Contrato pago criado aguardando pagamento. A experiência permanece ativa até o pagamento ser confirmado ou até vencer. Aluno notificado sobre o pagamento.",
       contract: result.paidContract,
       payment: result.payment,
     });
