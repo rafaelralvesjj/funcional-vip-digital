@@ -111,6 +111,94 @@ function formatDatePtBr(date: Date): string {
   });
 }
 
+function formatDateInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateInput(value?: string | null): Date | null {
+  if (!value) return null;
+
+  const date = new Date(`${value}T12:00:00`);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getExpectedWorkoutDatesForWeek(
+  startOfWeek: Date,
+  weeklyLimit?: number | null
+): string[] {
+  const limit = Math.max(Number(weeklyLimit || 0), 0);
+
+  if (!limit) return [];
+
+  const patterns: Record<number, number[]> = {
+    1: [0],
+    2: [0, 2],
+    3: [0, 2, 4],
+    4: [0, 1, 2, 4],
+    5: [0, 1, 2, 3, 4],
+  };
+
+  const offsets =
+    patterns[limit] ||
+    Array.from({ length: Math.min(limit, 7) }, (_, index) => index);
+
+  return offsets.map((offset) => {
+    const date = new Date(startOfWeek);
+    date.setDate(startOfWeek.getDate() + offset);
+    date.setHours(12, 0, 0, 0);
+
+    return formatDateInput(date);
+  });
+}
+
+function getPlanDateInput(plan: WorkoutPlanSummary): string | null {
+  const rawDate = plan.date || plan.createdAt;
+
+  if (!rawDate) return null;
+
+  const date = new Date(rawDate);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  return formatDateInput(date);
+}
+
+function getFirstMissingExpectedDate(
+  expectedDates: string[],
+  plans: WorkoutPlanSummary[]
+): string | null {
+  const createdDates = new Set(
+    plans
+      .map(getPlanDateInput)
+      .filter((value): value is string => Boolean(value))
+  );
+
+  return expectedDates.find((date) => !createdDates.has(date)) || null;
+}
+
+function getWeekScopeLabel(startOfWeek: Date): string {
+  const currentWeek = getWeekRange(new Date());
+
+  if (startOfWeek.getTime() === currentWeek.startOfWeek.getTime()) {
+    return "semana atual";
+  }
+
+  if (startOfWeek.getTime() === currentWeek.endOfWeek.getTime()) {
+    return "próxima semana";
+  }
+
+  if (startOfWeek.getTime() > currentWeek.endOfWeek.getTime()) {
+    return "semana futura";
+  }
+
+  return "semana anterior";
+}
+
 export default function MontarTreinoPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [library, setLibrary] = useState<LibraryExercise[]>([]);
@@ -135,11 +223,13 @@ export default function MontarTreinoPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [weeklyPlansCount, setWeeklyPlansCount] = useState(0);
+  const [weeklyPlans, setWeeklyPlans] = useState<WorkoutPlanSummary[]>([]);
   const [weeklyInfoLoading, setWeeklyInfoLoading] = useState(false);
   const [activeWorkoutContract, setActiveWorkoutContract] = useState<ActiveWorkoutContract | null>(null);
   const [contractWarning, setContractWarning] = useState<string | null>(null);
   const [lockStudentSelection, setLockStudentSelection] = useState(false);
   const [openedFromPendingList, setOpenedFromPendingList] = useState(false);
+  const [pendingWeekLabelFromUrl, setPendingWeekLabelFromUrl] = useState<string | null>(null);
   const [aiDraftBatch, setAiDraftBatch] = useState<AiWorkoutDraftBatch | null>(null);
   const [aiDraftIndex, setAiDraftIndex] = useState(0);
   const [openedFromAiDraft, setOpenedFromAiDraft] = useState(false);
@@ -276,6 +366,7 @@ export default function MontarTreinoPage() {
     const params = new URLSearchParams(window.location.search);
     const studentIdFromUrl = params.get("studentId");
     const dateFromUrl = params.get("date");
+    const weekFromUrl = params.get("week");
 
     if (studentIdFromUrl) {
       setSelectedStudent(studentIdFromUrl);
@@ -283,11 +374,18 @@ export default function MontarTreinoPage() {
       setOpenedFromPendingList(true);
     }
 
+    if (weekFromUrl === "current") {
+      setPendingWeekLabelFromUrl("semana atual");
+    } else if (weekFromUrl === "next") {
+      setPendingWeekLabelFromUrl("próxima semana");
+    } else if (studentIdFromUrl) {
+      setPendingWeekLabelFromUrl("semana selecionada no dashboard");
+    }
+
     if (dateFromUrl) {
       setDate(dateFromUrl);
     }
   }
-
   useEffect(() => {
     applyDashboardParams();
     loadAiWorkoutDraftFromStorage();
@@ -323,6 +421,19 @@ export default function MontarTreinoPage() {
 
   const selectedStudentInfo = students.find((student) => student.id === selectedStudent);
   const weeklyWorkoutLimit = activeWorkoutContract?.workoutsPerWeek || null;
+  const referenceWeekDate = date ? new Date(date + "T12:00:00") : new Date();
+  const { startOfWeek, endOfWeek } = getWeekRange(referenceWeekDate);
+  const weekScopeLabel = getWeekScopeLabel(startOfWeek);
+  const expectedWorkoutDates = getExpectedWorkoutDatesForWeek(
+    startOfWeek,
+    weeklyWorkoutLimit
+  );
+  const firstMissingExpectedDate = getFirstMissingExpectedDate(
+    expectedWorkoutDates,
+    weeklyPlans
+  );
+  const selectedDateIsExpected =
+    !date || expectedWorkoutDates.length === 0 || expectedWorkoutDates.includes(date);
   const weeklyRemaining =
     weeklyWorkoutLimit == null ? null : Math.max(weeklyWorkoutLimit - weeklyPlansCount, 0);
   const nextWeeklyCount =
@@ -332,8 +443,6 @@ export default function MontarTreinoPage() {
     !isNaN(weeklyWorkoutLimit) &&
     weeklyPlansCount < weeklyWorkoutLimit &&
     weeklyPlansCount + 1 >= weeklyWorkoutLimit;
-  const referenceWeekDate = date ? new Date(date + "T12:00:00") : new Date();
-  const { startOfWeek, endOfWeek } = getWeekRange(referenceWeekDate);
   const currentWeekRange = getWeekRange(new Date());
   const isFutureWorkoutWeek =
     startOfWeek.getTime() > currentWeekRange.startOfWeek.getTime();
@@ -344,6 +453,7 @@ export default function MontarTreinoPage() {
     async function fetchWeeklyWorkoutInfo() {
       if (!selectedStudent) {
         setWeeklyPlansCount(0);
+        setWeeklyPlans([]);
         setActiveWorkoutContract(null);
         setContractWarning(null);
         return;
@@ -368,6 +478,7 @@ export default function MontarTreinoPage() {
 
         if (!res.ok) {
           setWeeklyPlansCount(0);
+          setWeeklyPlans([]);
           setActiveWorkoutContract(null);
           setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
           return;
@@ -376,11 +487,13 @@ export default function MontarTreinoPage() {
         const data = (await res.json()) as WorkoutWeekSummary;
 
         setWeeklyPlansCount(Number(data.weeklyPlansCount || 0));
+        setWeeklyPlans(Array.isArray(data.plans) ? data.plans : []);
         setActiveWorkoutContract(data.activeContract || null);
         setContractWarning(data.message || null);
       } catch (error) {
         console.error("Erro ao buscar treinos da semana:", error);
         setWeeklyPlansCount(0);
+        setWeeklyPlans([]);
         setActiveWorkoutContract(null);
         setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
       } finally {
@@ -390,6 +503,27 @@ export default function MontarTreinoPage() {
 
     fetchWeeklyWorkoutInfo();
   }, [selectedStudent, date]);
+
+  useEffect(() => {
+    if (!openedFromPendingList || openedFromAiDraft) return;
+    if (!selectedStudent || !weeklyWorkoutLimit || weeklyInfoLoading) return;
+    if (planName.trim() || exercises.length > 0) return;
+    if (!firstMissingExpectedDate) return;
+
+    if (date !== firstMissingExpectedDate) {
+      setDate(firstMissingExpectedDate);
+    }
+  }, [
+    openedFromPendingList,
+    openedFromAiDraft,
+    selectedStudent,
+    weeklyWorkoutLimit,
+    weeklyInfoLoading,
+    firstMissingExpectedDate,
+    date,
+    planName,
+    exercises.length,
+  ]);
 
   async function fetchStudents() {
     try {
@@ -552,7 +686,41 @@ export default function MontarTreinoPage() {
           }
         }
 
+        const savedPlanId =
+          result?.workoutPlan?.id ||
+          result?.plan?.id ||
+          result?.workout?.id ||
+          `temp-${Date.now()}`;
+
+        setWeeklyPlans((current) => [
+          ...current,
+          {
+            id: savedPlanId,
+            date: date || null,
+          },
+        ]);
         setWeeklyPlansCount((current) => current + 1);
+
+        const nextMissingDateAfterSave = getFirstMissingExpectedDate(
+          expectedWorkoutDates,
+          [
+            ...weeklyPlans,
+            {
+              id: savedPlanId,
+              date: date || null,
+            },
+          ]
+        );
+
+        if (
+          openedFromPendingList &&
+          !hasNextAiWorkout &&
+          nextMissingDateAfterSave &&
+          nextMissingDateAfterSave !== date
+        ) {
+          setDate(nextMissingDateAfterSave);
+        }
+
         setTimeout(() => setSuccess(null), 7000);
       } else {
         const err = await res.json();
@@ -579,6 +747,52 @@ export default function MontarTreinoPage() {
           ✅ {success}
         </div>
       )}
+
+      <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4 mb-6">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.25em] text-[#D4A373] mb-1">
+              Contexto da montagem
+            </p>
+            <h2 className="text-lg font-semibold text-[#f5f5f5]">
+              {selectedStudent
+                ? `Você está montando treino da ${pendingWeekLabelFromUrl || weekScopeLabel}`
+                : "Selecione um aluno para iniciar a montagem"}
+            </h2>
+            <p className="text-xs text-[#a1a1a1] mt-1">
+              Semana de {formatDatePtBr(startOfWeek)} a{" "}
+              {formatDatePtBr(new Date(endOfWeek.getTime() - 1))}.
+              {openedFromPendingList
+                ? " Esta tela foi aberta a partir de uma pendência real do dashboard."
+                : " Para maior segurança, prefira iniciar pelo card de pendências do dashboard."}
+            </p>
+          </div>
+
+          {selectedStudent && (
+            <div className="rounded-lg bg-[#0a0a0a] border border-[#ffffff10] p-3 text-xs text-[#a1a1a1] min-w-[220px]">
+              <p>
+                Aluno:{" "}
+                <span className="text-[#f5f5f5] font-semibold">
+                  {selectedStudentInfo?.name || "carregando..."}
+                </span>
+              </p>
+              <p className="mt-1">
+                Meta:{" "}
+                <span className="text-[#f5f5f5] font-semibold">
+                  {weeklyWorkoutLimit ? `${weeklyWorkoutLimit} treino(s)/semana` : "carregando"}
+                </span>
+              </p>
+              <p className="mt-1">
+                Criados:{" "}
+                <span className="text-[#f5f5f5] font-semibold">
+                  {weeklyPlansCount}
+                  {weeklyWorkoutLimit ? `/${weeklyWorkoutLimit}` : ""}
+                </span>
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {openedFromAiDraft && aiDraftBatch && (
         <div className="bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm rounded-lg p-4 mb-6">
@@ -678,6 +892,7 @@ export default function MontarTreinoPage() {
                     onClick={() => {
                       setLockStudentSelection(false);
                       setOpenedFromPendingList(false);
+                      setPendingWeekLabelFromUrl(null);
                       setOpenedFromAiDraft(false);
                     }}
                     className="text-[10px] text-[#a1a1a1] hover:text-white underline mt-1"
@@ -741,6 +956,50 @@ export default function MontarTreinoPage() {
                     treino(s).
                   </p>
 
+                  {expectedWorkoutDates.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-[#ffffff10] bg-[#111111] p-3">
+                      <p className="text-[11px] text-[#a1a1a1] mb-2">
+                        Datas esperadas para este contrato nesta semana:
+                      </p>
+
+                      <div className="flex flex-wrap gap-2">
+                        {expectedWorkoutDates.map((expectedDate) => {
+                          const alreadyCreated = weeklyPlans.some(
+                            (plan) => getPlanDateInput(plan) === expectedDate
+                          );
+                          const isSelected = date === expectedDate;
+
+                          return (
+                            <button
+                              key={expectedDate}
+                              type="button"
+                              onClick={() => setDate(expectedDate)}
+                              disabled={alreadyCreated}
+                              className={
+                                "rounded-lg px-3 py-1.5 text-[11px] border transition " +
+                                (isSelected
+                                  ? "bg-[#D4A373] text-[#0a0a0a] border-[#D4A373]"
+                                  : alreadyCreated
+                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 cursor-not-allowed"
+                                    : "bg-[#1a1a1a] text-[#a1a1a1] border-[#ffffff10] hover:text-[#f5f5f5]")
+                              }
+                            >
+                              {formatDatePtBr(new Date(`${expectedDate}T12:00:00`))}
+                              {alreadyCreated ? " · criado" : isSelected ? " · selecionado" : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {!selectedDateIsExpected && (
+                        <p className="text-[11px] text-amber-400 mt-2">
+                          A data selecionada não está entre as datas esperadas automaticamente para esta semana.
+                          Revise antes de salvar.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div
                     className={
                       "mt-3 rounded-lg border p-3 text-xs " +
@@ -770,6 +1029,29 @@ export default function MontarTreinoPage() {
                       "Este aluno não possui contrato ativo para a data selecionada. Regularize o ciclo no Financeiro antes de montar novos treinos."}
                   </p>
                 )}
+              </div>
+            )}
+
+            {selectedStudent && date && (
+              <div className="md:col-span-2 rounded-xl border border-[#D4A373]/20 bg-[#D4A373]/10 p-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#D4A373]">
+                      Quer usar IA para montar esta semana?
+                    </p>
+                    <p className="text-xs text-[#a1a1a1] mt-1">
+                      Gere o resumo do aluno já com este contexto de aluno e semana.
+                      Depois cole o JSON de volta aqui para revisão do professor antes de salvar.
+                    </p>
+                  </div>
+
+                  <a
+                    href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}`}
+                    className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition"
+                  >
+                    Gerar por IA
+                  </a>
+                </div>
               </div>
             )}
 
