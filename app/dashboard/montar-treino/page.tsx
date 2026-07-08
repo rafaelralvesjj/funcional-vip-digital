@@ -56,6 +56,23 @@ interface WorkoutWeekSummary {
   message?: string | null;
 }
 
+interface ReleaseReviewContext {
+  baselineDate?: string;
+  previousWeek?: {
+    startOfWeek?: string;
+    endOfWeek?: string;
+    label?: string;
+  };
+  previousWeekWorkouts?: number;
+  completedPreviousWeek?: number;
+  pendingPreviousWeek?: number;
+  workoutUpdatesAfterPlanning?: number;
+  openCareEvents?: number;
+  newStudentQuestions?: number;
+  requiresReviewBeforeRelease?: boolean;
+  reviewAlerts?: string[];
+}
+
 interface ExerciseItem {
   libraryExerciseId: string;
   name: string;
@@ -293,6 +310,9 @@ export default function MontarTreinoPage() {
   const [aiDraftBatch, setAiDraftBatch] = useState<AiWorkoutDraftBatch | null>(null);
   const [aiDraftIndex, setAiDraftIndex] = useState(0);
   const [openedFromAiDraft, setOpenedFromAiDraft] = useState(false);
+  const [releaseLoading, setReleaseLoading] = useState(false);
+  const [releaseReviewContext, setReleaseReviewContext] = useState<ReleaseReviewContext | null>(null);
+  const [releaseMessage, setReleaseMessage] = useState<{ type: "success" | "error" | "warning"; text: string } | null>(null);
 
   function normalizeAiExercise(exercise: Partial<ExerciseItem> & { exerciseId?: string; exerciseLibraryId?: string }, index: number): ExerciseItem {
     const libraryExerciseId = String(
@@ -586,6 +606,11 @@ export default function MontarTreinoPage() {
   }, [selectedStudent, date]);
 
   useEffect(() => {
+    setReleaseReviewContext(null);
+    setReleaseMessage(null);
+  }, [selectedStudent, date]);
+
+  useEffect(() => {
     if (!openedFromPendingList || openedFromAiDraft) return;
     if (!selectedStudent || !weeklyWorkoutLimit || weeklyInfoLoading) return;
     if (planName.trim() || exercises.length > 0) return;
@@ -802,6 +827,66 @@ export default function MontarTreinoPage() {
     printWindow.document.close();
   }
 
+
+  async function releaseWeek(forceRelease = false) {
+    if (!selectedStudent || !date) {
+      setReleaseMessage({
+        type: "error",
+        text: "Selecione aluno e data/semana antes de liberar.",
+      });
+      return;
+    }
+
+    setReleaseLoading(true);
+    setReleaseMessage(null);
+
+    try {
+      const res = await fetch("/api/workout-plan", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "RELEASE_WEEK",
+          studentId: selectedStudent,
+          date,
+          forceRelease,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setReleaseReviewContext(data?.reviewContext || null);
+        setReleaseMessage({
+          type: "success",
+          text: data?.message || "Semana liberada para o aluno.",
+        });
+        setSuccess(data?.message || "Semana liberada para o aluno.");
+        setTimeout(() => setSuccess(null), 7000);
+        return;
+      }
+
+      if (res.status === 409 && data?.reviewRequired) {
+        setReleaseReviewContext(data.reviewContext || null);
+        setReleaseMessage({
+          type: "warning",
+          text: data?.error || "Revisão obrigatória antes de liberar a semana.",
+        });
+        return;
+      }
+
+      setReleaseMessage({
+        type: "error",
+        text: data?.error || "Não foi possível liberar a semana.",
+      });
+    } catch {
+      setReleaseMessage({
+        type: "error",
+        text: "Erro ao liberar a semana. Tente novamente.",
+      });
+    } finally {
+      setReleaseLoading(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1242,16 +1327,124 @@ export default function MontarTreinoPage() {
                   >
                     {isWeeklyLimitReached
                       ? isFutureWorkoutWeek
-                        ? "Semana futura já planejada. O aluno só verá estes treinos quando chegar a semana correta."
-                        : "Semana já completa. O aluno já deve ter sido notificado sobre os treinos desta semana."
+                        ? "Semana futura pré-planejada. Antes de liberar para o aluno, revise dados atualizados, execução da semana anterior, dúvidas e eventos de cuidado."
+                        : "Semana completa. Se necessário, use a revisão final para confirmar dados atualizados antes de liberar ou reenviar a programação."
                       : willCompleteWeekOnSave
                         ? isFutureWorkoutWeek
-                          ? "Ao salvar este treino, a meta da semana futura ficará completa. O aluno não será notificado agora e só verá o treino na semana correta."
+                          ? "Ao salvar este treino, a meta da semana futura ficará completa como pré-planejamento. O aluno ainda não será notificado até a revisão/liberação final."
                           : "Ao salvar este treino, a meta semanal será completa e o aluno será notificado com um único e-mail."
                         : isFutureWorkoutWeek
-                          ? "Este treino futuro será salvo como planejamento. O aluno ainda não verá este treino."
+                          ? "Este treino futuro será salvo como pré-planejamento. Antes da liberação, o sistema poderá exigir revisão dos dados atualizados do aluno."
                           : "Este treino será salvo, mas o aluno ainda não será notificado. O aviso será enviado somente quando todos os treinos da semana forem criados."}
                   </div>
+
+                  {isWeeklyLimitReached && (
+                    <div className="mt-3 rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-[#D4A373]">
+                            Revisão final da semana
+                          </p>
+                          <p className="text-xs text-[#a1a1a1] mt-1">
+                            Use esta etapa para liberar a semana somente depois de conferir se houve dados novos: execução dos treinos anteriores, dúvidas, dor/desconforto, eventos de cuidado ou alteração na ficha do aluno.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => releaseWeek(false)}
+                          disabled={releaseLoading || !selectedStudent || !date}
+                          className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition disabled:opacity-50"
+                        >
+                          {releaseLoading ? "Verificando..." : "Revisar e liberar semana"}
+                        </button>
+                      </div>
+
+                      {releaseMessage && (
+                        <div
+                          className={
+                            "mt-3 rounded-lg border p-3 text-xs " +
+                            (releaseMessage.type === "success"
+                              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                              : releaseMessage.type === "warning"
+                                ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
+                                : "border-red-500/20 bg-red-500/10 text-red-400")
+                          }
+                        >
+                          {releaseMessage.text}
+                        </div>
+                      )}
+
+                      {releaseReviewContext && (
+                        <div className="mt-3 rounded-lg border border-[#ffffff10] bg-[#0a0a0a] p-3 text-xs text-[#a1a1a1] space-y-2">
+                          <p className="font-semibold text-[#f5f5f5]">
+                            Dados considerados na revisão
+                          </p>
+
+                          {releaseReviewContext.previousWeek?.label && (
+                            <p>
+                              Semana anterior analisada: <span className="text-[#f5f5f5]">{releaseReviewContext.previousWeek.label}</span>
+                            </p>
+                          )}
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <div className="rounded-lg bg-[#111111] border border-[#ffffff10] p-2">
+                              <p className="text-[10px] uppercase text-[#6b6b6b]">Treinos anteriores</p>
+                              <p className="text-[#f5f5f5] font-semibold">
+                                {releaseReviewContext.previousWeekWorkouts ?? 0}
+                              </p>
+                            </div>
+                            <div className="rounded-lg bg-[#111111] border border-[#ffffff10] p-2">
+                              <p className="text-[10px] uppercase text-[#6b6b6b]">Concluídos</p>
+                              <p className="text-emerald-400 font-semibold">
+                                {releaseReviewContext.completedPreviousWeek ?? 0}
+                              </p>
+                            </div>
+                            <div className="rounded-lg bg-[#111111] border border-[#ffffff10] p-2">
+                              <p className="text-[10px] uppercase text-[#6b6b6b]">Pendentes/não concluídos</p>
+                              <p className="text-amber-400 font-semibold">
+                                {releaseReviewContext.pendingPreviousWeek ?? 0}
+                              </p>
+                            </div>
+                          </div>
+
+                          {releaseReviewContext.reviewAlerts && releaseReviewContext.reviewAlerts.length > 0 ? (
+                            <div>
+                              <p className="text-amber-400 font-semibold mb-1">
+                                Pontos que exigem atenção antes de liberar:
+                              </p>
+                              <ul className="list-disc pl-5 space-y-1">
+                                {releaseReviewContext.reviewAlerts.map((alert, index) => (
+                                  <li key={index}>{alert}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : (
+                            <p className="text-emerald-400">
+                              Nenhum alerta crítico encontrado desde o pré-planejamento.
+                            </p>
+                          )}
+
+                          {releaseReviewContext.requiresReviewBeforeRelease && (
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-2 border-t border-[#ffffff10]">
+                              <p className="text-xs text-[#a1a1a1]">
+                                Após revisar os pontos acima, confirme para liberar a semana mesmo com alertas registrados.
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => releaseWeek(true)}
+                                disabled={releaseLoading}
+                                className="inline-flex items-center justify-center rounded-lg bg-emerald-500/90 px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-emerald-400 transition disabled:opacity-50"
+                              >
+                                {releaseLoading ? "Liberando..." : "Confirmo que revisei e quero liberar"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   </>
                 ) : (
                   <p className="text-xs text-red-400 mt-3">
@@ -1563,11 +1756,11 @@ export default function MontarTreinoPage() {
                 ? "🚫 Limite semanal atingido"
                 : willCompleteWeekOnSave
                   ? isFutureWorkoutWeek
-                    ? "✅ Salvar e deixar semana futura planejada"
+                    ? "✅ Salvar pré-planejamento da semana futura"
                     : "✅ Salvar treino e liberar semana para o aluno"
                   : weeklyWorkoutLimit && nextWeeklyCount
                     ? isFutureWorkoutWeek
-                      ? `💾 Salvar treino futuro ${nextWeeklyCount}/${weeklyWorkoutLimit}`
+                      ? `💾 Salvar pré-planejamento ${nextWeeklyCount}/${weeklyWorkoutLimit}`
                       : `💾 Salvar treino ${nextWeeklyCount}/${weeklyWorkoutLimit} sem notificar ainda`
                     : "💾 Salvar treino"}
         </button>
