@@ -235,8 +235,7 @@ function firstRawText(source: AnyItem | null | undefined, paths: string[]): stri
 
 function extractFromNotes(notes?: unknown, labels: string[] = []): string {
   const lines = String(notes || "")
-    .split("
-")
+    .split("\n")
     .map((line) => line.replace(/^\s*[-•]\s*/, "").trim())
     .filter(Boolean);
 
@@ -270,8 +269,7 @@ function getItemDescription(item: AnyItem): string {
 
 function getItemCompactDescription(item: AnyItem): string {
   const description = getItemDescription(item)
-    .split("
-")
+    .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .slice(0, 2)
