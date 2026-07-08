@@ -84,16 +84,156 @@ function formatDatePtBr(date: Date | string): string {
   });
 }
 
+function normalizeOptionalNumberText(value: string): string {
+  const normalized = String(value || "")
+    .replace(",", ".")
+    .replace(/[^\d.]/g, "");
+
+  if (!normalized) return "";
+
+  const parsed = Number(normalized);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) return "";
+
+  return String(parsed);
+}
+
+function formatOnboardingValue(value: string): string | null {
+  const trimmed = String(value || "").trim();
+
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildOnboardingLines({
+  objective,
+  activityLevel,
+  trainingEnvironment,
+  availableEquipment,
+  timeAvailableMinutes,
+  preferredDays,
+  currentPain,
+  medicalRestriction,
+  trainingHistory,
+  weightKg,
+  heightCm,
+  notesFromBody,
+}: {
+  objective: string;
+  activityLevel: string;
+  trainingEnvironment: string;
+  availableEquipment: string;
+  timeAvailableMinutes: string;
+  preferredDays: string;
+  currentPain: string;
+  medicalRestriction: string;
+  trainingHistory: string;
+  weightKg: string;
+  heightCm: string;
+  notesFromBody: string;
+}): string[] {
+  return [
+    objective ? `Objetivo principal: ${objective}.` : null,
+    activityLevel ? `Nível atual informado: ${activityLevel}.` : null,
+    trainingEnvironment ? `Ambiente de treino: ${trainingEnvironment}.` : null,
+    availableEquipment ? `Equipamentos/materiais disponíveis: ${availableEquipment}.` : null,
+    timeAvailableMinutes ? `Tempo disponível por treino: ${timeAvailableMinutes} minuto(s).` : null,
+    preferredDays ? `Dias/horários preferidos: ${preferredDays}.` : null,
+    currentPain ? `Dor/desconforto atual informado: ${currentPain}.` : null,
+    medicalRestriction ? `Restrição médica/física declarada: ${medicalRestriction}.` : null,
+    trainingHistory ? `Histórico de treino: ${trainingHistory}.` : null,
+    weightKg ? `Peso informado: ${weightKg} kg.` : null,
+    heightCm ? `Altura informada: ${heightCm} cm.` : null,
+    notesFromBody ? `Observações livres do aluno: ${notesFromBody}.` : null,
+  ].filter((item): item is string => Boolean(item));
+}
+
+function getOnboardingStatus({
+  objective,
+  activityLevel,
+  trainingEnvironment,
+  availableEquipment,
+  timeAvailableMinutes,
+  currentPain,
+  medicalRestriction,
+  restrictions,
+}: {
+  objective: string;
+  activityLevel: string;
+  trainingEnvironment: string;
+  availableEquipment: string;
+  timeAvailableMinutes: string;
+  currentPain: string;
+  medicalRestriction: string;
+  restrictions: string;
+}): {
+  onboardingComplete: boolean;
+  missingLabels: string[];
+} {
+  const requiredFields = [
+    {
+      label: "objetivo principal",
+      value: objective,
+    },
+    {
+      label: "nível atual",
+      value: activityLevel,
+    },
+    {
+      label: "ambiente de treino",
+      value: trainingEnvironment,
+    },
+    {
+      label: "equipamentos disponíveis",
+      value: availableEquipment,
+    },
+    {
+      label: "tempo disponível por treino",
+      value: timeAvailableMinutes,
+    },
+    {
+      label: "dores, desconfortos ou restrições",
+      value: currentPain || medicalRestriction || restrictions,
+    },
+  ];
+
+  const missingLabels = requiredFields
+    .filter((field) => !formatOnboardingValue(field.value))
+    .map((field) => field.label);
+
+  return {
+    onboardingComplete: missingLabels.length === 0,
+    missingLabels,
+  };
+}
+
+function buildOnboardingStatusText({
+  onboardingComplete,
+  missingLabels,
+}: {
+  onboardingComplete: boolean;
+  missingLabels: string[];
+}): string {
+  if (onboardingComplete) {
+    return "Ficha inicial do aluno: completa.";
+  }
+
+  return `Ficha inicial do aluno: incompleta. Confirmar antes de personalizar treino: ${missingLabels.join(", ")}.`;
+}
+
 function buildTrialWelcomeContent({
   studentName,
   endDateText,
   workoutsPerWeek,
   workoutsPerMonth,
+  onboardingComplete,
+  missingOnboardingLabels,
 }: {
   studentName: string;
   endDateText: string;
   workoutsPerWeek: number;
   workoutsPerMonth: number;
+  onboardingComplete: boolean;
+  missingOnboardingLabels: string[];
 }): string {
   return [
     `Olá, ${studentName}!`,
@@ -102,6 +242,10 @@ function buildTrialWelcomeContent({
     `Validade da experiência: até ${endDateText}.`,
     "",
     `Nesta experiência, seu plano prevê ${workoutsPerWeek} treino(s) por semana, totalizando ${workoutsPerMonth} treino(s) no ciclo.`,
+    "",
+    onboardingComplete
+      ? "Recebemos sua ficha inicial. O professor usará essas informações para preparar treinos mais seguros e direcionados."
+      : `Ainda precisamos confirmar algumas informações antes de personalizar melhor seus treinos: ${missingOnboardingLabels.join(", ")}.`,
     "",
     "Agora a equipe fará o vínculo com um professor responsável. Assim que os primeiros treinos forem preparados e liberados, você receberá um novo aviso por aqui e por e-mail.",
     "",
@@ -119,6 +263,9 @@ function buildManagementNewTrialStudentContent({
   workoutsPerWeek,
   workoutsPerMonth,
   source,
+  onboardingComplete,
+  missingOnboardingLabels,
+  onboardingLines,
 }: {
   studentName: string;
   studentEmail: string;
@@ -127,6 +274,9 @@ function buildManagementNewTrialStudentContent({
   workoutsPerWeek: number;
   workoutsPerMonth: number;
   source: string;
+  onboardingComplete: boolean;
+  missingOnboardingLabels: string[];
+  onboardingLines: string[];
 }): string {
   return [
     `Novo aluno iniciou experiência gratuita: ${studentName}.`,
@@ -137,7 +287,17 @@ function buildManagementNewTrialStudentContent({
     `Experiência válida até: ${endDateText}.`,
     `Plano da experiência: ${workoutsPerWeek} treino(s)/semana e ${workoutsPerMonth} treino(s)/mês.`,
     "",
-    "Ação recomendada: acessar Vincular Alunos, definir o professor responsável e orientar a montagem dos primeiros treinos.",
+    buildOnboardingStatusText({
+      onboardingComplete,
+      missingLabels: missingOnboardingLabels,
+    }),
+    onboardingLines.length > 0 ? "" : null,
+    onboardingLines.length > 0 ? "Informações iniciais recebidas:" : null,
+    ...onboardingLines.map((line) => `- ${line}`),
+    "",
+    onboardingComplete
+      ? "Ação recomendada: acessar Vincular Alunos, definir o professor responsável e orientar a montagem dos primeiros treinos com base na ficha inicial."
+      : "Ação recomendada: acessar Vincular Alunos, definir o professor responsável e confirmar os dados faltantes antes de montar treinos personalizados. Enquanto isso, usar treino inicial conservador.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -331,6 +491,47 @@ export async function POST(req: NextRequest) {
     const objective = getString(body, ["objective", "objetivo"]);
     const restrictions = getString(body, ["restrictions", "restricoes", "lesoes", "dores"]);
     const activityLevel = getString(body, ["activityLevel", "nivelAtividade"]);
+    const trainingEnvironment = getString(body, [
+      "trainingEnvironment",
+      "ambienteTreino",
+      "ambiente",
+      "localTreino",
+    ]);
+    const availableEquipment = getString(body, [
+      "availableEquipment",
+      "equipamentos",
+      "materiais",
+      "equipment",
+    ]);
+    const timeAvailableMinutes = normalizeOptionalNumberText(
+      getString(body, [
+        "timeAvailableMinutes",
+        "tempoDisponivelMinutos",
+        "tempoTreino",
+        "tempoDisponivel",
+      ])
+    );
+    const preferredDays = getString(body, ["preferredDays", "diasPreferidos", "dias"]);
+    const currentPain = getString(body, [
+      "currentPain",
+      "dorAtual",
+      "desconfortoAtual",
+      "pain",
+    ]);
+    const medicalRestriction = getString(body, [
+      "medicalRestriction",
+      "restricaoMedica",
+      "restricao",
+      "restricoesMedicas",
+    ]);
+    const trainingHistory = getString(body, [
+      "trainingHistory",
+      "historicoTreino",
+      "historico",
+      "experienciaTreino",
+    ]);
+    const weightKg = normalizeOptionalNumberText(getString(body, ["weightKg", "peso", "pesoKg"]));
+    const heightCm = normalizeOptionalNumberText(getString(body, ["heightCm", "altura", "alturaCm"]));
     const source = getString(body, ["source", "origem"]) || "LANDING_PAGE";
     const acceptedTermsRaw = getValue(body, ["acceptedTerms", "aceiteTermos", "termsAccepted"]);
     const acceptedTerms =
@@ -341,6 +542,32 @@ export async function POST(req: NextRequest) {
     const notesFromBody = getString(body, ["notes", "observacoes", "observations"]);
     const uploadedImageUrl = getString(body, ["imageUrl", "fotoUrl", "photoUrl"]);
     const image = uploadedImageUrl || (await getOptionalImage(body));
+
+    const onboardingLines = buildOnboardingLines({
+      objective,
+      activityLevel,
+      trainingEnvironment,
+      availableEquipment,
+      timeAvailableMinutes,
+      preferredDays,
+      currentPain,
+      medicalRestriction,
+      trainingHistory,
+      weightKg,
+      heightCm,
+      notesFromBody,
+    });
+
+    const onboardingStatus = getOnboardingStatus({
+      objective,
+      activityLevel,
+      trainingEnvironment,
+      availableEquipment,
+      timeAvailableMinutes,
+      currentPain,
+      medicalRestriction,
+      restrictions,
+    });
 
     if (!name) {
       return NextResponse.json({ error: "Informe o nome do aluno." }, { status: 400 });
@@ -412,10 +639,13 @@ export async function POST(req: NextRequest) {
       const notes = [
         "Cadastro criado pelo fluxo de experiência gratuita.",
         `Origem: ${source}.`,
-        objective ? `Objetivo informado: ${objective}.` : null,
-        activityLevel ? `Nível de atividade: ${activityLevel}.` : null,
-        restrictions ? `Restrições/dores/lesões informadas: ${restrictions}.` : null,
-        notesFromBody ? `Observações: ${notesFromBody}.` : null,
+        buildOnboardingStatusText({
+          onboardingComplete: onboardingStatus.onboardingComplete,
+          missingLabels: onboardingStatus.missingLabels,
+        }),
+        restrictions ? `Restrições/dores/lesões informadas no campo antigo: ${restrictions}.` : null,
+        onboardingLines.length > 0 ? "Ficha inicial / mini-anamnese:" : null,
+        ...onboardingLines,
       ]
         .filter(Boolean)
         .join("\n");
@@ -428,7 +658,7 @@ export async function POST(req: NextRequest) {
           image,
           notes,
           active: true,
-          onboardingCompleto: false,
+          onboardingCompleto: onboardingStatus.onboardingComplete,
           commercialStatus: "EXPERIENCIA_ATIVA",
           contractedTrainingDaysPerMonth: trialPlan.workoutsPerMonth,
           userAuthId: authUser.id,
@@ -496,6 +726,8 @@ export async function POST(req: NextRequest) {
             endDateText,
             workoutsPerWeek: contract.workoutsPerWeek,
             workoutsPerMonth: contract.workoutsPerMonth,
+            onboardingComplete: onboardingStatus.onboardingComplete,
+            missingOnboardingLabels: onboardingStatus.missingLabels,
           }),
           type: "COMERCIAL",
           targetRole: "STUDENT",
@@ -516,6 +748,9 @@ export async function POST(req: NextRequest) {
             workoutsPerWeek: contract.workoutsPerWeek,
             workoutsPerMonth: contract.workoutsPerMonth,
             source,
+            onboardingComplete: onboardingStatus.onboardingComplete,
+            missingOnboardingLabels: onboardingStatus.missingLabels,
+            onboardingLines,
           }),
           type: "COMERCIAL",
           targetRole: "GESTOR",
@@ -524,6 +759,29 @@ export async function POST(req: NextRequest) {
           expiresAt: contract.endDate,
         },
       });
+
+      const onboardingCareEvent = onboardingStatus.onboardingComplete
+        ? null
+        : await tx.studentCareEvent.create({
+            data: {
+              studentId: student.id,
+              contractId: contract.id,
+              eventType: "ONBOARDING_INCOMPLETE",
+              severity: "ATENCAO",
+              status: "ABERTO",
+              source: "LANDING_PAGE",
+              title: "Ficha inicial incompleta",
+              description: [
+                "Aluno iniciou experiência gratuita, mas ainda faltam informações mínimas para personalização segura.",
+                `Campos a confirmar: ${onboardingStatus.missingLabels.join(", ")}.`,
+                "Enquanto a ficha estiver incompleta, orientar treino inicial conservador e confirmar dados antes de progredir carga/intensidade.",
+              ].join("\n"),
+              studentMessage:
+                "Precisamos confirmar algumas informações para personalizar melhor seus treinos.",
+              professorMessage:
+                "Antes de montar treinos personalizados, confirme os campos faltantes da ficha inicial do aluno.",
+            },
+          });
 
       return {
         userId: authUser.id,
@@ -541,6 +799,9 @@ export async function POST(req: NextRequest) {
         totalContractedWorkouts: contract.totalContractedWorkouts,
         welcomeNoticeId: notice.id,
         managementNoticeId: managementNotice.id,
+        onboardingCareEventId: onboardingCareEvent?.id || null,
+        onboardingComplete: onboardingStatus.onboardingComplete,
+        missingOnboardingLabels: onboardingStatus.missingLabels,
         managementRecipients: managementRecipients.map((item) => ({
           id: item.id,
           name: item.name,
@@ -566,6 +827,10 @@ export async function POST(req: NextRequest) {
           `Validade da experiência: até ${endDateText}.`,
           "",
           `Seu plano de experiência prevê ${result.workoutsPerWeek} treino(s) por semana, totalizando ${result.workoutsPerMonth} treino(s) no ciclo.`,
+          "",
+          result.onboardingComplete
+            ? "Recebemos sua ficha inicial. O professor usará essas informações para preparar treinos mais seguros e direcionados."
+            : `Ainda precisamos confirmar algumas informações para personalizar melhor seus treinos: ${result.missingOnboardingLabels.join(", ")}.`,
           "",
           "Agora a equipe irá vincular um professor responsável. Assim que seus primeiros treinos forem preparados, você receberá um novo aviso.",
           "",
@@ -594,6 +859,14 @@ export async function POST(req: NextRequest) {
               <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
                 Seu plano de experiência prevê <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong>,
                 totalizando <strong style="color:#f5f5f5;">${result.workoutsPerMonth} treino(s)</strong> no ciclo.
+              </p>
+
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                ${
+                  result.onboardingComplete
+                    ? "Recebemos sua ficha inicial. O professor usará essas informações para preparar treinos mais seguros e direcionados."
+                    : `Ainda precisamos confirmar algumas informações para personalizar melhor seus treinos: <strong style="color:#f5f5f5;">${escapeHtml(result.missingOnboardingLabels.join(", "))}</strong>.`
+                }
               </p>
 
               <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
@@ -648,7 +921,13 @@ export async function POST(req: NextRequest) {
                 `Experiência válida até: ${endDateText}.`,
                 `Plano da experiência: ${result.workoutsPerWeek} treino(s)/semana e ${result.workoutsPerMonth} treino(s)/mês.`,
                 "",
-                "Ação recomendada: acessar Vincular Alunos, definir o professor responsável e orientar a montagem dos primeiros treinos.",
+                result.onboardingComplete
+                  ? "Ficha inicial: completa."
+                  : `Ficha inicial: incompleta. Confirmar antes de personalizar treino: ${result.missingOnboardingLabels.join(", ")}.`,
+                "",
+                result.onboardingComplete
+                  ? "Ação recomendada: acessar Vincular Alunos, definir o professor responsável e orientar a montagem dos primeiros treinos."
+                  : "Ação recomendada: vincular professor e confirmar dados faltantes antes de montar treinos personalizados. Enquanto isso, usar treino inicial conservador.",
                 "",
                 `Abrir Vincular Alunos: ${assignmentUrl}`,
               ]
@@ -670,7 +949,19 @@ export async function POST(req: NextRequest) {
                     </p>
 
                     <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                      Ação recomendada: vincular um professor responsável para que os primeiros treinos possam ser preparados.
+                      ${
+                        result.onboardingComplete
+                          ? "Ficha inicial: completa."
+                          : `Ficha inicial: incompleta. Confirmar antes de personalizar treino: <strong style="color:#f5f5f5;">${escapeHtml(result.missingOnboardingLabels.join(", "))}</strong>.`
+                      }
+                    </p>
+
+                    <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+                      ${
+                        result.onboardingComplete
+                          ? "Ação recomendada: vincular um professor responsável para que os primeiros treinos possam ser preparados."
+                          : "Ação recomendada: vincular professor e confirmar dados faltantes antes de montar treinos personalizados. Enquanto isso, usar treino inicial conservador."
+                      }
                     </p>
 
                     <a href="${safeAssignmentUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
@@ -690,7 +981,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       message:
-        "Cadastro criado, experiência gratuita ativada, aluno avisado e gestão notificada para vincular professor.",
+        "Cadastro criado, experiência gratuita ativada, ficha inicial registrada, aluno avisado e gestão notificada para vincular professor.",
       ...result,
     });
   } catch (error: any) {
