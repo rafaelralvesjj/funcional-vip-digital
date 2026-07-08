@@ -1576,6 +1576,20 @@ export default async function DashboardPage() {
           </div>
 
           <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+              {labels.unansweredQuestionsList}
+            </h2>
+
+            <DashboardConversationList
+              conversations={unansweredQuestionConversationItems}
+              currentUserId={userId}
+              currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
+              emptyMessage="Nenhuma dúvida aguardando resposta."
+              allowReply={isTeacher}
+            />
+          </div>
+
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
             <h2 className="text-xl font-semibold text-[#f5f5f5] mb-2">
               {labels.careEventsList}
             </h2>
