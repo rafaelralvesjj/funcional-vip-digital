@@ -121,7 +121,7 @@ export default function StudentDetailPage() {
       ]);
 
       const students = getListFromResponse(studentsJson, ["students", "data"]);
-      const selectedStudent = students.find((item) => item.id === studentId) || null;
+      const selectedStudent = (students.find((item) => item.id === studentId) || null) as Student | null;
 
       setStudent(selectedStudent);
       setNotices(getListFromResponse(noticesJson, ["notices", "data", "items"]));
