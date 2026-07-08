@@ -1,747 +1,580 @@
-"use client";
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { hash } from "bcryptjs";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../../auth/[...nextauth]/auth";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
+type AnyStudent = Record<string, any>;
 
-type TabKey = "avisos" | "treinos" | "duvidas" | "resumo";
+function normalizeRole(role?: string | null) {
+  const value = String(role || "").toUpperCase();
 
-type AnyItem = Record<string, any>;
+  if (value === "ALUNO") return "STUDENT";
+  if (value === "PROFESSOR") return "TEACHER";
 
-type Student = AnyItem & {
-  id: string;
-  name: string;
-  email?: string | null;
-  phone?: string | null;
-  active?: boolean;
-  commercialStatus?: string | null;
-  contractedTrainingDaysPerMonth?: number | null;
-  professorName?: string | null;
-  user?: {
-    id?: string;
-    name?: string | null;
-    email?: string | null;
-  } | null;
-  createdAt?: string | null;
-};
-
-const GOAL_LABELS: Record<string, string> = {
-  EMAGRECIMENTO: "Emagrecimento",
-  HIPERTROFIA: "Ganho de massa muscular / hipertrofia",
-  CONDICIONAMENTO_GERAL: "Condicionamento físico geral",
-  SAUDE_QUALIDADE_VIDA: "Saúde e qualidade de vida",
-  MOBILIDADE_FLEXIBILIDADE: "Melhora da mobilidade e flexibilidade",
-  FORTALECIMENTO_MUSCULAR: "Fortalecimento muscular",
-  DEFINICAO_CORPORAL: "Definição corporal",
-  PREPARACAO_CORRIDA: "Preparação para corrida",
-  COMECAR_CORRER: "Começar a correr",
-  MELHORAR_CORRIDA: "Melhorar desempenho na corrida",
-  FORTALECIMENTO_CORRIDA: "Fortalecimento para corrida",
-  PREVENCAO_LESOES_CORRIDA: "Prevenção de lesões na corrida",
-  "RETORNO_POS_LESÃO": "Retorno aos treinos após lesão",
-  RETORNO_POS_LESAO: "Retorno aos treinos após lesão",
-  PRESCRICAO_MEDICA: "Treinamento por prescrição médica",
-  RETOMADA_COM_CUIDADO: "Reabilitação / retomada com cuidado",
-  PERFORMANCE_ESPORTIVA: "Melhora de performance esportiva",
-  ALTA_PERFORMANCE: "Atleta de alta performance",
-  LUTA_ARTE_MARCIAL: "Preparação física para luta ou arte marcial",
-  ESPORTE_ESPECIFICO: "Preparação física para esporte específico",
-  REDUCAO_DORES_FUNCIONAL: "Redução de dores e melhora funcional",
-  OUTRO: "Outro",
-};
-
-function formatDate(value?: string | null): string {
-  if (!value) return "-";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  return value;
 }
 
-function normalizeStatus(status?: string | null): string {
-  const value = String(status || "").toUpperCase();
-
-  const labels: Record<string, string> = {
-    EXPERIENCIA_ATIVA: "Experiência ativa",
-    CONTRATO_ATIVO: "Contrato ativo",
-    AGUARDANDO_PAGAMENTO: "Aguardando pagamento",
-    SUSPENSO_POR_PAGAMENTO: "Suspenso por pagamento",
-    SEM_CONTRATO_ATIVO: "Sem contrato ativo",
-    ACTIVE: "Ativo",
-    PENDING: "Pendente",
-    DONE: "Concluído",
-    COMPLETED: "Concluído",
-    RESOLVED: "Resolvido",
-    OPEN: "Aberto",
-    ABERTO: "Aberto",
-    RESPONDIDO: "Respondido",
-  };
-
-  return labels[value] || value || "Não informado";
+function normalizeEmail(email?: string | null) {
+  const value = String(email || "").trim().toLowerCase();
+  return value || null;
 }
 
-function normalizeFreeText(value?: unknown): string {
-  const text = String(value ?? "").trim();
+function parseOptionalInt(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
 
-  if (!text) return "Não informado";
-
-  const lower = text.toLowerCase();
-
-  if (["nao", "não", "n", "no", "nenhuma", "nenhum"].includes(lower)) {
-    return "Não informado / não relatado";
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return undefined;
   }
 
-  return text;
+  return parsed;
 }
 
-function normalizeGoal(value?: unknown, otherDescription?: unknown): string {
-  const raw = String(value ?? "").trim();
-  const other = String(otherDescription ?? "").trim();
+function cleanExtractedValue(value?: string | null): string | null {
+  const text = String(value || "")
+    .replace(/\r/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\.$/, "")
+    .trim();
 
-  if (!raw && !other) return "Não informado";
+  return text || null;
+}
 
-  if (raw === "OUTRO") {
-    return other ? `Outro: ${other}` : "Outro";
+function removeUnit(value: string | null, unitRegex: RegExp): string | null {
+  if (!value) return null;
+
+  const cleaned = value.replace(unitRegex, "").trim();
+  return cleaned || value;
+}
+
+function extractFromNotes(notes: string | null | undefined, labels: string[]): string | null {
+  const lines = String(notes || "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*[-•]\s*/, "").trim())
+    .filter(Boolean);
+
+  for (const label of labels) {
+    const prefix = `${label.toLowerCase()}:`;
+    const line = lines.find((item) => item.toLowerCase().startsWith(prefix));
+
+    if (line) {
+      return cleanExtractedValue(line.slice(label.length + 1));
+    }
   }
-
-  return GOAL_LABELS[raw] || raw || other || "Não informado";
-}
-
-function getListFromResponse(json: any, keys: string[]): AnyItem[] {
-  if (Array.isArray(json)) return json;
-
-  for (const key of keys) {
-    if (Array.isArray(json?.[key])) return json[key];
-  }
-
-  return [];
-}
-
-function getStudentFromResponse(json: any): AnyItem | null {
-  if (!json) return null;
-
-  if (json?.student && typeof json.student === "object") return json.student;
-  if (json?.data && !Array.isArray(json.data) && typeof json.data === "object") return json.data;
-  if (json?.item && typeof json.item === "object") return json.item;
-  if (json?.id && typeof json === "object") return json;
 
   return null;
 }
 
-function getByPath(source: AnyItem | null | undefined, path: string): unknown {
-  if (!source) return undefined;
+function buildInitialProfile(student: AnyStudent) {
+  const notes = String(student?.notes || "");
 
-  return path.split(".").reduce<unknown>((current, part) => {
-    if (current && typeof current === "object" && part in (current as AnyItem)) {
-      return (current as AnyItem)[part];
-    }
-
-    return undefined;
-  }, source);
-}
-
-function firstValue(source: AnyItem | null | undefined, paths: string[]): unknown {
-  for (const path of paths) {
-    const value = getByPath(source, path);
-
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
-function firstText(source: AnyItem | null | undefined, paths: string[]): string {
-  return normalizeFreeText(firstValue(source, paths));
-}
-
-function firstRawText(source: AnyItem | null | undefined, paths: string[]): string {
-  const value = firstValue(source, paths);
-  return String(value ?? "").trim();
-}
-
-function getItemTitle(item: AnyItem, fallback: string): string {
-  return String(item.title || item.name || item.subject || item.planName || item.content || fallback || "Registro");
-}
-
-function getItemDescription(item: AnyItem): string {
-  return String(item.description || item.content || item.message || item.answer || item.notes || item.studentSummary || "");
-}
-
-function getItemDate(item: AnyItem): string | null {
-  return item.date || item.scheduledDate || item.workoutDate || item.createdAt || item.updatedAt || null;
-}
-
-function isWorkoutCompleted(item: AnyItem): boolean {
-  const status = String(item.status || "").toUpperCase();
-
-  return Boolean(
-    item.completedAt ||
-      item.doneAt ||
-      item.finishedAt ||
-      ["DONE", "COMPLETED", "CONCLUIDO", "CONCLUÍDO", "FINALIZADO"].includes(status)
+  const timeAvailableMinutes = removeUnit(
+    extractFromNotes(notes, [
+      "Tempo disponível por treino",
+      "Tempo disponivel por treino",
+    ]),
+    /\s*minuto\(s\)$/i
   );
-}
 
-function isWorkoutExpired(item: AnyItem): boolean {
-  if (isWorkoutCompleted(item)) return false;
+  const weightKg = removeUnit(
+    extractFromNotes(notes, ["Peso informado"]),
+    /\s*kg$/i
+  );
 
-  const rawDate = getItemDate(item);
-  if (!rawDate) return false;
-
-  const workoutDate = new Date(rawDate);
-  if (Number.isNaN(workoutDate.getTime())) return false;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  workoutDate.setHours(0, 0, 0, 0);
-
-  return workoutDate < today;
-}
-
-function getStudentProfile(student: Student | null) {
-  const primaryGoal = firstRawText(student, [
-    "objective",
-    "goal",
-    "mainGoal",
-    "primaryGoal",
-    "initialProfile.objective",
-    "initialProfile.goal",
-    "initialProfile.primaryGoal",
-    "profile.objective",
-    "profile.goal",
-    "profile.primaryGoal",
-    "onboarding.objective",
-    "onboarding.goal",
-    "onboarding.primaryGoal",
-    "anamnesis.objective",
-    "anamnesis.goal",
-  ]);
-
-  const primaryGoalOtherDescription = firstRawText(student, [
-    "primaryGoalOtherDescription",
-    "initialProfile.primaryGoalOtherDescription",
-    "profile.primaryGoalOtherDescription",
-    "onboarding.primaryGoalOtherDescription",
-  ]);
+  const heightCm = removeUnit(
+    extractFromNotes(notes, ["Altura informada"]),
+    /\s*cm$/i
+  );
 
   return {
-    objective: normalizeGoal(primaryGoal, primaryGoalOtherDescription),
-    activityLevel: firstText(student, [
-      "activityLevel",
-      "level",
-      "currentLevel",
-      "initialProfile.activityLevel",
-      "profile.activityLevel",
-      "onboarding.activityLevel",
-      "anamnesis.activityLevel",
+    objective: extractFromNotes(notes, [
+      "Objetivo principal",
+      "Objetivo",
     ]),
-    trainingEnvironment: firstText(student, [
-      "trainingEnvironment",
-      "environment",
-      "trainingPlace",
-      "initialProfile.trainingEnvironment",
-      "profile.trainingEnvironment",
-      "onboarding.trainingEnvironment",
-      "anamnesis.trainingEnvironment",
+    activityLevel: extractFromNotes(notes, [
+      "Nível atual informado",
+      "Nivel atual informado",
+      "Nível atual",
+      "Nivel atual",
     ]),
-    availableEquipment: firstText(student, [
-      "availableEquipment",
-      "equipment",
-      "materials",
-      "initialProfile.availableEquipment",
-      "profile.availableEquipment",
-      "onboarding.availableEquipment",
-      "anamnesis.availableEquipment",
+    trainingEnvironment: extractFromNotes(notes, [
+      "Ambiente de treino",
+      "Local de treino",
     ]),
-    timeAvailableMinutes: firstText(student, [
-      "timeAvailableMinutes",
-      "timePerWorkout",
-      "availableTime",
-      "initialProfile.timeAvailableMinutes",
-      "profile.timeAvailableMinutes",
-      "onboarding.timeAvailableMinutes",
-      "anamnesis.timeAvailableMinutes",
+    availableEquipment: extractFromNotes(notes, [
+      "Equipamentos/materiais disponíveis",
+      "Equipamentos/materiais disponiveis",
+      "Equipamentos disponíveis",
+      "Equipamentos disponiveis",
+      "Materiais disponíveis",
+      "Materiais disponiveis",
     ]),
-    preferredDays: firstText(student, [
-      "preferredDays",
-      "preferredSchedule",
-      "initialProfile.preferredDays",
-      "profile.preferredDays",
-      "onboarding.preferredDays",
-      "anamnesis.preferredDays",
+    timeAvailableMinutes,
+    preferredDays: extractFromNotes(notes, [
+      "Dias/horários preferidos",
+      "Dias/horarios preferidos",
+      "Dias preferidos",
     ]),
-    currentPain: firstText(student, [
-      "currentPain",
-      "pain",
-      "painNotes",
-      "initialProfile.currentPain",
-      "profile.currentPain",
-      "onboarding.currentPain",
-      "anamnesis.currentPain",
+    currentPain: extractFromNotes(notes, [
+      "Dor/desconforto atual informado",
+      "Dor/desconforto atual",
+      "Dor atual",
     ]),
-    medicalRestriction: firstText(student, [
-      "medicalRestriction",
-      "restriction",
-      "physicalRestriction",
-      "initialProfile.medicalRestriction",
-      "profile.medicalRestriction",
-      "onboarding.medicalRestriction",
-      "anamnesis.medicalRestriction",
+    medicalRestriction: extractFromNotes(notes, [
+      "Restrição médica/física declarada",
+      "Restricao medica/fisica declarada",
+      "Restrição médica/física",
+      "Restricao medica/fisica",
+      "Restrição médica",
+      "Restricao medica",
     ]),
-    trainingHistory: firstText(student, [
-      "trainingHistory",
-      "history",
-      "initialProfile.trainingHistory",
-      "profile.trainingHistory",
-      "onboarding.trainingHistory",
-      "anamnesis.trainingHistory",
+    trainingHistory: extractFromNotes(notes, [
+      "Histórico de treino",
+      "Historico de treino",
     ]),
-    weightKg: firstText(student, [
-      "weightKg",
-      "weight",
-      "initialProfile.weightKg",
-      "profile.weightKg",
-      "onboarding.weightKg",
-      "anamnesis.weightKg",
-    ]),
-    heightCm: firstText(student, [
-      "heightCm",
-      "height",
-      "initialProfile.heightCm",
-      "profile.heightCm",
-      "onboarding.heightCm",
-      "anamnesis.heightCm",
-    ]),
-    notes: firstText(student, [
-      "notes",
-      "observation",
-      "observations",
-      "initialProfile.notes",
-      "profile.notes",
-      "onboarding.notes",
-      "anamnesis.notes",
+    weightKg,
+    heightCm,
+    notes: extractFromNotes(notes, [
+      "Observações livres do aluno",
+      "Observacoes livres do aluno",
+      "Observações do aluno",
+      "Observacoes do aluno",
     ]),
   };
 }
 
-function buildTeacherReading(profile: ReturnType<typeof getStudentProfile>, student: Student | null): string {
-  const parts: string[] = [];
-  const status = normalizeStatus(student?.commercialStatus);
-  const contractedDays = student?.contractedTrainingDaysPerMonth || 0;
+async function getCurrentUser() {
+  const session = await getServerSession(authOptions);
+  const sessionUser = session?.user as any;
 
-  parts.push(`Aluno com status ${status.toLowerCase()}.`);
-
-  if (profile.objective !== "Não informado") {
-    parts.push(`Objetivo principal informado: ${profile.objective}.`);
+  if (!sessionUser?.id && !sessionUser?.email) {
+    return null;
   }
 
-  if (profile.activityLevel !== "Não informado") {
-    parts.push(`Nível atual: ${profile.activityLevel}.`);
+  if (sessionUser?.id) {
+    const userById = await prisma.user.findUnique({
+      where: { id: sessionUser.id },
+      select: { id: true, role: true, email: true },
+    });
+
+    if (userById) return userById;
   }
 
-  if (profile.trainingEnvironment !== "Não informado" || profile.availableEquipment !== "Não informado") {
-    parts.push(
-      `Montagem inicial deve considerar ambiente ${profile.trainingEnvironment.toLowerCase()} e equipamentos: ${profile.availableEquipment}.`
-    );
+  if (sessionUser?.email) {
+    return prisma.user.findUnique({
+      where: { email: sessionUser.email },
+      select: { id: true, role: true, email: true },
+    });
   }
 
-  if (profile.currentPain !== "Não informado / não relatado" && profile.currentPain !== "Não informado") {
-    parts.push(`Atenção ao relato de dor/desconforto: ${profile.currentPain}.`);
-  }
-
-  if (profile.medicalRestriction !== "Não informado / não relatado" && profile.medicalRestriction !== "Não informado") {
-    parts.push(`Atenção à restrição médica/física: ${profile.medicalRestriction}.`);
-  }
-
-  if (contractedDays > 0) {
-    parts.push(`Contrato indica ${contractedDays} treino(s) por mês; organizar a semana respeitando a frequência contratada.`);
-  }
-
-  if (profile.objective.toLowerCase().includes("corrida")) {
-    parts.push("Para objetivo ligado à corrida, priorizar base, fortalecimento de pernas, glúteos, core, estabilidade e progressão de impacto.");
-  }
-
-  if (profile.objective.toLowerCase().includes("emagrecimento")) {
-    parts.push("Para emagrecimento, comunicar contribuição para gasto energético e consistência, sem prometer perda de peso.");
-  }
-
-  if (parts.length === 1) {
-    parts.push("Ficha inicial ainda não foi retornada completa pela API; confirmar objetivo, restrições, ambiente e equipamentos antes de personalizar novos treinos.");
-  }
-
-  return parts.join(" ");
+  return null;
 }
 
-export default function StudentDetailPage() {
-  const params = useParams();
-  const studentId = String(params?.studentId || "");
+function canManageStudents(role: string) {
+  return role === "GESTOR" || role === "ADMIN";
+}
 
-  const [activeTab, setActiveTab] = useState<TabKey>("avisos");
-  const [student, setStudent] = useState<Student | null>(null);
-  const [notices, setNotices] = useState<AnyItem[]>([]);
-  const [workouts, setWorkouts] = useState<AnyItem[]>([]);
-  const [questions, setQuestions] = useState<AnyItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
+function canReadStudents(role: string) {
+  return role === "GESTOR" || role === "ADMIN" || role === "TEACHER" || role === "PROFESSOR";
+}
 
-  useEffect(() => {
-    if (!studentId) return;
-    loadData();
-  }, [studentId]);
+function isProfessorUser(user?: { role?: string | null } | null): boolean {
+  const role = normalizeRole(user?.role);
+  return ["GESTOR", "ADMIN", "TEACHER"].includes(role);
+}
 
-  async function safeFetch(url: string) {
-    const res = await fetch(url, { cache: "no-store" });
-    const json = await res.json().catch(() => null);
+function buildStudentResponse(student: AnyStudent) {
+  const profile = buildInitialProfile(student);
+  const professorLinked = isProfessorUser(student.user);
 
-    if (!res.ok) return null;
+  return {
+    id: student.id,
+    name: student.name,
+    email: student.email,
+    phone: student.phone || student.userAuth?.phone || null,
+    notes: student.notes,
+    image: student.image,
+    active: student.active,
+    onboardingCompleto: student.onboardingCompleto,
+    contractedTrainingDaysPerMonth: student.contractedTrainingDaysPerMonth,
+    commercialStatus: student.commercialStatus,
+    createdAt: student.createdAt,
+    updatedAt: student.updatedAt,
+    userId: student.userId,
+    userAuthId: student.userAuthId,
 
-    return json;
+    objective: profile.objective,
+    activityLevel: profile.activityLevel,
+    trainingEnvironment: profile.trainingEnvironment,
+    availableEquipment: profile.availableEquipment,
+    timeAvailableMinutes: profile.timeAvailableMinutes,
+    preferredDays: profile.preferredDays,
+    currentPain: profile.currentPain,
+    medicalRestriction: profile.medicalRestriction,
+    trainingHistory: profile.trainingHistory,
+    weightKg: profile.weightKg,
+    heightCm: profile.heightCm,
+    initialNotes: profile.notes,
+    initialProfile: profile,
+    profile,
+    onboarding: profile,
+
+    professorId: professorLinked ? student.user?.id || null : null,
+    professorName: professorLinked ? student.user?.name || "Não vinculado" : "Não vinculado",
+    professorEmail: professorLinked ? student.user?.email || null : null,
+    user: student.user,
+    userAuth: student.userAuth,
+  };
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  async function loadData() {
-    setLoading(true);
-    setMessage("");
+  const role = normalizeRole(currentUser.role);
 
-    try {
-      const [studentsJson, studentDetailJson, noticesJson, workoutsJson, questionsJson] = await Promise.all([
-        safeFetch("/api/students"),
-        safeFetch(`/api/students/${encodeURIComponent(studentId)}`),
-        safeFetch(`/api/notices?studentId=${encodeURIComponent(studentId)}`),
-        safeFetch(`/api/workout-plan?studentId=${encodeURIComponent(studentId)}`),
-        safeFetch(`/api/questions?studentId=${encodeURIComponent(studentId)}`),
-      ]);
+  if (!canReadStudents(role)) {
+    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
 
-      const students = getListFromResponse(studentsJson, ["students", "data"]);
-      const selectedFromList = (students.find((item) => item.id === studentId) || null) as Student | null;
-      const selectedFromDetail = getStudentFromResponse(studentDetailJson) as Student | null;
-      const selectedStudent = selectedFromList || selectedFromDetail
-        ? ({ ...(selectedFromList || {}), ...(selectedFromDetail || {}) } as Student)
-        : null;
+  try {
+    const { id } = params;
 
-      setStudent(selectedStudent);
-      setNotices(getListFromResponse(noticesJson, ["notices", "data", "items"]));
-      setWorkouts(getListFromResponse(workoutsJson, ["workouts", "workoutPlans", "plans", "data", "items"]));
-      setQuestions(getListFromResponse(questionsJson, ["questions", "data", "items"]));
+    const student = await prisma.student.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userId: true,
+        userAuthId: true,
+        name: true,
+        email: true,
+        phone: true,
+        notes: true,
+        image: true,
+        active: true,
+        onboardingCompleto: true,
+        contractedTrainingDaysPerMonth: true,
+        commercialStatus: true,
+        createdAt: true,
+        updatedAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+        userAuth: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            role: true,
+          },
+        },
+      },
+    });
 
-      if (!selectedStudent) {
-        setMessage("Aluno não encontrado na lista retornada pela API de alunos.");
-      }
-    } catch {
-      setMessage("Erro ao carregar o detalhe do aluno.");
+    if (!student) {
+      return NextResponse.json({ error: "Aluno não encontrado." }, { status: 404 });
     }
 
-    setLoading(false);
+    if (role === "TEACHER" && student.userId !== currentUser.id) {
+      return NextResponse.json(
+        { error: "Você não tem acesso a este aluno." },
+        { status: 403 }
+      );
+    }
+
+    return NextResponse.json({
+      student: buildStudentResponse(student),
+    });
+  } catch (error: any) {
+    console.error("GET /api/students/[id] error:", error);
+    return NextResponse.json(
+      { error: "Erro interno", message: error?.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const professorName = student?.professorName || student?.user?.name || "Professor não informado";
-  const profile = useMemo(() => getStudentProfile(student), [student]);
+  const role = normalizeRole(currentUser.role);
 
-  const workoutStats = useMemo(() => {
-    const completed = workouts.filter(isWorkoutCompleted).length;
-    const expired = workouts.filter(isWorkoutExpired).length;
-    const pending = Math.max(workouts.length - completed - expired, 0);
-
-    return {
-      total: workouts.length,
-      completed,
-      expired,
-      pending,
-    };
-  }, [workouts]);
-
-  const tabCounts = useMemo(
-    () => ({
-      avisos: notices.length,
-      treinos: workouts.length,
-      duvidas: questions.length,
-    }),
-    [notices.length, workouts.length, questions.length]
-  );
-
-  const teacherReading = useMemo(
-    () => buildTeacherReading(profile, student),
-    [profile, student]
-  );
-
-  function renderEmpty(text: string) {
-    return (
-      <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-5 text-sm text-[#a1a1a1]">
-        {text}
-      </div>
+  if (!canManageStudents(role)) {
+    return NextResponse.json(
+      { error: "Apenas gestores podem excluir alunos." },
+      { status: 403 }
     );
   }
 
-  function renderGenericList(items: AnyItem[], emptyText: string, kind: "notice" | "workout" | "question") {
-    if (items.length === 0) return renderEmpty(emptyText);
+  try {
+    const { id } = params;
 
-    return (
-      <div className="space-y-3">
-        {items.map((item, index) => {
-          const title = getItemTitle(item, kind === "workout" ? "Treino" : kind === "question" ? "Mensagem" : "Aviso");
-          const description = getItemDescription(item);
-          const date = getItemDate(item);
-          const status = item.status || item.type || item.senderRole || item.targetRole || "";
+    const student = await prisma.student.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userAuthId: true,
+      },
+    });
 
-          return (
-            <div key={item.id || index} className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-4 space-y-3">
-              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-semibold text-[#f5f5f5]">{title}</h3>
-                    {status && (
-                      <span className="rounded-full bg-[#D4A373]/15 text-[#D4A373] px-2 py-1 text-[11px] font-semibold">
-                        {normalizeStatus(status)}
-                      </span>
-                    )}
-                  </div>
+    if (!student) {
+      return NextResponse.json({ error: "Aluno não encontrado." }, { status: 404 });
+    }
 
-                  {description && (
-                    <p className="text-sm text-[#d4d4d4] mt-2 whitespace-pre-wrap line-clamp-4">
-                      {description}
-                    </p>
-                  )}
+    await prisma.$transaction(async (tx) => {
+      await tx.student.delete({
+        where: { id },
+      });
 
-                  <p className="text-xs text-[#6b6b6b] mt-2">
-                    Data: {formatDate(date)}
-                  </p>
-                </div>
+      if (student.userAuthId) {
+        await tx.question.updateMany({
+          where: { answeredById: student.userAuthId },
+          data: { answeredById: null },
+        });
 
-                {kind === "workout" && (
-                  <div className="flex flex-wrap gap-2">
-                    <Link
-                      href={`/dashboard/montar-treino?studentId=${studentId}&workoutId=${item.id || ""}`}
-                      className="rounded-xl bg-[#1a1a1a] border border-[#D4A373]/30 text-[#D4A373] px-3 py-2 text-xs font-semibold"
-                    >
-                      Abrir/editar
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </div>
+        await tx.notice.deleteMany({
+          where: { authorId: student.userAuthId },
+        });
+
+        await tx.user.delete({
+          where: { id: student.userAuthId },
+        });
+      }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Erro ao excluir aluno:", error);
+    return NextResponse.json({ error: "Erro ao excluir aluno" }, { status: 500 });
+  }
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
+  const role = normalizeRole(currentUser.role);
+
+  if (!canManageStudents(role)) {
+    return NextResponse.json(
+      { error: "Apenas gestores podem editar alunos." },
+      { status: 403 }
+    );
+  }
+
+  try {
+    const { id } = params;
+    const body = await req.json();
+
+    const existingStudent = await prisma.student.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userAuthId: true,
+        userId: true,
+      },
+    });
+
+    if (!existingStudent) {
+      return NextResponse.json({ error: "Aluno não encontrado." }, { status: 404 });
+    }
+
+    const name =
+      body.name !== undefined ? String(body.name || "").trim() : undefined;
+    const email =
+      body.email !== undefined ? normalizeEmail(body.email) : undefined;
+    const phone =
+      body.phone !== undefined ? String(body.phone || "").trim() || null : undefined;
+    const notes =
+      body.notes !== undefined ? String(body.notes || "").trim() || null : undefined;
+    const image =
+      body.image !== undefined || body.imageUrl !== undefined
+        ? String(body.image ?? body.imageUrl ?? "").trim() || null
+        : undefined;
+    const active =
+      body.active !== undefined ? Boolean(body.active) : undefined;
+    const password =
+      body.password !== undefined ? String(body.password || "") : undefined;
+
+    const professorIdRaw =
+      body.professorId !== undefined || body.userId !== undefined
+        ? String(body.professorId ?? body.userId ?? "").trim()
+        : undefined;
+
+    const contractedTrainingDaysPerMonth = parseOptionalInt(
+      body.contractedTrainingDaysPerMonth ?? body.trainingDaysPerMonth ?? body.daysPerMonth
+    );
+
+    if (name !== undefined && !name) {
+      return NextResponse.json({ error: "O nome é obrigatório." }, { status: 400 });
+    }
+
+    if (email !== undefined && !email) {
+      return NextResponse.json({ error: "O e-mail é obrigatório." }, { status: 400 });
+    }
+
+    if (password !== undefined && password && password.length < 6) {
+      return NextResponse.json(
+        { error: "A senha deve ter no mínimo 6 caracteres." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      body.contractedTrainingDaysPerMonth !== undefined &&
+      contractedTrainingDaysPerMonth === undefined
+    ) {
+      return NextResponse.json(
+        { error: "Informe uma quantidade válida de dias contratados por mês." },
+        { status: 400 }
+      );
+    }
+
+    if (email && existingStudent.userAuthId) {
+      const duplicatedUser = await prisma.user.findFirst({
+        where: {
+          email,
+          id: { not: existingStudent.userAuthId },
+        },
+        select: { id: true },
+      });
+
+      if (duplicatedUser) {
+        return NextResponse.json(
+          { error: "Este e-mail já está cadastrado em outro usuário." },
+          { status: 409 }
+        );
+      }
+    }
+
+    let professorIdToSave: string | undefined;
+
+    if (professorIdRaw !== undefined) {
+      if (!professorIdRaw) {
+        professorIdToSave = currentUser.id;
+      } else {
+        const professor = await prisma.user.findFirst({
+          where: {
+            id: professorIdRaw,
+            role: { in: ["PROFESSOR", "TEACHER"] },
+          },
+          select: { id: true },
+        });
+
+        if (!professor) {
+          return NextResponse.json(
+            { error: "Professor responsável não encontrado." },
+            { status: 404 }
           );
-        })}
-      </div>
-    );
+        }
+
+        professorIdToSave = professor.id;
+      }
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const student = await tx.student.update({
+        where: { id },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(email !== undefined && { email }),
+          ...(phone !== undefined && { phone }),
+          ...(notes !== undefined && { notes }),
+          ...(image !== undefined && { image }),
+          ...(active !== undefined && { active }),
+          ...(professorIdToSave !== undefined && { userId: professorIdToSave }),
+          ...(contractedTrainingDaysPerMonth !== undefined && {
+            contractedTrainingDaysPerMonth,
+          }),
+        },
+        select: {
+          id: true,
+          userId: true,
+          userAuthId: true,
+          name: true,
+          email: true,
+          phone: true,
+          notes: true,
+          image: true,
+          active: true,
+          onboardingCompleto: true,
+          contractedTrainingDaysPerMonth: true,
+          commercialStatus: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+          userAuth: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      if (existingStudent.userAuthId) {
+        const userAuthData: any = {
+          ...(name !== undefined && { name }),
+          ...(email !== undefined && { email }),
+          ...(phone !== undefined && { phone }),
+        };
+
+        if (password) {
+          userAuthData.password = await hash(password, 12);
+        }
+
+        if (Object.keys(userAuthData).length > 0) {
+          await tx.user.update({
+            where: { id: existingStudent.userAuthId },
+            data: userAuthData,
+          });
+        }
+      }
+
+      return student;
+    });
+
+    return NextResponse.json(buildStudentResponse(updated));
+  } catch (error) {
+    console.error("Erro ao atualizar aluno:", error);
+    return NextResponse.json({ error: "Erro ao atualizar aluno" }, { status: 500 });
   }
-
-  function SummaryField({ label, value }: { label: string; value: string }) {
-    return (
-      <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
-        <p className="text-xs uppercase text-[#6b6b6b]">{label}</p>
-        <p className="text-[#f5f5f5] text-sm font-semibold mt-1 whitespace-pre-wrap">{value}</p>
-      </div>
-    );
-  }
-
-  return (
-    <main className="min-h-screen bg-[#0a0a0a] p-4 md:p-6 text-[#f5f5f5]">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <div>
-            <Link href="/dashboard/students" className="text-xs text-[#D4A373] underline">
-              ← Voltar para alunos
-            </Link>
-
-            <p className="text-xs uppercase tracking-[0.3em] text-[#D4A373] mt-4 mb-2">
-              Detalhe do aluno
-            </p>
-
-            <h1 className="text-2xl font-bold text-[#D4A373]">
-              {student?.name || "Aluno"}
-            </h1>
-
-            <p className="text-sm text-[#a1a1a1] mt-2">
-              {student?.email || "Sem e-mail"}
-              {student?.phone ? ` · ${student.phone}` : ""}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={loadData}
-            className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 text-sm font-semibold hover:border-[#D4A373]/40 transition"
-          >
-            Atualizar
-          </button>
-        </div>
-
-        {message && (
-          <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
-            {message}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 text-sm text-[#a1a1a1]">
-            Carregando detalhe do aluno...
-          </div>
-        ) : (
-          <>
-            <section className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-                <p className="text-xs uppercase text-[#6b6b6b]">Status</p>
-                <p className="text-lg font-bold text-[#D4A373] mt-1">
-                  {normalizeStatus(student?.commercialStatus)}
-                </p>
-              </div>
-
-              <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-                <p className="text-xs uppercase text-[#6b6b6b]">Professor</p>
-                <p className="text-lg font-bold text-[#f5f5f5] mt-1">{professorName}</p>
-              </div>
-
-              <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-                <p className="text-xs uppercase text-[#6b6b6b]">Treinos/mês</p>
-                <p className="text-lg font-bold text-[#f5f5f5] mt-1">
-                  {student?.contractedTrainingDaysPerMonth || "-"}
-                </p>
-              </div>
-
-              <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-                <p className="text-xs uppercase text-[#6b6b6b]">Cadastro</p>
-                <p className="text-lg font-bold text-[#f5f5f5] mt-1">
-                  {formatDate(student?.createdAt)}
-                </p>
-              </div>
-            </section>
-
-            <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4 md:p-5 space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { key: "avisos", label: `Avisos (${tabCounts.avisos})` },
-                  { key: "treinos", label: `Treinos (${tabCounts.treinos})` },
-                  { key: "duvidas", label: `Dúvidas (${tabCounts.duvidas})` },
-                  { key: "resumo", label: "Resumo PDF" },
-                ].map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setActiveTab(tab.key as TabKey)}
-                    className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                      activeTab === tab.key
-                        ? "bg-[#D4A373] text-[#0a0a0a]"
-                        : "bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10]"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {activeTab === "avisos" && renderGenericList(notices, "Nenhum aviso encontrado para este aluno.", "notice")}
-              {activeTab === "treinos" && renderGenericList(workouts, "Nenhum treino encontrado para este aluno.", "workout")}
-              {activeTab === "duvidas" && renderGenericList(questions, "Nenhuma dúvida encontrada para este aluno.", "question")}
-
-              {activeTab === "resumo" && (
-                <div id="student-summary-print" className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-5 space-y-5">
-                  <div>
-                    <h2 className="text-lg font-semibold text-[#D4A373]">Resumo do aluno</h2>
-                    <p className="text-xs text-[#a1a1a1] mt-1">
-                      Esta aba consolida os dados do cadastro, ficha inicial, histórico visível e leitura operacional para o professor.
-                    </p>
-                  </div>
-
-                  <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-[#D4A373]">1. Identificação e contrato</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <SummaryField label="Aluno" value={student?.name || "Aluno"} />
-                      <SummaryField label="E-mail" value={student?.email || "Sem e-mail"} />
-                      <SummaryField label="Telefone" value={student?.phone || "Não informado"} />
-                      <SummaryField label="Status" value={normalizeStatus(student?.commercialStatus)} />
-                      <SummaryField label="Professor" value={professorName} />
-                      <SummaryField label="Treinos contratados/mês" value={String(student?.contractedTrainingDaysPerMonth || "Não informado")} />
-                      <SummaryField label="Cadastro" value={formatDate(student?.createdAt)} />
-                    </div>
-                  </section>
-
-                  <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-[#D4A373]">2. Ficha inicial / onboarding</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <SummaryField label="Objetivo principal" value={profile.objective} />
-                      <SummaryField label="Nível atual" value={profile.activityLevel} />
-                      <SummaryField label="Ambiente de treino" value={profile.trainingEnvironment} />
-                      <SummaryField label="Equipamentos disponíveis" value={profile.availableEquipment} />
-                      <SummaryField label="Tempo disponível por treino" value={profile.timeAvailableMinutes === "Não informado" ? profile.timeAvailableMinutes : `${profile.timeAvailableMinutes} minuto(s)`} />
-                      <SummaryField label="Dias/horários preferidos" value={profile.preferredDays} />
-                      <SummaryField label="Dor/desconforto atual" value={profile.currentPain} />
-                      <SummaryField label="Restrição médica/física" value={profile.medicalRestriction} />
-                      <SummaryField label="Histórico de treino" value={profile.trainingHistory} />
-                      <SummaryField label="Peso informado" value={profile.weightKg === "Não informado" ? profile.weightKg : `${profile.weightKg} kg`} />
-                      <SummaryField label="Altura informada" value={profile.heightCm === "Não informado" ? profile.heightCm : `${profile.heightCm} cm`} />
-                      <SummaryField label="Observações do aluno" value={profile.notes} />
-                    </div>
-                  </section>
-
-                  <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-[#D4A373]">3. Histórico visível</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <SummaryField label="Treinos planejados/registrados" value={String(workoutStats.total)} />
-                      <SummaryField label="Treinos concluídos" value={String(workoutStats.completed)} />
-                      <SummaryField label="Treinos vencidos não concluídos" value={String(workoutStats.expired)} />
-                      <SummaryField label="Treinos pendentes futuros" value={String(workoutStats.pending)} />
-                      <SummaryField label="Dúvidas registradas" value={String(questions.length)} />
-                      <SummaryField label="Avisos recentes" value={String(notices.length)} />
-                    </div>
-                  </section>
-
-                  {notices.length > 0 && (
-                    <section className="space-y-3">
-                      <h3 className="text-sm font-semibold text-[#D4A373]">4. Avisos recentes</h3>
-                      <div className="space-y-2">
-                        {notices.slice(0, 3).map((notice, index) => (
-                          <div key={notice.id || index} className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
-                            <p className="text-[#f5f5f5] text-sm font-semibold">{getItemTitle(notice, "Aviso")}</p>
-                            <p className="text-[#a1a1a1] text-xs mt-1">
-                              {formatDate(getItemDate(notice))} · {normalizeStatus(notice.type || notice.status || "")}
-                            </p>
-                            {getItemDescription(notice) && (
-                              <p className="text-[#d4d4d4] text-xs mt-2 whitespace-pre-wrap">{getItemDescription(notice)}</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-[#D4A373]">5. Leitura operacional para o professor</h3>
-                    <div className="rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 p-4">
-                      <p className="text-sm text-[#f5f5f5] leading-relaxed whitespace-pre-wrap">
-                        {teacherReading}
-                      </p>
-                    </div>
-                  </section>
-
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => window.print()}
-                      className="rounded-xl bg-[#D4A373] text-[#0a0a0a] px-4 py-3 text-sm font-semibold hover:bg-[#c49563] transition"
-                    >
-                      Imprimir / salvar como PDF
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={loadData}
-                      className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 text-sm font-semibold hover:border-[#D4A373]/40 transition"
-                    >
-                      Atualizar resumo
-                    </button>
-                  </div>
-                </div>
-              )}
-            </section>
-          </>
-        )}
-      </div>
-    </main>
-  );
 }
