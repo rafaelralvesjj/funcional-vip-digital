@@ -169,22 +169,25 @@ model WorkoutPlan {
 }
 
 model Exercise {
-  id            String   @id @default(uuid())
-  workoutPlanId String   @map("workout_plan_id")
-  name          String
-  description   String?
-  series        Int?
-  reps          String?
-  weight        String?
-  restTime      String?  @map("rest_time")
-  notes         String?
-  order         Int      @default(0)
-  videoUrl      String?  @map("video_url")
-  imageUrl      String?  @map("image_url")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id                String   @id @default(uuid())
+  workoutPlanId     String   @map("workout_plan_id")
+  libraryExerciseId String?  @map("library_exercise_id")
+  name              String
+  description       String?
+  series            Int?
+  reps              String?
+  weight            String?
+  restTime          String?  @map("rest_time")
+  notes             String?
+  order             Int      @default(0)
+  videoUrl          String?  @map("video_url")
+  imageUrl          String?  @map("image_url")
+  createdAt         DateTime @default(now()) @map("created_at")
 
-  workoutPlan WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+  workoutPlan     WorkoutPlan      @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+  libraryExercise ExerciseLibrary? @relation(fields: [libraryExerciseId], references: [id])
 
+  @@index([libraryExerciseId])
   @@map("exercises")
 }
 
@@ -484,6 +487,8 @@ model ExerciseLibrary {
   contraindications String?  @db.Text
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
+
+  exercises Exercise[]
 
   @@index([active])
   @@index([muscleGroup])
