@@ -287,6 +287,314 @@ async function validateTeacher(teacherId: string) {
   });
 }
 
+
+type AutomaticCareDetection = {
+  eventType: string;
+  severity: string;
+  title: string;
+  description: string;
+  professorMessage: string;
+};
+
+function normalizeForCareDetection(value: string): string {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function textHasAny(text: string, terms: string[]): boolean {
+  return terms.some((term) => text.includes(term));
+}
+
+function detectAutomaticCareEvent(content: string): AutomaticCareDetection | null {
+  const text = normalizeForCareDetection(content);
+
+  if (!text) return null;
+
+  const painTerms = [
+    "dor",
+    "doendo",
+    "dolorido",
+    "desconforto",
+    "machuc",
+    "lesao",
+    "lesion",
+    "joelho",
+    "lombar",
+    "coluna",
+    "ombro",
+    "tornozelo",
+    "quadril",
+    "punho",
+    "cotovelo",
+    "tontura",
+    "tonteira",
+    "enjoo",
+    "falta de ar",
+    "falta ar",
+    "dor no peito",
+    "peito apertado",
+    "mal estar",
+    "caibra",
+  ];
+
+  if (textHasAny(text, painTerms)) {
+    return {
+      eventType: "DOR_DESCONFORTO",
+      severity: "ALTA",
+      title: "Aluno relatou dor ou desconforto",
+      description:
+        "O aluno relatou possível dor, desconforto ou sinal físico de atenção na área de dúvidas. Antes de orientar progressão ou novo treino, revise o relato e confirme se é necessário adaptar exercícios, carga, volume ou amplitude.",
+      professorMessage:
+        "Revise o relato do aluno antes do próximo treino. Se houver dor articular, tontura, falta de ar fora do esperado ou desconforto incomum, oriente pausa e ajuste o treino com segurança.",
+    };
+  }
+
+  const equipmentTerms = [
+    "nao tenho equipamento",
+    "nao tenho halter",
+    "nao tenho elastic",
+    "nao tenho corda",
+    "sem equipamento",
+    "sem halter",
+    "sem elastic",
+    "sem academia",
+    "treino em casa",
+    "nao tenho peso",
+    "nao tenho anilha",
+  ];
+
+  if (textHasAny(text, equipmentTerms)) {
+    return {
+      eventType: "FALTA_EQUIPAMENTO",
+      severity: "ATENCAO",
+      title: "Aluno sinalizou limitação de ambiente ou equipamento",
+      description:
+        "O aluno informou que pode não ter equipamento, carga, academia ou estrutura adequada para executar o treino como foi planejado.",
+      professorMessage:
+        "Verifique o ambiente de treino do aluno e adapte exercícios, materiais e alternativas antes da próxima prescrição.",
+    };
+  }
+
+  const difficultyTerms = [
+    "nao consegui",
+    "nao consigo",
+    "muito dificil",
+    "dificil demais",
+    "pesado demais",
+    "muito pesado",
+    "nao dou conta",
+    "nao consegui fazer",
+    "nao consegui completar",
+    "travei",
+    "falhei",
+    "nao consegui terminar",
+    "carga alta",
+    "carga pesada",
+  ];
+
+  if (textHasAny(text, difficultyTerms)) {
+    return {
+      eventType: "EXERCICIO_DIFICIL",
+      severity: "ATENCAO",
+      title: "Aluno relatou dificuldade no treino",
+      description:
+        "O aluno relatou dificuldade para executar ou concluir treino/exercício. Pode ser necessário ajustar carga, exercício, volume, pausa ou orientação técnica.",
+      professorMessage:
+        "Revise se a prescrição está adequada ao nível atual do aluno. Priorize adaptação, segurança e consistência antes de progredir intensidade.",
+    };
+  }
+
+  const clarityTerms = [
+    "nao entendi",
+    "nao sei fazer",
+    "como faz",
+    "como fazer",
+    "qual postura",
+    "postura certa",
+    "execucao correta",
+    "nao ficou claro",
+    "fiquei com duvida",
+  ];
+
+  if (textHasAny(text, clarityTerms)) {
+    return {
+      eventType: "NAO_ENTENDI",
+      severity: "BAIXA",
+      title: "Aluno precisa de orientação técnica",
+      description:
+        "O aluno sinalizou que não entendeu a execução, orientação ou objetivo de algum exercício/treino.",
+      professorMessage:
+        "Responda com orientação simples e, se necessário, ajuste a descrição do exercício ou envie uma explicação mais clara.",
+    };
+  }
+
+  const timeTerms = [
+    "sem tempo",
+    "falta de tempo",
+    "nao tive tempo",
+    "agenda corrida",
+    "rotina corrida",
+    "muito corrido",
+    "nao consegui treinar por tempo",
+    "nao deu tempo",
+  ];
+
+  if (textHasAny(text, timeTerms)) {
+    return {
+      eventType: "FALTA_TEMPO",
+      severity: "ATENCAO",
+      title: "Aluno sinalizou falta de tempo para treinar",
+      description:
+        "O aluno relatou dificuldade de encaixar o treino na rotina. Pode ser necessário ajustar duração, volume ou estratégia de adesão.",
+      professorMessage:
+        "Considere adaptar o próximo treino para uma versão mais curta, simples e viável, mantendo o foco em consistência.",
+    };
+  }
+
+  const motivationTerms = [
+    "desanimado",
+    "desanimada",
+    "sem motivacao",
+    "desmotivado",
+    "desmotivada",
+    "queria desistir",
+    "vou desistir",
+    "estou desmotivado",
+    "estou sem animo",
+    "perdi o ritmo",
+    "parei de treinar",
+  ];
+
+  if (textHasAny(text, motivationTerms)) {
+    return {
+      eventType: "DESMOTIVACAO",
+      severity: "ATENCAO",
+      title: "Aluno sinalizou desmotivação ou risco de baixa adesão",
+      description:
+        "O aluno relatou desmotivação, perda de ritmo ou risco de abandonar a rotina de treinos.",
+      professorMessage:
+        "Aproxime a comunicação, reduza barreiras e considere uma retomada mais leve e objetiva para reconstruir consistência.",
+    };
+  }
+
+  return null;
+}
+
+async function createAutomaticCareEventFromQuestion({
+  content,
+  studentId,
+  teacherId,
+  authorId,
+}: {
+  content: string;
+  studentId: string;
+  teacherId: string | null;
+  authorId: string;
+}) {
+  const detection = detectAutomaticCareEvent(content);
+
+  if (!detection) return null;
+
+  const oneDayAgo = new Date();
+  oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+
+  const existingOpenCareEvent = await prisma.studentCareEvent.findFirst({
+    where: {
+      studentId,
+      eventType: detection.eventType,
+      source: "DUVIDA_ALUNO",
+      status: {
+        in: ["ABERTO", "EM_ANDAMENTO", "PENDENTE"],
+      },
+      createdAt: {
+        gte: oneDayAgo,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existingOpenCareEvent) return null;
+
+  const student = await prisma.student.findUnique({
+    where: {
+      id: studentId,
+    },
+    select: {
+      id: true,
+      name: true,
+      userId: true,
+    },
+  });
+
+  if (!student) return null;
+
+  const professorId = teacherId || student.userId || null;
+  const now = new Date();
+
+  const activeContract = await prisma.studentContract.findFirst({
+    where: {
+      studentId,
+      status: "ACTIVE",
+      startDate: {
+        lte: now,
+      },
+      endDate: {
+        gte: now,
+      },
+    },
+    orderBy: {
+      endDate: "desc",
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return prisma.$transaction(async (tx) => {
+    const notice = await tx.notice.create({
+      data: {
+        title: detection.title,
+        content: [
+          `${student.name} enviou uma mensagem que exige atenção.`,
+          "",
+          detection.description,
+          "",
+          `Mensagem do aluno: ${content}`,
+        ].join("\n"),
+        type: "CARE",
+        targetRole: professorId ? "TEACHER" : "GESTOR",
+        authorId,
+        studentId,
+        professorId,
+      },
+    });
+
+    return tx.studentCareEvent.create({
+      data: {
+        studentId,
+        professorId,
+        authorId,
+        eventType: detection.eventType,
+        severity: detection.severity,
+        status: "ABERTO",
+        source: "DUVIDA_ALUNO",
+        title: detection.title,
+        description: detection.description,
+        studentMessage: content,
+        professorMessage: detection.professorMessage,
+        contractId: activeContract?.id || null,
+        professorNoticeId: notice.id,
+      },
+    });
+  });
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -628,6 +936,20 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+
+
+    if (senderRole === "STUDENT" && studentId) {
+      try {
+        await createAutomaticCareEventFromQuestion({
+          content,
+          studentId,
+          teacherId,
+          authorId: userId,
+        });
+      } catch (careError) {
+        console.error("Erro ao criar cuidado automático a partir da dúvida:", careError);
+      }
+    }
 
     if (!parentId) {
       try {
