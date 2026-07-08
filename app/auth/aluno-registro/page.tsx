@@ -14,6 +14,18 @@ export default function AlunoRegisterPage() {
     phone: "",
     password: "",
     confirmPassword: "",
+    objective: "",
+    activityLevel: "",
+    trainingEnvironment: "",
+    availableEquipment: "",
+    timeAvailableMinutes: "",
+    preferredDays: "",
+    currentPain: "",
+    medicalRestriction: "",
+    trainingHistory: "",
+    weightKg: "",
+    heightCm: "",
+    notes: "",
     acceptedTerms: false,
   });
 
@@ -22,12 +34,19 @@ export default function AlunoRegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const { name, value, type, checked } = event.target;
+  function handleChange(
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) {
+    const target = event.target;
+    const { name, value } = target;
+    const fieldValue =
+      target instanceof HTMLInputElement && target.type === "checkbox"
+        ? target.checked
+        : value;
 
     setForm((current) => ({
       ...current,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: fieldValue,
     }));
   }
 
@@ -61,6 +80,22 @@ export default function AlunoRegisterPage() {
     }
   }
 
+  function validateInitialProfile(): string | null {
+    const missing: string[] = [];
+
+    if (!form.objective.trim()) missing.push("objetivo principal");
+    if (!form.activityLevel.trim()) missing.push("nível atual");
+    if (!form.trainingEnvironment.trim()) missing.push("local de treino");
+    if (!form.availableEquipment.trim()) missing.push("equipamentos disponíveis");
+    if (!form.timeAvailableMinutes.trim()) missing.push("tempo disponível por treino");
+    if (!form.currentPain.trim()) missing.push("dor/desconforto atual");
+    if (!form.medicalRestriction.trim()) missing.push("restrição médica ou física");
+
+    if (missing.length === 0) return null;
+
+    return `Preencha a ficha inicial para treino seguro: ${missing.join(", ")}.`;
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
@@ -77,6 +112,13 @@ export default function AlunoRegisterPage() {
 
     if (form.password !== form.confirmPassword) {
       setError("As senhas não conferem.");
+      return;
+    }
+
+    const profileError = validateInitialProfile();
+
+    if (profileError) {
+      setError(profileError);
       return;
     }
 
@@ -102,6 +144,18 @@ export default function AlunoRegisterPage() {
           imageUrl: imageUrl || null,
           acceptedTerms: form.acceptedTerms,
           source: "LANDING_PAGE",
+          objective: form.objective,
+          activityLevel: form.activityLevel,
+          trainingEnvironment: form.trainingEnvironment,
+          availableEquipment: form.availableEquipment,
+          timeAvailableMinutes: form.timeAvailableMinutes,
+          preferredDays: form.preferredDays,
+          currentPain: form.currentPain,
+          medicalRestriction: form.medicalRestriction,
+          trainingHistory: form.trainingHistory,
+          weightKg: form.weightKg,
+          heightCm: form.heightCm,
+          notes: form.notes,
         }),
       });
 
@@ -134,7 +188,7 @@ export default function AlunoRegisterPage() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-[#D4A373]">
             Funcional Vip Digital
@@ -146,7 +200,7 @@ export default function AlunoRegisterPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="bg-[#111] border border-[#ffffff10] rounded-2xl p-6 space-y-4"
+          className="bg-[#111] border border-[#ffffff10] rounded-2xl p-6 space-y-5"
         >
           {error && (
             <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
@@ -163,99 +217,310 @@ export default function AlunoRegisterPage() {
             </p>
           </div>
 
-          <div>
-            <label className="block text-sm text-[#d6d6d6] mb-1">
-              Sua foto <span className="text-[#6b6b6b]">(opcional)</span>
-            </label>
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-[#D4A373]">
+                1. Dados de acesso
+              </h2>
+              <p className="text-xs text-[#a1a1a1] mt-1">
+                Use um e-mail e WhatsApp válidos para receber os avisos sobre seus treinos.
+              </p>
+            </div>
 
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="block w-full text-sm text-[#a1a1a1] file:mr-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#0a0a0a]"
-            />
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Sua foto <span className="text-[#6b6b6b]">(opcional)</span>
+              </label>
 
-            {uploading && (
-              <p className="text-xs text-[#D4A373] mt-1">Enviando foto...</p>
-            )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="block w-full text-sm text-[#a1a1a1] file:mr-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#0a0a0a]"
+              />
 
-            {imageUrl && !uploading && (
-              <p className="text-xs text-green-400 mt-1">✅ Foto enviada!</p>
-            )}
-          </div>
+              {uploading && (
+                <p className="text-xs text-[#D4A373] mt-1">Enviando foto...</p>
+              )}
 
-          <div>
-            <label className="block text-sm text-[#d6d6d6] mb-1">
-              Nome completo *
-            </label>
-            <input
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-              placeholder="Seu nome"
-              autoComplete="name"
-            />
-          </div>
+              {imageUrl && !uploading && (
+                <p className="text-xs text-green-400 mt-1">✅ Foto enviada!</p>
+              )}
+            </div>
 
-          <div>
-            <label className="block text-sm text-[#d6d6d6] mb-1">
-              E-mail *
-            </label>
-            <input
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleChange}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-              placeholder="voce@email.com"
-              autoComplete="email"
-            />
-          </div>
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Nome completo *
+              </label>
+              <input
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                placeholder="Seu nome"
+                autoComplete="name"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm text-[#d6d6d6] mb-1">
-              WhatsApp *
-            </label>
-            <input
-              name="phone"
-              value={form.phone}
-              onChange={handleChange}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-              placeholder="(61) 99999-9999"
-              autoComplete="tel"
-            />
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  E-mail *
+                </label>
+                <input
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  placeholder="voce@email.com"
+                  autoComplete="email"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm text-[#d6d6d6] mb-1">
-              Senha *
-            </label>
-            <input
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-              placeholder="Mínimo 6 caracteres"
-              autoComplete="new-password"
-            />
-          </div>
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  WhatsApp *
+                </label>
+                <input
+                  name="phone"
+                  value={form.phone}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  placeholder="(61) 99999-9999"
+                  autoComplete="tel"
+                />
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-sm text-[#d6d6d6] mb-1">
-              Confirmar senha *
-            </label>
-            <input
-              name="confirmPassword"
-              type="password"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-              placeholder="Repita sua senha"
-              autoComplete="new-password"
-            />
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  Senha *
+                </label>
+                <input
+                  name="password"
+                  type="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  placeholder="Mínimo 6 caracteres"
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  Confirmar senha *
+                </label>
+                <input
+                  name="confirmPassword"
+                  type="password"
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  placeholder="Repita sua senha"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4 border-t border-[#ffffff10] pt-5">
+            <div>
+              <h2 className="text-base font-semibold text-[#D4A373]">
+                2. Ficha inicial para treino seguro
+              </h2>
+              <p className="text-xs text-[#a1a1a1] mt-1">
+                Essas informações ajudam o professor a montar um treino inicial mais seguro e adequado para sua rotina.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Qual é seu objetivo principal? *
+              </label>
+              <input
+                name="objective"
+                value={form.objective}
+                onChange={handleChange}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                placeholder="Ex: emagrecer, ganhar força, voltar a treinar, melhorar condicionamento"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  Nível atual *
+                </label>
+                <select
+                  name="activityLevel"
+                  value={form.activityLevel}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                >
+                  <option value="">Selecione...</option>
+                  <option value="Sedentário">Sedentário</option>
+                  <option value="Iniciante">Iniciante</option>
+                  <option value="Intermediário">Intermediário</option>
+                  <option value="Avançado">Avançado</option>
+                  <option value="Retomando após pausa">Retomando após pausa</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  Onde você pretende treinar? *
+                </label>
+                <select
+                  name="trainingEnvironment"
+                  value={form.trainingEnvironment}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                >
+                  <option value="">Selecione...</option>
+                  <option value="Academia">Academia</option>
+                  <option value="Casa">Casa</option>
+                  <option value="Condomínio">Condomínio</option>
+                  <option value="Parque / ao ar livre">Parque / ao ar livre</option>
+                  <option value="Misto">Misto</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Equipamentos ou materiais disponíveis *
+              </label>
+              <textarea
+                name="availableEquipment"
+                value={form.availableEquipment}
+                onChange={handleChange}
+                rows={3}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                placeholder="Ex: halteres, elástico, colchonete, academia completa, nenhum equipamento"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  Tempo disponível por treino *
+                </label>
+                <input
+                  name="timeAvailableMinutes"
+                  type="number"
+                  min="10"
+                  max="180"
+                  value={form.timeAvailableMinutes}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  placeholder="Ex: 40"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  Dias ou horários preferidos <span className="text-[#6b6b6b]">(opcional)</span>
+                </label>
+                <input
+                  name="preferredDays"
+                  value={form.preferredDays}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  placeholder="Ex: segunda e quarta à noite"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Sente alguma dor ou desconforto hoje? *
+              </label>
+              <textarea
+                name="currentPain"
+                value={form.currentPain}
+                onChange={handleChange}
+                rows={2}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                placeholder="Ex: não sinto dores; dor leve no joelho; desconforto na lombar"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Possui restrição médica ou física? *
+              </label>
+              <textarea
+                name="medicalRestriction"
+                value={form.medicalRestriction}
+                onChange={handleChange}
+                rows={2}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                placeholder="Ex: nenhuma; liberação médica com restrição; evitar impacto; problema no ombro"
+              />
+              <p className="text-[11px] text-[#6b6b6b] mt-1">
+                Em caso de condição médica, o professor poderá solicitar liberação/orientação profissional antes de evoluir intensidade.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Histórico de treino <span className="text-[#6b6b6b]">(opcional)</span>
+              </label>
+              <textarea
+                name="trainingHistory"
+                value={form.trainingHistory}
+                onChange={handleChange}
+                rows={3}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                placeholder="Ex: já treinei musculação por 1 ano; estou parado há 6 meses; nunca treinei"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  Peso em kg <span className="text-[#6b6b6b]">(opcional)</span>
+                </label>
+                <input
+                  name="weightKg"
+                  value={form.weightKg}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  placeholder="Ex: 72"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#d6d6d6] mb-1">
+                  Altura em cm <span className="text-[#6b6b6b]">(opcional)</span>
+                </label>
+                <input
+                  name="heightCm"
+                  value={form.heightCm}
+                  onChange={handleChange}
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  placeholder="Ex: 168"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Algo mais que o professor precisa saber? <span className="text-[#6b6b6b]">(opcional)</span>
+              </label>
+              <textarea
+                name="notes"
+                value={form.notes}
+                onChange={handleChange}
+                rows={3}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                placeholder="Ex: prefiro treinos curtos; tenho pouco tempo; quero começar devagar"
+              />
+            </div>
+          </section>
 
           <label className="flex gap-3 rounded-xl bg-[#1a1a1a] border border-[#ffffff10] px-4 py-3 cursor-pointer">
             <input
