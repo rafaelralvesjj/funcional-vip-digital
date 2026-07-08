@@ -4,8 +4,15 @@ import { hash } from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/auth";
 
+type AnyStudent = Record<string, any>;
+
 function normalizeRole(role?: string | null) {
-  return String(role || "").toUpperCase();
+  const value = String(role || "").toUpperCase();
+
+  if (value === "ALUNO") return "STUDENT";
+  if (value === "PROFESSOR") return "TEACHER";
+
+  return value;
 }
 
 function normalizeEmail(email?: string | null) {
@@ -23,6 +30,120 @@ function parseOptionalInt(value: unknown): number | null | undefined {
   }
 
   return parsed;
+}
+
+function cleanExtractedValue(value?: string | null): string | null {
+  const text = String(value || "")
+    .replace(/\r/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\.$/, "")
+    .trim();
+
+  return text || null;
+}
+
+function removeUnit(value: string | null, unitRegex: RegExp): string | null {
+  if (!value) return null;
+
+  const cleaned = value.replace(unitRegex, "").trim();
+  return cleaned || value;
+}
+
+function extractFromNotes(notes: string | null | undefined, labels: string[]): string | null {
+  const lines = String(notes || "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*[-•]\s*/, "").trim())
+    .filter(Boolean);
+
+  for (const label of labels) {
+    const prefix = `${label.toLowerCase()}:`;
+    const line = lines.find((item) => item.toLowerCase().startsWith(prefix));
+
+    if (line) {
+      return cleanExtractedValue(line.slice(label.length + 1));
+    }
+  }
+
+  return null;
+}
+
+function buildInitialProfile(student: AnyStudent) {
+  const notes = String(student?.notes || "");
+
+  const timeAvailableMinutes = removeUnit(
+    extractFromNotes(notes, [
+      "Tempo disponível por treino",
+      "Tempo disponivel por treino",
+    ]),
+    /\s*minuto\(s\)$/i
+  );
+
+  const weightKg = removeUnit(
+    extractFromNotes(notes, ["Peso informado"]),
+    /\s*kg$/i
+  );
+
+  const heightCm = removeUnit(
+    extractFromNotes(notes, ["Altura informada"]),
+    /\s*cm$/i
+  );
+
+  return {
+    objective: extractFromNotes(notes, [
+      "Objetivo principal",
+      "Objetivo",
+    ]),
+    activityLevel: extractFromNotes(notes, [
+      "Nível atual informado",
+      "Nivel atual informado",
+      "Nível atual",
+      "Nivel atual",
+    ]),
+    trainingEnvironment: extractFromNotes(notes, [
+      "Ambiente de treino",
+      "Local de treino",
+    ]),
+    availableEquipment: extractFromNotes(notes, [
+      "Equipamentos/materiais disponíveis",
+      "Equipamentos/materiais disponiveis",
+      "Equipamentos disponíveis",
+      "Equipamentos disponiveis",
+      "Materiais disponíveis",
+      "Materiais disponiveis",
+    ]),
+    timeAvailableMinutes,
+    preferredDays: extractFromNotes(notes, [
+      "Dias/horários preferidos",
+      "Dias/horarios preferidos",
+      "Dias preferidos",
+    ]),
+    currentPain: extractFromNotes(notes, [
+      "Dor/desconforto atual informado",
+      "Dor/desconforto atual",
+      "Dor atual",
+    ]),
+    medicalRestriction: extractFromNotes(notes, [
+      "Restrição médica/física declarada",
+      "Restricao medica/fisica declarada",
+      "Restrição médica/física",
+      "Restricao medica/fisica",
+      "Restrição médica",
+      "Restricao medica",
+    ]),
+    trainingHistory: extractFromNotes(notes, [
+      "Histórico de treino",
+      "Historico de treino",
+    ]),
+    weightKg,
+    heightCm,
+    notes: extractFromNotes(notes, [
+      "Observações livres do aluno",
+      "Observacoes livres do aluno",
+      "Observações do aluno",
+      "Observacoes do aluno",
+    ]),
+  };
 }
 
 async function getCurrentUser() {
@@ -54,6 +175,138 @@ async function getCurrentUser() {
 
 function canManageStudents(role: string) {
   return role === "GESTOR" || role === "ADMIN";
+}
+
+function canReadStudents(role: string) {
+  return role === "GESTOR" || role === "ADMIN" || role === "TEACHER" || role === "PROFESSOR";
+}
+
+function isProfessorUser(user?: { role?: string | null } | null): boolean {
+  const role = normalizeRole(user?.role);
+  return ["GESTOR", "ADMIN", "TEACHER"].includes(role);
+}
+
+function buildStudentResponse(student: AnyStudent) {
+  const profile = buildInitialProfile(student);
+  const professorLinked = isProfessorUser(student.user);
+
+  return {
+    id: student.id,
+    name: student.name,
+    email: student.email,
+    phone: student.phone || student.userAuth?.phone || null,
+    notes: student.notes,
+    image: student.image,
+    active: student.active,
+    onboardingCompleto: student.onboardingCompleto,
+    contractedTrainingDaysPerMonth: student.contractedTrainingDaysPerMonth,
+    commercialStatus: student.commercialStatus,
+    createdAt: student.createdAt,
+    updatedAt: student.updatedAt,
+    userId: student.userId,
+    userAuthId: student.userAuthId,
+
+    objective: profile.objective,
+    activityLevel: profile.activityLevel,
+    trainingEnvironment: profile.trainingEnvironment,
+    availableEquipment: profile.availableEquipment,
+    timeAvailableMinutes: profile.timeAvailableMinutes,
+    preferredDays: profile.preferredDays,
+    currentPain: profile.currentPain,
+    medicalRestriction: profile.medicalRestriction,
+    trainingHistory: profile.trainingHistory,
+    weightKg: profile.weightKg,
+    heightCm: profile.heightCm,
+    initialNotes: profile.notes,
+    initialProfile: profile,
+    profile,
+    onboarding: profile,
+
+    professorId: professorLinked ? student.user?.id || null : null,
+    professorName: professorLinked ? student.user?.name || "Não vinculado" : "Não vinculado",
+    professorEmail: professorLinked ? student.user?.email || null : null,
+    user: student.user,
+    userAuth: student.userAuth,
+  };
+}
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
+  const role = normalizeRole(currentUser.role);
+
+  if (!canReadStudents(role)) {
+    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+
+  try {
+    const { id } = params;
+
+    const student = await prisma.student.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userId: true,
+        userAuthId: true,
+        name: true,
+        email: true,
+        phone: true,
+        notes: true,
+        image: true,
+        active: true,
+        onboardingCompleto: true,
+        contractedTrainingDaysPerMonth: true,
+        commercialStatus: true,
+        createdAt: true,
+        updatedAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+        userAuth: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      return NextResponse.json({ error: "Aluno não encontrado." }, { status: 404 });
+    }
+
+    if (role === "TEACHER" && student.userId !== currentUser.id) {
+      return NextResponse.json(
+        { error: "Você não tem acesso a este aluno." },
+        { status: 403 }
+      );
+    }
+
+    return NextResponse.json({
+      student: buildStudentResponse(student),
+    });
+  } catch (error: any) {
+    console.error("GET /api/students/[id] error:", error);
+    return NextResponse.json(
+      { error: "Erro interno", message: error?.message },
+      { status: 500 }
+    );
+  }
 }
 
 export async function DELETE(
@@ -274,6 +527,7 @@ export async function PUT(
           active: true,
           onboardingCompleto: true,
           contractedTrainingDaysPerMonth: true,
+          commercialStatus: true,
           createdAt: true,
           updatedAt: true,
           user: {
@@ -318,7 +572,7 @@ export async function PUT(
       return student;
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json(buildStudentResponse(updated));
   } catch (error) {
     console.error("Erro ao atualizar aluno:", error);
     return NextResponse.json({ error: "Erro ao atualizar aluno" }, { status: 500 });
