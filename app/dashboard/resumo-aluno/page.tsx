@@ -65,6 +65,33 @@ function formatIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function parseExpectedWorkoutDatesParam(value?: string | null): string[] {
+  if (!value) return [];
+
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item));
+}
+
+function getWeekdayNameFromDateInput(value: string): string {
+  const parsedDate = parseDateInput(value);
+
+  if (!parsedDate) return "data informada";
+
+  return parsedDate.toLocaleDateString("pt-BR", {
+    weekday: "long",
+  });
+}
+
+function getTrainingScheduleFromExpectedDates(expectedWorkoutDates: string[]) {
+  return expectedWorkoutDates.map((date, index) => ({
+    offset: index,
+    weekday: getWeekdayNameFromDateInput(date),
+    date,
+  }));
+}
+
 function resolveWeekStartIso(dateValue?: string | null): string {
   const parsedDate = parseDateInput(dateValue);
 
@@ -156,17 +183,21 @@ function getAiValidationContext({
   contractedTrainingDaysPerMonth,
   weekStartIso,
   fallbackWorkoutCount,
+  expectedWorkoutDatesOverride,
 }: {
   studentId: string;
   contractedTrainingDaysPerMonth?: number | null;
   weekStartIso?: string | null;
   fallbackWorkoutCount?: number | null;
+  expectedWorkoutDatesOverride?: string[];
 }) {
   const weekStart = resolveWeekStartIso(weekStartIso);
   const weekStartDate = parseDateInput(weekStart) || getNextMonday();
   const weekEnd = formatIsoDate(addDays(weekStartDate, 6));
   const schedule = getTrainingSchedule(contractedTrainingDaysPerMonth, weekStart);
-  const expectedWorkoutDates = schedule.map((item) => item.date);
+  const expectedWorkoutDates = expectedWorkoutDatesOverride && expectedWorkoutDatesOverride.length > 0
+    ? expectedWorkoutDatesOverride
+    : schedule.map((item) => item.date);
   const expectedWorkoutCount = expectedWorkoutDates.length || Number(fallbackWorkoutCount || 1);
   const validationKey = [
     "FVD",
@@ -189,13 +220,16 @@ function getAiValidationContext({
 function applyContractScheduleToWorkouts(
   workouts: any[],
   contractedTrainingDaysPerMonth?: number | null,
-  weekStartIso?: string | null
+  weekStartIso?: string | null,
+  expectedWorkoutDatesOverride?: string[]
 ): {
   workouts: any[];
   scheduleDescription: string;
   scheduleWarning?: string;
 } {
-  const schedule = getTrainingSchedule(contractedTrainingDaysPerMonth, weekStartIso);
+  const schedule = expectedWorkoutDatesOverride && expectedWorkoutDatesOverride.length > 0
+    ? getTrainingScheduleFromExpectedDates(expectedWorkoutDatesOverride)
+    : getTrainingSchedule(contractedTrainingDaysPerMonth, weekStartIso);
   const scheduleDescription = getTrainingScheduleDescription(contractedTrainingDaysPerMonth);
 
   if (schedule.length === 0) {
@@ -253,6 +287,7 @@ export default function ResumoAlunoPage() {
   const [viewMode, setViewMode] = useState<"prompt" | "summary" | "jsonPrompt">("jsonPrompt");
   const [aiJsonText, setAiJsonText] = useState("");
   const [targetWeekStart, setTargetWeekStart] = useState("");
+  const [targetExpectedWorkoutDates, setTargetExpectedWorkoutDates] = useState<string[]>([]);
 
   async function loadStudents(preselectId?: string | null) {
     setLoadingStudents(true);
@@ -288,8 +323,12 @@ export default function ResumoAlunoPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const weekDateFromUrl = params.get("date") || params.get("weekStart");
+    const expectedDatesFromUrl = parseExpectedWorkoutDatesParam(
+      params.get("expectedWorkoutDates") || params.get("expectedDates")
+    );
 
     setTargetWeekStart(resolveWeekStartIso(weekDateFromUrl));
+    setTargetExpectedWorkoutDates(expectedDatesFromUrl);
     loadStudents(params.get("studentId"));
   }, []);
 
@@ -304,8 +343,11 @@ export default function ResumoAlunoPage() {
       contractedTrainingDaysPerMonth: contractedDays,
       weekStartIso: targetWeekStart,
       fallbackWorkoutCount: summaryData.student.weeklyLimit,
+      expectedWorkoutDatesOverride: targetExpectedWorkoutDates,
     });
-    const schedule = getTrainingSchedule(contractedDays, validationContext.weekStart);
+    const schedule = validationContext.expectedWorkoutDates.length > 0
+      ? getTrainingScheduleFromExpectedDates(validationContext.expectedWorkoutDates)
+      : getTrainingSchedule(contractedDays, validationContext.weekStart);
     const scheduleDescription = getTrainingScheduleDescription(contractedDays);
     const expectedWorkoutCount = validationContext.expectedWorkoutCount;
     const scheduleLines = schedule.length
@@ -524,7 +566,8 @@ export default function ResumoAlunoPage() {
     const scheduled = applyContractScheduleToWorkouts(
       normalizedWorkouts,
       contractedDays,
-      expectedContext.weekStart
+      expectedContext.weekStart,
+      expectedContext.expectedWorkoutDates
     );
 
     return {
@@ -548,7 +591,8 @@ export default function ResumoAlunoPage() {
       localStorage.setItem("aiWorkoutDraftBatch", JSON.stringify(normalized));
       setMessage({ type: "success", text: "JSON validado. Abrindo tela de montar treino com os dados preenchidos." });
 
-      window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(normalized.studentId)}&date=${encodeURIComponent(normalized.aiValidation.weekStart)}&source=ai-json`;
+      const firstWorkoutDate = normalized.aiValidation.expectedWorkoutDates?.[0] || normalized.aiValidation.weekStart;
+      window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(normalized.studentId)}&date=${encodeURIComponent(firstWorkoutDate)}&source=ai-json`;
     } catch (error: any) {
       setMessage({
         type: "error",
@@ -622,10 +666,12 @@ export default function ResumoAlunoPage() {
     : "";
   const displayWeekStart = targetWeekStart || resolveWeekStartIso(null);
   const displayWeekEnd = formatIsoDate(addDays(parseDateInput(displayWeekStart) || getNextMonday(), 6));
-  const displaySchedule = getTrainingSchedule(
-    selectedStudent?.contractedTrainingDaysPerMonth || null,
-    displayWeekStart
-  );
+  const displaySchedule = targetExpectedWorkoutDates.length > 0
+    ? getTrainingScheduleFromExpectedDates(targetExpectedWorkoutDates)
+    : getTrainingSchedule(
+        selectedStudent?.contractedTrainingDaysPerMonth || null,
+        displayWeekStart
+      );
 
   return (
     <div className="p-4 md:p-8 space-y-6">
