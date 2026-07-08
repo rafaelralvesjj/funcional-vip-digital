@@ -1164,6 +1164,15 @@ export async function GET(req: NextRequest) {
           exercises: {
             orderBy: { order: "asc" },
           },
+          workouts: {
+            select: {
+              id: true,
+              status: true,
+              date: true,
+              notes: true,
+            },
+            orderBy: { date: "asc" },
+          },
         },
       });
 
