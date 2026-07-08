@@ -5,6 +5,32 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+const OTHER_OBJECTIVE = "Outro";
+
+const OBJECTIVE_OPTIONS = [
+  "Emagrecimento",
+  "Ganho de massa muscular / hipertrofia",
+  "Condicionamento físico geral",
+  "Saúde e qualidade de vida",
+  "Melhora da mobilidade e flexibilidade",
+  "Fortalecimento muscular",
+  "Definição corporal",
+  "Preparação para corrida",
+  "Começar a correr",
+  "Melhorar desempenho na corrida",
+  "Fortalecimento para corrida",
+  "Prevenção de lesões na corrida",
+  "Retorno aos treinos após lesão",
+  "Treinamento por prescrição médica",
+  "Reabilitação / retomada com cuidado",
+  "Melhora de performance esportiva",
+  "Atleta de alta performance",
+  "Preparação física para luta ou arte marcial",
+  "Preparação física para esporte específico",
+  "Redução de dores e melhora funcional",
+  OTHER_OBJECTIVE,
+];
+
 export default function AlunoRegisterPage() {
   const router = useRouter();
 
@@ -15,6 +41,7 @@ export default function AlunoRegisterPage() {
     password: "",
     confirmPassword: "",
     objective: "",
+    objectiveOther: "",
     activityLevel: "",
     trainingEnvironment: "",
     availableEquipment: "",
@@ -44,10 +71,34 @@ export default function AlunoRegisterPage() {
         ? target.checked
         : value;
 
-    setForm((current) => ({
-      ...current,
-      [name]: fieldValue,
-    }));
+    setForm((current) => {
+      if (name === "objective" && value !== OTHER_OBJECTIVE) {
+        return {
+          ...current,
+          objective: value,
+          objectiveOther: "",
+        };
+      }
+
+      return {
+        ...current,
+        [name]: fieldValue,
+      };
+    });
+  }
+
+  function getFinalObjective() {
+    if (form.objective === OTHER_OBJECTIVE) {
+      const otherObjective = form.objectiveOther.trim();
+
+      if (!otherObjective) {
+        return "";
+      }
+
+      return `${OTHER_OBJECTIVE}: ${otherObjective}`;
+    }
+
+    return form.objective.trim();
   }
 
   async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -84,6 +135,9 @@ export default function AlunoRegisterPage() {
     const missing: string[] = [];
 
     if (!form.objective.trim()) missing.push("objetivo principal");
+    if (form.objective === OTHER_OBJECTIVE && !form.objectiveOther.trim()) {
+      missing.push("descrição do objetivo");
+    }
     if (!form.activityLevel.trim()) missing.push("nível atual");
     if (!form.trainingEnvironment.trim()) missing.push("local de treino");
     if (!form.availableEquipment.trim()) missing.push("equipamentos disponíveis");
@@ -122,6 +176,13 @@ export default function AlunoRegisterPage() {
       return;
     }
 
+    const finalObjective = getFinalObjective();
+
+    if (!finalObjective) {
+      setError("Informe seu objetivo principal para continuar.");
+      return;
+    }
+
     if (!form.acceptedTerms) {
       setError("Para iniciar a experiência gratuita, aceite o termo de experiência.");
       return;
@@ -144,7 +205,10 @@ export default function AlunoRegisterPage() {
           imageUrl: imageUrl || null,
           acceptedTerms: form.acceptedTerms,
           source: "LANDING_PAGE",
-          objective: form.objective,
+          objective: finalObjective,
+          primaryGoal: form.objective,
+          primaryGoalOtherDescription:
+            form.objective === OTHER_OBJECTIVE ? form.objectiveOther.trim() : null,
           activityLevel: form.activityLevel,
           trainingEnvironment: form.trainingEnvironment,
           availableEquipment: form.availableEquipment,
@@ -340,13 +404,35 @@ export default function AlunoRegisterPage() {
               <label className="block text-sm text-[#d6d6d6] mb-1">
                 Qual é seu objetivo principal? *
               </label>
-              <input
+              <select
                 name="objective"
                 value={form.objective}
                 onChange={handleChange}
                 className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                placeholder="Ex: emagrecer, ganhar força, voltar a treinar, melhorar condicionamento"
-              />
+              >
+                <option value="">Selecione...</option>
+                {OBJECTIVE_OPTIONS.map((objective) => (
+                  <option key={objective} value={objective}>
+                    {objective}
+                  </option>
+                ))}
+              </select>
+
+              {form.objective === OTHER_OBJECTIVE && (
+                <div className="mt-3">
+                  <label className="block text-sm text-[#d6d6d6] mb-1">
+                    Descreva seu objetivo *
+                  </label>
+                  <textarea
+                    name="objectiveOther"
+                    value={form.objectiveOther}
+                    onChange={handleChange}
+                    rows={3}
+                    className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                    placeholder="Ex: melhorar condicionamento para uma trilha, preparar para uma prova específica, voltar após uma pausa longa"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
