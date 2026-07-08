@@ -332,6 +332,80 @@ function hasRelevantCareInfo(value: string): boolean {
   return !text.toLowerCase().startsWith("nenhum") && !text.toLowerCase().startsWith("nenhuma");
 }
 
+function containsAnyCareKeyword(value?: unknown, keywords: string[] = []): boolean {
+  const normalized = normalizeForCompare(value);
+
+  if (!normalized) return false;
+
+  return keywords.some((keyword) => normalized.includes(normalizeForCompare(keyword)));
+}
+
+function hasPainOrInjurySignal(value?: unknown): boolean {
+  return containsAnyCareKeyword(value, [
+    "dor",
+    "doendo",
+    "dolorido",
+    "dolorida",
+    "desconforto",
+    "torci",
+    "torceu",
+    "torcao",
+    "torsao",
+    "lesao",
+    "lesão",
+    "machuquei",
+    "machucou",
+    "lombar",
+    "coluna",
+    "joelho",
+    "tornozelo",
+    "pe",
+    "pé",
+    "panturrilha",
+    "ombro",
+    "punho",
+  ]);
+}
+
+function hasDifficultExerciseSignal(value?: unknown): boolean {
+  return containsAnyCareKeyword(value, [
+    "dificil",
+    "difícil",
+    "pesado",
+    "pesada",
+    "nao consegui",
+    "não consegui",
+    "muito forte",
+    "muito puxado",
+    "cansativo demais",
+    "travei",
+  ]);
+}
+
+function hasLowMotivationSignal(value?: unknown): boolean {
+  return containsAnyCareKeyword(value, [
+    "sem tempo",
+    "falta de tempo",
+    "desmotivado",
+    "desmotivada",
+    "preguica",
+    "preguiça",
+    "nao fiz",
+    "não fiz",
+    "nao consegui fazer",
+    "não consegui fazer",
+  ]);
+}
+
+function getQuestionConversationText(question: any): string {
+  const messages = [question, ...((question?.children || []) as any[])];
+
+  return messages
+    .map((message) => message?.content || "")
+    .join(" ")
+    .trim();
+}
+
 function getOnboardingOperationalLines(profile: ReturnType<typeof getOnboardingProfile>): string[] {
   const lines: string[] = [];
 
@@ -426,6 +500,10 @@ function getEvolutionDecisionStatus({
   hasInjuryCare,
   hasDifficultExercise,
   hasLowMotivation,
+  hasOpenPainQuestion,
+  hasOpenDifficultQuestion,
+  hasOpenLowMotivationQuestion,
+  openQuestionsCount,
   openCareEventsCount,
   currentWeekPlansCount,
   currentWeekWorkoutsCount,
@@ -435,6 +513,10 @@ function getEvolutionDecisionStatus({
   hasInjuryCare: boolean;
   hasDifficultExercise: boolean;
   hasLowMotivation: boolean;
+  hasOpenPainQuestion: boolean;
+  hasOpenDifficultQuestion: boolean;
+  hasOpenLowMotivationQuestion: boolean;
+  openQuestionsCount: number;
   openCareEventsCount: number;
   currentWeekPlansCount: number;
   currentWeekWorkoutsCount: number;
@@ -443,13 +525,15 @@ function getEvolutionDecisionStatus({
 }): { status: string; reason: string; requiresReviewBeforeRelease: boolean; reviewAlerts: string[] } {
   const reviewAlerts: string[] = [];
 
-  if (hasInjuryCare || openCareEventsCount > 0) {
+  if (hasInjuryCare || hasOpenPainQuestion || openQuestionsCount > 0 || openCareEventsCount > 0) {
     if (hasInjuryCare) reviewAlerts.push("Existe relato/evento de dor ou desconforto em aberto.");
+    if (hasOpenPainQuestion) reviewAlerts.push("Existe dúvida aberta do aluno com relato de dor/desconforto. Revisão humana obrigatória antes de evoluir treino.");
+    if (openQuestionsCount > 0) reviewAlerts.push(`Existe(m) ${openQuestionsCount} dúvida(s) aberta(s) do aluno. O professor deve responder/revisar antes da liberação.`);
     if (openCareEventsCount > 0) reviewAlerts.push(`Existem ${openCareEventsCount} evento(s) de cuidado em aberto.`);
 
     return {
       status: "REVISAO_HUMANA_OBRIGATORIA",
-      reason: "Há sinal sensível de cuidado. Não tratar a próxima prescrição como evolução automática.",
+      reason: "Há dúvida aberta ou sinal sensível de cuidado. Não tratar a próxima prescrição como evolução automática.",
       requiresReviewBeforeRelease: true,
       reviewAlerts,
     };
@@ -491,9 +575,9 @@ function getEvolutionDecisionStatus({
     };
   }
 
-  if (hasDifficultExercise || hasLowMotivation) {
-    if (hasDifficultExercise) reviewAlerts.push("Aluno relatou exercício/treino difícil.");
-    if (hasLowMotivation) reviewAlerts.push("Há sinal de falta de tempo ou desmotivação.");
+  if (hasDifficultExercise || hasLowMotivation || hasOpenDifficultQuestion || hasOpenLowMotivationQuestion) {
+    if (hasDifficultExercise || hasOpenDifficultQuestion) reviewAlerts.push("Aluno relatou exercício/treino difícil.");
+    if (hasLowMotivation || hasOpenLowMotivationQuestion) reviewAlerts.push("Há sinal de falta de tempo ou desmotivação.");
 
     return {
       status: "MANUTENCAO_RECOMENDADA",
@@ -958,13 +1042,22 @@ export async function GET(
     });
 
     const openCareEvents = careEvents.filter((event) => event.status !== "RESOLVIDO");
+    const openQuestions = questions.filter((question) => !question.resolvedAt);
+    const openQuestionTexts = openQuestions.map(getQuestionConversationText);
     const hasInjuryCare = openCareEvents.some((event) => event.eventType === "DOR_DESCONFORTO");
     const hasDifficultExercise = openCareEvents.some((event) => event.eventType === "EXERCICIO_DIFICIL");
     const hasLowMotivation = openCareEvents.some((event) => event.eventType === "DESMOTIVACAO" || event.eventType === "FALTA_TEMPO");
+    const hasOpenPainQuestion = openQuestionTexts.some(hasPainOrInjurySignal);
+    const hasOpenDifficultQuestion = openQuestionTexts.some(hasDifficultExerciseSignal);
+    const hasOpenLowMotivationQuestion = openQuestionTexts.some(hasLowMotivationSignal);
     const evolutionDecision = getEvolutionDecisionStatus({
       hasInjuryCare,
       hasDifficultExercise,
       hasLowMotivation,
+      hasOpenPainQuestion,
+      hasOpenDifficultQuestion,
+      hasOpenLowMotivationQuestion,
+      openQuestionsCount: openQuestions.length,
       openCareEventsCount: openCareEvents.length,
       currentWeekPlansCount: currentWeekPlans.length,
       currentWeekWorkoutsCount: currentWeekWorkouts.length,
@@ -1077,13 +1170,16 @@ export async function GET(
       openCareEvents.length > 0
         ? `Existem ${openCareEvents.length} evento(s) de cuidado em aberto. Revisar antes de montar ou progredir treino.`
         : "Não há eventos de cuidado em aberto.",
-      hasInjuryCare
-        ? "Atenção: há relato de dor/desconforto. Não gerar progressão agressiva. Priorizar segurança, regressão, revisão humana e, se necessário, orientação para avaliação profissional."
+      openQuestions.length > 0
+        ? `Existem ${openQuestions.length} dúvida(s) aberta(s) do aluno. O professor deve revisar/responder antes de liberar a próxima semana.`
+        : "Não há dúvidas abertas do aluno.",
+      hasInjuryCare || hasOpenPainQuestion
+        ? "Atenção: há relato aberto de dor/desconforto em evento de cuidado ou dúvida/chat. Não gerar progressão agressiva. Priorizar segurança, regressão, revisão humana e, se necessário, orientação para avaliação profissional."
         : "Sem relato aberto de dor/desconforto.",
-      hasDifficultExercise
+      hasDifficultExercise || hasOpenDifficultQuestion
         ? "Atenção: aluno relatou exercício/treino difícil. Sugerir variações mais simples, menor volume, menor carga ou instruções mais claras."
         : "Sem relato aberto de exercício difícil.",
-      hasLowMotivation
+      hasLowMotivation || hasOpenLowMotivationQuestion
         ? "Atenção: há sinal de falta de tempo/desmotivação. Priorizar treino curto, objetivo e aderente."
         : "Sem sinal aberto de falta de tempo/desmotivação.",
       weeklyLimit
@@ -1125,6 +1221,7 @@ export async function GET(
         nextWeekPlans: nextWeekPlans.length,
         feedbacks: feedbacks.length,
         questions: questions.length,
+        openQuestions: openQuestions.length,
         careEvents: careEvents.length,
         openCareEvents: openCareEvents.length,
       },
