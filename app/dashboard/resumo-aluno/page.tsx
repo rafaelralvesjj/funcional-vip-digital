@@ -21,6 +21,12 @@ type SummaryResponse = {
     weeklyLimit?: number | null;
   };
   metrics: Record<string, number>;
+  evolutionContext?: {
+    status?: string;
+    reason?: string;
+    requiresReviewBeforeRelease?: boolean;
+    reviewAlerts?: string[];
+  } | null;
   summaryText: string;
   aiPrompt: string;
 };
@@ -473,6 +479,15 @@ export default function ResumoAlunoPage() {
       "- Para objetivo de emagrecimento, fale em contribuição para gasto energético e consistência, não em promessa de perda de peso.",
       "- Para hipertrofia/força, priorize estímulo muscular, técnica e progressão, não calorias.",
       "",
+      "REGRA DE EVOLUÇÃO E PRÉ-PLANEJAMENTO:",
+      "- Antes de prescrever, classifique a decisão evolutiva em um destes status: EVOLUCAO_PERMITIDA, MANUTENCAO_RECOMENDADA, RETOMADA_REPETICAO_ADAPTADA, PRE_PLANEJAMENTO_CONSERVADOR ou REVISAO_HUMANA_OBRIGATORIA.",
+      "- Se a semana atual ainda não tem execução registrada, trate a próxima semana como PRE_PLANEJAMENTO_CONSERVADOR.",
+      "- Se o aluno não concluiu treinos, teve baixa adesão ou tem treinos vencidos, priorize RETOMADA_REPETICAO_ADAPTADA.",
+      "- Se houver dor/desconforto, restrição, dúvida aberta ou evento de cuidado, sinalize REVISAO_HUMANA_OBRIGATORIA e não gere progressão agressiva.",
+      "- Só use EVOLUCAO_PERMITIDA quando houver dados suficientes de execução/adesão e ausência de alertas críticos.",
+      "- Não evolua carga, impacto, volume, complexidade ou intensidade sem evidência de resposta do aluno.",
+      "- Mesmo em pré-planejamento, crie treino seguro, conservador e revisável pelo professor antes da liberação ao aluno.",
+      "",
       "REGRA DE SEGURANÇA DO SISTEMA:",
       "- O JSON deve devolver o bloco aiValidation exatamente como informado no formato obrigatório.",
       "- Não altere studentId, weekStart, weekEnd, expectedWorkoutDates, expectedWorkoutCount nem validationKey.",
@@ -504,6 +519,12 @@ export default function ResumoAlunoPage() {
       '    "expectedWorkoutCount": ' + validationContext.expectedWorkoutCount + ',',
       '    "expectedWorkoutDates": [' + expectedDatesJson + '],',
       '    "validationKey": "' + validationContext.validationKey + '"',
+      '  },',
+      '  "evolutionDecision": {',
+      '    "status": "PRE_PLANEJAMENTO_CONSERVADOR",',
+      '    "reason": "Explique a decisão com base no resumo: evolução, manutenção, retomada, pré-planejamento ou revisão humana obrigatória.",',
+      '    "requiresReviewBeforeRelease": true,',
+      '    "reviewAlerts": ["Professor deve revisar dados atualizados antes de liberar a próxima semana"]',
       '  },',
       '  "workouts": [',
       "    {",
@@ -629,6 +650,21 @@ export default function ResumoAlunoPage() {
       throw new Error("A chave de validação não confere. Gere novamente o resumo pela tela correta.");
     }
 
+    const rawEvolutionDecision = payload?.evolutionDecision || payload?.evolucao || payload?.evolution || null;
+    const evolutionDecision = {
+      status: String(rawEvolutionDecision?.status || "PRE_PLANEJAMENTO_CONSERVADOR"),
+      reason: String(rawEvolutionDecision?.reason || rawEvolutionDecision?.motivo || "Treino importado para revisão do professor."),
+      requiresReviewBeforeRelease:
+        rawEvolutionDecision?.requiresReviewBeforeRelease === false || rawEvolutionDecision?.requerRevisaoAntesDeLiberar === false
+          ? false
+          : true,
+      reviewAlerts: Array.isArray(rawEvolutionDecision?.reviewAlerts)
+        ? rawEvolutionDecision.reviewAlerts.map((item: unknown) => String(item))
+        : Array.isArray(rawEvolutionDecision?.alertasRevisao)
+          ? rawEvolutionDecision.alertasRevisao.map((item: unknown) => String(item))
+          : ["Professor deve revisar dados atualizados antes de liberar a próxima semana."],
+    };
+
     const normalizedWorkouts = workouts.map((workout: any, workoutIndex: number) => {
       const workoutDate = String(workout?.date || workout?.data || "");
       const expectedDate = expectedContext.expectedWorkoutDates[workoutIndex];
@@ -691,6 +727,7 @@ export default function ResumoAlunoPage() {
       studentId: payloadStudentId,
       studentName: payload?.studentName || selectedStudent?.name || "",
       aiValidation: expectedContext,
+      evolutionDecision,
       currentIndex: 0,
       scheduleDescription: scheduled.scheduleDescription,
       scheduleWarning: scheduled.scheduleWarning,
