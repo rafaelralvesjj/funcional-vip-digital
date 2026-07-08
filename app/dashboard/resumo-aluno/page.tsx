@@ -24,6 +24,32 @@ type SummaryResponse = {
   aiPrompt: string;
 };
 
+function parseDateInput(value?: string | null): Date | null {
+  if (!value) return null;
+
+  const date = new Date(`${value}T12:00:00`);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
+  const date = new Date(referenceDate);
+  date.setHours(0, 0, 0, 0);
+
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+
+  const startOfWeek = new Date(date);
+  startOfWeek.setDate(date.getDate() + diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+  endOfWeek.setHours(0, 0, 0, 0);
+
+  return { startOfWeek, endOfWeek };
+}
+
 function getNextMonday(referenceDate = new Date()): Date {
   const date = new Date(referenceDate);
   date.setHours(12, 0, 0, 0);
@@ -39,10 +65,28 @@ function formatIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function resolveWeekStartIso(dateValue?: string | null): string {
+  const parsedDate = parseDateInput(dateValue);
+
+  if (parsedDate) {
+    return formatIsoDate(getWeekRange(parsedDate).startOfWeek);
+  }
+
+  return formatIsoDate(getNextMonday());
+}
+
 function addDays(date: Date, days: number): Date {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
   return nextDate;
+}
+
+function formatDatePtBr(date: Date): string {
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 function getTrainingWeekdayOffsets(contractedTrainingDaysPerMonth?: number | null): number[] {
@@ -50,12 +94,12 @@ function getTrainingWeekdayOffsets(contractedTrainingDaysPerMonth?: number | nul
 
   if (!Number.isFinite(contracted) || contracted <= 0) return [];
 
-  if (contracted <= 4) return [0]; // segunda
-  if (contracted <= 8) return [0, 2]; // segunda e quarta
-  if (contracted <= 12) return [0, 2, 4]; // segunda, quarta e sexta
-  if (contracted <= 16) return [0, 1, 3, 4]; // segunda, terça, quinta e sexta; quarta livre
+  if (contracted <= 4) return [0];
+  if (contracted <= 8) return [0, 2];
+  if (contracted <= 12) return [0, 2, 4];
+  if (contracted <= 16) return [0, 1, 3, 4];
 
-  return [0, 1, 2, 3, 4]; // segunda a sexta
+  return [0, 1, 2, 3, 4];
 }
 
 function getWeekdayName(offset: number): string {
@@ -70,14 +114,14 @@ function getWeekdayName(offset: number): string {
   return names[offset] || "dia útil";
 }
 
-function getTrainingSchedule(contractedTrainingDaysPerMonth?: number | null) {
-  const nextMonday = getNextMonday();
+function getTrainingSchedule(contractedTrainingDaysPerMonth?: number | null, weekStartIso?: string | null) {
+  const weekStartDate = parseDateInput(weekStartIso) || getNextMonday();
   const offsets = getTrainingWeekdayOffsets(contractedTrainingDaysPerMonth);
 
   return offsets.map((offset) => ({
     offset,
     weekday: getWeekdayName(offset),
-    date: formatIsoDate(addDays(nextMonday, offset)),
+    date: formatIsoDate(addDays(weekStartDate, offset)),
   }));
 }
 
@@ -87,8 +131,6 @@ function getTrainingScheduleDescription(contractedTrainingDaysPerMonth?: number 
   if (!Number.isFinite(contracted) || contracted <= 0) {
     return "Quantidade contratada não configurada. Confirmar antes de montar treino.";
   }
-
-  const schedule = getTrainingSchedule(contractedTrainingDaysPerMonth);
 
   if (contracted <= 4) {
     return `Contrato de ${contracted} dia(s)/mês: gerar 1 treino por semana, preferencialmente na segunda-feira.`;
@@ -109,12 +151,51 @@ function getTrainingScheduleDescription(contractedTrainingDaysPerMonth?: number 
   return `Contrato de ${contracted} dias/mês: gerar 5 treinos por semana, de segunda-feira a sexta-feira, sem folga em dia útil.`;
 }
 
-function applyContractScheduleToWorkouts(workouts: any[], contractedTrainingDaysPerMonth?: number | null): {
+function getAiValidationContext({
+  studentId,
+  contractedTrainingDaysPerMonth,
+  weekStartIso,
+  fallbackWorkoutCount,
+}: {
+  studentId: string;
+  contractedTrainingDaysPerMonth?: number | null;
+  weekStartIso?: string | null;
+  fallbackWorkoutCount?: number | null;
+}) {
+  const weekStart = resolveWeekStartIso(weekStartIso);
+  const weekStartDate = parseDateInput(weekStart) || getNextMonday();
+  const weekEnd = formatIsoDate(addDays(weekStartDate, 6));
+  const schedule = getTrainingSchedule(contractedTrainingDaysPerMonth, weekStart);
+  const expectedWorkoutDates = schedule.map((item) => item.date);
+  const expectedWorkoutCount = expectedWorkoutDates.length || Number(fallbackWorkoutCount || 1);
+  const validationKey = [
+    "FVD",
+    studentId,
+    weekStart,
+    String(expectedWorkoutCount),
+    expectedWorkoutDates.join("_"),
+  ].join("|");
+
+  return {
+    studentId,
+    weekStart,
+    weekEnd,
+    expectedWorkoutDates,
+    expectedWorkoutCount,
+    validationKey,
+  };
+}
+
+function applyContractScheduleToWorkouts(
+  workouts: any[],
+  contractedTrainingDaysPerMonth?: number | null,
+  weekStartIso?: string | null
+): {
   workouts: any[];
   scheduleDescription: string;
   scheduleWarning?: string;
 } {
-  const schedule = getTrainingSchedule(contractedTrainingDaysPerMonth);
+  const schedule = getTrainingSchedule(contractedTrainingDaysPerMonth, weekStartIso);
   const scheduleDescription = getTrainingScheduleDescription(contractedTrainingDaysPerMonth);
 
   if (schedule.length === 0) {
@@ -171,6 +252,7 @@ export default function ResumoAlunoPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [viewMode, setViewMode] = useState<"prompt" | "summary" | "jsonPrompt">("jsonPrompt");
   const [aiJsonText, setAiJsonText] = useState("");
+  const [targetWeekStart, setTargetWeekStart] = useState("");
 
   async function loadStudents(preselectId?: string | null) {
     setLoadingStudents(true);
@@ -205,6 +287,9 @@ export default function ResumoAlunoPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const weekDateFromUrl = params.get("date") || params.get("weekStart");
+
+    setTargetWeekStart(resolveWeekStartIso(weekDateFromUrl));
     loadStudents(params.get("studentId"));
   }, []);
 
@@ -214,12 +299,21 @@ export default function ResumoAlunoPage() {
 
   function getJsonPrompt(summaryData: SummaryResponse): string {
     const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || null;
-    const schedule = getTrainingSchedule(contractedDays);
+    const validationContext = getAiValidationContext({
+      studentId: summaryData.student.id,
+      contractedTrainingDaysPerMonth: contractedDays,
+      weekStartIso: targetWeekStart,
+      fallbackWorkoutCount: summaryData.student.weeklyLimit,
+    });
+    const schedule = getTrainingSchedule(contractedDays, validationContext.weekStart);
     const scheduleDescription = getTrainingScheduleDescription(contractedDays);
-    const expectedWorkoutCount = schedule.length || summaryData.student.weeklyLimit || 1;
+    const expectedWorkoutCount = validationContext.expectedWorkoutCount;
     const scheduleLines = schedule.length
       ? schedule.map((item, index) => `- Treino ${index + 1}: ${item.weekday}, ${item.date}`)
       : ["- Sem calendário automático porque a quantidade contratada não está configurada."];
+    const expectedDatesJson = validationContext.expectedWorkoutDates
+      .map((item) => `"${item}"`)
+      .join(", ");
 
     return [
       "Você é um professor de educação física apoiando a montagem de treino.",
@@ -248,16 +342,30 @@ export default function ResumoAlunoPage() {
       "- Para objetivo de emagrecimento, fale em contribuição para gasto energético e consistência, não em promessa de perda de peso.",
       "- Para hipertrofia/força, priorize estímulo muscular, técnica e progressão, não calorias.",
       "",
+      "REGRA DE SEGURANÇA DO SISTEMA:",
+      "- O JSON deve devolver o bloco aiValidation exatamente como informado no formato obrigatório.",
+      "- Não altere studentId, weekStart, weekEnd, expectedWorkoutDates, expectedWorkoutCount nem validationKey.",
+      "- Se esses campos forem alterados, o Funcional VIP Digital vai bloquear a importação para evitar treino no aluno ou semana errada.",
+      "",
       "REGRA DE CALENDÁRIO DO CONTRATO:",
       scheduleDescription,
+      `Semana alvo obrigatória: ${validationContext.weekStart} a ${validationContext.weekEnd}.`,
       `Quantidade exata esperada no JSON: ${expectedWorkoutCount} treino(s).`,
-      "Datas obrigatórias para a próxima semana:",
+      "Datas obrigatórias para esta semana:",
       ...scheduleLines,
       "",
       "FORMATO OBRIGATÓRIO DO JSON:",
       "{",
       '  "studentId": "' + summaryData.student.id + '",',
       '  "studentName": "' + summaryData.student.name.replaceAll('"', "'") + '",',
+      '  "aiValidation": {',
+      '    "studentId": "' + validationContext.studentId + '",',
+      '    "weekStart": "' + validationContext.weekStart + '",',
+      '    "weekEnd": "' + validationContext.weekEnd + '",',
+      '    "expectedWorkoutCount": ' + validationContext.expectedWorkoutCount + ',',
+      '    "expectedWorkoutDates": [' + expectedDatesJson + '],',
+      '    "validationKey": "' + validationContext.validationKey + '"',
+      '  },',
       '  "workouts": [',
       "    {",
       '      "name": "Treino A - nome do treino",',
@@ -313,52 +421,118 @@ export default function ResumoAlunoPage() {
         ? payload.treinos
         : [];
 
-    if (!payload?.studentId && !selectedStudentId) {
+    const payloadStudentId = String(payload?.studentId || "");
+
+    if (!payloadStudentId) {
       throw new Error("O JSON precisa ter studentId.");
+    }
+
+    if (payloadStudentId !== selectedStudentId) {
+      throw new Error("Este JSON não pertence ao aluno selecionado. Gere o resumo novamente pela tela correta.");
     }
 
     if (workouts.length === 0) {
       throw new Error("O JSON precisa ter pelo menos um treino em workouts.");
     }
 
-    const normalizedWorkouts = workouts.map((workout: any, workoutIndex: number) => ({
-      name: String(workout?.name || workout?.nome || `Treino ${workoutIndex + 1}`),
-      date: String(workout?.date || workout?.data || ""),
-      description: String(workout?.description || workout?.descricao || ""),
-      objective: String(workout?.objective || workout?.objetivo || ""),
-      focusAreas: String(workout?.focusAreas || workout?.focus_areas || workout?.focos || workout?.foco || ""),
-      intensity: String(workout?.intensity || workout?.intensidade || ""),
-      estimatedDurationMinutes:
-        Number(workout?.estimatedDurationMinutes || workout?.estimated_duration_minutes || workout?.duracaoEstimadaMinutos || 0) || null,
-      estimatedCaloriesMin:
-        Number(workout?.estimatedCaloriesMin || workout?.estimated_calories_min || workout?.caloriasMin || 0) || null,
-      estimatedCaloriesMax:
-        Number(workout?.estimatedCaloriesMax || workout?.estimated_calories_max || workout?.caloriasMax || 0) || null,
-      studentSummary: String(workout?.studentSummary || workout?.student_summary || workout?.resumoAluno || workout?.resumo || ""),
-      safetyNote: String(workout?.safetyNote || workout?.safety_note || workout?.observacaoSeguranca || ""),
-      notes: String(workout?.notes || workout?.observacoes || ""),
-      exercises: (Array.isArray(workout?.exercises) ? workout.exercises : workout?.exercicios || []).map((exercise: any, index: number) => ({
-        name: String(exercise?.name || exercise?.nome || `Exercício ${index + 1}`),
-        description: String(exercise?.description || exercise?.descricao || ""),
-        series: Number(exercise?.series || exercise?.serie || exercise?.sets || 3),
-        reps: String(exercise?.reps || exercise?.repeticoes || exercise?.repetições || "10"),
-        weight: String(exercise?.weight || exercise?.carga || ""),
-        restTime: String(exercise?.restTime || exercise?.descanso || "60s"),
-        notes: String(exercise?.notes || exercise?.observacoes || ""),
-        order: Number.isFinite(Number(exercise?.order)) ? Number(exercise.order) : index,
-      })),
-    }));
+    const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || null;
+    const expectedContext = getAiValidationContext({
+      studentId: selectedStudentId,
+      contractedTrainingDaysPerMonth: contractedDays,
+      weekStartIso: targetWeekStart,
+    });
+    const aiValidation = payload?.aiValidation || payload?.security || null;
+
+    if (!aiValidation) {
+      throw new Error("O JSON não possui aiValidation. Copie novamente o Prompt JSON atualizado e gere outro arquivo pela IA.");
+    }
+
+    if (String(aiValidation.studentId || "") !== expectedContext.studentId) {
+      throw new Error("A chave de segurança não pertence ao aluno selecionado.");
+    }
+
+    if (String(aiValidation.weekStart || "") !== expectedContext.weekStart) {
+      throw new Error("Este JSON é de outra semana. Gere novamente o resumo pela pendência correta.");
+    }
+
+    if (String(aiValidation.weekEnd || "") !== expectedContext.weekEnd) {
+      throw new Error("A data final da semana não confere com a semana selecionada.");
+    }
+
+    if (Number(aiValidation.expectedWorkoutCount || 0) !== expectedContext.expectedWorkoutCount) {
+      throw new Error("A quantidade de treinos do JSON não confere com o contrato/semana selecionados.");
+    }
+
+    const validationDates = Array.isArray(aiValidation.expectedWorkoutDates)
+      ? aiValidation.expectedWorkoutDates.map((item: unknown) => String(item))
+      : [];
+
+    if (expectedContext.expectedWorkoutDates.length > 0) {
+      const expectedDatesText = expectedContext.expectedWorkoutDates.join(", ");
+      const validationDatesText = validationDates.join(", ");
+
+      if (validationDatesText !== expectedDatesText) {
+        throw new Error("As datas esperadas do aiValidation não conferem com a semana selecionada.");
+      }
+
+      if (workouts.length !== expectedContext.expectedWorkoutDates.length) {
+        throw new Error(`O contrato espera ${expectedContext.expectedWorkoutDates.length} treino(s) nesta semana, mas o JSON trouxe ${workouts.length}.`);
+      }
+    }
+
+    if (String(aiValidation.validationKey || "") !== expectedContext.validationKey) {
+      throw new Error("A chave de validação não confere. Gere novamente o resumo pela tela correta.");
+    }
+
+    const normalizedWorkouts = workouts.map((workout: any, workoutIndex: number) => {
+      const workoutDate = String(workout?.date || workout?.data || "");
+      const expectedDate = expectedContext.expectedWorkoutDates[workoutIndex];
+
+      if (expectedDate && workoutDate !== expectedDate) {
+        throw new Error(`A data do treino ${workoutIndex + 1} deveria ser ${expectedDate}, mas veio ${workoutDate || "sem data"}.`);
+      }
+
+      return {
+        name: String(workout?.name || workout?.nome || `Treino ${workoutIndex + 1}`),
+        date: workoutDate,
+        description: String(workout?.description || workout?.descricao || ""),
+        objective: String(workout?.objective || workout?.objetivo || ""),
+        focusAreas: String(workout?.focusAreas || workout?.focus_areas || workout?.focos || workout?.foco || ""),
+        intensity: String(workout?.intensity || workout?.intensidade || ""),
+        estimatedDurationMinutes:
+          Number(workout?.estimatedDurationMinutes || workout?.estimated_duration_minutes || workout?.duracaoEstimadaMinutos || 0) || null,
+        estimatedCaloriesMin:
+          Number(workout?.estimatedCaloriesMin || workout?.estimated_calories_min || workout?.caloriasMin || 0) || null,
+        estimatedCaloriesMax:
+          Number(workout?.estimatedCaloriesMax || workout?.estimated_calories_max || workout?.caloriasMax || 0) || null,
+        studentSummary: String(workout?.studentSummary || workout?.student_summary || workout?.resumoAluno || workout?.resumo || ""),
+        safetyNote: String(workout?.safetyNote || workout?.safety_note || workout?.observacaoSeguranca || ""),
+        notes: String(workout?.notes || workout?.observacoes || ""),
+        exercises: (Array.isArray(workout?.exercises) ? workout.exercises : workout?.exercicios || []).map((exercise: any, index: number) => ({
+          name: String(exercise?.name || exercise?.nome || `Exercício ${index + 1}`),
+          description: String(exercise?.description || exercise?.descricao || ""),
+          series: Number(exercise?.series || exercise?.serie || exercise?.sets || 3),
+          reps: String(exercise?.reps || exercise?.repeticoes || exercise?.repetições || "10"),
+          weight: String(exercise?.weight || exercise?.carga || ""),
+          restTime: String(exercise?.restTime || exercise?.descanso || "60s"),
+          notes: String(exercise?.notes || exercise?.observacoes || ""),
+          order: Number.isFinite(Number(exercise?.order)) ? Number(exercise.order) : index,
+        })),
+      };
+    });
 
     const scheduled = applyContractScheduleToWorkouts(
       normalizedWorkouts,
-      selectedStudent?.contractedTrainingDaysPerMonth || null
+      contractedDays,
+      expectedContext.weekStart
     );
 
     return {
       source: "ai-summary",
       createdAt: new Date().toISOString(),
-      studentId: String(payload?.studentId || selectedStudentId),
+      studentId: payloadStudentId,
       studentName: payload?.studentName || selectedStudent?.name || "",
+      aiValidation: expectedContext,
       currentIndex: 0,
       scheduleDescription: scheduled.scheduleDescription,
       scheduleWarning: scheduled.scheduleWarning,
@@ -374,7 +548,7 @@ export default function ResumoAlunoPage() {
       localStorage.setItem("aiWorkoutDraftBatch", JSON.stringify(normalized));
       setMessage({ type: "success", text: "JSON validado. Abrindo tela de montar treino com os dados preenchidos." });
 
-      window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(normalized.studentId)}&source=ai-json`;
+      window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(normalized.studentId)}&date=${encodeURIComponent(normalized.aiValidation.weekStart)}&source=ai-json`;
     } catch (error: any) {
       setMessage({
         type: "error",
@@ -426,7 +600,7 @@ export default function ResumoAlunoPage() {
   function downloadText() {
     if (!summary) return;
 
-    const content = viewMode === "prompt" ? summary.aiPrompt : summary.summaryText;
+    const content = textToShow;
     const filename = `resumo-aluno-${summary.student.name.replaceAll(" ", "-").toLowerCase()}.txt`;
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -446,6 +620,12 @@ export default function ResumoAlunoPage() {
         ? summary.aiPrompt
         : summary.summaryText
     : "";
+  const displayWeekStart = targetWeekStart || resolveWeekStartIso(null);
+  const displayWeekEnd = formatIsoDate(addDays(parseDateInput(displayWeekStart) || getNextMonday(), 6));
+  const displaySchedule = getTrainingSchedule(
+    selectedStudent?.contractedTrainingDaysPerMonth || null,
+    displayWeekStart
+  );
 
   return (
     <div className="p-4 md:p-8 space-y-6">
@@ -503,9 +683,19 @@ export default function ResumoAlunoPage() {
             </select>
 
             {selectedStudent && (
-              <p className="text-xs text-[#6b6b6b] mt-2">
-                {selectedStudent.email || "Sem e-mail"} · {selectedStudent.contractedTrainingDaysPerMonth || "-"} treino(s)/mês
-              </p>
+              <div className="text-xs text-[#6b6b6b] mt-2 space-y-1">
+                <p>
+                  {selectedStudent.email || "Sem e-mail"} · {selectedStudent.contractedTrainingDaysPerMonth || "-"} treino(s)/mês
+                </p>
+                <p className="text-[#D4A373]">
+                  Semana alvo da IA: {displayWeekStart} a {displayWeekEnd}
+                </p>
+                {displaySchedule.length > 0 && (
+                  <p>
+                    Datas esperadas: {displaySchedule.map((item) => `${item.weekday} (${item.date})`).join(" · ")}
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
@@ -523,10 +713,9 @@ export default function ResumoAlunoPage() {
             Fluxo recomendado
           </p>
           <p className="text-xs text-[#a1a1a1] leading-relaxed">
-            1. Gere o resumo. 2. Copie o prompt para IA. 3. Peça uma sugestão estruturada de treino.
-            4. O sistema aplica automaticamente os dias da semana conforme o contrato.
-            5. O professor revisa e cadastra o treino no sistema.
-            Evite rodar SQL direto no banco para não cadastrar treino no aluno errado ou quebrar histórico.
+            1. Entre pela pendência do dashboard. 2. Gere o resumo. 3. Copie o Prompt JSON para IA.
+            4. A IA devolve o JSON com a chave de segurança do aluno e da semana. 5. Cole o JSON aqui.
+            6. O sistema valida aluno, semana, datas e quantidade antes de abrir a montagem para revisão.
           </p>
         </div>
       </div>
@@ -645,7 +834,7 @@ export default function ResumoAlunoPage() {
               </h3>
               <p className="text-xs text-[#a1a1a1] mt-1">
                 Depois de copiar o Prompt JSON e pedir a sugestão para a IA, cole aqui o JSON retornado.
-                O sistema vai validar e abrir a tela de montar treino já preenchida para o professor revisar.
+                O sistema vai validar aluno, semana, datas, quantidade de treinos e chave de segurança antes de abrir a montagem para revisão.
               </p>
             </div>
 
@@ -658,7 +847,7 @@ export default function ResumoAlunoPage() {
 
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <p className="text-xs text-[#6b6b6b]">
-                Segurança: o JSON não grava nada sozinho. Ele apenas pré-preenche a tela. O professor revisa e salva.
+                Segurança: o JSON não grava nada sozinho. Se for de outro aluno, outra semana ou outra data, será bloqueado.
               </p>
 
               <button
