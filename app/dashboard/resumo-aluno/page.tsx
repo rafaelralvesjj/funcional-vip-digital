@@ -583,6 +583,7 @@ export default function ResumoAlunoPage() {
       studentId: selectedStudentId,
       contractedTrainingDaysPerMonth: contractedDays,
       weekStartIso: targetWeekStart,
+      expectedWorkoutDatesOverride: targetExpectedWorkoutDates,
     });
     const aiValidation = payload?.aiValidation || payload?.security || null;
 
