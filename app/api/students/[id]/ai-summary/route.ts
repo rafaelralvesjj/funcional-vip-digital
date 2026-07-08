@@ -114,6 +114,291 @@ function normalizeText(value?: string | null): string {
   return text || "não informado";
 }
 
+function cleanText(value?: unknown): string {
+  return String(value ?? "")
+    .replace(/\r/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\.$/, "")
+    .trim();
+}
+
+function normalizeForCompare(value?: unknown): string {
+  return cleanText(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isNoneReported(value?: unknown): boolean {
+  const normalized = normalizeForCompare(value);
+
+  return [
+    "nao",
+    "nao tenho",
+    "nao possui",
+    "nao possuo",
+    "nenhum",
+    "nenhuma",
+    "nennhum",
+    "nennhuma",
+    "sem",
+    "sem restricao",
+    "sem restricoes",
+    "sem dor",
+    "sem dores",
+    "sem equipamento",
+    "sem equipamentos",
+  ].includes(normalized);
+}
+
+function displayText(value?: unknown, fallback = "não informado"): string {
+  const text = cleanText(value);
+
+  return text || fallback;
+}
+
+function displayEquipment(value?: unknown): string {
+  const text = cleanText(value);
+
+  if (!text) return "não informado";
+  if (isNoneReported(text)) return "nenhum equipamento disponível";
+
+  return text;
+}
+
+function displayPain(value?: unknown): string {
+  const text = cleanText(value);
+
+  if (!text) return "não informado";
+  if (isNoneReported(text)) return "nenhuma dor/desconforto relatado";
+
+  return text;
+}
+
+function displayRestriction(value?: unknown): string {
+  const text = cleanText(value);
+
+  if (!text) return "não informado";
+  if (isNoneReported(text)) return "nenhuma restrição médica/física relatada";
+
+  return text;
+}
+
+function displayMinutes(value?: unknown): string {
+  const text = cleanText(value).replace(/\s*minuto\(s\)$/i, "").trim();
+
+  return text ? `${text} minuto(s)` : "não informado";
+}
+
+function displayKg(value?: unknown): string {
+  const text = cleanText(value).replace(/\s*kg$/i, "").trim();
+
+  return text ? `${text} kg` : "não informado";
+}
+
+function displayCm(value?: unknown): string {
+  const text = cleanText(value).replace(/\s*cm$/i, "").trim();
+
+  return text ? `${text} cm` : "não informado";
+}
+
+function extractNotesLines(notes?: string | null): string[] {
+  return String(notes || "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*[-•]\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function extractFromNotes(notes: string | null | undefined, labels: string[]): string {
+  const lines = extractNotesLines(notes);
+
+  for (const label of labels) {
+    const prefix = `${label.toLowerCase()}:`;
+    const line = lines.find((item) => item.toLowerCase().startsWith(prefix));
+
+    if (line) {
+      return cleanText(line.slice(label.length + 1));
+    }
+  }
+
+  return "";
+}
+
+function buildCadastroNotes(notes?: string | null): string {
+  const lines = extractNotesLines(notes);
+
+  const relevant = lines.filter((line) => {
+    const lower = line.toLowerCase();
+
+    if (lower.startsWith("objetivo principal:")) return false;
+    if (lower.startsWith("nível atual informado:")) return false;
+    if (lower.startsWith("nivel atual informado:")) return false;
+    if (lower.startsWith("ambiente de treino:")) return false;
+    if (lower.startsWith("equipamentos/materiais disponíveis:")) return false;
+    if (lower.startsWith("equipamentos/materiais disponiveis:")) return false;
+    if (lower.startsWith("tempo disponível por treino:")) return false;
+    if (lower.startsWith("tempo disponivel por treino:")) return false;
+    if (lower.startsWith("dias/horários preferidos:")) return false;
+    if (lower.startsWith("dias/horarios preferidos:")) return false;
+    if (lower.startsWith("dor/desconforto atual informado:")) return false;
+    if (lower.startsWith("restrição médica/física declarada:")) return false;
+    if (lower.startsWith("restricao medica/fisica declarada:")) return false;
+    if (lower.startsWith("histórico de treino:")) return false;
+    if (lower.startsWith("historico de treino:")) return false;
+    if (lower.startsWith("peso informado:")) return false;
+    if (lower.startsWith("altura informada:")) return false;
+    if (lower.startsWith("observações livres do aluno:")) return false;
+    if (lower.startsWith("observacoes livres do aluno:")) return false;
+    if (lower === "ficha inicial / mini-anamnese:") return false;
+
+    return true;
+  });
+
+  return relevant.length ? relevant.join(" ") : "não informado";
+}
+
+function getOnboardingProfile(notes?: string | null) {
+  const objective = extractFromNotes(notes, ["Objetivo principal", "Objetivo"]);
+  const activityLevel = extractFromNotes(notes, [
+    "Nível atual informado",
+    "Nivel atual informado",
+    "Nível atual",
+    "Nivel atual",
+  ]);
+  const trainingEnvironment = extractFromNotes(notes, ["Ambiente de treino", "Local de treino"]);
+  const availableEquipment = extractFromNotes(notes, [
+    "Equipamentos/materiais disponíveis",
+    "Equipamentos/materiais disponiveis",
+    "Equipamentos disponíveis",
+    "Equipamentos disponiveis",
+    "Materiais disponíveis",
+    "Materiais disponiveis",
+  ]);
+  const timeAvailableMinutes = extractFromNotes(notes, [
+    "Tempo disponível por treino",
+    "Tempo disponivel por treino",
+  ]);
+  const preferredDays = extractFromNotes(notes, [
+    "Dias/horários preferidos",
+    "Dias/horarios preferidos",
+    "Dias preferidos",
+  ]);
+  const currentPain = extractFromNotes(notes, [
+    "Dor/desconforto atual informado",
+    "Dor/desconforto atual",
+    "Dor atual",
+  ]);
+  const medicalRestriction = extractFromNotes(notes, [
+    "Restrição médica/física declarada",
+    "Restricao medica/fisica declarada",
+    "Restrição médica/física",
+    "Restricao medica/fisica",
+    "Restrição médica",
+    "Restricao medica",
+  ]);
+  const trainingHistory = extractFromNotes(notes, ["Histórico de treino", "Historico de treino"]);
+  const weightKg = extractFromNotes(notes, ["Peso informado"]);
+  const heightCm = extractFromNotes(notes, ["Altura informada"]);
+  const initialNotes = extractFromNotes(notes, [
+    "Observações livres do aluno",
+    "Observacoes livres do aluno",
+    "Observações do aluno",
+    "Observacoes do aluno",
+  ]);
+
+  return {
+    objective: displayText(objective),
+    activityLevel: displayText(activityLevel),
+    trainingEnvironment: displayText(trainingEnvironment),
+    availableEquipment: displayEquipment(availableEquipment),
+    timeAvailableMinutes: displayMinutes(timeAvailableMinutes),
+    preferredDays: displayText(preferredDays),
+    currentPain: displayPain(currentPain),
+    medicalRestriction: displayRestriction(medicalRestriction),
+    trainingHistory: displayText(trainingHistory),
+    weightKg: displayKg(weightKg),
+    heightCm: displayCm(heightCm),
+    initialNotes: displayText(initialNotes),
+    hasObjective: Boolean(cleanText(objective)),
+  };
+}
+
+function hasRelevantCareInfo(value: string): boolean {
+  const text = cleanText(value);
+
+  if (!text || text === "não informado") return false;
+
+  return !text.toLowerCase().startsWith("nenhum") && !text.toLowerCase().startsWith("nenhuma");
+}
+
+function getOnboardingOperationalLines(profile: ReturnType<typeof getOnboardingProfile>): string[] {
+  const lines: string[] = [];
+
+  if (profile.objective !== "não informado") {
+    lines.push(`Objetivo principal do onboarding: ${profile.objective}.`);
+  }
+
+  if (profile.activityLevel !== "não informado") {
+    lines.push(`Nível atual informado no onboarding: ${profile.activityLevel}.`);
+  }
+
+  if (profile.trainingEnvironment !== "não informado" || profile.availableEquipment !== "não informado") {
+    lines.push(
+      `Ambiente/equipamentos do onboarding: ${profile.trainingEnvironment}; equipamentos: ${profile.availableEquipment}.`
+    );
+  }
+
+  if (profile.timeAvailableMinutes !== "não informado") {
+    lines.push(`Tempo disponível por treino informado: ${profile.timeAvailableMinutes}.`);
+  }
+
+  if (profile.preferredDays !== "não informado") {
+    lines.push(`Dias/horários preferidos informados: ${profile.preferredDays}.`);
+  }
+
+  if (hasRelevantCareInfo(profile.currentPain)) {
+    lines.push(`Atenção ao relato de dor/desconforto do onboarding: ${profile.currentPain}.`);
+  } else if (profile.currentPain !== "não informado") {
+    lines.push(`Dor/desconforto no onboarding: ${profile.currentPain}.`);
+  }
+
+  if (hasRelevantCareInfo(profile.medicalRestriction)) {
+    lines.push(`Atenção à restrição médica/física do onboarding: ${profile.medicalRestriction}.`);
+  } else if (profile.medicalRestriction !== "não informado") {
+    lines.push(`Restrição médica/física no onboarding: ${profile.medicalRestriction}.`);
+  }
+
+  const objectiveLower = profile.objective.toLowerCase();
+
+  if (objectiveLower.includes("corrida")) {
+    lines.push(
+      "Como o objetivo envolve corrida, priorizar base, fortalecimento de pernas, glúteos, core, estabilidade, mobilidade de tornozelo/quadril e progressão gradual de impacto."
+    );
+  }
+
+  if (objectiveLower.includes("emagrecimento")) {
+    lines.push(
+      "Como o objetivo envolve emagrecimento, comunicar contribuição para gasto energético e consistência, sem prometer perda de peso."
+    );
+  }
+
+  if (
+    objectiveLower.includes("lesão") ||
+    objectiveLower.includes("lesao") ||
+    objectiveLower.includes("prescrição") ||
+    objectiveLower.includes("prescricao") ||
+    objectiveLower.includes("reabilitação") ||
+    objectiveLower.includes("reabilitacao")
+  ) {
+    lines.push(
+      "Como há objetivo ligado a retomada, lesão, reabilitação ou prescrição médica, manter intensidade conservadora e validar restrições antes de evoluir carga ou impacto."
+    );
+  }
+
+  return lines;
+}
+
 function calculateAdherence(completed: number, planned: number): string {
   if (!planned) return "sem treinos planejados";
 
@@ -254,6 +539,9 @@ export async function GET(
     if (!hasAccess) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
+
+    const onboardingProfile = getOnboardingProfile(student.notes);
+    const cadastroNotes = buildCadastroNotes(student.notes);
 
     const now = new Date();
     const currentWeek = getWeekRange(now);
@@ -568,6 +856,7 @@ export async function GET(
     const hasInjuryCare = openCareEvents.some((event) => event.eventType === "DOR_DESCONFORTO");
     const hasDifficultExercise = openCareEvents.some((event) => event.eventType === "EXERCICIO_DIFICIL");
     const hasLowMotivation = openCareEvents.some((event) => event.eventType === "DESMOTIVACAO" || event.eventType === "FALTA_TEMPO");
+    const onboardingOperationalLines = getOnboardingOperationalLines(onboardingProfile);
 
     const summaryText = [
       "RESUMO COMPLETO DO ALUNO — FUNCIONAL VIP DIGITAL",
@@ -582,9 +871,24 @@ export async function GET(
       `Professor responsável: ${student.user?.name || "não vinculado"} (${student.user?.email || "sem e-mail"})`,
       `Treinos contratados/mês: ${student.contractedTrainingDaysPerMonth || "não informado"}`,
       `Meta semanal estimada: ${weeklyLimit ? `${weeklyLimit} treino(s)/semana` : "não configurada"}`,
-      `Observações cadastrais: ${normalizeText(student.notes)}`,
+      `Observações cadastrais: ${cadastroNotes}`,
+      "",
+      "Ficha inicial / mini-anamnese:",
+      `Objetivo principal: ${onboardingProfile.objective}`,
+      `Nível atual informado: ${onboardingProfile.activityLevel}`,
+      `Ambiente de treino: ${onboardingProfile.trainingEnvironment}`,
+      `Equipamentos/materiais disponíveis: ${onboardingProfile.availableEquipment}`,
+      `Tempo disponível por treino: ${onboardingProfile.timeAvailableMinutes}`,
+      `Dias/horários preferidos: ${onboardingProfile.preferredDays}`,
+      `Dor/desconforto atual informado: ${onboardingProfile.currentPain}`,
+      `Restrição médica/física declarada: ${onboardingProfile.medicalRestriction}`,
+      `Histórico de treino: ${onboardingProfile.trainingHistory}`,
+      `Peso informado: ${onboardingProfile.weightKg}`,
+      `Altura informada: ${onboardingProfile.heightCm}`,
+      `Observações livres do aluno: ${onboardingProfile.initialNotes}`,
       "",
       "2) Objetivo e avaliação/bioimpedância",
+      `Objetivo principal cadastrado no onboarding: ${onboardingProfile.objective}`,
       `Total de avaliações registradas: ${avaliacoes.length}`,
       `Primeira avaliação: ${firstAvaliacao ? formatDate(firstAvaliacao.createdAt) : "não informada"}`,
       `Última avaliação: ${latestAvaliacao ? formatDate(latestAvaliacao.createdAt) : "não informada"}`,
@@ -643,6 +947,9 @@ export async function GET(
       careLines.length ? careLines.join("\n") : "Nenhum sinal de cuidado registrado.",
       "",
       "10) Leitura operacional para montagem de treino",
+      onboardingOperationalLines.length
+        ? onboardingOperationalLines.join("\n")
+        : "Ficha inicial ainda não trouxe dados suficientes. Confirmar objetivo, nível, ambiente, equipamentos e restrições antes de montar treino.",
       openCareEvents.length > 0
         ? `Existem ${openCareEvents.length} evento(s) de cuidado em aberto. Revisar antes de montar ou progredir treino.`
         : "Não há eventos de cuidado em aberto.",
