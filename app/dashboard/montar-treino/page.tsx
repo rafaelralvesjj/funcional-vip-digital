@@ -14,7 +14,16 @@ interface LibraryExercise {
   name: string;
   description: string;
   muscleGroup: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
+  videoUrl?: string | null;
+  objectiveTags?: string | null;
+  locationTags?: string | null;
+  equipmentTags?: string | null;
+  restrictionTags?: string | null;
+  levelTags?: string | null;
+  intensity?: string | null;
+  instructions?: string | null;
+  safetyNotes?: string | null;
 }
 
 interface WorkoutPlanSummary {
@@ -48,6 +57,7 @@ interface WorkoutWeekSummary {
 }
 
 interface ExerciseItem {
+  libraryExerciseId: string;
   name: string;
   description: string;
   series: number;
@@ -56,6 +66,8 @@ interface ExerciseItem {
   restTime: string;
   notes: string;
   order: number;
+  imageUrl?: string | null;
+  videoUrl?: string | null;
 }
 
 interface AiWorkoutDraft {
@@ -282,16 +294,28 @@ export default function MontarTreinoPage() {
   const [aiDraftIndex, setAiDraftIndex] = useState(0);
   const [openedFromAiDraft, setOpenedFromAiDraft] = useState(false);
 
-  function normalizeAiExercise(exercise: Partial<ExerciseItem>, index: number): ExerciseItem {
+  function normalizeAiExercise(exercise: Partial<ExerciseItem> & { exerciseId?: string; exerciseLibraryId?: string }, index: number): ExerciseItem {
+    const libraryExerciseId = String(
+      exercise?.libraryExerciseId ||
+        exercise?.exerciseId ||
+        exercise?.exerciseLibraryId ||
+        ""
+    );
+
+    const libraryExercise = library.find((item) => item.id === libraryExerciseId);
+
     return {
-      name: String(exercise?.name || `Exercício ${index + 1}`),
-      description: String(exercise?.description || ""),
+      libraryExerciseId,
+      name: String(libraryExercise?.name || exercise?.name || `Exercício ${index + 1}`),
+      description: String(exercise?.description || libraryExercise?.description || ""),
       series: Number(exercise?.series || 3),
       reps: String(exercise?.reps || "10"),
       weight: String(exercise?.weight || ""),
       restTime: String(exercise?.restTime || "60s"),
       notes: String(exercise?.notes || ""),
       order: index,
+      imageUrl: exercise?.imageUrl || libraryExercise?.imageUrl || null,
+      videoUrl: exercise?.videoUrl || libraryExercise?.videoUrl || null,
     };
   }
 
@@ -609,7 +633,9 @@ export default function MontarTreinoPage() {
 
   async function fetchLibrary() {
     try {
-      const res = await fetch("/api/exercise-library");
+      const res = await fetch("/api/exercise-library?active=1", {
+        cache: "no-store",
+      });
       if (res.ok) {
         const data = await res.json();
         setLibrary(data.exercises || []);
@@ -620,6 +646,7 @@ export default function MontarTreinoPage() {
 
   function addExercise(ex: LibraryExercise) {
     const newExercise: ExerciseItem = {
+      libraryExerciseId: ex.id,
       name: ex.name,
       description: ex.description,
       series: 3,
@@ -628,6 +655,8 @@ export default function MontarTreinoPage() {
       restTime: "60s",
       notes: "",
       order: exercises.length,
+      imageUrl: ex.imageUrl || null,
+      videoUrl: ex.videoUrl || null,
     };
     setExercises([...exercises, newExercise]);
     setShowLibrary(false);
@@ -786,6 +815,18 @@ export default function MontarTreinoPage() {
       return;
     }
 
+    if (library.length === 0) {
+      alert("A biblioteca de exercícios está vazia. Cadastre exercícios antes de montar treino manual ou por IA.");
+      return;
+    }
+
+    const exerciseWithoutLibrary = exercises.find((exercise) => !exercise.libraryExerciseId);
+
+    if (exerciseWithoutLibrary) {
+      alert("Todos os exercícios precisam vir da Biblioteca de Exercícios. Remova exercícios soltos e selecione novamente pela biblioteca.");
+      return;
+    }
+
     if (isWeeklyLimitReached) {
       alert(
         `Este aluno já recebeu ${weeklyPlansCount} treino(s) nesta semana. O limite atual é de ${weeklyWorkoutLimit} treino(s) por semana.`
@@ -813,6 +854,8 @@ export default function MontarTreinoPage() {
           safetyNote: safetyNote || null,
           notes: notes || null,
           exercises: exercises.map((ex) => ({
+            libraryExerciseId: ex.libraryExerciseId,
+            exerciseId: ex.libraryExerciseId,
             name: ex.name,
             description: ex.description,
             series: ex.series,
@@ -821,6 +864,8 @@ export default function MontarTreinoPage() {
             restTime: ex.restTime || null,
             notes: ex.notes || null,
             order: ex.order,
+            imageUrl: ex.imageUrl || null,
+            videoUrl: ex.videoUrl || null,
           })),
         }),
       });
@@ -1499,6 +1544,8 @@ export default function MontarTreinoPage() {
             !planName.trim() ||
             !date ||
             exercises.length === 0 ||
+            library.length === 0 ||
+            exercises.some((exercise) => !exercise.libraryExerciseId) ||
             !weeklyWorkoutLimit ||
             isWeeklyLimitReached
           }
@@ -1506,9 +1553,13 @@ export default function MontarTreinoPage() {
         >
           {saving
             ? "💾 Salvando treino..."
-            : !weeklyWorkoutLimit && selectedStudent
+            : library.length === 0
+              ? "⚠️ Biblioteca vazia"
+              : !weeklyWorkoutLimit && selectedStudent
               ? "⚠️ Sem contrato ativo para a data"
-              : isWeeklyLimitReached
+              : exercises.some((exercise) => !exercise.libraryExerciseId)
+                ? "⚠️ Exercício fora da biblioteca"
+                : isWeeklyLimitReached
                 ? "🚫 Limite semanal atingido"
                 : willCompleteWeekOnSave
                   ? isFutureWorkoutWeek
