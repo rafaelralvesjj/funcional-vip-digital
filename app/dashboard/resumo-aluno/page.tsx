@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type StudentOption = {
   id: string;
@@ -794,20 +795,33 @@ export default function ResumoAlunoPage() {
         selectedStudent?.contractedTrainingDaysPerMonth || null,
         displayWeekStart
       );
+  const backToWorkoutBuilderDate = displaySchedule[0]?.date || targetExpectedWorkoutDates[0] || displayWeekStart;
+  const backToWorkoutBuilderHref = selectedStudentId
+    ? `/dashboard/montar-treino?studentId=${encodeURIComponent(selectedStudentId)}&date=${encodeURIComponent(backToWorkoutBuilderDate)}`
+    : "/dashboard/montar-treino";
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <div>
-        <p className="text-xs text-[#D4A373] uppercase tracking-[0.3em] mb-2">
-          Apoio inteligente
-        </p>
-        <h1 className="text-2xl md:text-3xl font-bold text-[#f5f5f5]">
-          Resumo do aluno para IA
-        </h1>
-        <p className="text-sm text-[#a1a1a1] mt-2 max-w-3xl">
-          Gere um resumo completo do aluno com avaliações, treinos, adesão, dúvidas, avisos e feedbacks.
-          Use o texto para pedir uma sugestão de treino para a IA. A IA apoia, mas o professor revisa e valida antes de cadastrar.
-        </p>
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div>
+          <p className="text-xs text-[#D4A373] uppercase tracking-[0.3em] mb-2">
+            Apoio inteligente
+          </p>
+          <h1 className="text-2xl md:text-3xl font-bold text-[#f5f5f5]">
+            Resumo do aluno para IA
+          </h1>
+          <p className="text-sm text-[#a1a1a1] mt-2 max-w-3xl">
+            Gere um resumo completo do aluno com avaliações, treinos, adesão, dúvidas, avisos e feedbacks.
+            Use o texto para pedir uma sugestão de treino para a IA. A IA apoia, mas o professor revisa e valida antes de cadastrar.
+          </p>
+        </div>
+
+        <Link
+          href={backToWorkoutBuilderHref}
+          className="inline-flex items-center justify-center rounded-xl bg-[#1a1a1a] border border-[#D4A373]/30 text-[#D4A373] px-4 py-3 text-sm font-semibold hover:border-[#D4A373] transition"
+        >
+          ← Fechar IA e voltar para montagem manual
+        </Link>
       </div>
 
       {message && (
