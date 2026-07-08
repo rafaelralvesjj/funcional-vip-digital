@@ -111,6 +111,19 @@ function serializeWorkoutContract(contract: any) {
   };
 }
 
+function sortWorkoutContractsByPriority<T extends { type?: string | null; endDate: Date }>(contracts: T[]): T[] {
+  return contracts.sort((a, b) => {
+    const aPriority = a.type === "PAID" ? 0 : 1;
+    const bPriority = b.type === "PAID" ? 0 : 1;
+
+    if (aPriority !== bPriority) {
+      return aPriority - bPriority;
+    }
+
+    return b.endDate.getTime() - a.endDate.getTime();
+  });
+}
+
 async function findActiveWorkoutContract(studentId: string, workoutDate: Date) {
   const contracts = await prisma.studentContract.findMany({
     where: {
@@ -135,16 +148,62 @@ async function findActiveWorkoutContract(studentId: string, workoutDate: Date) {
 
   if (contracts.length === 0) return null;
 
-  return contracts.sort((a, b) => {
-    const aPriority = a.type === "PAID" ? 0 : 1;
-    const bPriority = b.type === "PAID" ? 0 : 1;
+  return sortWorkoutContractsByPriority(contracts)[0];
+}
 
-    if (aPriority !== bPriority) {
-      return aPriority - bPriority;
-    }
+async function findActiveWorkoutContractForWeek(studentId: string, week: { startOfWeek: Date; endOfWeek: Date }) {
+  const contracts = await prisma.studentContract.findMany({
+    where: {
+      studentId,
+      status: "ACTIVE",
+      startDate: {
+        lt: week.endOfWeek,
+      },
+      endDate: {
+        gte: week.startOfWeek,
+      },
+    },
+    include: {
+      plan: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
 
-    return b.endDate.getTime() - a.endDate.getTime();
-  })[0];
+  if (contracts.length === 0) return null;
+
+  return sortWorkoutContractsByPriority(contracts)[0];
+}
+
+function normalizeWorkoutDateInsideContract(workoutDate: Date, contract: { startDate: Date; endDate: Date }): Date {
+  const contractStart = new Date(contract.startDate);
+  const contractEnd = new Date(contract.endDate);
+  const workoutWeek = getWeekRange(workoutDate);
+
+  if (
+    workoutDate < contractStart &&
+    contractStart >= workoutWeek.startOfWeek &&
+    contractStart < workoutWeek.endOfWeek
+  ) {
+    const adjustedDate = new Date(contractStart);
+    adjustedDate.setHours(12, 0, 0, 0);
+    return adjustedDate;
+  }
+
+  if (
+    workoutDate > contractEnd &&
+    contractEnd >= workoutWeek.startOfWeek &&
+    contractEnd < workoutWeek.endOfWeek
+  ) {
+    const adjustedDate = new Date(contractEnd);
+    adjustedDate.setHours(12, 0, 0, 0);
+    return adjustedDate;
+  }
+
+  return workoutDate;
 }
 
 
@@ -438,9 +497,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const workoutDate = date ? new Date(date + "T12:00:00") : new Date();
+    const requestedWorkoutDate = date ? new Date(date + "T12:00:00") : new Date();
+    const requestedWeek = getWeekRange(requestedWorkoutDate);
 
-    const activeContract = await findActiveWorkoutContract(studentId, workoutDate);
+    let activeContract = await findActiveWorkoutContract(studentId, requestedWorkoutDate);
+
+    /*
+     * Aluno novo pode entrar no meio da semana.
+     * Exemplo: dashboard abre a semana de segunda-feira, mas o contrato começou na quarta.
+     * Nesse caso, a semana tem contrato ativo, porém a segunda-feira não tinha.
+     * Usamos o contrato que cruza a semana e ajustamos a data efetiva para dentro do contrato.
+     */
+    if (!activeContract) {
+      activeContract = await findActiveWorkoutContractForWeek(studentId, requestedWeek);
+    }
 
     if (!activeContract) {
       return NextResponse.json(
@@ -451,6 +521,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const workoutDate = normalizeWorkoutDateInsideContract(requestedWorkoutDate, activeContract);
 
     const existingWorkoutPlanCount = await prisma.workoutPlan.count({
       where: {
@@ -722,10 +794,21 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(plans);
       }
 
-      const activeContract = await findActiveWorkoutContract(studentId, referenceDate);
-      const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
       const { startOfWeek, endOfWeek } = getWeekRange(referenceDate);
       const weekEndDisplay = new Date(endOfWeek.getTime() - 1);
+      let activeContract = await findActiveWorkoutContract(studentId, referenceDate);
+
+      if (!activeContract) {
+        activeContract = await findActiveWorkoutContractForWeek(studentId, {
+          startOfWeek,
+          endOfWeek,
+        });
+      }
+
+      const effectiveWorkoutDate = activeContract
+        ? normalizeWorkoutDateInsideContract(referenceDate, activeContract)
+        : referenceDate;
+      const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
 
       const weeklyPlansCount = activeContract
         ? await prisma.workoutPlan.count({
@@ -740,6 +823,10 @@ export async function GET(req: NextRequest) {
           })
         : 0;
 
+      const selectedDateBeforeContractStart = Boolean(
+        activeContract && referenceDate < activeContract.startDate
+      );
+
       return NextResponse.json({
         plans,
         activeContract: serializeWorkoutContract(activeContract),
@@ -753,9 +840,12 @@ export async function GET(req: NextRequest) {
           label: `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`,
           futureWeek: isFutureWeek(startOfWeek),
         },
+        effectiveWorkoutDate: effectiveWorkoutDate.toISOString().slice(0, 10),
         canCreateWorkout: Boolean(activeContract && weeklyLimit && weeklyPlansCount < weeklyLimit),
         message: activeContract
-          ? null
+          ? selectedDateBeforeContractStart
+            ? `Contrato ativo encontrado para esta semana. Como o contrato começa em ${formatDatePtBr(activeContract.startDate)}, o treino será salvo a partir dessa data.`
+            : null
           : "Este aluno não possui contrato ativo para a data selecionada.",
       });
     }
@@ -840,7 +930,13 @@ export async function PUT(req: NextRequest) {
     let nextContractId: string | null = null;
 
     if (data.date) {
-      const activeContract = await findActiveWorkoutContract(planExists.studentId, data.date);
+      const requestedDate = data.date;
+      const requestedWeek = getWeekRange(requestedDate);
+      let activeContract = await findActiveWorkoutContract(planExists.studentId, requestedDate);
+
+      if (!activeContract) {
+        activeContract = await findActiveWorkoutContractForWeek(planExists.studentId, requestedWeek);
+      }
 
       if (!activeContract) {
         return NextResponse.json(
@@ -852,6 +948,7 @@ export async function PUT(req: NextRequest) {
         );
       }
 
+      data.date = normalizeWorkoutDateInsideContract(requestedDate, activeContract);
       data.contractId = activeContract.id;
       nextContractId = activeContract.id;
     }
