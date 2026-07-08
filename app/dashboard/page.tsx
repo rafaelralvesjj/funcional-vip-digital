@@ -1182,19 +1182,6 @@ export default async function DashboardPage() {
                   Semana de referência: {currentWorkoutWeekLabel}. Pendência urgente: aluno ativo, com professor vinculado e dias contratados, mas ainda sem a quantidade de treinos prevista para a semana vigente.
                 </p>
               </div>
-
-              {isTeacher && (
-                <a
-                  href={
-                    studentsMissingCurrentWeekWorkouts.length > 0
-                      ? `/dashboard/montar-treino?studentId=${studentsMissingCurrentWeekWorkouts[0].student.id}&date=${studentsMissingCurrentWeekWorkouts[0].weekStartDateInput}`
-                      : "/dashboard/montar-treino"
-                  }
-                  className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
-                >
-                  Montar treino
-                </a>
-              )}
             </div>
 
             {studentsMissingCurrentWeekWorkouts.length === 0 ? (
@@ -1318,19 +1305,6 @@ export default async function DashboardPage() {
                   </p>
                 )}
               </div>
-
-              {isTeacher && (
-                <a
-                  href={
-                    studentsMissingNextWeekWorkouts.length > 0
-                      ? `/dashboard/montar-treino?studentId=${studentsMissingNextWeekWorkouts[0].student.id}&date=${studentsMissingNextWeekWorkouts[0].weekStartDateInput}`
-                      : "/dashboard/montar-treino"
-                  }
-                  className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
-                >
-                  Montar primeiro pendente
-                </a>
-              )}
             </div>
 
             {studentsMissingNextWeekWorkouts.length === 0 ? (
