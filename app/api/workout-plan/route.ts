@@ -4,6 +4,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 
+const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
+const WORKOUT_STATUS_PENDING = "PENDENTE";
+const WORKOUT_STATUS_NEEDS_REVIEW = "PRECISA_REVISAO";
+const WORKOUT_STATUS_COMPLETED = "CONCLUIDO";
+
 function getAppLoginUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -80,9 +85,32 @@ function isFutureWeek(startOfWeek: Date): boolean {
   return startOfWeek.getTime() > currentWeek.startOfWeek.getTime();
 }
 
-function getStartOfNextWeek(): Date {
-  return getWeekRange(new Date()).endOfWeek;
+function isWorkoutReleasedForStudent(status?: string | null): boolean {
+  const value = String(status || "").toUpperCase();
+
+  return value !== WORKOUT_STATUS_PRE_PLANNED && value !== WORKOUT_STATUS_NEEDS_REVIEW;
 }
+
+function getPreviousWeekRangeFromStart(startOfWeek: Date): { startOfWeek: Date; endOfWeek: Date } {
+  const previousStart = new Date(startOfWeek);
+  previousStart.setDate(previousStart.getDate() - 7);
+  previousStart.setHours(0, 0, 0, 0);
+
+  const previousEnd = new Date(startOfWeek);
+  previousEnd.setHours(0, 0, 0, 0);
+
+  return { startOfWeek: previousStart, endOfWeek: previousEnd };
+}
+
+function getLatestPlanUpdateDate(plans: Array<{ createdAt: Date; updatedAt?: Date | null }>): Date {
+  return plans.reduce((latest, plan) => {
+    const dates = [plan.createdAt, plan.updatedAt].filter(Boolean) as Date[];
+    const planLatest = dates.reduce((current, item) => (item > current ? item : current), dates[0] || latest);
+
+    return planLatest > latest ? planLatest : latest;
+  }, plans[0]?.createdAt || new Date());
+}
+
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -489,6 +517,354 @@ async function notifyWorkoutAvailable({
   }
 }
 
+async function buildReleaseReviewContext({
+  studentId,
+  startOfWeek,
+  baselineDate,
+}: {
+  studentId: string;
+  startOfWeek: Date;
+  baselineDate: Date;
+}) {
+  const previousWeek = getPreviousWeekRangeFromStart(startOfWeek);
+
+  const [previousWeekWorkouts, openCareEvents, newStudentQuestions, student] = await Promise.all([
+    prisma.workout.findMany({
+      where: {
+        studentId,
+        date: {
+          gte: previousWeek.startOfWeek,
+          lt: previousWeek.endOfWeek,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        date: true,
+        updatedAt: true,
+      },
+      orderBy: {
+        date: "asc",
+      },
+    }),
+
+    prisma.studentCareEvent.findMany({
+      where: {
+        studentId,
+        status: {
+          not: "RESOLVIDO",
+        },
+        OR: [
+          {
+            createdAt: {
+              gt: baselineDate,
+            },
+          },
+          {
+            eventType: {
+              in: ["DOR_DESCONFORTO", "EXERCICIO_DIFICIL", "DESMOTIVACAO", "FALTA_TEMPO"],
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        eventType: true,
+        severity: true,
+        title: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 8,
+    }),
+
+    prisma.question.findMany({
+      where: {
+        studentId,
+        senderRole: "STUDENT",
+        resolvedAt: null,
+        createdAt: {
+          gt: baselineDate,
+        },
+      },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 8,
+    }),
+
+    prisma.student.findUnique({
+      where: {
+        id: studentId,
+      },
+      select: {
+        updatedAt: true,
+      },
+    }),
+  ]);
+
+  const completedPreviousWeek = previousWeekWorkouts.filter(
+    (workout) => String(workout.status || "").toUpperCase() === WORKOUT_STATUS_COMPLETED
+  ).length;
+  const pendingPreviousWeek = previousWeekWorkouts.filter(
+    (workout) => String(workout.status || "").toUpperCase() !== WORKOUT_STATUS_COMPLETED
+  ).length;
+  const workoutUpdatesAfterPlanning = previousWeekWorkouts.filter(
+    (workout) => workout.updatedAt > baselineDate
+  ).length;
+
+  const reviewAlerts: string[] = [];
+
+  if (previousWeekWorkouts.length === 0) {
+    reviewAlerts.push(
+      "Não há treinos registrados na semana anterior ao treino que será liberado. Validar se a prescrição deve ser conservadora ou de retomada."
+    );
+  } else if (completedPreviousWeek === 0) {
+    reviewAlerts.push(
+      "A semana anterior não possui treinos concluídos. Antes de liberar, revisar se é melhor repetir, reduzir complexidade ou adaptar a proposta."
+    );
+  }
+
+  if (pendingPreviousWeek > 0) {
+    reviewAlerts.push(
+      `A semana anterior possui ${pendingPreviousWeek} treino(s) não concluído(s). Confirmar adesão antes de evoluir carga, volume ou intensidade.`
+    );
+  }
+
+  if (workoutUpdatesAfterPlanning > 0) {
+    reviewAlerts.push(
+      `Houve ${workoutUpdatesAfterPlanning} atualização(ões) em treinos anteriores depois que esta semana foi pré-planejada.`
+    );
+  }
+
+  if (openCareEvents.length > 0) {
+    reviewAlerts.push(
+      `Há ${openCareEvents.length} evento(s) de cuidado em aberto ou recente(s). Revisar dor, dificuldade, desmotivação ou falta de tempo antes de liberar.`
+    );
+  }
+
+  if (newStudentQuestions.length > 0) {
+    reviewAlerts.push(
+      `Há ${newStudentQuestions.length} dúvida(s) nova(s) do aluno sem resolução desde o pré-planejamento.`
+    );
+  }
+
+  if (student?.updatedAt && student.updatedAt > baselineDate) {
+    reviewAlerts.push(
+      "O cadastro/ficha do aluno foi atualizado depois que esta semana foi pré-planejada. Revisar informações atuais antes de liberar."
+    );
+  }
+
+  return {
+    baselineDate: baselineDate.toISOString(),
+    previousWeek: {
+      startOfWeek: previousWeek.startOfWeek.toISOString(),
+      endOfWeek: previousWeek.endOfWeek.toISOString(),
+      label: `${formatDatePtBr(previousWeek.startOfWeek)} a ${formatDatePtBr(new Date(previousWeek.endOfWeek.getTime() - 1))}`,
+    },
+    previousWeekWorkouts: previousWeekWorkouts.length,
+    completedPreviousWeek,
+    pendingPreviousWeek,
+    workoutUpdatesAfterPlanning,
+    openCareEvents: openCareEvents.length,
+    newStudentQuestions: newStudentQuestions.length,
+    requiresReviewBeforeRelease: reviewAlerts.length > 0,
+    reviewAlerts,
+  };
+}
+
+async function releaseWorkoutWeek({
+  studentId,
+  date,
+  currentUserId,
+  forceRelease,
+}: {
+  studentId: string;
+  date?: string | null;
+  currentUserId: string | null;
+  forceRelease: boolean;
+}) {
+  if (!studentId || typeof studentId !== "string") {
+    return NextResponse.json(
+      { error: "studentId é obrigatório para liberar a semana." },
+      { status: 400 }
+    );
+  }
+
+  const referenceDate = date ? new Date(`${date}T12:00:00`) : new Date();
+
+  if (Number.isNaN(referenceDate.getTime())) {
+    return NextResponse.json(
+      { error: "Data inválida para liberar a semana." },
+      { status: 400 }
+    );
+  }
+
+  const student = await prisma.student.findUnique({
+    where: {
+      id: studentId,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      userId: true,
+      userAuthId: true,
+    },
+  });
+
+  if (!student) {
+    return NextResponse.json(
+      { error: "Aluno não encontrado." },
+      { status: 404 }
+    );
+  }
+
+  const week = getWeekRange(referenceDate);
+  let activeContract = await findActiveWorkoutContract(studentId, referenceDate);
+
+  if (!activeContract) {
+    activeContract = await findActiveWorkoutContractForWeek(studentId, week);
+  }
+
+  if (!activeContract) {
+    return NextResponse.json(
+      { error: "Este aluno não possui contrato ativo para a semana selecionada." },
+      { status: 400 }
+    );
+  }
+
+  const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
+
+  if (!weeklyLimit) {
+    return NextResponse.json(
+      { error: "O contrato ativo não possui quantidade semanal configurada." },
+      { status: 400 }
+    );
+  }
+
+  const plans = await prisma.workoutPlan.findMany({
+    where: {
+      studentId,
+      contractId: activeContract.id,
+      date: {
+        gte: week.startOfWeek,
+        lt: week.endOfWeek,
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true,
+      workouts: {
+        select: {
+          id: true,
+          status: true,
+        },
+      },
+    },
+    orderBy: {
+      date: "asc",
+    },
+  });
+
+  if (plans.length < weeklyLimit) {
+    return NextResponse.json(
+      {
+        error: `A semana ainda não está completa. Existem ${plans.length}/${weeklyLimit} treino(s) planejados.`,
+      },
+      { status: 400 }
+    );
+  }
+
+  const baselineDate = getLatestPlanUpdateDate(plans);
+  const reviewContext = await buildReleaseReviewContext({
+    studentId,
+    startOfWeek: week.startOfWeek,
+    baselineDate,
+  });
+
+  if (reviewContext.requiresReviewBeforeRelease && !forceRelease) {
+    return NextResponse.json(
+      {
+        error: "Revisão obrigatória antes de liberar a semana.",
+        reviewRequired: true,
+        reviewContext,
+      },
+      { status: 409 }
+    );
+  }
+
+  const planIds = plans.map((plan) => plan.id);
+
+  await prisma.workout.updateMany({
+    where: {
+      workoutPlanId: {
+        in: planIds,
+      },
+    },
+    data: {
+      status: WORKOUT_STATUS_PENDING,
+    },
+  });
+
+  let emailSent = false;
+
+  try {
+    const fallbackAuthorId = await getFallbackNoticeAuthorId(student.userId);
+    const authorId = currentUserId || fallbackAuthorId;
+    const previousPlansCount = await prisma.workoutPlan.count({
+      where: {
+        studentId,
+        contractId: activeContract.id,
+        date: {
+          lt: week.startOfWeek,
+        },
+      },
+    });
+
+    await notifyWorkoutAvailable({
+      studentId,
+      planName: plans[plans.length - 1]?.name || "Treinos da semana",
+      isFirstWorkoutPackage: previousPlansCount === 0,
+      authorId,
+      weeklyLimit,
+      startOfWeek: week.startOfWeek,
+      endOfWeek: week.endOfWeek,
+    });
+
+    emailSent = true;
+  } catch (notificationError) {
+    console.error("Erro ao notificar aluno na liberação da semana:", notificationError);
+  }
+
+  const weekEndDisplay = new Date(week.endOfWeek.getTime() - 1);
+
+  return NextResponse.json({
+    ok: true,
+    released: true,
+    studentId,
+    week: {
+      startOfWeek: week.startOfWeek.toISOString(),
+      endOfWeek: week.endOfWeek.toISOString(),
+      label: `${formatDatePtBr(week.startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`,
+    },
+    weeklyLimit,
+    releasedPlans: plans.length,
+    emailSent,
+    reviewContext,
+    message: `Semana liberada para o aluno: ${formatDatePtBr(week.startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}.`,
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -638,6 +1014,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const futureWeek = isFutureWeek(startOfWeek);
+    const initialWorkoutStatus = futureWeek ? WORKOUT_STATUS_PRE_PLANNED : WORKOUT_STATUS_PENDING;
+
     const result = await prisma.$transaction(async (tx) => {
       const plan = await tx.workoutPlan.create({
         data: {
@@ -672,6 +1051,15 @@ export async function POST(req: NextRequest) {
           exercises: {
             orderBy: { order: "asc" },
           },
+          workouts: {
+            select: {
+              id: true,
+              status: true,
+              date: true,
+              notes: true,
+            },
+            orderBy: { date: "asc" },
+          },
         },
       });
 
@@ -683,7 +1071,7 @@ export async function POST(req: NextRequest) {
           contractId: activeContract.id,
           workoutPlanId: plan.id,
           date: workoutDate,
-          status: "PENDENTE",
+          status: initialWorkoutStatus,
         },
       });
 
@@ -692,7 +1080,6 @@ export async function POST(req: NextRequest) {
 
     const workoutsThisWeekAfterCreate = workoutPlansThisWeek + 1;
     const isWeeklyPackageComplete = workoutsThisWeekAfterCreate >= weeklyLimit;
-    const futureWeek = isFutureWeek(startOfWeek);
     let emailSent = false;
 
     /*
@@ -737,7 +1124,7 @@ export async function POST(req: NextRequest) {
           emailSent,
           message: isWeeklyPackageComplete
             ? futureWeek
-              ? `Semana futura planejada. O aluno só verá estes treinos na semana de ${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}. Nenhum e-mail foi enviado agora.`
+              ? `Semana futura pré-planejada para ${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}. Antes de ficar disponível para o aluno, faça a revisão final e libere a semana. Nenhum e-mail foi enviado agora.`
               : "Meta semanal completa. Aluno notificado sobre os treinos da semana."
             : `Treino salvo. Ainda falta(m) ${weeklyLimit - workoutsThisWeekAfterCreate} treino(s) para completar a semana.`,
         },
@@ -768,7 +1155,6 @@ export async function GET(req: NextRequest) {
     const referenceDate = referenceDateParam
       ? new Date(`${referenceDateParam}T12:00:00`)
       : new Date();
-    const startOfNextWeek = getStartOfNextWeek();
     const isStudentUser = role === "STUDENT";
 
     if (id) {
@@ -800,7 +1186,11 @@ export async function GET(req: NextRequest) {
           return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
 
-        if (plan.date && plan.date >= startOfNextWeek) {
+        const hasReleasedWorkout = plan.workouts.some((workout) =>
+          isWorkoutReleasedForStudent(workout.status)
+        );
+
+        if (!hasReleasedWorkout) {
           return NextResponse.json(
             { error: "Este treino ainda não está disponível para o aluno." },
             { status: 404 }
@@ -826,11 +1216,14 @@ export async function GET(req: NextRequest) {
           return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
 
-        // Aluno só vê treinos da semana vigente ou anteriores.
-        // Treinos de semana futura ficam escondidos inclusive das bolinhas do calendário,
-        // desde que o calendário use esta rota para buscar os treinos.
-        where.date = {
-          lt: startOfNextWeek,
+        // Aluno só vê treinos que já passaram pela revisão/liberação final.
+        // Treinos salvos como pré-planejamento ficam ocultos até o professor liberar.
+        where.workouts = {
+          some: {
+            status: {
+              notIn: [WORKOUT_STATUS_PRE_PLANNED, WORKOUT_STATUS_NEEDS_REVIEW],
+            },
+          },
         };
       }
 
@@ -839,6 +1232,15 @@ export async function GET(req: NextRequest) {
         include: {
           exercises: {
             orderBy: { order: "asc" },
+          },
+          workouts: {
+            select: {
+              id: true,
+              status: true,
+              date: true,
+              notes: true,
+            },
+            orderBy: { date: "asc" },
           },
         },
         orderBy: { createdAt: "desc" },
@@ -920,6 +1322,21 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
+    const action = String(body?.action || "").toUpperCase();
+
+    if (action === "RELEASE_WEEK") {
+      const session = await getServerSession(authOptions);
+      const sessionUser = session?.user as any;
+      const currentUserId = sessionUser?.id ? String(sessionUser.id) : null;
+
+      return releaseWorkoutWeek({
+        studentId: String(body?.studentId || ""),
+        date: body?.date ? String(body.date) : null,
+        currentUserId,
+        forceRelease: Boolean(body?.forceRelease),
+      });
+    }
+
     const {
       id,
       name,
