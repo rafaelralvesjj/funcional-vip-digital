@@ -422,6 +422,104 @@ function getTrendText(first: any | null, latest: any | null): string[] {
   ];
 }
 
+function getEvolutionDecisionStatus({
+  hasInjuryCare,
+  hasDifficultExercise,
+  hasLowMotivation,
+  openCareEventsCount,
+  currentWeekPlansCount,
+  currentWeekWorkoutsCount,
+  currentWeekCompleted,
+  overdueWorkoutsCount,
+}: {
+  hasInjuryCare: boolean;
+  hasDifficultExercise: boolean;
+  hasLowMotivation: boolean;
+  openCareEventsCount: number;
+  currentWeekPlansCount: number;
+  currentWeekWorkoutsCount: number;
+  currentWeekCompleted: number;
+  overdueWorkoutsCount: number;
+}): { status: string; reason: string; requiresReviewBeforeRelease: boolean; reviewAlerts: string[] } {
+  const reviewAlerts: string[] = [];
+
+  if (hasInjuryCare || openCareEventsCount > 0) {
+    if (hasInjuryCare) reviewAlerts.push("Existe relato/evento de dor ou desconforto em aberto.");
+    if (openCareEventsCount > 0) reviewAlerts.push(`Existem ${openCareEventsCount} evento(s) de cuidado em aberto.`);
+
+    return {
+      status: "REVISAO_HUMANA_OBRIGATORIA",
+      reason: "Há sinal sensível de cuidado. Não tratar a próxima prescrição como evolução automática.",
+      requiresReviewBeforeRelease: true,
+      reviewAlerts,
+    };
+  }
+
+  if (currentWeekPlansCount > 0 && currentWeekWorkoutsCount === 0) {
+    return {
+      status: "PRE_PLANEJAMENTO_CONSERVADOR",
+      reason: "A semana atual tem treino planejado, mas ainda não há execução registrada. A próxima semana deve ser tratada como pré-planejamento conservador.",
+      requiresReviewBeforeRelease: true,
+      reviewAlerts: [
+        "Antes de liberar, confirmar se houve execução, dor, dúvida, baixa adesão ou necessidade de ajuste.",
+        "Não evoluir carga, impacto ou complexidade sem evidência de resposta do aluno.",
+      ],
+    };
+  }
+
+  if (currentWeekWorkoutsCount === 0 && currentWeekPlansCount === 0) {
+    return {
+      status: "PRE_PLANEJAMENTO_CONSERVADOR",
+      reason: "Ainda não existem dados recentes de treino planejado/executado na semana atual.",
+      requiresReviewBeforeRelease: true,
+      reviewAlerts: [
+        "Usar ficha inicial e histórico disponível como base; não tratar como progressão evolutiva.",
+        "Revisar novamente antes de liberar a próxima semana.",
+      ],
+    };
+  }
+
+  if (overdueWorkoutsCount >= 3 || currentWeekCompleted < currentWeekWorkoutsCount) {
+    if (overdueWorkoutsCount >= 3) reviewAlerts.push("Há vários treinos vencidos/não concluídos no histórico.");
+    if (currentWeekCompleted < currentWeekWorkoutsCount) reviewAlerts.push("Nem todos os treinos da semana atual foram concluídos.");
+
+    return {
+      status: "RETOMADA_REPETICAO_ADAPTADA",
+      reason: "A adesão não sustenta progressão automática. Priorizar retomada, simplicidade e consistência.",
+      requiresReviewBeforeRelease: true,
+      reviewAlerts,
+    };
+  }
+
+  if (hasDifficultExercise || hasLowMotivation) {
+    if (hasDifficultExercise) reviewAlerts.push("Aluno relatou exercício/treino difícil.");
+    if (hasLowMotivation) reviewAlerts.push("Há sinal de falta de tempo ou desmotivação.");
+
+    return {
+      status: "MANUTENCAO_RECOMENDADA",
+      reason: "Há sinal comportamental/técnico que recomenda manter base e ajustar aderência antes de evoluir.",
+      requiresReviewBeforeRelease: true,
+      reviewAlerts,
+    };
+  }
+
+  if (currentWeekWorkoutsCount > 0 && currentWeekCompleted === currentWeekWorkoutsCount) {
+    return {
+      status: "EVOLUCAO_PERMITIDA",
+      reason: "Há registro de execução/conclusão suficiente e nenhum evento crítico aberto.",
+      requiresReviewBeforeRelease: false,
+      reviewAlerts: ["Ainda assim, o professor deve revisar técnica, dor, dúvidas e aderência antes de liberar."],
+    };
+  }
+
+  return {
+    status: "MANUTENCAO_RECOMENDADA",
+    reason: "Dados ainda não sustentam progressão agressiva. Manter base, variar com cuidado e revisar antes de liberar.",
+    requiresReviewBeforeRelease: true,
+    reviewAlerts: ["Confirmar dados atualizados antes da liberação final."],
+  };
+}
+
 function buildAiPrompt(summaryText: string): string {
   return [
     "Você é um professor de educação física apoiando a montagem de um treino personalizado.",
@@ -434,12 +532,16 @@ function buildAiPrompt(summaryText: string): string {
     "- O professor é responsável por validar, ajustar e cadastrar no sistema.",
     "- Se houver baixa adesão, priorize retomada, segurança e consistência antes de progressão agressiva.",
     "- Se faltarem dados, indique quais informações precisam ser confirmadas.",
+    "- Se a semana atual ainda não tem execução registrada, trate a próxima semana como pré-planejamento conservador, não como evolução.",
+    "- Só recomende progressão de carga, impacto, volume ou complexidade quando houver dados de execução/adesão suficientes.",
+    "- Se houver dor, dúvida aberta, baixa adesão ou evento de cuidado, sinalize revisão humana obrigatória antes da liberação.",
     "",
     "Formato esperado:",
     "1. Leitura rápida do aluno",
     "2. Pontos de atenção",
-    "3. Estratégia da próxima semana",
-    "4. Treinos sugeridos em formato estruturado:",
+    "3. Decisão evolutiva: evolução, manutenção, retomada/repetição adaptada, pré-planejamento conservador ou revisão humana obrigatória",
+    "4. Estratégia da próxima semana",
+    "5. Treinos sugeridos em formato estruturado:",
     "   - Nome do treino",
     "   - Data sugerida",
     "   - Objetivo do treino",
@@ -449,7 +551,7 @@ function buildAiPrompt(summaryText: string): string {
     "   - Carga sugerida ou orientação de carga",
     "   - Descanso",
     "   - Observações para o professor revisar",
-    "5. Justificativa técnica da sugestão",
+    "6. Justificativa técnica da sugestão",
     "",
     "RESUMO DO ALUNO:",
     summaryText,
@@ -771,6 +873,9 @@ export async function GET(
     const currentWeekWorkouts = workouts.filter(
       (workout) => workout.date >= currentWeek.startOfWeek && workout.date < currentWeek.endOfWeek
     );
+    const currentWeekPlans = workoutPlans.filter(
+      (plan) => plan.date && plan.date >= currentWeek.startOfWeek && plan.date < currentWeek.endOfWeek
+    );
     const nextWeekPlans = workoutPlans.filter(
       (plan) => plan.date && plan.date >= nextWeek.startOfWeek && plan.date < nextWeek.endOfWeek
     );
@@ -856,6 +961,16 @@ export async function GET(
     const hasInjuryCare = openCareEvents.some((event) => event.eventType === "DOR_DESCONFORTO");
     const hasDifficultExercise = openCareEvents.some((event) => event.eventType === "EXERCICIO_DIFICIL");
     const hasLowMotivation = openCareEvents.some((event) => event.eventType === "DESMOTIVACAO" || event.eventType === "FALTA_TEMPO");
+    const evolutionDecision = getEvolutionDecisionStatus({
+      hasInjuryCare,
+      hasDifficultExercise,
+      hasLowMotivation,
+      openCareEventsCount: openCareEvents.length,
+      currentWeekPlansCount: currentWeekPlans.length,
+      currentWeekWorkoutsCount: currentWeekWorkouts.length,
+      currentWeekCompleted,
+      overdueWorkoutsCount: overdueWorkouts.length,
+    });
     const onboardingOperationalLines = getOnboardingOperationalLines(onboardingProfile);
 
     const summaryText = [
@@ -921,9 +1036,18 @@ export async function GET(
       `Treinos pendentes futuros: ${pendingFutureWorkouts.length}`,
       `Adesão geral: ${calculateAdherence(completedWorkouts.length, workouts.length)}`,
       `Semana atual: ${formatDate(currentWeek.startOfWeek)} a ${formatDate(new Date(currentWeek.endOfWeek.getTime() - 1))}`,
-      `Treinos da semana atual: ${currentWeekWorkouts.length}; concluídos: ${currentWeekCompleted}; adesão semanal: ${calculateAdherence(currentWeekCompleted, currentWeekWorkouts.length)}`,
+      `Planos criados para a semana atual: ${currentWeekPlans.length}${weeklyLimit ? `/${weeklyLimit}` : ""}`,
+      `Execuções registradas na semana atual: ${currentWeekWorkouts.length}; concluídas: ${currentWeekCompleted}; adesão semanal: ${calculateAdherence(currentWeekCompleted, currentWeekWorkouts.length)}`,
       `Próxima semana: ${formatDate(nextWeek.startOfWeek)} a ${formatDate(new Date(nextWeek.endOfWeek.getTime() - 1))}`,
       `Treinos já planejados para próxima semana: ${nextWeekPlans.length}${weeklyLimit ? `/${weeklyLimit}` : ""}`,
+      "",
+      "Contexto evolutivo para próxima prescrição:",
+      `Status de decisão: ${evolutionDecision.status}`,
+      `Motivo: ${evolutionDecision.reason}`,
+      `Exige revisão antes de liberar: ${evolutionDecision.requiresReviewBeforeRelease ? "sim" : "não"}`,
+      `Alertas de revisão: ${evolutionDecision.reviewAlerts.length ? evolutionDecision.reviewAlerts.join(" | ") : "sem alertas críticos"}`,
+      "Regra de evolução: não aumentar carga, impacto, volume ou complexidade sem evidência suficiente de execução/adesão e sem checar dor, dúvidas e eventos de cuidado.",
+      "Se não houver execução recente, a próxima semana deve ser tratada como pré-planejamento conservador ou repetição adaptada, nunca como evolução automática.",
       "",
       "Últimos planos de treino com exercícios:",
       recentWorkoutLines.length ? recentWorkoutLines.join("\n\n") : "Nenhum plano de treino encontrado.",
@@ -995,6 +1119,7 @@ export async function GET(
         completedWorkouts: completedWorkouts.length,
         overdueWorkouts: overdueWorkouts.length,
         pendingFutureWorkouts: pendingFutureWorkouts.length,
+        currentWeekPlans: currentWeekPlans.length,
         currentWeekWorkouts: currentWeekWorkouts.length,
         currentWeekCompleted,
         nextWeekPlans: nextWeekPlans.length,
@@ -1003,6 +1128,7 @@ export async function GET(
         careEvents: careEvents.length,
         openCareEvents: openCareEvents.length,
       },
+      evolutionContext: evolutionDecision,
       summaryText,
       aiPrompt,
     });
