@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 type AnyStudent = Record<string, any>;
 
