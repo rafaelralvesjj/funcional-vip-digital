@@ -276,6 +276,19 @@ async function canAccessStudent({
   return false;
 }
 
+function getCarePermissions(role: string) {
+  const canManageEvents = role === "TEACHER";
+
+  return {
+    role,
+    canManageEvents,
+    readOnly: !canManageEvents,
+    label: canManageEvents
+      ? "Professor: você pode marcar em revisão e resolver eventos dos seus alunos."
+      : "Gestão: visualização geral dos eventos. Somente o professor responsável altera status e resolução.",
+  };
+}
+
 function normalizeEvent(event: any) {
   return {
     id: event.id,
@@ -426,6 +439,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       events: events.map(normalizeEvent),
+      permissions: getCarePermissions(role),
     });
   } catch (error: any) {
     console.error("GET /api/student-care-events error:", error);
@@ -715,8 +729,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    if (role !== "TEACHER" && role !== "GESTOR" && role !== "ADMIN") {
-      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    if (role !== "TEACHER") {
+      return NextResponse.json(
+        { error: "Somente o professor responsável pode alterar eventos de cuidado. A gestão visualiza e acompanha em modo leitura." },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();
