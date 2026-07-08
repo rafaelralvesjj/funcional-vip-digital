@@ -127,33 +127,72 @@ function parseDateInput(value?: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function getExpectedWorkoutDatesForWeek(
-  startOfWeek: Date,
-  weeklyLimit?: number | null
-): string[] {
+function getDateInputFromRaw(value?: string | Date | null): string | null {
+  if (!value) return null;
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  return formatDateInput(date);
+}
+
+function getPreferredWorkoutOffsets(weeklyLimit?: number | null): number[] {
   const limit = Math.max(Number(weeklyLimit || 0), 0);
 
   if (!limit) return [];
 
   const patterns: Record<number, number[]> = {
-    1: [0],
-    2: [0, 2],
-    3: [0, 2, 4],
-    4: [0, 1, 2, 4],
-    5: [0, 1, 2, 3, 4],
+    1: [0, 1, 2, 3, 4, 5, 6],
+    2: [0, 2, 4, 1, 3, 5, 6],
+    3: [0, 2, 4, 1, 3, 5, 6],
+    4: [0, 1, 3, 4, 2, 5, 6],
+    5: [0, 1, 2, 3, 4, 5, 6],
   };
 
-  const offsets =
-    patterns[limit] ||
-    Array.from({ length: Math.min(limit, 7) }, (_, index) => index);
+  return patterns[limit] || [0, 1, 2, 3, 4, 5, 6];
+}
 
-  return offsets.map((offset) => {
+function getExpectedWorkoutDatesForWeek(
+  startOfWeek: Date,
+  weeklyLimit?: number | null,
+  activeContract?: ActiveWorkoutContract | null
+): string[] {
+  const limit = Math.max(Number(weeklyLimit || 0), 0);
+
+  if (!limit) return [];
+
+  const weekStartInput = formatDateInput(startOfWeek);
+
+  const weekEndExclusive = new Date(startOfWeek);
+  weekEndExclusive.setDate(startOfWeek.getDate() + 7);
+  weekEndExclusive.setHours(12, 0, 0, 0);
+  const weekEndExclusiveInput = formatDateInput(weekEndExclusive);
+
+  const contractStartInput = getDateInputFromRaw(activeContract?.startDate);
+  const contractEndInput = getDateInputFromRaw(activeContract?.endDate);
+
+  const effectiveStartInput = contractStartInput && contractStartInput > weekStartInput
+    ? contractStartInput
+    : weekStartInput;
+
+  const effectiveEndExclusiveInput = contractEndInput && contractEndInput < weekEndExclusiveInput
+    ? contractEndInput
+    : weekEndExclusiveInput;
+
+  const candidates = getPreferredWorkoutOffsets(limit).map((offset) => {
     const date = new Date(startOfWeek);
     date.setDate(startOfWeek.getDate() + offset);
     date.setHours(12, 0, 0, 0);
 
     return formatDateInput(date);
   });
+
+  const uniqueCandidates = Array.from(new Set(candidates));
+
+  return uniqueCandidates
+    .filter((candidate) => candidate >= effectiveStartInput && candidate < effectiveEndExclusiveInput)
+    .slice(0, limit);
 }
 
 function getPlanDateInput(plan: WorkoutPlanSummary): string | null {
@@ -435,7 +474,8 @@ export default function MontarTreinoPage() {
   const weekScopeLabel = getWeekScopeLabel(startOfWeek);
   const expectedWorkoutDates = getExpectedWorkoutDatesForWeek(
     startOfWeek,
-    weeklyWorkoutLimit
+    weeklyWorkoutLimit,
+    activeWorkoutContract
   );
   const firstMissingExpectedDate = getFirstMissingExpectedDate(
     expectedWorkoutDates,
@@ -457,6 +497,14 @@ export default function MontarTreinoPage() {
     startOfWeek.getTime() > currentWeekRange.startOfWeek.getTime();
   const isWeeklyLimitReached =
     weeklyWorkoutLimit != null && weeklyPlansCount >= weeklyWorkoutLimit;
+
+  useEffect(() => {
+    if (!activeWorkoutContract || expectedWorkoutDates.length === 0) return;
+
+    if (!date || !expectedWorkoutDates.includes(date)) {
+      setDate(expectedWorkoutDates[0]);
+    }
+  }, [activeWorkoutContract?.id, date, expectedWorkoutDates.join("|")]);
 
   useEffect(() => {
     async function fetchWeeklyWorkoutInfo() {
@@ -1090,7 +1138,7 @@ export default function MontarTreinoPage() {
                   {expectedWorkoutDates.length > 0 && (
                     <div className="mt-3 rounded-lg border border-[#ffffff10] bg-[#111111] p-3">
                       <p className="text-[11px] text-[#a1a1a1] mb-2">
-                        Datas esperadas para este contrato nesta semana:
+                        Datas válidas para este contrato nesta semana:
                       </p>
 
                       <div className="flex flex-wrap gap-2">
@@ -1122,9 +1170,15 @@ export default function MontarTreinoPage() {
                         })}
                       </div>
 
+                      {activeWorkoutContract?.startDate && getDateInputFromRaw(activeWorkoutContract.startDate) && getDateInputFromRaw(activeWorkoutContract.startDate)! > formatDateInput(startOfWeek) && (
+                        <p className="text-[11px] text-[#a1a1a1] mt-2">
+                          O contrato começou no meio da semana. Por isso, o sistema removeu datas anteriores ao início da experiência.
+                        </p>
+                      )}
+
                       {!selectedDateIsExpected && (
                         <p className="text-[11px] text-amber-400 mt-2">
-                          A data selecionada não está entre as datas esperadas automaticamente para esta semana.
+                          A data selecionada não está entre as datas válidas automaticamente para esta semana.
                           Revise antes de salvar.
                         </p>
                       )}
@@ -1177,7 +1231,7 @@ export default function MontarTreinoPage() {
                   </div>
 
                   <a
-                    href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}`}
+                    href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}&expectedWorkoutDates=${encodeURIComponent(expectedWorkoutDates.join(","))}`}
                     className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition"
                   >
                     Gerar por IA
