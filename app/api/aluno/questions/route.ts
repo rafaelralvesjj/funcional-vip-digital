@@ -45,6 +45,87 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
+function normalizeSearchText(value: string): string {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function hasCareSignal(content: string): boolean {
+  const text = normalizeSearchText(content);
+  const paddedText = ` ${text} `;
+
+  const careKeywords = [
+    "dor",
+    "doendo",
+    "dolorido",
+    "dolorida",
+    "desconforto",
+    "machuquei",
+    "machucou",
+    "machucado",
+    "machucada",
+    "lesao",
+    "lesionei",
+    "torci",
+    "torceu",
+    "torsao",
+    "torcao",
+    "lombar",
+    "coluna",
+    "ciatico",
+    "cervical",
+    "ombro",
+    "joelho",
+    "tornozelo",
+    "punho",
+    "quadril",
+    "panturrilha",
+    "tontura",
+    "tonto",
+    "falta de ar",
+    "formigamento",
+    "fisgada",
+    "travou",
+    "inchado",
+    "inchada",
+    "inflamado",
+    "inflamada",
+  ];
+
+  if (careKeywords.some((keyword) => text.includes(keyword))) {
+    return true;
+  }
+
+  // Termo curto para pé, evitando falso positivo dentro de palavras maiores.
+  return /(^|\s)pe(\s|$)/.test(paddedText);
+}
+
+function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
+  const date = new Date(referenceDate);
+  date.setHours(0, 0, 0, 0);
+
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+
+  const startOfWeek = new Date(date);
+  startOfWeek.setDate(date.getDate() + diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+  endOfWeek.setHours(0, 0, 0, 0);
+
+  return { startOfWeek, endOfWeek };
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
 type StudentQuestionEmailRecipient = {
   id: string;
   name: string | null;
@@ -284,6 +365,179 @@ function getQuestionIncludes() {
   };
 }
 
+async function findActiveContractIdForCareEvent(studentId: string): Promise<string | null> {
+  const now = new Date();
+
+  const contract = await prisma.studentContract.findFirst({
+    where: {
+      studentId,
+      status: "ACTIVE",
+      startDate: {
+        lte: now,
+      },
+      endDate: {
+        gte: now,
+      },
+    },
+    orderBy: {
+      endDate: "desc",
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return contract?.id || null;
+}
+
+async function maybeCreateCareEventFromStudentQuestion({
+  rootConversationId,
+  studentId,
+  professorId,
+  authorId,
+}: {
+  rootConversationId: string;
+  studentId: string;
+  professorId: string | null;
+  authorId: string;
+}) {
+  const rootConversation = await prisma.question.findUnique({
+    where: {
+      id: rootConversationId,
+    },
+    select: {
+      id: true,
+      content: true,
+      senderRole: true,
+      createdAt: true,
+      children: {
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          id: true,
+          content: true,
+          senderRole: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  if (!rootConversation) return;
+
+  const messages = [
+    {
+      id: rootConversation.id,
+      content: rootConversation.content,
+      senderRole: rootConversation.senderRole,
+      createdAt: rootConversation.createdAt,
+    },
+    ...rootConversation.children,
+  ];
+
+  const studentCareMessages = messages.filter(
+    (message) => normalizeRole(message.senderRole) === "STUDENT" && hasCareSignal(message.content)
+  );
+
+  if (studentCareMessages.length === 0) return;
+
+  const firstCareMessage = studentCareMessages[0];
+
+  const alreadyExists = await prisma.studentCareEvent.findFirst({
+    where: {
+      studentId,
+      source: "CHAT_DUVIDAS",
+      eventType: "RELATO_DOR_DUVIDA",
+      status: "ABERTO",
+      description: {
+        contains: `Conversa: ${rootConversationId}`,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (alreadyExists) return;
+
+  const student = await prisma.student.findUnique({
+    where: {
+      id: studentId,
+    },
+    select: {
+      id: true,
+      name: true,
+      userId: true,
+    },
+  });
+
+  const effectiveProfessorId = professorId || student?.userId || null;
+  const { startOfWeek, endOfWeek } = getWeekRange(firstCareMessage.createdAt || new Date());
+  const contractId = await findActiveContractIdForCareEvent(studentId);
+  const title = "Relato de dor/desconforto em dúvida do aluno";
+  const description = [
+    `Conversa: ${rootConversationId}`,
+    `Mensagem: ${firstCareMessage.id}`,
+    "O aluno registrou uma mensagem com possível dor, desconforto, torção, lesão ou sinal físico sensível no chat/dúvidas.",
+    "Antes de evoluir, repetir ou liberar a próxima semana de treinos, o professor deve revisar o relato e ajustar a prescrição se necessário.",
+    "Relato do aluno:",
+    firstCareMessage.content,
+  ].join("\n");
+
+  let professorNoticeId: string | null = null;
+
+  if (effectiveProfessorId) {
+    try {
+      const notice = await prisma.notice.create({
+        data: {
+          title,
+          content: [
+            `${student?.name || "Aluno"} registrou um possível relato de dor/desconforto no chat/dúvidas.`,
+            "Revise a conversa antes de liberar ou evoluir a próxima semana de treinos.",
+            "",
+            `Relato: ${firstCareMessage.content}`,
+          ].join("\n"),
+          type: "CUIDADO_ALUNO",
+          targetRole: "TEACHER",
+          studentId,
+          professorId: effectiveProfessorId,
+          authorId,
+          expiresAt: addDays(new Date(), 30),
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      professorNoticeId = notice.id;
+    } catch (noticeError) {
+      console.error("Erro ao criar aviso de cuidado para professor:", noticeError);
+    }
+  }
+
+  await prisma.studentCareEvent.create({
+    data: {
+      studentId,
+      professorId: effectiveProfessorId,
+      authorId,
+      eventType: "RELATO_DOR_DUVIDA",
+      severity: "ALERTA",
+      status: "ABERTO",
+      source: "CHAT_DUVIDAS",
+      title,
+      description,
+      studentMessage: firstCareMessage.content,
+      professorMessage:
+        "Revisar relato de dor/desconforto antes de liberar, evoluir carga, impacto, volume, complexidade ou intensidade da próxima semana.",
+      contractId,
+      weekStart: startOfWeek,
+      weekEnd: endOfWeek,
+      professorNoticeId,
+    },
+  });
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -448,6 +702,17 @@ export async function POST(req: NextRequest) {
       },
       include: getQuestionIncludes(),
     });
+
+    try {
+      await maybeCreateCareEventFromStudentQuestion({
+        rootConversationId: rootQuestion?.id || question.id,
+        studentId: student.id,
+        professorId: teacherId,
+        authorId: userId,
+      });
+    } catch (careEventError) {
+      console.error("Erro ao criar evento de cuidado a partir da dúvida do aluno:", careEventError);
+    }
 
     if (!rootQuestion) {
       try {
