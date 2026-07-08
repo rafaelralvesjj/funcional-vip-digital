@@ -17,23 +17,34 @@ export default function DashboardLayout({
   const isGestor = role === "GESTOR" || role === "ADMIN";
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Itens do professor
-  // Regra: professor não vê o menu Mural.
+  /*
+   * Menu do professor
+   *
+   * Ajuste Fase 10.2:
+   * - Professor não acessa mais "Montar Treino" solto pelo menu.
+   * - Professor não acessa mais "Resumo do Aluno IA" solto pelo menu.
+   * - A montagem de treino deve nascer do contexto correto:
+   *   Dashboard -> aluno pendente -> semana atual/próxima semana -> montar treino.
+   * - O resumo do aluno deve ficar dentro da ficha do aluno, não como tela isolada.
+   */
   const professorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
-    { href: "/dashboard/cuidado-aluno", label: "Cuidado do Aluno", icon: "heart" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
+    { href: "/dashboard/cuidado-aluno", label: "Acompanhamento do Aluno", icon: "heart" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
-    { href: "/dashboard/montar-treino", label: "Montar Treino", icon: "edit" },
     { href: "/dashboard/feedbacks-evolucao", label: "Feedbacks de Evolução", icon: "message" },
-    { href: "/dashboard/resumo-aluno", label: "Resumo do Aluno IA", icon: "book" },
   ];
 
-  // Itens do gestor
-  // Regra: gestor não vê os menus Montar Treino e Mural.
+  /*
+   * Menu da gestão
+   *
+   * Regra:
+   * - Gestor não vê "Montar Treino".
+   * - Gestão mantém acesso a financeiro, gestão de alunos/professores e acompanhamento.
+   */
   const gestorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
-    { href: "/dashboard/cuidado-aluno", label: "Cuidado do Aluno", icon: "heart" },
+    { href: "/dashboard/cuidado-aluno", label: "Acompanhamento do Aluno", icon: "heart" },
     { href: "/dashboard/financeiro", label: "Financeiro", icon: "credit" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/gestao", label: "Gestão", icon: "message" },
@@ -46,7 +57,6 @@ export default function DashboardLayout({
     { href: "/dashboard/gestor/gestores", label: "Gerenciar Gestores", icon: "user" },
   ];
 
-  // Seleciona os itens conforme o cargo
   const navItems = isGestor ? gestorItems : professorItems;
 
   function NavIcon({ icon }: { icon: string }) {
