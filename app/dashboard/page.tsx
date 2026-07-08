@@ -56,6 +56,10 @@ export default async function DashboardPage() {
       ? 'Dúvidas sem resposta de todos os alunos'
       : 'Dúvidas sem resposta dos meus alunos',
 
+    careEventsCard: isGestor
+      ? 'Alertas de cuidado abertos'
+      : 'Alertas de cuidado dos meus alunos',
+
     pendingNoticesCard: isGestor
       ? 'Avisos pendentes de todos os alunos'
       : 'Avisos pendentes dos meus alunos',
@@ -79,6 +83,10 @@ export default async function DashboardPage() {
     unansweredQuestionsList: isGestor
       ? 'Dúvidas sem resposta de todos os alunos'
       : 'Dúvidas sem resposta dos meus alunos',
+
+    careEventsList: isGestor
+      ? 'Alertas de cuidado de todos os alunos'
+      : 'Alertas de cuidado dos meus alunos',
 
     managementNoticesList: isGestor
       ? 'Avisos da gestão de todos os professores'
@@ -389,6 +397,60 @@ export default async function DashboardPage() {
     orderBy: {
       createdAt: 'desc',
     },
+  });
+
+  const openCareEvents = await prisma.studentCareEvent.findMany({
+    where: {
+      status: {
+        in: ['ABERTO', 'REQUER_REVISAO', 'EM_REVISAO'],
+      },
+      ...(isTeacher
+        ? {
+            OR: [
+              { professorId: userId },
+              {
+                student: {
+                  userId,
+                },
+              },
+            ],
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+      eventType: true,
+      severity: true,
+      status: true,
+      title: true,
+      description: true,
+      professorMessage: true,
+      createdAt: true,
+      student: {
+        select: {
+          id: true,
+          name: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+      professor: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: [
+      {
+        createdAt: 'desc',
+      },
+    ],
+    take: 20,
   });
 
   const unansweredQuestions = await prisma.question.findMany({
@@ -940,6 +1002,50 @@ export default async function DashboardPage() {
     };
   });
 
+  function getCareEventTypeLabel(type?: string | null): string {
+    const normalized = String(type || '').toUpperCase();
+
+    const labelsByType: Record<string, string> = {
+      FALTA_TEMPO: 'Falta de tempo',
+      EXERCICIO_DIFICIL: 'Exercício difícil',
+      DOR_DESCONFORTO: 'Dor/desconforto',
+      RELATO_DOR_DUVIDA: 'Relato de dor no chat/dúvidas',
+      NAO_ENTENDI: 'Não entendi',
+      DESMOTIVACAO: 'Desmotivação',
+      BAIXA_ADERENCIA: 'Baixa aderência',
+      OUTRO: 'Outro motivo',
+    };
+
+    return labelsByType[normalized] || normalized || 'Cuidado do aluno';
+  }
+
+  function getCareEventStatusLabel(status?: string | null): string {
+    const normalized = String(status || '').toUpperCase();
+
+    const labelsByStatus: Record<string, string> = {
+      ABERTO: 'Aberto',
+      REQUER_REVISAO: 'Requer revisão',
+      EM_REVISAO: 'Em revisão',
+      RESOLVIDO: 'Resolvido',
+    };
+
+    return labelsByStatus[normalized] || normalized || 'Aberto';
+  }
+
+  function getCareEventSeverityClass(severity?: string | null): string {
+    const normalized = String(severity || '').toUpperCase();
+
+    if (normalized === 'CUIDADO') {
+      return 'bg-red-900/30 text-red-400 border border-red-500/20';
+    }
+
+    if (normalized === 'REVISAO') {
+      return 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/20';
+    }
+
+    return 'bg-blue-900/30 text-blue-400 border border-blue-500/20';
+  }
+
   const summaryCards = [
     {
       id: 'students',
@@ -980,6 +1086,12 @@ export default async function DashboardPage() {
       id: 'unanswered-questions',
       label: labels.unansweredQuestionsCard,
       value: questionsWithoutAnswer.length,
+    },
+    {
+      id: 'care-events',
+      label: labels.careEventsCard,
+      value: openCareEvents.length,
+      tone: openCareEvents.length > 0 ? 'danger' : 'default',
     },
     {
       id: 'pending-notices',
@@ -1464,17 +1576,80 @@ export default async function DashboardPage() {
           </div>
 
           <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
-              {labels.unansweredQuestionsList}
+            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-2">
+              {labels.careEventsList}
             </h2>
 
-            <DashboardConversationList
-              conversations={unansweredQuestionConversationItems}
-              currentUserId={userId}
-              currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
-              emptyMessage="Nenhuma dúvida aguardando resposta."
-              allowReply={isTeacher}
-            />
+            <p className="text-sm text-[#a1a1a1] mb-4">
+              {isGestor
+                ? 'A gestão acompanha os sinais de cuidado em aberto, mas quem altera status e resolve é o professor responsável.'
+                : 'Revise estes sinais antes de montar, evoluir ou liberar a próxima semana. Eventos abertos bloqueiam evolução automática da IA.'}
+            </p>
+
+            {openCareEvents.length === 0 ? (
+              <p className="text-[#a1a1a1]">
+                Nenhum alerta de cuidado aberto no momento.
+              </p>
+            ) : (
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
+                {openCareEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    className="bg-[#111111] border border-red-500/20 rounded-xl overflow-hidden"
+                  >
+                    <div className="p-4">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className={"text-[10px] px-2 py-0.5 rounded-full font-medium " + getCareEventSeverityClass(event.severity)}>
+                            {event.severity}
+                          </span>
+
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/30 text-blue-400 border border-blue-500/20">
+                            {getCareEventStatusLabel(event.status)}
+                          </span>
+
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#D4A373]/10 text-[#D4A373] border border-[#D4A373]/20">
+                            {getCareEventTypeLabel(event.eventType)}
+                          </span>
+                        </div>
+
+                        <span className="text-[10px] text-[#a1a1a1] shrink-0">
+                          {formatDate(event.createdAt)}
+                        </span>
+                      </div>
+
+                      <p className="text-sm font-bold text-[#f5f5f5] mb-1">
+                        {event.student?.name || 'Aluno'}
+                      </p>
+
+                      <p className="text-xs text-[#a1a1a1] mb-3">
+                        Professor:{' '}
+                        <span className="text-[#D4A373]">
+                          {event.professor?.name || event.student?.user?.name || 'Não informado'}
+                        </span>
+                      </p>
+
+                      <p className="text-sm text-[#e5e5e5] mb-3 whitespace-pre-wrap line-clamp-4">
+                        {event.professorMessage || event.description || event.title || 'Alerta de cuidado aberto.'}
+                      </p>
+
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <p className="text-xs text-red-400">
+                          Revisar antes de evoluir carga, impacto, volume, complexidade ou intensidade.
+                        </p>
+
+                        <a
+                          href="/dashboard/cuidado-aluno"
+                          className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                        >
+                          {isTeacher ? 'Abrir e tratar alerta' : 'Visualizar central'}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
