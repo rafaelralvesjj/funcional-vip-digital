@@ -207,6 +207,62 @@ function normalizeWorkoutDateInsideContract(workoutDate: Date, contract: { start
 }
 
 
+async function normalizeExercisesFromOfficialLibrary(exercises: any[]) {
+  if (!Array.isArray(exercises) || exercises.length === 0) {
+    throw new Error("O treino precisa ter pelo menos um exercício da biblioteca.");
+  }
+
+  const ids = exercises
+    .map((ex) => String(ex?.libraryExerciseId || ex?.exerciseId || ex?.exerciseLibraryId || "").trim())
+    .filter(Boolean);
+
+  if (ids.length !== exercises.length) {
+    throw new Error("Todos os exercícios do treino precisam vir da Biblioteca de Exercícios. Selecione exercícios cadastrados ou gere novamente pela IA usando exerciseId.");
+  }
+
+  const uniqueIds = Array.from(new Set(ids));
+
+  const libraryExercises = await prisma.exerciseLibrary.findMany({
+    where: {
+      id: {
+        in: uniqueIds,
+      },
+      active: true,
+    },
+  });
+
+  const libraryById = new Map(libraryExercises.map((exercise) => [exercise.id, exercise]));
+  const missingIds = uniqueIds.filter((id) => !libraryById.has(id));
+
+  if (missingIds.length > 0) {
+    throw new Error(`Um ou mais exercícios não existem ou estão inativos na biblioteca oficial: ${missingIds.join(", ")}.`);
+  }
+
+  return exercises.map((ex: any, index: number) => {
+    const libraryExerciseId = String(ex?.libraryExerciseId || ex?.exerciseId || ex?.exerciseLibraryId || "").trim();
+    const libraryExercise = libraryById.get(libraryExerciseId);
+
+    if (!libraryExercise) {
+      throw new Error("Exercício da biblioteca não encontrado.");
+    }
+
+    return {
+      libraryExerciseId,
+      name: libraryExercise.name,
+      description: String(ex?.description || libraryExercise.description || ""),
+      series: Number(ex?.series || 3),
+      reps: ex?.reps ? String(ex.reps) : "10",
+      weight: ex?.weight ? String(ex.weight) : null,
+      restTime: ex?.restTime ? String(ex.restTime) : "60s",
+      notes: ex?.notes ? String(ex.notes) : null,
+      order: typeof ex?.order === "number" ? ex.order : index,
+      videoUrl: String(ex?.videoUrl || libraryExercise.videoUrl || "") || null,
+      imageUrl: String(ex?.imageUrl || libraryExercise.imageUrl || "") || null,
+    };
+  });
+}
+
+
 async function getStudentEmail(student: {
   email?: string | null;
   userAuthId?: string | null;
@@ -571,18 +627,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const normalizedExercises = exercises.map((ex: any, index: number) => ({
-      name: ex.name,
-      description: ex.description,
-      series: ex.series,
-      reps: ex.reps,
-      weight: ex.weight,
-      restTime: ex.restTime,
-      notes: ex.notes,
-      order: typeof ex.order === "number" ? ex.order : index,
-      videoUrl: ex.videoUrl,
-      imageUrl: ex.imageUrl,
-    }));
+    let normalizedExercises;
+
+    try {
+      normalizedExercises = await normalizeExercisesFromOfficialLibrary(exercises);
+    } catch (validationError: any) {
+      return NextResponse.json(
+        { error: validationError?.message || "Exercícios inválidos." },
+        { status: 400 }
+      );
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const plan = await tx.workoutPlan.create({
@@ -976,20 +1030,18 @@ export async function PUT(req: NextRequest) {
     if (studentSummary !== undefined) data.studentSummary = studentSummary ? String(studentSummary).trim() : null;
     if (safetyNote !== undefined) data.safetyNote = safetyNote ? String(safetyNote).trim() : null;
 
-    const normalizedExercises = Array.isArray(exercises)
-      ? exercises.map((ex: any, index: number) => ({
-          name: ex.name,
-          description: ex.description,
-          series: Number(ex.series) || 1,
-          reps: ex.reps,
-          weight: ex.weight,
-          restTime: ex.restTime,
-          notes: ex.notes,
-          order: typeof ex.order === "number" ? ex.order : index,
-          videoUrl: ex.videoUrl,
-          imageUrl: ex.imageUrl,
-        }))
-      : null;
+    let normalizedExercises = null;
+
+    if (Array.isArray(exercises)) {
+      try {
+        normalizedExercises = await normalizeExercisesFromOfficialLibrary(exercises);
+      } catch (validationError: any) {
+        return NextResponse.json(
+          { error: validationError?.message || "Exercícios inválidos." },
+          { status: 400 }
+        );
+      }
+    }
 
     const plan = await prisma.$transaction(async (tx) => {
       if (Object.keys(data).length > 0) {
