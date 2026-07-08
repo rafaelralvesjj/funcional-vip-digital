@@ -111,6 +111,44 @@ function getLatestPlanUpdateDate(plans: Array<{ createdAt: Date; updatedAt?: Dat
   }, plans[0]?.createdAt || new Date());
 }
 
+function normalizeForCareCompare(value?: unknown): string {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasPainOrInjuryQuestionSignal(value?: unknown): boolean {
+  const text = normalizeForCareCompare(value);
+
+  if (!text) return false;
+
+  return [
+    "dor",
+    "doendo",
+    "dolorido",
+    "dolorida",
+    "desconforto",
+    "torci",
+    "torceu",
+    "torcao",
+    "torsao",
+    "lesao",
+    "machuquei",
+    "machucou",
+    "lombar",
+    "coluna",
+    "joelho",
+    "tornozelo",
+    "pe",
+    "panturrilha",
+    "ombro",
+    "punho",
+  ].some((keyword) => text.includes(normalizeForCareCompare(keyword)));
+}
+
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -585,9 +623,6 @@ async function buildReleaseReviewContext({
         studentId,
         senderRole: "STUDENT",
         resolvedAt: null,
-        createdAt: {
-          gt: baselineDate,
-        },
       },
       select: {
         id: true,
@@ -621,6 +656,9 @@ async function buildReleaseReviewContext({
   ).length;
 
   const reviewAlerts: string[] = [];
+  const hasOpenPainQuestion = newStudentQuestions.some((question) =>
+    hasPainOrInjuryQuestionSignal(question.content)
+  );
 
   if (previousWeekWorkouts.length === 0) {
     reviewAlerts.push(
@@ -652,7 +690,13 @@ async function buildReleaseReviewContext({
 
   if (newStudentQuestions.length > 0) {
     reviewAlerts.push(
-      `Há ${newStudentQuestions.length} dúvida(s) nova(s) do aluno sem resolução desde o pré-planejamento.`
+      `Há ${newStudentQuestions.length} dúvida(s) aberta(s) do aluno sem resolução. Revisar/responder antes de liberar a semana.`
+    );
+  }
+
+  if (hasOpenPainQuestion) {
+    reviewAlerts.push(
+      "Existe dúvida aberta com possível relato de dor/desconforto. Não liberar como evolução normal sem revisão do professor."
     );
   }
 
@@ -675,6 +719,7 @@ async function buildReleaseReviewContext({
     workoutUpdatesAfterPlanning,
     openCareEvents: openCareEvents.length,
     newStudentQuestions: newStudentQuestions.length,
+    hasOpenPainQuestion,
     requiresReviewBeforeRelease: reviewAlerts.length > 0,
     reviewAlerts,
   };
