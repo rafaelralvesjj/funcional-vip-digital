@@ -967,14 +967,41 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const updated = await prisma.question.update({
-      where: {
-        id: rootQuestionId,
-      },
-      data: {
-        resolvedAt: rootQuestion.resolvedAt || new Date(),
-      },
-      include: getQuestionIncludes(),
+    const resolvedAt = rootQuestion.resolvedAt || new Date();
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedQuestion = await tx.question.update({
+        where: {
+          id: rootQuestionId,
+        },
+        data: {
+          resolvedAt,
+        },
+        include: getQuestionIncludes(),
+      });
+
+      if (rootQuestion.studentId) {
+        await tx.studentCareEvent.updateMany({
+          where: {
+            studentId: rootQuestion.studentId,
+            source: "CHAT_DUVIDAS",
+            eventType: "RELATO_DOR_DUVIDA",
+            status: "ABERTO",
+            description: {
+              contains: `Conversa: ${rootQuestionId}`,
+            },
+          },
+          data: {
+            status: "RESOLVIDO",
+            resolvedAt,
+            resolvedById: currentUserId,
+            resolutionNotes:
+              "Dúvida encerrada pelo aluno no chat. Evento de cuidado fechado automaticamente; se a dor persistir, o aluno deve abrir nova conversa e o professor deve revisar a prescrição antes de evoluir.",
+          },
+        });
+      }
+
+      return updatedQuestion;
     });
 
     return NextResponse.json(updated);
