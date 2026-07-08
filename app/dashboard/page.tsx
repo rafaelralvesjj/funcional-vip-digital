@@ -45,8 +45,8 @@ export default async function DashboardPage() {
       : 'Meus alunos sem treino da semana atual',
 
     missingNextWeekWorkoutsCard: isGestor
-      ? 'Alunos sem treino da próxima semana'
-      : 'Meus alunos sem treino da próxima semana',
+      ? 'Alunos sem pré-planejamento da próxima semana'
+      : 'Meus alunos sem pré-planejamento da próxima semana',
 
     pendingWorkoutsCard: isGestor
       ? 'Treinos pendentes de todos os alunos'
@@ -97,8 +97,8 @@ export default async function DashboardPage() {
       : 'Meus alunos sem treino da semana atual',
 
     missingNextWeekWorkoutsList: isGestor
-      ? 'Alunos sem treino da próxima semana'
-      : 'Meus alunos sem treino da próxima semana',
+      ? 'Alunos sem pré-planejamento da próxima semana'
+      : 'Meus alunos sem pré-planejamento da próxima semana',
   };
 
   function formatDate(date: Date): string {
@@ -1199,7 +1199,7 @@ export default async function DashboardPage() {
                       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
-                            TREINO PENDENTE
+                            PRÉ-PLANEJAMENTO PENDENTE
                           </span>
 
                           <span className="text-sm font-bold text-[#f5f5f5] truncate">
@@ -1208,7 +1208,7 @@ export default async function DashboardPage() {
                         </div>
 
                         <span className="text-[10px] text-amber-400 shrink-0">
-                          Falta(m) {item.missingCount} treino(s)
+                          Pendente(s) {item.missingCount} treino(s)
                         </span>
                       </div>
 
@@ -1252,7 +1252,7 @@ export default async function DashboardPage() {
 
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <p className="text-xs text-[#a1a1a1]">
-                          {isGestor ? 'Acompanhe o professor responsável. O aluno sai desta lista automaticamente quando a meta semanal for atingida.' : 'O aluno sai desta lista automaticamente quando atingir a quantidade de treinos prevista para a semana.'}
+                          {isGestor ? 'Acompanhe o professor responsável. O aluno sai desta lista quando a quantidade prevista de treinos da próxima semana estiver pré-planejada.' : 'O aluno sai desta lista quando a quantidade prevista de treinos estiver pré-planejada. Antes da liberação final, revise os dados atualizados do aluno.'}
                         </p>
 
                         {isTeacher && (
@@ -1292,16 +1292,16 @@ export default async function DashboardPage() {
                 </div>
 
                 <p className="text-sm text-[#a1a1a1] mt-1">
-                  Semana de referência: {nextWorkoutWeekLabel}. Esta lista mostra os alunos que ainda não têm a quantidade completa de treinos prevista para a próxima semana.
+                  Semana de referência: {nextWorkoutWeekLabel}. Esta lista mostra os alunos que ainda não têm a quantidade completa de treinos pré-planejada para a próxima semana. Pré-planejar ajuda a organizar, mas a liberação final deve considerar os dados mais recentes do aluno.
                 </p>
 
                 {isWorkoutPlanningDeadlineToday && studentsMissingNextWeekWorkouts.length > 0 ? (
                   <p className="text-xs text-red-400 mt-2">
-                    Hoje é sábado: os professores responsáveis serão alertados por e-mail e aviso se ainda houver pendência.
+                    Hoje é sábado: os professores responsáveis serão alertados por e-mail e aviso se ainda houver pré-planejamento pendente.
                   </p>
                 ) : (
                   <p className="text-xs text-amber-400 mt-2">
-                    Prazo de planejamento: até sábado, os treinos da próxima semana devem estar montados.
+                    Prazo de pré-planejamento: até sábado, os treinos da próxima semana devem estar preparados para revisão final antes da liberação ao aluno.
                   </p>
                 )}
               </div>
@@ -1334,7 +1334,7 @@ export default async function DashboardPage() {
                                 : "bg-amber-900/30 text-amber-400 border border-amber-500/20")
                             }
                           >
-                            {isWorkoutPlanningDeadlineToday ? 'PRAZO HOJE' : 'TREINO PENDENTE'}
+                            {isWorkoutPlanningDeadlineToday ? 'PRAZO HOJE' : 'PRÉ-PLANEJAMENTO PENDENTE'}
                           </span>
 
                           <span className="text-sm font-bold text-[#f5f5f5] truncate">
@@ -1343,7 +1343,7 @@ export default async function DashboardPage() {
                         </div>
 
                         <span className={isWorkoutPlanningDeadlineToday ? "text-[10px] text-red-400 shrink-0" : "text-[10px] text-amber-400 shrink-0"}>
-                          Falta(m) {item.missingCount} treino(s)
+                          Pendente(s) {item.missingCount} treino(s)
                         </span>
                       </div>
 
@@ -1387,7 +1387,7 @@ export default async function DashboardPage() {
 
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <p className="text-xs text-[#a1a1a1]">
-                          {isGestor ? 'Acompanhe o professor responsável. O aluno sai desta lista automaticamente quando a meta semanal for atingida.' : 'O aluno sai desta lista automaticamente quando atingir a quantidade de treinos prevista para a semana.'}
+                          {isGestor ? 'Acompanhe o professor responsável. O aluno sai desta lista quando a quantidade prevista de treinos da próxima semana estiver pré-planejada.' : 'O aluno sai desta lista quando a quantidade prevista de treinos estiver pré-planejada. Antes da liberação final, revise os dados atualizados do aluno.'}
                         </p>
 
                         {isTeacher && (
