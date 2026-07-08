@@ -26,11 +26,19 @@ type CareEvent = {
   createdAt: string;
 };
 
+type CarePermissions = {
+  role: string;
+  canManageEvents: boolean;
+  readOnly: boolean;
+  label: string;
+};
+
 function getEventTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     FALTA_TEMPO: "Falta de tempo",
     EXERCICIO_DIFICIL: "Exercício difícil",
     DOR_DESCONFORTO: "Dor/desconforto",
+    RELATO_DOR_DUVIDA: "Relato de dor no chat/dúvidas",
     NAO_ENTENDI: "Não entendi",
     DESMOTIVACAO: "Desmotivação",
     BAIXA_ADERENCIA: "Baixa aderência",
@@ -102,9 +110,17 @@ export default function CuidadoAlunoPage() {
   const [status, setStatus] = useState("TODOS");
   const [search, setSearch] = useState("");
   const [resolutionNotesById, setResolutionNotesById] = useState<Record<string, string>>({});
+  const [permissions, setPermissions] = useState<CarePermissions>({
+    role: "",
+    canManageEvents: false,
+    readOnly: true,
+    label: "Carregando permissões...",
+  });
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const canManageEvents = permissions.canManageEvents;
 
   async function loadEvents() {
     setLoading(true);
@@ -119,6 +135,12 @@ export default function CuidadoAlunoPage() {
 
       if (res.ok) {
         setEvents(Array.isArray(data?.events) ? data.events : []);
+        setPermissions({
+          role: String(data?.permissions?.role || ""),
+          canManageEvents: Boolean(data?.permissions?.canManageEvents),
+          readOnly: Boolean(data?.permissions?.readOnly ?? true),
+          label: String(data?.permissions?.label || "Gestão visualiza; professor trata os eventos dos próprios alunos."),
+        });
       } else {
         setMessage({ type: "error", text: data?.error || "Erro ao carregar cuidado dos alunos." });
       }
@@ -166,6 +188,11 @@ export default function CuidadoAlunoPage() {
   }, [events]);
 
   async function updateEvent(event: CareEvent, nextStatus: string) {
+    if (!canManageEvents) {
+      setMessage({ type: "error", text: "A gestão visualiza os eventos, mas somente o professor responsável pode alterar o status." });
+      return;
+    }
+
     setSavingId(event.id);
     setMessage(null);
 
@@ -217,7 +244,7 @@ export default function CuidadoAlunoPage() {
         </h1>
         <p className="text-sm text-[#a1a1a1] mt-2 max-w-4xl">
           Aqui aparecem sinais importantes do aluno: treino difícil, dor/desconforto, falta de tempo,
-          dúvida de execução, desmotivação e baixa aderência. Use esses sinais antes de montar a próxima semana.
+          dúvida de execução, desmotivação e baixa aderência. O professor trata os alertas dos próprios alunos; a gestão acompanha em modo leitura.
         </p>
       </div>
 
@@ -233,6 +260,10 @@ export default function CuidadoAlunoPage() {
           {message.text}
         </div>
       )}
+
+      <div className={"rounded-xl px-4 py-3 text-xs border " + (canManageEvents ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20" : "bg-blue-500/10 text-blue-300 border-blue-500/20")}>
+        {permissions.label}
+      </div>
 
       <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -292,9 +323,9 @@ export default function CuidadoAlunoPage() {
             Como usar
           </p>
           <p className="text-xs text-[#a1a1a1] leading-relaxed">
-            Antes de montar a próxima semana, veja se há eventos em aberto. Se o aluno relatou dor,
+            Antes de montar ou liberar a próxima semana, veja se há eventos em aberto. Se o aluno relatou dor,
             não faça progressão automática. Se relatou dificuldade, simplifique. Se relatou falta de tempo,
-            reduza complexidade e aumente aderência. A IA deve apoiar, mas o professor valida.
+            reduza complexidade e aumente aderência. A IA apoia, mas o professor responsável valida e resolve os alertas; a gestão apenas acompanha.
           </p>
         </div>
       </div>
@@ -354,7 +385,7 @@ export default function CuidadoAlunoPage() {
                     Copiar contexto IA
                   </button>
 
-                  {event.status !== "EM_REVISAO" && event.status !== "RESOLVIDO" && (
+                  {canManageEvents && event.status !== "EM_REVISAO" && event.status !== "RESOLVIDO" && (
                     <button
                       type="button"
                       disabled={savingId === event.id}
@@ -365,7 +396,7 @@ export default function CuidadoAlunoPage() {
                     </button>
                   )}
 
-                  {event.status !== "RESOLVIDO" && (
+                  {canManageEvents && event.status !== "RESOLVIDO" && (
                     <button
                       type="button"
                       disabled={savingId === event.id}
@@ -374,6 +405,12 @@ export default function CuidadoAlunoPage() {
                     >
                       Resolver
                     </button>
+                  )}
+
+                  {!canManageEvents && event.status !== "RESOLVIDO" && (
+                    <span className="text-xs px-3 py-2 rounded-lg bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                      Somente leitura
+                    </span>
                   )}
                 </div>
               </div>
@@ -410,8 +447,9 @@ export default function CuidadoAlunoPage() {
                       [event.id]: input.target.value,
                     }))
                   }
-                  placeholder="Ex.: treino revisado, carga reduzida, exercício substituído, aluno orientado..."
-                  className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  placeholder={canManageEvents ? "Ex.: treino revisado, carga reduzida, exercício substituído, aluno orientado..." : "Gestão visualiza este campo. Somente o professor responsável registra resolução/revisão."}
+                  disabled={!canManageEvents}
+                  className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
