@@ -199,6 +199,15 @@ function getWeekScopeLabel(startOfWeek: Date): string {
   return "semana anterior";
 }
 
+function escapeHtmlForPrint(value?: string | number | null): string {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('\"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 export default function MontarTreinoPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [library, setLibrary] = useState<LibraryExercise[]>([]);
@@ -594,6 +603,128 @@ export default function MontarTreinoPage() {
     (updated[index] as any)[field] = value;
     setExercises(updated);
   }
+
+  function openWorkoutPrintPreview() {
+    if (!selectedStudent || !planName.trim() || !date || exercises.length === 0) {
+      alert("Preencha aluno, nome do treino, data e pelo menos um exercício antes de gerar a prévia.");
+      return;
+    }
+
+    const studentName = selectedStudentInfo?.name || "Aluno";
+    const weekLabel = `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(new Date(endOfWeek.getTime() - 1))}`;
+    const caloriesLabel =
+      estimatedCaloriesMin || estimatedCaloriesMax
+        ? `${estimatedCaloriesMin || "-"} a ${estimatedCaloriesMax || "-"} kcal`
+        : "Não informado";
+
+    const exercisesHtml = exercises
+      .map(
+        (exercise, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>
+              <strong>${escapeHtmlForPrint(exercise.name)}</strong>
+              ${exercise.description ? `<br/><span>${escapeHtmlForPrint(exercise.description)}</span>` : ""}
+              ${exercise.notes ? `<br/><em>${escapeHtmlForPrint(exercise.notes)}</em>` : ""}
+            </td>
+            <td>${escapeHtmlForPrint(exercise.series)}</td>
+            <td>${escapeHtmlForPrint(exercise.reps)}</td>
+            <td>${escapeHtmlForPrint(exercise.weight || "a definir")}</td>
+            <td>${escapeHtmlForPrint(exercise.restTime || "-")}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    const html = `
+      <!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Prévia do treino - ${escapeHtmlForPrint(studentName)}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; color: #171717; margin: 0; padding: 32px; background: #fff; }
+            .header { border-bottom: 3px solid #D4A373; padding-bottom: 16px; margin-bottom: 24px; }
+            .brand { color: #9a6b3f; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; }
+            h1 { margin: 8px 0 4px; font-size: 24px; }
+            h2 { margin: 22px 0 10px; font-size: 16px; color: #9a6b3f; }
+            p { margin: 4px 0; line-height: 1.45; }
+            .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 18px 0; }
+            .card { border: 1px solid #e5e5e5; border-radius: 10px; padding: 12px; }
+            .label { color: #737373; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+            .value { color: #171717; font-size: 14px; font-weight: bold; margin-top: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+            th { background: #f5f5f5; text-align: left; padding: 9px; border: 1px solid #e5e5e5; }
+            td { vertical-align: top; padding: 9px; border: 1px solid #e5e5e5; }
+            em { color: #525252; font-size: 11px; }
+            .box { border: 1px solid #e5e5e5; border-radius: 10px; padding: 12px; margin-top: 10px; background: #fafafa; }
+            .actions { position: sticky; top: 0; background: #fff; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #eee; }
+            button { background: #D4A373; border: 0; color: #0a0a0a; font-weight: bold; border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+            @media print { .actions { display: none; } body { padding: 20px; } }
+          </style>
+        </head>
+        <body>
+          <div class="actions">
+            <button onclick="window.print()">Imprimir / salvar como PDF</button>
+          </div>
+
+          <div class="header">
+            <div class="brand">Funcional VIP Digital</div>
+            <h1>${escapeHtmlForPrint(planName)}</h1>
+            <p><strong>Aluno:</strong> ${escapeHtmlForPrint(studentName)}</p>
+            <p><strong>Data:</strong> ${escapeHtmlForPrint(formatDatePtBr(new Date(date + "T12:00:00")))} · <strong>Semana:</strong> ${escapeHtmlForPrint(weekLabel)}</p>
+          </div>
+
+          <div class="grid">
+            <div class="card"><div class="label">Contrato/ciclo</div><div class="value">${escapeHtmlForPrint(activeWorkoutContract?.planName || activeWorkoutContract?.type || "Não informado")}</div></div>
+            <div class="card"><div class="label">Meta semanal</div><div class="value">${escapeHtmlForPrint(weeklyWorkoutLimit || "-")} treino(s)</div></div>
+            <div class="card"><div class="label">Intensidade</div><div class="value">${escapeHtmlForPrint(intensity || "Não informada")}</div></div>
+            <div class="card"><div class="label">Duração/calorias</div><div class="value">${escapeHtmlForPrint(estimatedDurationMinutes || "-")} min · ${escapeHtmlForPrint(caloriesLabel)}</div></div>
+          </div>
+
+          ${description ? `<h2>Descrição técnica</h2><div class="box">${escapeHtmlForPrint(description)}</div>` : ""}
+          ${objective ? `<h2>Objetivo para o aluno</h2><div class="box">${escapeHtmlForPrint(objective)}</div>` : ""}
+          ${focusAreas ? `<h2>Foco do treino</h2><div class="box">${escapeHtmlForPrint(focusAreas)}</div>` : ""}
+          ${studentSummary ? `<h2>Resumo humanizado</h2><div class="box">${escapeHtmlForPrint(studentSummary)}</div>` : ""}
+          ${safetyNote ? `<h2>Segurança</h2><div class="box">${escapeHtmlForPrint(safetyNote)}</div>` : ""}
+          ${notes ? `<h2>Observações do professor</h2><div class="box">${escapeHtmlForPrint(notes)}</div>` : ""}
+
+          <h2>Exercícios</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Exercício</th>
+                <th>Séries</th>
+                <th>Reps</th>
+                <th>Carga</th>
+                <th>Descanso</th>
+              </tr>
+            </thead>
+            <tbody>${exercisesHtml}</tbody>
+          </table>
+
+          <p style="margin-top:24px; color:#737373; font-size:11px;">
+            Prévia para revisão do professor. Este documento não substitui avaliação individual, orientação profissional ou ajustes necessários conforme dor, restrição, ambiente e equipamentos disponíveis. Gasto calórico é estimado e pode variar.
+          </p>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+
+    if (!printWindow) {
+      alert("Não foi possível abrir a prévia. Verifique se o navegador bloqueou pop-up.");
+      return;
+    }
+
+    printWindow.opener = null;
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
+
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1296,6 +1427,16 @@ export default function MontarTreinoPage() {
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Observações gerais para o aluno sobre este treino..." className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]" />
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={openWorkoutPrintPreview}
+            disabled={!selectedStudent || !planName.trim() || !date || exercises.length === 0}
+            className="w-full bg-[#1a1a1a] border border-[#D4A373]/30 text-[#D4A373] font-bold rounded-xl py-4 text-base transition hover:bg-[#D4A373]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            👁️ Pré-visualizar treino em PDF
+          </button>
+
         <button
           type="submit"
           disabled={
@@ -1325,6 +1466,7 @@ export default function MontarTreinoPage() {
                       : `💾 Salvar treino ${nextWeeklyCount}/${weeklyWorkoutLimit} sem notificar ainda`
                     : "💾 Salvar treino"}
         </button>
+        </div>
         <p className="text-xs text-[#525252] text-center">
           {exercises.length} exercício{exercises.length !== 1 ? "s" : ""}
           {selectedStudent && ` • Aluno: ${students.find((s) => s.id === selectedStudent)?.name || ""}`}
