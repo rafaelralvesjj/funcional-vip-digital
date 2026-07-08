@@ -464,14 +464,29 @@ model Question {
 }
 
 model ExerciseLibrary {
-  id          String   @id @default(uuid())
-  name        String
-  description String
-  muscleGroup String
-  imageUrl    String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  name              String
+  description       String
+  muscleGroup       String
+  imageUrl          String?
+  videoUrl          String?  @map("video_url") @db.Text
+  active            Boolean  @default(true)
+  objectiveTags     String?  @map("objective_tags") @db.Text
+  locationTags      String?  @map("location_tags") @db.Text
+  equipmentTags     String?  @map("equipment_tags") @db.Text
+  restrictionTags   String?  @map("restriction_tags") @db.Text
+  levelTags         String?  @map("level_tags") @db.Text
+  intensity         String?
+  instructions      String?  @db.Text
+  commonMistakes    String?  @map("common_mistakes") @db.Text
+  substitutions     String?  @db.Text
+  safetyNotes       String?  @map("safety_notes") @db.Text
+  contraindications String?  @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
+  @@index([active])
+  @@index([muscleGroup])
   @@map("exercise_library")
 }
 
