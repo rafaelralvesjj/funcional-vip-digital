@@ -24,6 +24,24 @@ type SummaryResponse = {
   aiPrompt: string;
 };
 
+type LibraryExercise = {
+  id: string;
+  name: string;
+  description: string;
+  muscleGroup: string;
+  imageUrl?: string | null;
+  videoUrl?: string | null;
+  active?: boolean;
+  objectiveTags?: string | null;
+  locationTags?: string | null;
+  equipmentTags?: string | null;
+  restrictionTags?: string | null;
+  levelTags?: string | null;
+  intensity?: string | null;
+  instructions?: string | null;
+  safetyNotes?: string | null;
+};
+
 function parseDateInput(value?: string | null): Date | null {
   if (!value) return null;
 
@@ -288,6 +306,8 @@ export default function ResumoAlunoPage() {
   const [aiJsonText, setAiJsonText] = useState("");
   const [targetWeekStart, setTargetWeekStart] = useState("");
   const [targetExpectedWorkoutDates, setTargetExpectedWorkoutDates] = useState<string[]>([]);
+  const [exerciseLibrary, setExerciseLibrary] = useState<LibraryExercise[]>([]);
+  const [loadingExerciseLibrary, setLoadingExerciseLibrary] = useState(true);
 
   async function loadStudents(preselectId?: string | null) {
     setLoadingStudents(true);
@@ -320,6 +340,28 @@ export default function ResumoAlunoPage() {
     setLoadingStudents(false);
   }
 
+  async function loadExerciseLibrary() {
+    setLoadingExerciseLibrary(true);
+
+    try {
+      const res = await fetch("/api/exercise-library?active=1", {
+        cache: "no-store",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data?.exercises) ? data.exercises : [];
+        setExerciseLibrary(list);
+      } else {
+        setExerciseLibrary([]);
+      }
+    } catch {
+      setExerciseLibrary([]);
+    }
+
+    setLoadingExerciseLibrary(false);
+  }
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const weekDateFromUrl = params.get("date") || params.get("weekStart");
@@ -330,11 +372,57 @@ export default function ResumoAlunoPage() {
     setTargetWeekStart(resolveWeekStartIso(weekDateFromUrl));
     setTargetExpectedWorkoutDates(expectedDatesFromUrl);
     loadStudents(params.get("studentId"));
+    loadExerciseLibrary();
   }, []);
 
   const selectedStudent = useMemo(() => {
     return students.find((student) => student.id === selectedStudentId) || null;
   }, [students, selectedStudentId]);
+
+  function getExerciseLibraryPromptLines(): string[] {
+    if (exerciseLibrary.length === 0) {
+      return [
+        "BIBLIOTECA DE EXERCÍCIOS PERMITIDOS:",
+        "- Nenhum exercício cadastrado/ativo encontrado. Não gere treino enquanto a biblioteca estiver vazia.",
+      ];
+    }
+
+    const lines = exerciseLibrary.map((exercise, index) => {
+      const tags = [
+        exercise.muscleGroup ? `grupo=${exercise.muscleGroup}` : null,
+        exercise.levelTags ? `nível=${exercise.levelTags}` : null,
+        exercise.locationTags ? `local=${exercise.locationTags}` : null,
+        exercise.equipmentTags ? `equipamento=${exercise.equipmentTags}` : null,
+        exercise.objectiveTags ? `objetivo=${exercise.objectiveTags}` : null,
+        exercise.restrictionTags ? `cuidados=${exercise.restrictionTags}` : null,
+        exercise.intensity ? `intensidade=${exercise.intensity}` : null,
+      ]
+        .filter(Boolean)
+        .join("; ");
+
+      return `${index + 1}. exerciseId=${exercise.id} | nome=${exercise.name} | ${tags || "sem tags"} | descrição=${exercise.description}`;
+    });
+
+    return [
+      "BIBLIOTECA DE EXERCÍCIOS PERMITIDOS:",
+      "Use SOMENTE os exercícios abaixo. Cada exercício do JSON deve trazer exerciseId exatamente igual ao cadastrado.",
+      "Não invente exercícios. Não use exercício sem exerciseId.",
+      ...lines,
+    ];
+  }
+
+  function findLibraryExerciseByPayload(exercise: any): LibraryExercise | null {
+    const exerciseId = String(
+      exercise?.exerciseId ||
+        exercise?.libraryExerciseId ||
+        exercise?.exerciseLibraryId ||
+        ""
+    ).trim();
+
+    if (!exerciseId) return null;
+
+    return exerciseLibrary.find((item) => item.id === exerciseId) || null;
+  }
 
   function getJsonPrompt(summaryData: SummaryResponse): string {
     const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || null;
@@ -389,6 +477,14 @@ export default function ResumoAlunoPage() {
       "- Não altere studentId, weekStart, weekEnd, expectedWorkoutDates, expectedWorkoutCount nem validationKey.",
       "- Se esses campos forem alterados, o Funcional VIP Digital vai bloquear a importação para evitar treino no aluno ou semana errada.",
       "",
+      "REGRA DA BIBLIOTECA OFICIAL:",
+      "- Use somente exercícios cadastrados na biblioteca abaixo.",
+      "- Cada exercício precisa ter exerciseId.",
+      "- Não invente exercícios fora da biblioteca.",
+      "- O sistema vai bloquear qualquer exercício sem exerciseId válido.",
+      "",
+      ...getExerciseLibraryPromptLines(),
+      "",
       "REGRA DE CALENDÁRIO DO CONTRATO:",
       scheduleDescription,
       `Semana alvo obrigatória: ${validationContext.weekStart} a ${validationContext.weekEnd}.`,
@@ -424,7 +520,8 @@ export default function ResumoAlunoPage() {
       '      "notes": "observações para o professor revisar",',
       '      "exercises": [',
       "        {",
-      '          "name": "Nome do exercício",',
+      '          "exerciseId": "id-exato-da-biblioteca",',
+      '          "name": "Nome do exercício cadastrado na biblioteca",',
       '          "description": "como executar ou foco técnico",',
       '          "series": 3,',
       '          "reps": "10-12",',
@@ -475,6 +572,10 @@ export default function ResumoAlunoPage() {
 
     if (workouts.length === 0) {
       throw new Error("O JSON precisa ter pelo menos um treino em workouts.");
+    }
+
+    if (exerciseLibrary.length === 0) {
+      throw new Error("A biblioteca de exercícios está vazia. Cadastre exercícios antes de importar treino da IA.");
     }
 
     const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || null;
@@ -550,16 +651,28 @@ export default function ResumoAlunoPage() {
         studentSummary: String(workout?.studentSummary || workout?.student_summary || workout?.resumoAluno || workout?.resumo || ""),
         safetyNote: String(workout?.safetyNote || workout?.safety_note || workout?.observacaoSeguranca || ""),
         notes: String(workout?.notes || workout?.observacoes || ""),
-        exercises: (Array.isArray(workout?.exercises) ? workout.exercises : workout?.exercicios || []).map((exercise: any, index: number) => ({
-          name: String(exercise?.name || exercise?.nome || `Exercício ${index + 1}`),
-          description: String(exercise?.description || exercise?.descricao || ""),
-          series: Number(exercise?.series || exercise?.serie || exercise?.sets || 3),
-          reps: String(exercise?.reps || exercise?.repeticoes || exercise?.repetições || "10"),
-          weight: String(exercise?.weight || exercise?.carga || ""),
-          restTime: String(exercise?.restTime || exercise?.descanso || "60s"),
-          notes: String(exercise?.notes || exercise?.observacoes || ""),
-          order: Number.isFinite(Number(exercise?.order)) ? Number(exercise.order) : index,
-        })),
+        exercises: (Array.isArray(workout?.exercises) ? workout.exercises : workout?.exercicios || []).map((exercise: any, index: number) => {
+          const libraryExercise = findLibraryExerciseByPayload(exercise);
+
+          if (!libraryExercise) {
+            throw new Error(`O exercício ${index + 1} do treino ${workoutIndex + 1} não possui exerciseId válido da biblioteca oficial.`);
+          }
+
+          return {
+            libraryExerciseId: libraryExercise.id,
+            exerciseId: libraryExercise.id,
+            name: libraryExercise.name,
+            description: String(exercise?.description || exercise?.descricao || libraryExercise.description || ""),
+            series: Number(exercise?.series || exercise?.serie || exercise?.sets || 3),
+            reps: String(exercise?.reps || exercise?.repeticoes || exercise?.repetições || "10"),
+            weight: String(exercise?.weight || exercise?.carga || ""),
+            restTime: String(exercise?.restTime || exercise?.descanso || "60s"),
+            notes: String(exercise?.notes || exercise?.observacoes || ""),
+            order: Number.isFinite(Number(exercise?.order)) ? Number(exercise.order) : index,
+            imageUrl: libraryExercise.imageUrl || null,
+            videoUrl: libraryExercise.videoUrl || null,
+          };
+        }),
       };
     });
 
@@ -604,6 +717,14 @@ export default function ResumoAlunoPage() {
   async function generateSummary() {
     if (!selectedStudentId) {
       setMessage({ type: "error", text: "Selecione um aluno." });
+      return;
+    }
+
+    if (!loadingExerciseLibrary && exerciseLibrary.length === 0) {
+      setMessage({
+        type: "error",
+        text: "A biblioteca de exercícios está vazia. Cadastre exercícios antes de gerar treino por IA.",
+      });
       return;
     }
 
@@ -747,10 +868,10 @@ export default function ResumoAlunoPage() {
 
           <button
             onClick={generateSummary}
-            disabled={loadingStudents || loadingSummary || !selectedStudentId}
+            disabled={loadingStudents || loadingSummary || loadingExerciseLibrary || !selectedStudentId || exerciseLibrary.length === 0}
             className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
           >
-            {loadingSummary ? "Gerando..." : "Gerar resumo"}
+            {loadingSummary ? "Gerando..." : loadingExerciseLibrary ? "Carregando biblioteca..." : exerciseLibrary.length === 0 ? "Biblioteca vazia" : "Gerar resumo"}
           </button>
         </div>
 
