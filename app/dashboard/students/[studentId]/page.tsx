@@ -6,7 +6,9 @@ import { useParams } from "next/navigation";
 
 type TabKey = "avisos" | "treinos" | "duvidas" | "resumo";
 
-type Student = {
+type AnyItem = Record<string, any>;
+
+type Student = AnyItem & {
   id: string;
   name: string;
   email?: string | null;
@@ -23,7 +25,30 @@ type Student = {
   createdAt?: string | null;
 };
 
-type AnyItem = Record<string, any>;
+const GOAL_LABELS: Record<string, string> = {
+  EMAGRECIMENTO: "Emagrecimento",
+  HIPERTROFIA: "Ganho de massa muscular / hipertrofia",
+  CONDICIONAMENTO_GERAL: "Condicionamento físico geral",
+  SAUDE_QUALIDADE_VIDA: "Saúde e qualidade de vida",
+  MOBILIDADE_FLEXIBILIDADE: "Melhora da mobilidade e flexibilidade",
+  FORTALECIMENTO_MUSCULAR: "Fortalecimento muscular",
+  DEFINICAO_CORPORAL: "Definição corporal",
+  PREPARACAO_CORRIDA: "Preparação para corrida",
+  COMECAR_CORRER: "Começar a correr",
+  MELHORAR_CORRIDA: "Melhorar desempenho na corrida",
+  FORTALECIMENTO_CORRIDA: "Fortalecimento para corrida",
+  PREVENCAO_LESOES_CORRIDA: "Prevenção de lesões na corrida",
+  "RETORNO_POS_LESÃO": "Retorno aos treinos após lesão",
+  RETORNO_POS_LESAO: "Retorno aos treinos após lesão",
+  PRESCRICAO_MEDICA: "Treinamento por prescrição médica",
+  RETOMADA_COM_CUIDADO: "Reabilitação / retomada com cuidado",
+  PERFORMANCE_ESPORTIVA: "Melhora de performance esportiva",
+  ALTA_PERFORMANCE: "Atleta de alta performance",
+  LUTA_ARTE_MARCIAL: "Preparação física para luta ou arte marcial",
+  ESPORTE_ESPECIFICO: "Preparação física para esporte específico",
+  REDUCAO_DORES_FUNCIONAL: "Redução de dores e melhora funcional",
+  OUTRO: "Outro",
+};
 
 function formatDate(value?: string | null): string {
   if (!value) return "-";
@@ -60,6 +85,33 @@ function normalizeStatus(status?: string | null): string {
   return labels[value] || value || "Não informado";
 }
 
+function normalizeFreeText(value?: unknown): string {
+  const text = String(value ?? "").trim();
+
+  if (!text) return "Não informado";
+
+  const lower = text.toLowerCase();
+
+  if (["nao", "não", "n", "no", "nenhuma", "nenhum"].includes(lower)) {
+    return "Não informado / não relatado";
+  }
+
+  return text;
+}
+
+function normalizeGoal(value?: unknown, otherDescription?: unknown): string {
+  const raw = String(value ?? "").trim();
+  const other = String(otherDescription ?? "").trim();
+
+  if (!raw && !other) return "Não informado";
+
+  if (raw === "OUTRO") {
+    return other ? `Outro: ${other}` : "Outro";
+  }
+
+  return GOAL_LABELS[raw] || raw || other || "Não informado";
+}
+
 function getListFromResponse(json: any, keys: string[]): AnyItem[] {
   if (Array.isArray(json)) return json;
 
@@ -68,6 +120,50 @@ function getListFromResponse(json: any, keys: string[]): AnyItem[] {
   }
 
   return [];
+}
+
+function getStudentFromResponse(json: any): AnyItem | null {
+  if (!json) return null;
+
+  if (json?.student && typeof json.student === "object") return json.student;
+  if (json?.data && !Array.isArray(json.data) && typeof json.data === "object") return json.data;
+  if (json?.item && typeof json.item === "object") return json.item;
+  if (json?.id && typeof json === "object") return json;
+
+  return null;
+}
+
+function getByPath(source: AnyItem | null | undefined, path: string): unknown {
+  if (!source) return undefined;
+
+  return path.split(".").reduce<unknown>((current, part) => {
+    if (current && typeof current === "object" && part in (current as AnyItem)) {
+      return (current as AnyItem)[part];
+    }
+
+    return undefined;
+  }, source);
+}
+
+function firstValue(source: AnyItem | null | undefined, paths: string[]): unknown {
+  for (const path of paths) {
+    const value = getByPath(source, path);
+
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function firstText(source: AnyItem | null | undefined, paths: string[]): string {
+  return normalizeFreeText(firstValue(source, paths));
+}
+
+function firstRawText(source: AnyItem | null | undefined, paths: string[]): string {
+  const value = firstValue(source, paths);
+  return String(value ?? "").trim();
 }
 
 function getItemTitle(item: AnyItem, fallback: string): string {
@@ -80,6 +176,207 @@ function getItemDescription(item: AnyItem): string {
 
 function getItemDate(item: AnyItem): string | null {
   return item.date || item.scheduledDate || item.workoutDate || item.createdAt || item.updatedAt || null;
+}
+
+function isWorkoutCompleted(item: AnyItem): boolean {
+  const status = String(item.status || "").toUpperCase();
+
+  return Boolean(
+    item.completedAt ||
+      item.doneAt ||
+      item.finishedAt ||
+      ["DONE", "COMPLETED", "CONCLUIDO", "CONCLUÍDO", "FINALIZADO"].includes(status)
+  );
+}
+
+function isWorkoutExpired(item: AnyItem): boolean {
+  if (isWorkoutCompleted(item)) return false;
+
+  const rawDate = getItemDate(item);
+  if (!rawDate) return false;
+
+  const workoutDate = new Date(rawDate);
+  if (Number.isNaN(workoutDate.getTime())) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  workoutDate.setHours(0, 0, 0, 0);
+
+  return workoutDate < today;
+}
+
+function getStudentProfile(student: Student | null) {
+  const primaryGoal = firstRawText(student, [
+    "objective",
+    "goal",
+    "mainGoal",
+    "primaryGoal",
+    "initialProfile.objective",
+    "initialProfile.goal",
+    "initialProfile.primaryGoal",
+    "profile.objective",
+    "profile.goal",
+    "profile.primaryGoal",
+    "onboarding.objective",
+    "onboarding.goal",
+    "onboarding.primaryGoal",
+    "anamnesis.objective",
+    "anamnesis.goal",
+  ]);
+
+  const primaryGoalOtherDescription = firstRawText(student, [
+    "primaryGoalOtherDescription",
+    "initialProfile.primaryGoalOtherDescription",
+    "profile.primaryGoalOtherDescription",
+    "onboarding.primaryGoalOtherDescription",
+  ]);
+
+  return {
+    objective: normalizeGoal(primaryGoal, primaryGoalOtherDescription),
+    activityLevel: firstText(student, [
+      "activityLevel",
+      "level",
+      "currentLevel",
+      "initialProfile.activityLevel",
+      "profile.activityLevel",
+      "onboarding.activityLevel",
+      "anamnesis.activityLevel",
+    ]),
+    trainingEnvironment: firstText(student, [
+      "trainingEnvironment",
+      "environment",
+      "trainingPlace",
+      "initialProfile.trainingEnvironment",
+      "profile.trainingEnvironment",
+      "onboarding.trainingEnvironment",
+      "anamnesis.trainingEnvironment",
+    ]),
+    availableEquipment: firstText(student, [
+      "availableEquipment",
+      "equipment",
+      "materials",
+      "initialProfile.availableEquipment",
+      "profile.availableEquipment",
+      "onboarding.availableEquipment",
+      "anamnesis.availableEquipment",
+    ]),
+    timeAvailableMinutes: firstText(student, [
+      "timeAvailableMinutes",
+      "timePerWorkout",
+      "availableTime",
+      "initialProfile.timeAvailableMinutes",
+      "profile.timeAvailableMinutes",
+      "onboarding.timeAvailableMinutes",
+      "anamnesis.timeAvailableMinutes",
+    ]),
+    preferredDays: firstText(student, [
+      "preferredDays",
+      "preferredSchedule",
+      "initialProfile.preferredDays",
+      "profile.preferredDays",
+      "onboarding.preferredDays",
+      "anamnesis.preferredDays",
+    ]),
+    currentPain: firstText(student, [
+      "currentPain",
+      "pain",
+      "painNotes",
+      "initialProfile.currentPain",
+      "profile.currentPain",
+      "onboarding.currentPain",
+      "anamnesis.currentPain",
+    ]),
+    medicalRestriction: firstText(student, [
+      "medicalRestriction",
+      "restriction",
+      "physicalRestriction",
+      "initialProfile.medicalRestriction",
+      "profile.medicalRestriction",
+      "onboarding.medicalRestriction",
+      "anamnesis.medicalRestriction",
+    ]),
+    trainingHistory: firstText(student, [
+      "trainingHistory",
+      "history",
+      "initialProfile.trainingHistory",
+      "profile.trainingHistory",
+      "onboarding.trainingHistory",
+      "anamnesis.trainingHistory",
+    ]),
+    weightKg: firstText(student, [
+      "weightKg",
+      "weight",
+      "initialProfile.weightKg",
+      "profile.weightKg",
+      "onboarding.weightKg",
+      "anamnesis.weightKg",
+    ]),
+    heightCm: firstText(student, [
+      "heightCm",
+      "height",
+      "initialProfile.heightCm",
+      "profile.heightCm",
+      "onboarding.heightCm",
+      "anamnesis.heightCm",
+    ]),
+    notes: firstText(student, [
+      "notes",
+      "observation",
+      "observations",
+      "initialProfile.notes",
+      "profile.notes",
+      "onboarding.notes",
+      "anamnesis.notes",
+    ]),
+  };
+}
+
+function buildTeacherReading(profile: ReturnType<typeof getStudentProfile>, student: Student | null): string {
+  const parts: string[] = [];
+  const status = normalizeStatus(student?.commercialStatus);
+  const contractedDays = student?.contractedTrainingDaysPerMonth || 0;
+
+  parts.push(`Aluno com status ${status.toLowerCase()}.`);
+
+  if (profile.objective !== "Não informado") {
+    parts.push(`Objetivo principal informado: ${profile.objective}.`);
+  }
+
+  if (profile.activityLevel !== "Não informado") {
+    parts.push(`Nível atual: ${profile.activityLevel}.`);
+  }
+
+  if (profile.trainingEnvironment !== "Não informado" || profile.availableEquipment !== "Não informado") {
+    parts.push(
+      `Montagem inicial deve considerar ambiente ${profile.trainingEnvironment.toLowerCase()} e equipamentos: ${profile.availableEquipment}.`
+    );
+  }
+
+  if (profile.currentPain !== "Não informado / não relatado" && profile.currentPain !== "Não informado") {
+    parts.push(`Atenção ao relato de dor/desconforto: ${profile.currentPain}.`);
+  }
+
+  if (profile.medicalRestriction !== "Não informado / não relatado" && profile.medicalRestriction !== "Não informado") {
+    parts.push(`Atenção à restrição médica/física: ${profile.medicalRestriction}.`);
+  }
+
+  if (contractedDays > 0) {
+    parts.push(`Contrato indica ${contractedDays} treino(s) por mês; organizar a semana respeitando a frequência contratada.`);
+  }
+
+  if (profile.objective.toLowerCase().includes("corrida")) {
+    parts.push("Para objetivo ligado à corrida, priorizar base, fortalecimento de pernas, glúteos, core, estabilidade e progressão de impacto.");
+  }
+
+  if (profile.objective.toLowerCase().includes("emagrecimento")) {
+    parts.push("Para emagrecimento, comunicar contribuição para gasto energético e consistência, sem prometer perda de peso.");
+  }
+
+  if (parts.length === 1) {
+    parts.push("Ficha inicial ainda não foi retornada completa pela API; confirmar objetivo, restrições, ambiente e equipamentos antes de personalizar novos treinos.");
+  }
+
+  return parts.join(" ");
 }
 
 export default function StudentDetailPage() {
@@ -113,15 +410,20 @@ export default function StudentDetailPage() {
     setMessage("");
 
     try {
-      const [studentsJson, noticesJson, workoutsJson, questionsJson] = await Promise.all([
+      const [studentsJson, studentDetailJson, noticesJson, workoutsJson, questionsJson] = await Promise.all([
         safeFetch("/api/students"),
+        safeFetch(`/api/students/${encodeURIComponent(studentId)}`),
         safeFetch(`/api/notices?studentId=${encodeURIComponent(studentId)}`),
         safeFetch(`/api/workout-plan?studentId=${encodeURIComponent(studentId)}`),
         safeFetch(`/api/questions?studentId=${encodeURIComponent(studentId)}`),
       ]);
 
       const students = getListFromResponse(studentsJson, ["students", "data"]);
-      const selectedStudent = (students.find((item) => item.id === studentId) || null) as Student | null;
+      const selectedFromList = (students.find((item) => item.id === studentId) || null) as Student | null;
+      const selectedFromDetail = getStudentFromResponse(studentDetailJson) as Student | null;
+      const selectedStudent = selectedFromList || selectedFromDetail
+        ? ({ ...(selectedFromList || {}), ...(selectedFromDetail || {}) } as Student)
+        : null;
 
       setStudent(selectedStudent);
       setNotices(getListFromResponse(noticesJson, ["notices", "data", "items"]));
@@ -139,6 +441,20 @@ export default function StudentDetailPage() {
   }
 
   const professorName = student?.professorName || student?.user?.name || "Professor não informado";
+  const profile = useMemo(() => getStudentProfile(student), [student]);
+
+  const workoutStats = useMemo(() => {
+    const completed = workouts.filter(isWorkoutCompleted).length;
+    const expired = workouts.filter(isWorkoutExpired).length;
+    const pending = Math.max(workouts.length - completed - expired, 0);
+
+    return {
+      total: workouts.length,
+      completed,
+      expired,
+      pending,
+    };
+  }, [workouts]);
 
   const tabCounts = useMemo(
     () => ({
@@ -147,6 +463,11 @@ export default function StudentDetailPage() {
       duvidas: questions.length,
     }),
     [notices.length, workouts.length, questions.length]
+  );
+
+  const teacherReading = useMemo(
+    () => buildTeacherReading(profile, student),
+    [profile, student]
   );
 
   function renderEmpty(text: string) {
@@ -206,6 +527,15 @@ export default function StudentDetailPage() {
             </div>
           );
         })}
+      </div>
+    );
+  }
+
+  function SummaryField({ label, value }: { label: string; value: string }) {
+    return (
+      <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
+        <p className="text-xs uppercase text-[#6b6b6b]">{label}</p>
+        <p className="text-[#f5f5f5] text-sm font-semibold mt-1 whitespace-pre-wrap">{value}</p>
       </div>
     );
   }
@@ -310,49 +640,102 @@ export default function StudentDetailPage() {
               {activeTab === "duvidas" && renderGenericList(questions, "Nenhuma dúvida encontrada para este aluno.", "question")}
 
               {activeTab === "resumo" && (
-                <div id="student-summary-print" className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-5 space-y-4">
+                <div id="student-summary-print" className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-5 space-y-5">
                   <div>
                     <h2 className="text-lg font-semibold text-[#D4A373]">Resumo do aluno</h2>
                     <p className="text-xs text-[#a1a1a1] mt-1">
-                      Esta aba organiza o ciclo do aluno para leitura rápida do professor. Use o botão abaixo para imprimir ou salvar como PDF pelo navegador.
+                      Esta aba consolida os dados do cadastro, ficha inicial, histórico visível e leitura operacional para o professor.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
-                      <p className="text-xs uppercase text-[#6b6b6b]">Aluno</p>
-                      <p className="text-[#f5f5f5] font-semibold mt-1">{student?.name || "Aluno"}</p>
-                      <p className="text-[#a1a1a1] text-xs mt-1">{student?.email || "Sem e-mail"}</p>
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-[#D4A373]">1. Identificação e contrato</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <SummaryField label="Aluno" value={student?.name || "Aluno"} />
+                      <SummaryField label="E-mail" value={student?.email || "Sem e-mail"} />
+                      <SummaryField label="Telefone" value={student?.phone || "Não informado"} />
+                      <SummaryField label="Status" value={normalizeStatus(student?.commercialStatus)} />
+                      <SummaryField label="Professor" value={professorName} />
+                      <SummaryField label="Treinos contratados/mês" value={String(student?.contractedTrainingDaysPerMonth || "Não informado")} />
+                      <SummaryField label="Cadastro" value={formatDate(student?.createdAt)} />
                     </div>
+                  </section>
 
-                    <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
-                      <p className="text-xs uppercase text-[#6b6b6b]">Contexto</p>
-                      <p className="text-[#f5f5f5] font-semibold mt-1">{normalizeStatus(student?.commercialStatus)}</p>
-                      <p className="text-[#a1a1a1] text-xs mt-1">Professor: {professorName}</p>
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-[#D4A373]">2. Ficha inicial / onboarding</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <SummaryField label="Objetivo principal" value={profile.objective} />
+                      <SummaryField label="Nível atual" value={profile.activityLevel} />
+                      <SummaryField label="Ambiente de treino" value={profile.trainingEnvironment} />
+                      <SummaryField label="Equipamentos disponíveis" value={profile.availableEquipment} />
+                      <SummaryField label="Tempo disponível por treino" value={profile.timeAvailableMinutes === "Não informado" ? profile.timeAvailableMinutes : `${profile.timeAvailableMinutes} minuto(s)`} />
+                      <SummaryField label="Dias/horários preferidos" value={profile.preferredDays} />
+                      <SummaryField label="Dor/desconforto atual" value={profile.currentPain} />
+                      <SummaryField label="Restrição médica/física" value={profile.medicalRestriction} />
+                      <SummaryField label="Histórico de treino" value={profile.trainingHistory} />
+                      <SummaryField label="Peso informado" value={profile.weightKg === "Não informado" ? profile.weightKg : `${profile.weightKg} kg`} />
+                      <SummaryField label="Altura informada" value={profile.heightCm === "Não informado" ? profile.heightCm : `${profile.heightCm} cm`} />
+                      <SummaryField label="Observações do aluno" value={profile.notes} />
                     </div>
+                  </section>
 
-                    <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
-                      <p className="text-xs uppercase text-[#6b6b6b]">Histórico visível</p>
-                      <p className="text-[#f5f5f5] font-semibold mt-1">
-                        {workouts.length} treino(s), {questions.length} dúvida(s), {notices.length} aviso(s)
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-[#D4A373]">3. Histórico visível</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <SummaryField label="Treinos planejados/registrados" value={String(workoutStats.total)} />
+                      <SummaryField label="Treinos concluídos" value={String(workoutStats.completed)} />
+                      <SummaryField label="Treinos vencidos não concluídos" value={String(workoutStats.expired)} />
+                      <SummaryField label="Treinos pendentes futuros" value={String(workoutStats.pending)} />
+                      <SummaryField label="Dúvidas registradas" value={String(questions.length)} />
+                      <SummaryField label="Avisos recentes" value={String(notices.length)} />
+                    </div>
+                  </section>
+
+                  {notices.length > 0 && (
+                    <section className="space-y-3">
+                      <h3 className="text-sm font-semibold text-[#D4A373]">4. Avisos recentes</h3>
+                      <div className="space-y-2">
+                        {notices.slice(0, 3).map((notice, index) => (
+                          <div key={notice.id || index} className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
+                            <p className="text-[#f5f5f5] text-sm font-semibold">{getItemTitle(notice, "Aviso")}</p>
+                            <p className="text-[#a1a1a1] text-xs mt-1">
+                              {formatDate(getItemDate(notice))} · {normalizeStatus(notice.type || notice.status || "")}
+                            </p>
+                            {getItemDescription(notice) && (
+                              <p className="text-[#d4d4d4] text-xs mt-2 whitespace-pre-wrap">{getItemDescription(notice)}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-[#D4A373]">5. Leitura operacional para o professor</h3>
+                    <div className="rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 p-4">
+                      <p className="text-sm text-[#f5f5f5] leading-relaxed whitespace-pre-wrap">
+                        {teacherReading}
                       </p>
                     </div>
+                  </section>
 
-                    <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
-                      <p className="text-xs uppercase text-[#6b6b6b]">Observação</p>
-                      <p className="text-[#a1a1a1] text-xs mt-1">
-                        Confirmar onboarding, objetivo, restrições, ambiente de treino e equipamentos antes de personalizar novos treinos.
-                      </p>
-                    </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="rounded-xl bg-[#D4A373] text-[#0a0a0a] px-4 py-3 text-sm font-semibold hover:bg-[#c49563] transition"
+                    >
+                      Imprimir / salvar como PDF
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={loadData}
+                      className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 text-sm font-semibold hover:border-[#D4A373]/40 transition"
+                    >
+                      Atualizar resumo
+                    </button>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="rounded-xl bg-[#D4A373] text-[#0a0a0a] px-4 py-3 text-sm font-semibold hover:bg-[#c49563] transition"
-                  >
-                    Imprimir / salvar como PDF
-                  </button>
                 </div>
               )}
             </section>
