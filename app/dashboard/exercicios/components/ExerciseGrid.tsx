@@ -9,6 +9,12 @@ type Exercise = {
   muscleGroup: string;
   imageUrl: string | null;
   videoUrl?: string | null;
+  sequenceImageUrl?: string | null;
+  sequenceImageLabel?: string | null;
+  sequenceImageNotes?: string | null;
+  sequenceFramesCount?: number | null;
+  sequenceGeneratedByAi?: boolean | null;
+  sequencePrompt?: string | null;
   active?: boolean;
   objectiveTags?: string | null;
   locationTags?: string | null;
@@ -29,6 +35,12 @@ type ExerciseForm = {
   muscleGroup: string;
   imageUrl: string;
   videoUrl: string;
+  sequenceImageUrl: string;
+  sequenceImageLabel: string;
+  sequenceImageNotes: string;
+  sequenceFramesCount: string;
+  sequenceGeneratedByAi: boolean;
+  sequencePrompt: string;
   objectiveTags: string;
   locationTags: string;
   equipmentTags: string;
@@ -49,6 +61,12 @@ const emptyForm: ExerciseForm = {
   muscleGroup: "",
   imageUrl: "",
   videoUrl: "",
+  sequenceImageUrl: "",
+  sequenceImageLabel: "",
+  sequenceImageNotes: "",
+  sequenceFramesCount: "6",
+  sequenceGeneratedByAi: false,
+  sequencePrompt: "",
   objectiveTags: "",
   locationTags: "",
   equipmentTags: "",
@@ -93,6 +111,7 @@ export default function ExerciseGrid({
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sequenceFileInputRef = useRef<HTMLInputElement>(null);
 
   function updateForm<K extends keyof ExerciseForm>(field: K, value: ExerciseForm[K]) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -111,6 +130,12 @@ export default function ExerciseGrid({
       muscleGroup: exercise.muscleGroup || "",
       imageUrl: exercise.imageUrl || "",
       videoUrl: exercise.videoUrl || "",
+      sequenceImageUrl: exercise.sequenceImageUrl || "",
+      sequenceImageLabel: exercise.sequenceImageLabel || "",
+      sequenceImageNotes: exercise.sequenceImageNotes || "",
+      sequenceFramesCount: exercise.sequenceFramesCount ? String(exercise.sequenceFramesCount) : "6",
+      sequenceGeneratedByAi: Boolean(exercise.sequenceGeneratedByAi),
+      sequencePrompt: exercise.sequencePrompt || "",
       objectiveTags: exercise.objectiveTags || "",
       locationTags: exercise.locationTags || "",
       equipmentTags: exercise.equipmentTags || "",
@@ -128,13 +153,18 @@ export default function ExerciseGrid({
     setShowForm(true);
   }
 
-  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+  async function uploadFileToField(
+    event: React.ChangeEvent<HTMLInputElement>,
+    field: "imageUrl" | "sequenceImageUrl",
+    folder: "biblioteca" | "sequencias"
+  ) {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("folder", folder);
 
     try {
       const res = await fetch("/api/upload-image", {
@@ -145,17 +175,60 @@ export default function ExerciseGrid({
       const data = await res.json().catch(() => null);
 
       if (res.ok && data?.url) {
-        updateForm("imageUrl", data.url);
+        updateForm(field, data.url);
       } else {
-        alert(`Erro ao enviar imagem: ${data?.error || "tente novamente"}`);
+        alert(`Erro ao enviar arquivo: ${data?.error || "tente novamente"}`);
       }
     } catch {
       alert("Erro ao conectar com o servidor.");
     } finally {
       setUploading(false);
-      if (fileInputRef.current) {
+      if (field === "imageUrl" && fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+      if (field === "sequenceImageUrl" && sequenceFileInputRef.current) {
+        sequenceFileInputRef.current.value = "";
+      }
+    }
+  }
+
+  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    return uploadFileToField(event, "imageUrl", "biblioteca");
+  }
+
+  async function handleSequenceImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    return uploadFileToField(event, "sequenceImageUrl", "sequencias");
+  }
+
+  function buildSequenceImagePromptFromForm(): string {
+    const framesCount = Math.max(Number(form.sequenceFramesCount || 6), 3);
+
+    return [
+      `Crie uma imagem sequencial didática com ${framesCount} quadros para demonstrar o exercício "${form.name || "nome do exercício"}".`,
+      "A imagem deve mostrar a mesma pessoa executando o movimento do início ao fim, em quadros numerados, com fundo limpo, estilo realista e instrutivo, sem texto pequeno demais.",
+      form.description ? `Finalidade do exercício: ${form.description}.` : "",
+      form.muscleGroup ? `Grupo muscular principal: ${form.muscleGroup}.` : "",
+      form.instructions ? `Como executar: ${form.instructions}.` : "",
+      form.safetyNotes ? `Cuidados de segurança: ${form.safetyNotes}.` : "",
+      form.commonMistakes ? `Evite representar estes erros: ${form.commonMistakes}.` : "",
+      form.contraindications ? `Atenções/contraindicações: ${form.contraindications}.` : "",
+      "Priorize alinhamento corporal, postura neutra, execução controlada e progressão clara do movimento. Não criar posições perigosas, amplitude exagerada ou articulações desalinhadas.",
+      "Formato sugerido: imagem horizontal 16:9, com quadros lado a lado ou em grade, boa iluminação e foco total na execução do exercício.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  async function handleBuildSequencePrompt() {
+    const prompt = buildSequenceImagePromptFromForm();
+    updateForm("sequencePrompt", prompt);
+    updateForm("sequenceGeneratedByAi", true);
+
+    try {
+      await navigator.clipboard?.writeText(prompt);
+      alert("Prompt da imagem sequencial copiado. Gere a imagem na IA, revise e depois suba o arquivo no campo de imagem sequencial.");
+    } catch {
+      alert("Prompt gerado. Copie o texto do campo de prompt para usar na IA.");
     }
   }
 
@@ -171,6 +244,12 @@ export default function ExerciseGrid({
         muscleGroup: form.muscleGroup.trim(),
         imageUrl: form.imageUrl.trim() || null,
         videoUrl: form.videoUrl.trim() || null,
+        sequenceImageUrl: form.sequenceImageUrl.trim() || null,
+        sequenceImageLabel: form.sequenceImageLabel.trim() || null,
+        sequenceImageNotes: form.sequenceImageNotes.trim() || null,
+        sequenceFramesCount: form.sequenceFramesCount ? Math.max(Number(form.sequenceFramesCount), 0) : 0,
+        sequenceGeneratedByAi: form.sequenceGeneratedByAi,
+        sequencePrompt: form.sequencePrompt.trim() || null,
         objectiveTags: form.objectiveTags.trim() || null,
         locationTags: form.locationTags.trim() || null,
         equipmentTags: form.equipmentTags.trim() || null,
@@ -495,6 +574,122 @@ export default function ExerciseGrid({
             </div>
           </div>
 
+          <div className="rounded-xl border border-[#D4A373]/20 bg-[#D4A373]/5 p-4 space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-[#D4A373]">
+                Imagem sequencial da execução
+              </p>
+              <p className="text-xs text-[#a1a1a1] mt-1 leading-relaxed">
+                Use uma imagem única com 3 a 6 quadros mostrando o movimento do início ao fim. Ela aparecerá no detalhe do exercício para o aluno.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm text-[#e5e5e5] block mb-1">Quantidade de quadros</label>
+                <input
+                  type="number"
+                  min="3"
+                  max="8"
+                  value={form.sequenceFramesCount}
+                  onChange={(event) => updateForm("sequenceFramesCount", event.target.value)}
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-sm text-[#e5e5e5] block mb-1">Título da sequência</label>
+                <input
+                  value={form.sequenceImageLabel}
+                  onChange={(event) => updateForm("sequenceImageLabel", event.target.value)}
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  placeholder="Ex: Execução do agachamento em 6 etapas"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm text-[#e5e5e5] block mb-1">Observação para acompanhar a sequência</label>
+              <textarea
+                value={form.sequenceImageNotes}
+                onChange={(event) => updateForm("sequenceImageNotes", event.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                placeholder="Ex: Observe o alinhamento dos joelhos, coluna neutra e controle na descida e subida."
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-[#e5e5e5] block">Arquivo da imagem sequencial</label>
+              <input
+                type="file"
+                ref={sequenceFileInputRef}
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleSequenceImageUpload}
+                className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#b88a5e]"
+              />
+              {uploading && <p className="text-xs text-[#D4A373]">Enviando arquivo...</p>}
+              {form.sequenceImageUrl && !uploading && (
+                <div className="flex items-center gap-3 rounded-lg border border-[#ffffff10] bg-[#1a1a1a] p-2">
+                  <img
+                    src={form.sequenceImageUrl}
+                    alt="Preview da sequência"
+                    className="h-20 w-28 rounded-lg border border-[#ffffff10] bg-[#0a0a0a] object-cover"
+                    onError={(event) => {
+                      (event.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                  <span className="text-xs text-[#a1a1a1] truncate flex-1">
+                    {form.sequenceImageUrl}
+                  </span>
+                </div>
+              )}
+              <input
+                value={form.sequenceImageUrl}
+                onChange={(event) => updateForm("sequenceImageUrl", event.target.value)}
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                placeholder="Ou cole a URL da imagem sequencial..."
+              />
+            </div>
+
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 space-y-3">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-blue-300">Apoio de IA</p>
+                  <p className="text-xs text-blue-100/70 mt-1">
+                    Gere um prompt para criar a imagem sequencial em uma IA de imagem. Depois revise a execução e suba a imagem aprovada.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleBuildSequencePrompt}
+                  className="rounded-lg bg-blue-400 px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-blue-300 transition"
+                >
+                  Gerar prompt IA
+                </button>
+              </div>
+
+              {form.sequencePrompt && (
+                <textarea
+                  value={form.sequencePrompt}
+                  onChange={(event) => updateForm("sequencePrompt", event.target.value)}
+                  rows={5}
+                  className="w-full rounded-lg border border-blue-500/20 bg-[#0a0a0a] px-3 py-2 text-xs text-blue-100 placeholder-blue-100/40 outline-none focus:border-blue-300"
+                />
+              )}
+
+              <label className="flex items-center gap-2 text-xs text-blue-100/80">
+                <input
+                  type="checkbox"
+                  checked={form.sequenceGeneratedByAi}
+                  onChange={(event) => updateForm("sequenceGeneratedByAi", event.target.checked)}
+                  className="accent-blue-400"
+                />
+                Imagem sequencial criada com apoio de IA e revisada pelo professor
+              </label>
+            </div>
+          </div>
+
           <div>
             <label className="text-sm text-[#e5e5e5] block mb-1">Vídeo demonstrativo</label>
             <input
@@ -561,6 +756,11 @@ export default function ExerciseGrid({
                       <span className="inline-block mt-2 text-xs bg-[#D4A373]/10 text-[#D4A373] px-2 py-0.5 rounded-full">
                         {exercise.muscleGroup}
                       </span>
+                      {exercise.sequenceImageUrl && (
+                        <span className="inline-block mt-2 ml-1 text-xs bg-blue-500/10 text-blue-300 px-2 py-0.5 rounded-full">
+                          sequência visual
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition shrink-0">
@@ -589,6 +789,18 @@ export default function ExerciseGrid({
                       {shortText(exercise.description) || "Não informado."}
                     </p>
                   </div>
+
+                  {exercise.sequenceImageUrl && (
+                    <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
+                      <p className="text-[10px] uppercase tracking-wide text-blue-300 font-semibold">
+                        Sequência de execução
+                      </p>
+                      <p className="text-xs text-blue-100/80 mt-1">
+                        {exercise.sequenceImageLabel || `Imagem sequencial com ${exercise.sequenceFramesCount || 0} quadro(s)`}
+                        {exercise.sequenceGeneratedByAi ? " · apoio de IA" : ""}
+                      </p>
+                    </div>
+                  )}
 
                   {(exercise.safetyNotes || exercise.restrictionTags || exercise.commonMistakes || exercise.contraindications) && (
                     <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
