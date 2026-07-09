@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 
 type ConversationRole = "GESTOR" | "ADMIN" | "TEACHER" | "PROFESSOR";
 
@@ -10,6 +10,8 @@ type ConversationReply = {
   studentId?: string | null;
   teacherId?: string | null;
   content: string;
+  imageUrl?: string | null;
+  videoUrl?: string | null;
   senderRole: string;
   createdAt: string;
   resolvedAt?: string | null;
@@ -23,6 +25,8 @@ type ConversationItem = {
   studentId?: string | null;
   teacherId?: string | null;
   content: string;
+  imageUrl?: string | null;
+  videoUrl?: string | null;
   senderRole: string;
   createdAt: string;
   resolvedAt?: string | null;
@@ -175,6 +179,39 @@ function canCurrentUserCloseConversation(
   return false;
 }
 
+
+function renderChatAttachment(item: { imageUrl?: string | null; videoUrl?: string | null }) {
+  if (!item.imageUrl && !item.videoUrl) return null;
+
+  return (
+    <div className="mt-3 space-y-2">
+      {item.imageUrl && (
+        <a href={item.imageUrl} target="_blank" rel="noreferrer" className="block group">
+          <img
+            src={item.imageUrl}
+            alt="Imagem enviada na conversa"
+            className="max-h-52 max-w-full rounded-xl border border-[#ffffff10] object-contain bg-[#0a0a0a] group-hover:border-[#D4A373]/40"
+          />
+          <span className="mt-1 block text-[10px] text-[#D4A373]">Abrir imagem</span>
+        </a>
+      )}
+
+      {item.videoUrl && (
+        <div className="space-y-1">
+          <video
+            src={item.videoUrl}
+            controls
+            className="max-h-52 w-full rounded-xl border border-[#ffffff10] bg-black"
+          />
+          <a href={item.videoUrl} target="_blank" rel="noreferrer" className="text-[10px] text-[#D4A373] hover:underline">
+            Abrir vídeo em nova aba
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardConversationList({
   conversations,
   currentUserId,
@@ -186,6 +223,7 @@ export default function DashboardConversationList({
 
   const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
   const [replyContentById, setReplyContentById] = useState<Record<string, string>>({});
+  const [replyFileById, setReplyFileById] = useState<Record<string, File | null>>({});
   const [sendingConversationId, setSendingConversationId] = useState<string | null>(null);
   const [closingConversationId, setClosingConversationId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
@@ -196,12 +234,14 @@ export default function DashboardConversationList({
 
     if (!allowReply || conversation.resolvedAt) return;
 
-    const content = (replyContentById[conversation.id] || "").trim();
+    const selectedFile = replyFileById[conversation.id] || null;
+    const rawContent = (replyContentById[conversation.id] || "").trim();
+    const content = rawContent || (selectedFile ? "Anexo enviado na resposta." : "");
 
     if (!content) {
       setErrorById((current) => ({
         ...current,
-        [conversation.id]: "Escreva uma resposta antes de enviar.",
+        [conversation.id]: "Escreva uma resposta ou anexe uma foto/vídeo antes de enviar.",
       }));
       return;
     }
@@ -211,19 +251,19 @@ export default function DashboardConversationList({
     setSuccessById((current) => ({ ...current, [conversation.id]: "" }));
 
     try {
+      const form = new FormData();
+      form.append("content", content);
+      form.append("parentId", conversation.id);
+      form.append("senderRole", currentRole);
+      form.append("answeredById", currentUserId);
+
+      if (conversation.studentId) form.append("studentId", conversation.studentId);
+      if (conversation.teacherId) form.append("teacherId", conversation.teacherId);
+      if (selectedFile) form.append("file", selectedFile);
+
       const response = await fetch("/api/questions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content,
-          parentId: conversation.id,
-          studentId: conversation.studentId || null,
-          teacherId: conversation.teacherId || null,
-          senderRole: currentRole,
-          answeredById: currentUserId,
-        }),
+        body: form,
       });
 
       const data = await response.json().catch(() => null);
@@ -239,6 +279,10 @@ export default function DashboardConversationList({
       setReplyContentById((current) => ({
         ...current,
         [conversation.id]: "",
+      }));
+      setReplyFileById((current) => ({
+        ...current,
+        [conversation.id]: null,
       }));
 
       setSuccessById((current) => ({
@@ -355,7 +399,9 @@ export default function DashboardConversationList({
                 {conversation.content}
               </p>
 
-              <p className="text-xs text-[#a1a1a1] mb-3">
+              {renderChatAttachment(conversation)}
+
+              <p className="text-xs text-[#a1a1a1] mb-3 mt-3">
                 Para: <span className="text-[#D4A373]">{conversation.targetLabel}</span>
               </p>
 
@@ -397,6 +443,8 @@ export default function DashboardConversationList({
                         <p className="text-xs text-[#a1a1a1] whitespace-pre-wrap">
                           {reply.content}
                         </p>
+
+                        {renderChatAttachment(reply)}
                       </div>
                     ))}
                   </div>
@@ -443,6 +491,25 @@ export default function DashboardConversationList({
                       className="w-full bg-[#111111] border border-[#ffffff10] rounded-lg p-2 text-xs text-[#f5f5f5] focus:outline-none focus:border-[#D4A373] h-20 resize-none"
                       placeholder="Escreva sua resposta..."
                     />
+
+                    <div className="space-y-1">
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                          setReplyFileById((current) => ({
+                            ...current,
+                            [conversation.id]: event.target.files?.[0] || null,
+                          }))
+                        }
+                        className="block w-full text-[10px] text-[#a1a1a1] file:mr-2 file:rounded file:border-0 file:bg-[#D4A373] file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-[#0a0a0a]"
+                      />
+                      {replyFileById[conversation.id] && (
+                        <p className="text-[10px] text-[#D4A373]">
+                          Anexo selecionado: {replyFileById[conversation.id]?.name}
+                        </p>
+                      )}
+                    </div>
 
                     <div className="flex flex-wrap gap-2">
                       <button
