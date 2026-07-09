@@ -39,6 +39,22 @@ export default async function DashboardPage() {
 
   const profileImageUrl = currentUser?.image || sessionUser?.image || null;
 
+  function getStudentInitials(name?: string | null): string {
+    const parts = String(name || 'Aluno')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const first = parts[0]?.[0] || 'A';
+    const second = parts.length > 1 ? parts[parts.length - 1]?.[0] : '';
+
+    return `${first}${second}`.toUpperCase();
+  }
+
+  function getStudentProfileHref(studentId: string): string {
+    return `/dashboard/students/${encodeURIComponent(studentId)}`;
+  }
+
   const labels = {
     studentsCard: isGestor ? 'Todos os alunos' : 'Meus alunos',
 
@@ -203,6 +219,7 @@ export default async function DashboardPage() {
       id: true,
       name: true,
       email: true,
+      image: true,
       active: true,
       userId: true,
       userAuthId: true,
@@ -1159,37 +1176,74 @@ export default async function DashboardPage() {
             ) : (
               <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
                 {students.map((student) => (
-                  <div
+                  <a
                     key={student.id}
-                    className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
+                    href={getStudentProfileHref(student.id)}
+                    className="group block bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden hover:border-[#D4A373]/40 hover:bg-[#141414] transition"
                   >
                     <div className="p-4">
-                      <div className="flex justify-between items-start gap-4 mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/30 text-blue-400 border border-blue-500/20">
-                            ALUNO
-                          </span>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#1a1a1a] flex items-center justify-center">
+                            {student.image ? (
+                              <img
+                                src={student.image}
+                                alt={student.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-sm font-bold text-[#D4A373]">
+                                {getStudentInitials(student.name)}
+                              </span>
+                            )}
+                          </div>
 
-                          <span className="text-sm font-bold text-[#f5f5f5] truncate">
-                            {student.name}
-                          </span>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-900/30 text-blue-400 border border-blue-500/20">
+                                ALUNO
+                              </span>
+
+                              <span className="text-sm font-bold text-[#f5f5f5] truncate group-hover:text-[#D4A373] transition">
+                                {student.name}
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-[#a1a1a1]">
+                              Professor:{' '}
+                              <span className="text-[#D4A373]">
+                                {student.user?.name || 'Não vinculado'}
+                              </span>
+                            </p>
+
+                            <p className="text-[10px] text-[#6b6b6b] mt-1">
+                              Clique para abrir a ficha do aluno, dados pessoais e resumo de transição.
+                            </p>
+                          </div>
                         </div>
+
+                        <span className="text-[10px] text-[#D4A373] opacity-0 group-hover:opacity-100 transition shrink-0">
+                          Ver ficha →
+                        </span>
                       </div>
 
-                      <p className="text-xs text-[#a1a1a1] mb-3">
-                        Professor:{' '}
-                        <span className="text-[#D4A373]">
-                          {student.user?.name || 'Não vinculado'}
-                        </span>
-                      </p>
-
-                      <div className="flex justify-between items-center gap-4">
+                      <div className="flex flex-wrap items-center gap-2 mt-3">
                         <span className="text-[10px] text-emerald-400">
-                          Vinculado
+                          {student.user?.name ? 'Vinculado' : 'Não vinculado'}
                         </span>
+
+                        <span className="text-[10px] text-[#6b6b6b]">
+                          Status: {getCommercialStatus(student).replaceAll('_', ' ').toLowerCase()}
+                        </span>
+
+                        {student.contractedTrainingDaysPerMonth ? (
+                          <span className="text-[10px] text-[#6b6b6b]">
+                            {student.contractedTrainingDaysPerMonth} treino(s)/mês
+                          </span>
+                        ) : null}
                       </div>
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
             )}
