@@ -194,35 +194,7 @@ function renderAttachmentIndicator(item: { imageUrl?: string | null; videoUrl?: 
   );
 }
 
-function renderChatAttachmentLinks(item: { imageUrl?: string | null; videoUrl?: string | null }) {
-  if (!hasChatAttachment(item)) return null;
 
-  return (
-    <div className="mt-3 flex flex-wrap gap-2">
-      {item.imageUrl && (
-        <a
-          href={item.imageUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-[11px] font-semibold text-blue-300 hover:border-blue-400/40 hover:text-blue-200"
-        >
-          Ver imagem enviada
-        </a>
-      )}
-
-      {item.videoUrl && (
-        <a
-          href={item.videoUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-[11px] font-semibold text-blue-300 hover:border-blue-400/40 hover:text-blue-200"
-        >
-          Ver vídeo enviado
-        </a>
-      )}
-    </div>
-  );
-}
 
 export default function DashboardConversationList({
   conversations,
@@ -240,6 +212,69 @@ export default function DashboardConversationList({
   const [closingConversationId, setClosingConversationId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
   const [successById, setSuccessById] = useState<Record<string, string>>({});
+  const [openAttachmentKey, setOpenAttachmentKey] = useState<string | null>(null);
+
+  function renderChatAttachmentViewer(
+    item: { id?: string | null; imageUrl?: string | null; videoUrl?: string | null },
+    fallbackKey: string
+  ) {
+    if (!hasChatAttachment(item)) return null;
+
+    const itemId = String(item.id || fallbackKey);
+    const imageKey = `${itemId}:image`;
+    const videoKey = `${itemId}:video`;
+    const isImageOpen = openAttachmentKey === imageKey;
+    const isVideoOpen = openAttachmentKey === videoKey;
+
+    return (
+      <div className="mt-3 space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {item.imageUrl && (
+            <button
+              type="button"
+              onClick={() => setOpenAttachmentKey(isImageOpen ? null : imageKey)}
+              className="inline-flex items-center rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-[11px] font-semibold text-blue-300 hover:border-blue-400/40 hover:text-blue-200"
+            >
+              {isImageOpen ? "Ocultar imagem" : "Ver imagem enviada"}
+            </button>
+          )}
+
+          {item.videoUrl && (
+            <button
+              type="button"
+              onClick={() => setOpenAttachmentKey(isVideoOpen ? null : videoKey)}
+              className="inline-flex items-center rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-[11px] font-semibold text-blue-300 hover:border-blue-400/40 hover:text-blue-200"
+            >
+              {isVideoOpen ? "Ocultar vídeo" : "Ver vídeo enviado"}
+            </button>
+          )}
+        </div>
+
+        {item.imageUrl && isImageOpen && (
+          <div className="rounded-xl border border-[#ffffff10] bg-black/30 p-2">
+            <img
+              src={item.imageUrl}
+              alt="Imagem enviada na conversa"
+              className="max-h-72 w-auto max-w-full rounded-lg object-contain"
+            />
+          </div>
+        )}
+
+        {item.videoUrl && isVideoOpen && (
+          <div className="rounded-xl border border-[#ffffff10] bg-black/30 p-2">
+            <video
+              src={item.videoUrl}
+              controls
+              preload="metadata"
+              className="max-h-72 w-full rounded-lg bg-black object-contain"
+            >
+              Seu navegador não conseguiu reproduzir este vídeo.
+            </video>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   async function handleReply(event: FormEvent<HTMLFormElement>, conversation: ConversationItem) {
     event.preventDefault();
@@ -412,7 +447,7 @@ export default function DashboardConversationList({
               </p>
 
               {!isExpanded && renderAttachmentIndicator(conversation)}
-              {isExpanded && renderChatAttachmentLinks(conversation)}
+              {isExpanded && renderChatAttachmentViewer(conversation, `conversation-${conversation.id}`)}
 
               <p className="text-xs text-[#a1a1a1] mb-3 mt-3">
                 Para: <span className="text-[#D4A373]">{conversation.targetLabel}</span>
@@ -457,7 +492,7 @@ export default function DashboardConversationList({
                           {reply.content}
                         </p>
 
-                        {renderChatAttachmentLinks(reply)}
+                        {renderChatAttachmentViewer(reply, `reply-${reply.id}`)}
                       </div>
                     ))}
                   </div>
