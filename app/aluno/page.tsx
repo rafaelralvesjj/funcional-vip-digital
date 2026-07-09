@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
+import ProfilePhotoEditor from "@/components/ProfilePhotoEditor";
 interface LibraryExercise {
   id: string;
   name: string;
@@ -79,19 +80,6 @@ export default function AlunoPage() {
     return exerciseImages[key] || null;
   }
 
-  function getStudentInitials(name: string): string {
-    const parts = String(name || "Aluno")
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
-
-    if (parts.length === 0) return "A";
-
-    const first = parts[0]?.[0] || "A";
-    const second = parts.length > 1 ? parts[parts.length - 1]?.[0] || "" : "";
-
-    return `${first}${second}`.toUpperCase();
-  }
   useEffect(() => {
     fetchStudentInfo();
     fetchDashboardSummary();
@@ -797,25 +785,29 @@ export default function AlunoPage() {
   const unreadCount = notices.filter((n: any) => !n.readByStudent).length;
   const pendingCount = questions.filter((q: any) => getThreadStatus(q) === "new_reply").length;
   const profileImageUrl = getImageUrl(studentImage || dashboardSummary?.student?.image || null);
-  const studentInitials = getStudentInitials(studentName);
-
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#1a1a1a] flex items-center justify-center shadow-lg shadow-black/20">
-          {profileImageUrl ? (
-            <img
-              src={profileImageUrl}
-              alt={`Foto de ${studentName}`}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <span className="text-sm font-bold text-[#D4A373]">
-              {studentInitials}
-            </span>
-          )}
-        </div>
+        <ProfilePhotoEditor
+          name={studentName}
+          initialImageUrl={profileImageUrl}
+          size="md"
+          onUpdated={(imageUrl) => {
+            setStudentImage(imageUrl);
+            setDashboardSummary((current: any) =>
+              current
+                ? {
+                    ...current,
+                    student: {
+                      ...current.student,
+                      image: imageUrl,
+                    },
+                  }
+                : current
+            );
+          }}
+        />
 
         <div>
           <h1 className="text-lg font-bold text-[#f5f5f5]">Ola, {studentName}!</h1>
