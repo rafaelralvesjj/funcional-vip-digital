@@ -180,33 +180,45 @@ function canCurrentUserCloseConversation(
 }
 
 
-function renderChatAttachment(item: { imageUrl?: string | null; videoUrl?: string | null }) {
-  if (!item.imageUrl && !item.videoUrl) return null;
+function hasChatAttachment(item: { imageUrl?: string | null; videoUrl?: string | null }): boolean {
+  return Boolean(item.imageUrl || item.videoUrl);
+}
+
+function renderAttachmentIndicator(item: { imageUrl?: string | null; videoUrl?: string | null }) {
+  if (!hasChatAttachment(item)) return null;
 
   return (
-    <div className="mt-3 space-y-2">
+    <p className="mt-2 text-[10px] text-[#D4A373]">
+      📎 Anexo enviado. Abra a conversa para visualizar.
+    </p>
+  );
+}
+
+function renderChatAttachmentLinks(item: { imageUrl?: string | null; videoUrl?: string | null }) {
+  if (!hasChatAttachment(item)) return null;
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
       {item.imageUrl && (
-        <a href={item.imageUrl} target="_blank" rel="noreferrer" className="block group">
-          <img
-            src={item.imageUrl}
-            alt="Imagem enviada na conversa"
-            className="max-h-52 max-w-full rounded-xl border border-[#ffffff10] object-contain bg-[#0a0a0a] group-hover:border-[#D4A373]/40"
-          />
-          <span className="mt-1 block text-[10px] text-[#D4A373]">Abrir imagem</span>
+        <a
+          href={item.imageUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-[11px] font-semibold text-blue-300 hover:border-blue-400/40 hover:text-blue-200"
+        >
+          Ver imagem enviada
         </a>
       )}
 
       {item.videoUrl && (
-        <div className="space-y-1">
-          <video
-            src={item.videoUrl}
-            controls
-            className="max-h-52 w-full rounded-xl border border-[#ffffff10] bg-black"
-          />
-          <a href={item.videoUrl} target="_blank" rel="noreferrer" className="text-[10px] text-[#D4A373] hover:underline">
-            Abrir vídeo em nova aba
-          </a>
-        </div>
+        <a
+          href={item.videoUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-[11px] font-semibold text-blue-300 hover:border-blue-400/40 hover:text-blue-200"
+        >
+          Ver vídeo enviado
+        </a>
       )}
     </div>
   );
@@ -399,7 +411,8 @@ export default function DashboardConversationList({
                 {conversation.content}
               </p>
 
-              {renderChatAttachment(conversation)}
+              {!isExpanded && renderAttachmentIndicator(conversation)}
+              {isExpanded && renderChatAttachmentLinks(conversation)}
 
               <p className="text-xs text-[#a1a1a1] mb-3 mt-3">
                 Para: <span className="text-[#D4A373]">{conversation.targetLabel}</span>
@@ -444,7 +457,7 @@ export default function DashboardConversationList({
                           {reply.content}
                         </p>
 
-                        {renderChatAttachment(reply)}
+                        {renderChatAttachmentLinks(reply)}
                       </div>
                     ))}
                   </div>
