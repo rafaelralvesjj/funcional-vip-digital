@@ -59,6 +59,8 @@ function hasCareSignal(content: string): boolean {
 type CareSignalClassification = {
   hasSignal: boolean;
   isCritical: boolean;
+  requiresTrainingPause: boolean;
+  eventType: "RELATO_DOR_DUVIDA" | "PAUSA_POR_CUIDADO";
   severity: "ALERTA" | "CUIDADO";
   status: "ABERTO" | "REQUER_REVISAO";
 };
@@ -66,6 +68,52 @@ type CareSignalClassification = {
 function classifyCareSignal(content: string): CareSignalClassification {
   const text = normalizeSearchText(content);
   const paddedText = ` ${text} `;
+
+  const trainingPauseKeywords = [
+    "nao consigo treinar",
+    "nao consigo fazer treino",
+    "nao consigo fazer o treino",
+    "nao consigo me exercitar",
+    "nao vou conseguir treinar",
+    "nao posso treinar",
+    "sem condicao de treinar",
+    "sem condicoes de treinar",
+    "sem condicao para treinar",
+    "sem condicoes para treinar",
+    "impossibilitado de treinar",
+    "impossibilitada de treinar",
+    "preciso parar de treinar",
+    "vou ter que parar de treinar",
+    "medico mandou parar",
+    "medica mandou parar",
+    "fisioterapeuta mandou parar",
+    "estou de repouso",
+    "repouso medico",
+    "atestado",
+    "fratura",
+    "fraturei",
+    "quebrei",
+    "gesso",
+    "imobilizado",
+    "imobilizada",
+    "bota ortopedica",
+    "muleta",
+    "cirurgia",
+    "operei",
+    "operacao",
+    "hospital",
+    "emergencia",
+    "acidente",
+    "cai e machuquei",
+    "cai e nao consigo",
+    "nao consigo apoiar",
+    "nao consigo andar",
+    "nao consigo levantar",
+    "nao consigo mexer",
+    "nao consigo mover",
+  ];
+
+  const requiresTrainingPause = trainingPauseKeywords.some((keyword) => text.includes(keyword));
 
   const generalCareKeywords = [
     "dor",
@@ -107,12 +155,14 @@ function classifyCareSignal(content: string): CareSignalClassification {
 
   const hasShortFootSignal = /(^|\s)pe(\s|$)/.test(paddedText);
   const hasGeneralCareSignal =
-    generalCareKeywords.some((keyword) => text.includes(keyword)) || hasShortFootSignal;
+    generalCareKeywords.some((keyword) => text.includes(keyword)) || hasShortFootSignal || requiresTrainingPause;
 
   if (!hasGeneralCareSignal) {
     return {
       hasSignal: false,
       isCritical: false,
+      requiresTrainingPause: false,
+      eventType: "RELATO_DOR_DUVIDA",
       severity: "ALERTA",
       status: "ABERTO",
     };
@@ -152,16 +202,17 @@ function classifyCareSignal(content: string): CareSignalClassification {
     "desmaiei",
   ];
 
-  const isCritical = criticalCareKeywords.some((keyword) => text.includes(keyword));
+  const isCritical = requiresTrainingPause || criticalCareKeywords.some((keyword) => text.includes(keyword));
 
   return {
     hasSignal: true,
     isCritical,
+    requiresTrainingPause,
+    eventType: requiresTrainingPause ? "PAUSA_POR_CUIDADO" : "RELATO_DOR_DUVIDA",
     severity: isCritical ? "CUIDADO" : "ALERTA",
     status: isCritical ? "REQUER_REVISAO" : "ABERTO",
   };
 }
-
 function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
   const date = new Date(referenceDate);
   date.setHours(0, 0, 0, 0);
@@ -511,7 +562,7 @@ async function maybeCreateCareEventFromStudentQuestion({
     where: {
       studentId,
       source: "CHAT_DUVIDAS",
-      eventType: "RELATO_DOR_DUVIDA",
+      eventType: careClassification.eventType,
       status: {
         in: ["ABERTO", "REQUER_REVISAO", "EM_REVISAO"],
       },
@@ -540,14 +591,20 @@ async function maybeCreateCareEventFromStudentQuestion({
   const effectiveProfessorId = professorId || student?.userId || null;
   const { startOfWeek, endOfWeek } = getWeekRange(firstCareMessage.createdAt || new Date());
   const contractId = await findActiveContractIdForCareEvent(studentId);
-  const title = careClassification.isCritical
-    ? "Relato crítico de dor/desconforto em dúvida do aluno"
-    : "Relato de dor/desconforto em dúvida do aluno";
+  const title = careClassification.requiresTrainingPause
+    ? "Pausa por cuidado: aluno sem condição de treinar"
+    : careClassification.isCritical
+      ? "Relato crítico de dor/desconforto em dúvida do aluno"
+      : "Relato de dor/desconforto em dúvida do aluno";
   const description = [
     `Conversa: ${rootConversationId}`,
     `Mensagem: ${firstCareMessage.id}`,
-    "O aluno registrou uma mensagem com possível dor, desconforto, torção, lesão ou sinal físico sensível no chat/dúvidas.",
-    "Antes de evoluir, repetir ou liberar a próxima semana de treinos, o professor deve revisar o relato e ajustar a prescrição se necessário.",
+    careClassification.requiresTrainingPause
+      ? "O aluno registrou uma mensagem indicando que está sem condição de treinar ou precisa pausar por cuidado."
+      : "O aluno registrou uma mensagem com possível dor, desconforto, torção, lesão ou sinal físico sensível no chat/dúvidas.",
+    careClassification.requiresTrainingPause
+      ? "Não liberar novo treino normal enquanto este evento estiver aberto. O aluno deve informar aptidão para retomada e o professor deve revisar antes de voltar a prescrever."
+      : "Antes de evoluir, repetir ou liberar a próxima semana de treinos, o professor deve revisar o relato e ajustar a prescrição se necessário.",
     "Relato do aluno:",
     firstCareMessage.content,
   ].join("\n");
@@ -560,8 +617,12 @@ async function maybeCreateCareEventFromStudentQuestion({
         data: {
           title,
           content: [
-            `${student?.name || "Aluno"} registrou ${careClassification.isCritical ? "um possível cuidado crítico" : "um alerta"} de dor/desconforto no chat/dúvidas.`,
-            "Revise a conversa antes de liberar ou evoluir a próxima semana de treinos.",
+            careClassification.requiresTrainingPause
+              ? `${student?.name || "Aluno"} sinalizou que está sem condição de treinar e pode precisar de pausa por cuidado.`
+              : `${student?.name || "Aluno"} registrou ${careClassification.isCritical ? "um possível cuidado crítico" : "um alerta"} de dor/desconforto no chat/dúvidas.`,
+            careClassification.requiresTrainingPause
+              ? "Não libere novo treino normal enquanto o alerta de pausa estiver aberto. Oriente retomada segura e, se necessário, avaliação profissional."
+              : "Revise a conversa antes de liberar ou evoluir a próxima semana de treinos.",
             "",
             `Relato: ${firstCareMessage.content}`,
           ].join("\n"),
@@ -588,15 +649,16 @@ async function maybeCreateCareEventFromStudentQuestion({
       studentId,
       professorId: effectiveProfessorId,
       authorId,
-      eventType: "RELATO_DOR_DUVIDA",
+      eventType: careClassification.eventType,
       severity: careClassification.severity,
       status: careClassification.status,
       source: "CHAT_DUVIDAS",
       title,
       description,
       studentMessage: firstCareMessage.content,
-      professorMessage:
-        "Revisar relato de dor/desconforto antes de liberar, evoluir carga, impacto, volume, complexidade ou intensidade da próxima semana.",
+      professorMessage: careClassification.requiresTrainingPause
+        ? "Aluno sinalizou que está sem condição de treinar. Não liberar treino normal enquanto o evento estiver aberto. Orientar avaliação profissional quando necessário e revisar retomada segura quando o aluno informar aptidão."
+        : "Revisar relato de dor/desconforto antes de liberar, evoluir carga, impacto, volume, complexidade ou intensidade da próxima semana.",
       contractId,
       weekStart: startOfWeek,
       weekEnd: endOfWeek,
