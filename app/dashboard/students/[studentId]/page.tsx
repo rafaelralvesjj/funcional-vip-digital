@@ -15,6 +15,7 @@ type Student = AnyItem & {
   phone?: string | null;
   active?: boolean;
   commercialStatus?: string | null;
+  image?: string | null;
   contractedTrainingDaysPerMonth?: number | null;
   professorName?: string | null;
   user?: {
@@ -61,6 +62,18 @@ function formatDate(value?: string | null): string {
     month: "2-digit",
     year: "numeric",
   });
+}
+
+function getInitials(name?: string | null): string {
+  const parts = String(name || "Aluno")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const first = parts[0]?.[0] || "A";
+  const second = parts.length > 1 ? parts[parts.length - 1]?.[0] : "";
+
+  return `${first}${second}`.toUpperCase();
 }
 
 function normalizeStatus(status?: string | null): string {
@@ -581,7 +594,7 @@ export default function StudentDetailPage() {
   const params = useParams();
   const studentId = String(params?.studentId || "");
 
-  const [activeTab, setActiveTab] = useState<TabKey>("avisos");
+  const [activeTab, setActiveTab] = useState<TabKey>("resumo");
   const [student, setStudent] = useState<Student | null>(null);
   const [notices, setNotices] = useState<AnyItem[]>([]);
   const [workouts, setWorkouts] = useState<AnyItem[]>([]);
@@ -640,6 +653,7 @@ export default function StudentDetailPage() {
   }
 
   const professorName = student?.professorName || student?.user?.name || "Professor não informado";
+  const studentImageUrl = student?.image || student?.userAuth?.image || null;
   const profile = useMemo(() => getStudentProfile(student), [student]);
 
   const workoutStats = useMemo(() => {
@@ -955,23 +969,43 @@ export default function StudentDetailPage() {
     <main className="min-h-screen bg-[#0a0a0a] p-4 md:p-6 text-[#f5f5f5]">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <div>
-            <Link href="/dashboard/students" className="text-xs text-[#D4A373] underline">
-              ← Voltar para alunos
-            </Link>
+          <div className="flex items-start gap-4">
+            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#111] flex items-center justify-center">
+              {studentImageUrl ? (
+                <img
+                  src={studentImageUrl}
+                  alt={student?.name || "Aluno"}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-2xl font-bold text-[#D4A373]">
+                  {getInitials(student?.name)}
+                </span>
+              )}
+            </div>
 
-            <p className="text-xs uppercase tracking-[0.3em] text-[#D4A373] mt-4 mb-2">
-              Detalhe do aluno
-            </p>
+            <div>
+              <Link href="/dashboard/students" className="text-xs text-[#D4A373] underline">
+                ← Voltar para alunos
+              </Link>
 
-            <h1 className="text-2xl font-bold text-[#D4A373]">
-              {student?.name || "Aluno"}
-            </h1>
+              <p className="text-xs uppercase tracking-[0.3em] text-[#D4A373] mt-4 mb-2">
+                Ficha do aluno
+              </p>
 
-            <p className="text-sm text-[#a1a1a1] mt-2">
-              {student?.email || "Sem e-mail"}
-              {student?.phone ? ` · ${student.phone}` : ""}
-            </p>
+              <h1 className="text-2xl font-bold text-[#D4A373]">
+                {student?.name || "Aluno"}
+              </h1>
+
+              <p className="text-sm text-[#a1a1a1] mt-2">
+                {student?.email || "Sem e-mail"}
+                {student?.phone ? ` · ${student.phone}` : ""}
+              </p>
+
+              <p className="text-xs text-[#6b6b6b] mt-1">
+                Entrou na Funcional em {formatDate(student?.createdAt)} · Professor atual: {professorName}
+              </p>
+            </div>
           </div>
 
           <button
@@ -995,6 +1029,38 @@ export default function StudentDetailPage() {
           </div>
         ) : (
           <>
+            <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4 md:p-5 space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-[#D4A373] font-semibold">
+                    Resumo para transição de professor
+                  </p>
+                  <h2 className="text-lg font-bold text-[#f5f5f5] mt-1">
+                    Como ler este aluno rapidamente
+                  </h2>
+                  <p className="text-sm text-[#d4d4d4] leading-relaxed mt-2 max-w-4xl">
+                    {teacherReading}
+                  </p>
+                </div>
+
+                <Link
+                  href={`/dashboard/resumo-aluno?studentId=${encodeURIComponent(studentId)}`}
+                  className="inline-flex items-center justify-center rounded-xl bg-[#D4A373] text-[#0a0a0a] px-4 py-3 text-xs font-semibold hover:bg-[#c49563] transition"
+                >
+                  Gerar resumo IA
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <SummaryField label="Objetivo" value={profile.objective} />
+                <SummaryField label="Nível atual" value={profile.activityLevel} />
+                <SummaryField label="Ambiente/equipamentos" value={`${profile.trainingEnvironment} · ${profile.availableEquipment}`} />
+                <SummaryField label="Tempo e preferência" value={`${profile.timeAvailableMinutes} · ${profile.preferredDays}`} />
+                <SummaryField label="Dor/desconforto" value={profile.currentPain} />
+                <SummaryField label="Restrição médica/física" value={profile.medicalRestriction} />
+              </div>
+            </section>
+
             <section className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
                 <p className="text-xs uppercase text-[#6b6b6b]">Status</p>
