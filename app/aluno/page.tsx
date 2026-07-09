@@ -12,6 +12,7 @@ interface LibraryExercise {
 export default function AlunoPage() {
   const [studentId, setStudentId] = useState<string>("");
   const [studentName, setStudentName] = useState("Aluno");
+  const [studentImage, setStudentImage] = useState<string | null>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
@@ -77,6 +78,20 @@ export default function AlunoPage() {
     const key = exerciseName.toLowerCase();
     return exerciseImages[key] || null;
   }
+
+  function getStudentInitials(name: string): string {
+    const parts = String(name || "Aluno")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (parts.length === 0) return "A";
+
+    const first = parts[0]?.[0] || "A";
+    const second = parts.length > 1 ? parts[parts.length - 1]?.[0] || "" : "";
+
+    return `${first}${second}`.toUpperCase();
+  }
   useEffect(() => {
     fetchStudentInfo();
     fetchDashboardSummary();
@@ -95,11 +110,18 @@ export default function AlunoPage() {
       if (res.ok) {
         const session = await res.json();
         const userName = session?.user?.name || session?.name || "";
+        const userImage = session?.user?.image || session?.image || null;
+
+        if (userImage) {
+          setStudentImage(String(userImage));
+        }
+
         const r2 = await fetch("/api/student/me");
         if (r2.ok) {
           const data = await r2.json();
           setStudentId(data.id);
           setStudentName(data.name);
+          setStudentImage(data.image || data.photoUrl || data.avatarUrl || userImage || null);
         } else if (userName) {
           setStudentName(userName);
         }
@@ -120,6 +142,10 @@ export default function AlunoPage() {
 
       if (res.ok && data?.summary) {
         setDashboardSummary(data.summary);
+
+        if (data.summary?.student?.image) {
+          setStudentImage(data.summary.student.image);
+        }
       }
     } catch {}
 
@@ -770,13 +796,31 @@ export default function AlunoPage() {
   const meses = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   const unreadCount = notices.filter((n: any) => !n.readByStudent).length;
   const pendingCount = questions.filter((q: any) => getThreadStatus(q) === "new_reply").length;
+  const profileImageUrl = getImageUrl(studentImage || dashboardSummary?.student?.image || null);
+  const studentInitials = getStudentInitials(studentName);
 
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
   return (
     <div className="space-y-3">
-      <div>
-        <h1 className="text-lg font-bold text-[#f5f5f5]">Ola, {studentName}!</h1>
-        <p className="text-xs text-[#a1a1a1]">Bem-vindo a sua area do aluno</p>
+      <div className="flex items-center gap-3">
+        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#1a1a1a] flex items-center justify-center shadow-lg shadow-black/20">
+          {profileImageUrl ? (
+            <img
+              src={profileImageUrl}
+              alt={`Foto de ${studentName}`}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="text-sm font-bold text-[#D4A373]">
+              {studentInitials}
+            </span>
+          )}
+        </div>
+
+        <div>
+          <h1 className="text-lg font-bold text-[#f5f5f5]">Ola, {studentName}!</h1>
+          <p className="text-xs text-[#a1a1a1]">Bem-vindo a sua area do aluno</p>
+        </div>
       </div>
       {message && (
         <div className={"text-sm rounded-lg p-2.5 " + (message.type === "success" ? "bg-green-500/10 text-green-400" : message.type === "error" ? "bg-red-500/10 text-red-400" : "bg-blue-500/10 text-blue-400")}>
