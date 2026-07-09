@@ -38,6 +38,26 @@ type DashboardSummary = {
     method: string | null;
     paymentLinkUrl: string | null;
   } | null;
+  currentCarePause?: {
+    id: string;
+    eventType: string;
+    severity: string;
+    status: string;
+    title: string;
+    description: string | null;
+    studentMessage: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  commercialImpact?: {
+    status: "SEM_IMPACTO" | "CONGELAR_EXPERIENCIA" | "AVALIAR_COMPENSACAO";
+    affectsTrainingDelivery: boolean;
+    countsAsCompletedWorkout: boolean;
+    countsAsAbsence: boolean;
+    recommendedAction: string | null;
+    preservedTrialDays: number | null;
+    message: string | null;
+  };
   flags: {
     isTrial: boolean;
     isPaid: boolean;
@@ -46,10 +66,15 @@ type DashboardSummary = {
     isTrainingBlocked: boolean;
     hasProfessor: boolean;
     hasPaymentIssue: boolean;
+    hasOpenCarePause?: boolean;
+    hasCarePauseAwaitingReturn?: boolean;
+    hasCarePauseUnderReview?: boolean;
+    shouldEvaluateCommercialCompensation?: boolean;
   };
   uiState:
     | "EXPERIENCIA_ATIVA"
     | "CONTRATO_ATIVO"
+    | "PAUSA_POR_CUIDADO"
     | "AGUARDANDO_PAGAMENTO"
     | "AGUARDANDO_VINCULO_PROFESSOR"
     | "SUSPENSO_POR_PAGAMENTO"
@@ -90,12 +115,23 @@ function getCycleLabel(summary: DashboardSummary) {
 }
 
 function getStatusTitle(summary: DashboardSummary) {
+  if (summary.uiState === "PAUSA_POR_CUIDADO") return "Treinos pausados por cuidado";
   if (summary.uiState === "EXPERIENCIA_ATIVA") return "Experiência gratuita ativa";
   if (summary.uiState === "AGUARDANDO_VINCULO_PROFESSOR") return "Experiência ativa, aguardando professor";
   if (summary.uiState === "CONTRATO_ATIVO") return "Plano ativo";
   if (summary.uiState === "AGUARDANDO_PAGAMENTO") return "Aguardando pagamento";
   if (summary.uiState === "SUSPENSO_POR_PAGAMENTO") return "Acesso suspenso por pagamento";
   return "Sem contrato ativo";
+}
+
+function getCarePauseStatusLabel(status?: string | null) {
+  const normalized = String(status || "").toUpperCase();
+
+  if (normalized === "EM_REVISAO") return "Retomada solicitada, aguardando professor";
+  if (normalized === "REQUER_REVISAO") return "Aguardando sinalização de retomada";
+  if (normalized === "ABERTO") return "Pausa aberta";
+
+  return normalized || "Pausa aberta";
 }
 
 export function AlunoCommercialStatusPanel() {
@@ -178,9 +214,11 @@ export function AlunoCommercialStatusPanel() {
   if (!summary) return null;
 
   const cycle = summary.currentCycle;
+  const isCarePause = summary.uiState === "PAUSA_POR_CUIDADO" || Boolean(summary.flags?.hasOpenCarePause);
   const canRequestTrialContinuation =
     summary.flags?.isTrial &&
     Boolean(cycle) &&
+    !isCarePause &&
     summary.uiState !== "SEM_CONTRATO_ATIVO" &&
     summary.uiState !== "SUSPENSO_POR_PAGAMENTO";
 
@@ -207,6 +245,35 @@ export function AlunoCommercialStatusPanel() {
           </div>
         )}
       </div>
+
+      {isCarePause && (
+        <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+          <p className="text-[11px] font-semibold text-red-300">
+            Pausa por cuidado ativa
+          </p>
+          <p className="mt-1 text-[10px] leading-relaxed text-red-100/80">
+            Seus treinos ficam pausados até a retomada ser revisada pelo professor. Esse período não deve ser tratado como falta, baixa adesão comum ou treino realizado.
+          </p>
+
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <InfoItem label="Status" value={getCarePauseStatusLabel(summary.currentCarePause?.status)} />
+            <InfoItem
+              label="Impacto"
+              value={summary.commercialImpact?.status === "CONGELAR_EXPERIENCIA" ? "Preservar experiência" : "Avaliar compensação"}
+            />
+            <InfoItem
+              label="Treinos"
+              value="Não conta como feito/falta"
+            />
+          </div>
+
+          {summary.commercialImpact?.message && (
+            <p className="mt-2 text-[10px] leading-relaxed text-red-100/70">
+              {summary.commercialImpact.message}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
         <InfoItem label="Ciclo" value={getCycleLabel(summary)} />
