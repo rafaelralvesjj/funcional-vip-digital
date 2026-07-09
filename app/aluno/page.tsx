@@ -73,6 +73,35 @@ export default function AlunoPage() {
     }
     return url;
   };
+
+  function renderChatAttachment(msg: any) {
+    if (!msg?.imageUrl && !msg?.videoUrl) return null;
+
+    return (
+      <div className="mt-2 space-y-2">
+        {msg.imageUrl && (
+          <a href={msg.imageUrl} target="_blank" rel="noreferrer" className="block">
+            <img
+              src={msg.imageUrl}
+              alt="Imagem enviada na dúvida"
+              className="max-h-52 max-w-full rounded-xl border border-[#ffffff10] bg-[#0a0a0a] object-contain"
+            />
+            <span className="mt-1 block text-[9px] text-blue-400 underline">Abrir imagem</span>
+          </a>
+        )}
+
+        {msg.videoUrl && (
+          <div className="space-y-1">
+            <video src={msg.videoUrl} controls className="max-h-52 w-full rounded-xl border border-[#ffffff10] bg-black" />
+            <a href={msg.videoUrl} target="_blank" rel="noreferrer" className="text-[9px] text-blue-400 underline">
+              Abrir vídeo
+            </a>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   async function fetchExerciseLibrary() {
     try {
       const res = await fetch("/api/exercise-library?active=1", {
@@ -507,14 +536,17 @@ export default function AlunoPage() {
 
   async function handleSendQuestion(parentId?: string) {
     const text = parentId ? followUpText : newQuestion;
-    if (!text.trim() || !studentId) return;
+    const file = parentId ? followUpFile : questionFile;
+    const content = text.trim() || (file ? "Anexo enviado pelo aluno." : "");
+
+    if (!content || !studentId) return;
 
     if (parentId) setSendingFollowUp(true);
     else setSendingQuestion(true);
 
     try {
       const form = new FormData();
-      form.append("content", text.trim());
+      form.append("content", content);
       form.append("studentId", studentId);
 
       if (parentId) {
@@ -522,10 +554,11 @@ export default function AlunoPage() {
       } else {
         form.append("target", questionTarget);
       }
-      const file = parentId ? followUpFile : questionFile;
       if (file) form.append("file", file);
 
       const res = await fetch("/api/aluno/questions", { method: "POST", body: form });
+      const data = await res.json().catch(() => null);
+
       if (res.ok) {
         if (parentId) {
           setFollowUpText("");
@@ -535,10 +568,10 @@ export default function AlunoPage() {
           setNewQuestion("");
           setQuestionFile(null);
         }
-        setMessage({ type: "success", text: "Duvida enviada!" });
+        setMessage({ type: "success", text: "Dúvida enviada!" });
         await fetchQuestions(studentId);
       } else {
-        setMessage({ type: "error", text: "Erro ao enviar" });
+        setMessage({ type: "error", text: data?.error || "Erro ao enviar" });
       }
     } catch {
       setMessage({ type: "error", text: "Erro ao enviar" });
@@ -1084,7 +1117,7 @@ export default function AlunoPage() {
                   className="text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
                 {questionFile && <span className="text-[8px] text-[#D4A373]">1</span>}
               </div>
-              <button onClick={() => handleSendQuestion()} disabled={sendingQuestion || !newQuestion.trim()}
+              <button onClick={() => handleSendQuestion()} disabled={sendingQuestion || (!newQuestion.trim() && !questionFile)}
                 className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
                 {sendingQuestion ? "..." : "Enviar"}
               </button>
@@ -1171,23 +1204,7 @@ export default function AlunoPage() {
 
                         <p className="text-xs text-[#e5e5e5]">{msg.content}</p>
 
-                        {(msg.imageUrl || msg.videoUrl) && (
-                          <div className="mt-1.5 flex gap-2">
-                            {msg.imageUrl && (
-                              <a href={msg.imageUrl} target="_blank" className="text-[9px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                Ver imagem
-                              </a>
-                            )}
-
-                            {msg.videoUrl && (
-                              <a href={msg.videoUrl} target="_blank" className="text-[9px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                Ver video
-                              </a>
-                            )}
-                          </div>
-                        )}
+                        {renderChatAttachment(msg)}
                       </div>
                     </div>
 
@@ -1278,7 +1295,7 @@ export default function AlunoPage() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleSendQuestion(selectedQuestion.id)}
-                    disabled={sendingFollowUp || !followUpText.trim()}
+                    disabled={sendingFollowUp || (!followUpText.trim() && !followUpFile)}
                     className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
                     {sendingFollowUp ? "..." : "Continuar perguntando"}
                   </button>
