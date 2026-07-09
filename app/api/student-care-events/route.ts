@@ -105,6 +105,8 @@ function normalizeEventType(value?: string | null): string {
     "FALTA_TEMPO",
     "EXERCICIO_DIFICIL",
     "DOR_DESCONFORTO",
+    "RELATO_DOR_DUVIDA",
+    "PAUSA_POR_CUIDADO",
     "NAO_ENTENDI",
     "DESMOTIVACAO",
     "BAIXA_ADERENCIA",
@@ -167,6 +169,28 @@ function getCareCopy({
         "Sentimos muito que você tenha sentido dor ou desconforto. Sua segurança vem em primeiro lugar. Evite insistir no exercício que gerou desconforto. Se a dor persistir, piorar ou limitar seus movimentos, procure orientação de um profissional de saúde ou fisioterapia. Já sinalizamos o professor para revisar sua programação antes de qualquer progressão.",
       professorMessage:
         `${studentName} relatou dor, desconforto ou possível lesão. Não seguir com progressão automática. Revise o treino, o exercício envolvido, intensidade e necessidade de adaptação. Se necessário, oriente avaliação com profissional de saúde.`,
+      shouldEmailStudent: true,
+      shouldEmailProfessor: true,
+    },
+    RELATO_DOR_DUVIDA: {
+      severity: "CUIDADO",
+      status: "REQUER_REVISAO",
+      title: "Sua segurança vem primeiro",
+      studentMessage:
+        "Obrigado por avisar. Dor ou desconforto não devem ser ignorados. Já sinalizamos o professor para revisar sua próxima programação antes de qualquer progressão. Se a dor persistir, piorar ou limitar movimentos, procure avaliação de um profissional de saúde.",
+      professorMessage:
+        `${studentName} relatou dor/desconforto no chat. Revisar antes de liberar, evoluir carga, impacto, volume ou complexidade da próxima semana.`,
+      shouldEmailStudent: true,
+      shouldEmailProfessor: true,
+    },
+    PAUSA_POR_CUIDADO: {
+      severity: "CUIDADO",
+      status: "REQUER_REVISAO",
+      title: "Pausa por cuidado registrada",
+      studentMessage:
+        "Sua segurança vem primeiro. Registramos uma pausa por cuidado porque você informou que não está em condição de treinar agora. Evite insistir em exercícios. Quando se sentir apto(a) para retomar, avise no sistema ou fale com o professor. Se houver dor persistente, piora ou limitação de movimento, procure avaliação de um profissional de saúde.",
+      professorMessage:
+        `${studentName} sinalizou que está sem condição de treinar. Não liberar treino normal enquanto este evento estiver aberto. Orientar avaliação profissional quando necessário e revisar retomada segura quando o aluno informar aptidão.`,
       shouldEmailStudent: true,
       shouldEmailProfessor: true,
     },
