@@ -182,7 +182,11 @@ export default function AlunoPage() {
       );
     } catch {}
   }
-  async function markAsComplete() {
+  async function markAsComplete(options?: {
+    careEventType?: string;
+    careEventDescription?: string | null;
+    completionStatus?: "CONCLUIDO" | "NAO_CONCLUIDO_COM_RELATO" | "INTERROMPIDO_CUIDADO";
+  }) {
     if (!selectedPlan || !studentId || selectedDay === null) return;
 
     if (isStudentTrainingBlocked()) {
@@ -205,7 +209,22 @@ export default function AlunoPage() {
       return;
     }
 
-    setCompleting(true); setMessage(null);
+    const careEventType = String(options?.careEventType || "").trim();
+    const completionStatus = options?.completionStatus || "CONCLUIDO";
+    const description = String(options?.careEventDescription ?? careEventDetail ?? "").trim();
+
+    if (careEventType && !description) {
+      setMessage({
+        type: "error",
+        text: "Explique em poucas palavras o que aconteceu antes de encerrar o treino com relato de cuidado.",
+      });
+      setTimeout(() => setMessage(null), 5000);
+      return;
+    }
+
+    setCompleting(true);
+    setMessage(null);
+
     try {
       const planDate = new Date(currentYear, currentMonth, selectedDay);
       const res = await fetch("/api/workout/mark-complete", {
@@ -215,23 +234,54 @@ export default function AlunoPage() {
           workoutPlanId: selectedPlan.id,
           studentId,
           date: planDate.toISOString(),
+          completionStatus,
+          careEventType: careEventType || null,
+          careEventDescription: description || null,
         }),
       });
+
+      const data = await res.json().catch(() => null);
+
       if (res.ok) {
-        setMessage({ type: "success", text: "Treino concluido!" });
-        fetchWorkouts(studentId);
+        if (careEventType) {
+          setCareEventSentForPlanId((current) => ({
+            ...current,
+            [selectedPlan.id]: true,
+          }));
+        }
+
+        setCareEventDetail("");
+
+        setMessage({
+          type: "success",
+          text:
+            data?.message ||
+            (completionStatus === "CONCLUIDO"
+              ? "Treino concluído!"
+              : "Treino encerrado com relato enviado ao professor."),
+        });
+
+        await fetchWorkouts(studentId);
+        await fetchNotices(studentId);
+        await fetchDashboardSummary();
         setShowWorkoutModal(false);
       } else {
-        const data = await res.json().catch(() => null);
         setMessage({
           type: "error",
           text: data?.error || "Não foi possível validar este treino.",
         });
         setShowWorkoutModal(false);
       }
-    } catch {}
+    } catch {
+      setMessage({
+        type: "error",
+        text: "Não foi possível validar este treino.",
+      });
+      setShowWorkoutModal(false);
+    }
+
     setCompleting(false);
-    setTimeout(() => setMessage(null), 3000);
+    setTimeout(() => setMessage(null), 4000);
   }
 
   // Envia nova dúvida (fora do modal) ou follow-up (dentro do modal)
@@ -259,61 +309,23 @@ export default function AlunoPage() {
     return "Obrigado por compartilhar. Sua resposta ajuda o professor a cuidar melhor do seu treino.";
   }
 
-  async function reportCareEvent(eventType: string) {
+  async function reportCareEvent(
+    eventType: string,
+    completionStatus: "CONCLUIDO" | "NAO_CONCLUIDO_COM_RELATO" | "INTERROMPIDO_CUIDADO" = "NAO_CONCLUIDO_COM_RELATO"
+  ) {
     if (!studentId || !selectedPlan) return;
 
     setSendingCareEvent(true);
-    setMessage(null);
 
     try {
-      const planDate =
-        selectedDay !== null
-          ? new Date(currentYear, currentMonth, selectedDay)
-          : selectedPlan?.date
-            ? new Date(selectedPlan.date)
-            : new Date();
-
-      const res = await fetch("/api/student-care-events", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          studentId,
-          eventType,
-          description: careEventDetail || null,
-          relatedWorkoutPlanId: selectedPlan.id,
-          source: "APP_ALUNO_TREINO",
-          workoutDate: planDate.toISOString(),
-        }),
+      await markAsComplete({
+        careEventType: eventType,
+        careEventDescription: careEventDetail,
+        completionStatus,
       });
-
-      const data = await res.json().catch(() => null);
-
-      if (res.ok) {
-        setCareEventSentForPlanId((current) => ({
-          ...current,
-          [selectedPlan.id]: true,
-        }));
-        setCareEventDetail("");
-        setMessage({
-          type: "success",
-          text: data?.message || getCareEventFriendlyMessage(eventType),
-        });
-      } else {
-        setMessage({
-          type: "error",
-          text: data?.error || "Não foi possível registrar sua resposta agora.",
-        });
-      }
-    } catch {
-      setMessage({
-        type: "error",
-        text: "Não foi possível registrar sua resposta agora.",
-      });
+    } finally {
+      setSendingCareEvent(false);
     }
-
-    setSendingCareEvent(false);
   }
 
   async function handleSendQuestion(parentId?: string) {
@@ -1190,15 +1202,15 @@ export default function AlunoPage() {
                         Precisa de algum ajuste ou cuidado?
                       </p>
                       <p className="text-[10px] text-[#a1a1a1] leading-relaxed mt-0.5">
-                        Conte o que aconteceu. Isso ajuda o professor a ajustar sua próxima semana
-                        sem transformar dificuldade em cobrança.
+                        Conte o que aconteceu antes de encerrar o treino. O relato será salvo junto com o encerramento,
+                        para o professor ajustar sua próxima semana sem transformar dificuldade em cobrança.
                       </p>
                     </div>
 
                     <textarea
                       value={careEventDetail}
                       onChange={(event) => setCareEventDetail(event.target.value)}
-                      placeholder="Opcional: explique em poucas palavras o que aconteceu."
+                      placeholder="Obrigatório se for encerrar com relato: explique em poucas palavras o que aconteceu."
                       className="w-full min-h-[60px] bg-[#111] border border-[#ffffff10] rounded-lg px-3 py-2 text-[11px] text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
                     />
 
@@ -1212,56 +1224,65 @@ export default function AlunoPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <button
                           type="button"
-                          disabled={sendingCareEvent}
-                          onClick={() => reportCareEvent("FALTA_TEMPO")}
+                          disabled={sendingCareEvent || completing}
+                          onClick={() => reportCareEvent("FALTA_TEMPO", "NAO_CONCLUIDO_COM_RELATO")}
                           className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
-                          Falta de tempo
+                          Não consegui concluir por falta de tempo
                         </button>
 
                         <button
                           type="button"
-                          disabled={sendingCareEvent}
-                          onClick={() => reportCareEvent("EXERCICIO_DIFICIL")}
+                          disabled={sendingCareEvent || completing}
+                          onClick={() => reportCareEvent("EXERCICIO_DIFICIL", "NAO_CONCLUIDO_COM_RELATO")}
                           className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
-                          Exercício difícil
+                          Não consegui concluir: exercício difícil
                         </button>
 
                         <button
                           type="button"
-                          disabled={sendingCareEvent}
-                          onClick={() => reportCareEvent("NAO_ENTENDI")}
+                          disabled={sendingCareEvent || completing}
+                          onClick={() => reportCareEvent("NAO_ENTENDI", "NAO_CONCLUIDO_COM_RELATO")}
                           className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
-                          Não entendi
+                          Não entendi e não concluí
                         </button>
 
                         <button
                           type="button"
-                          disabled={sendingCareEvent}
-                          onClick={() => reportCareEvent("DESMOTIVACAO")}
+                          disabled={sendingCareEvent || completing}
+                          onClick={() => reportCareEvent("DESMOTIVACAO", "NAO_CONCLUIDO_COM_RELATO")}
                           className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
-                          Desmotivação
+                          Não concluí por desmotivação
                         </button>
 
                         <button
                           type="button"
-                          disabled={sendingCareEvent}
-                          onClick={() => reportCareEvent("DOR_DESCONFORTO")}
+                          disabled={sendingCareEvent || completing}
+                          onClick={() => reportCareEvent("DOR_DESCONFORTO", "CONCLUIDO")}
                           className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-red-500/10 text-red-300 hover:bg-red-500/20 border border-red-500/20 disabled:opacity-50"
                         >
-                          Senti dor ou desconforto
+                          Concluí, mas senti dor ou desconforto
                         </button>
 
                         <button
                           type="button"
-                          disabled={sendingCareEvent}
-                          onClick={() => reportCareEvent("OUTRO")}
+                          disabled={sendingCareEvent || completing}
+                          onClick={() => reportCareEvent("PAUSA_POR_CUIDADO", "INTERROMPIDO_CUIDADO")}
+                          className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-red-600/20 text-red-200 hover:bg-red-600/30 border border-red-500/30 disabled:opacity-50"
+                        >
+                          Não consegui concluir por dor, acidente ou orientação médica
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={sendingCareEvent || completing}
+                          onClick={() => reportCareEvent("OUTRO", "NAO_CONCLUIDO_COM_RELATO")}
                           className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
-                          Outro motivo
+                          Outro motivo / não concluí
                         </button>
                       </div>
                     )}
@@ -1269,7 +1290,7 @@ export default function AlunoPage() {
                 )}
 
                 <button
-                  onClick={markAsComplete}
+                  onClick={() => markAsComplete()}
                   disabled={completing || isCompleted(selectedDay) || !canValidateWorkoutDay(selectedDay)}
                   className={"w-full text-xs font-semibold py-2.5 rounded-lg transition " + (
                     isCompleted(selectedDay)
