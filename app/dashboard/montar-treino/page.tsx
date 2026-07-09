@@ -166,6 +166,40 @@ function getDateInputFromRaw(value?: string | Date | null): string | null {
   return formatDateInput(date);
 }
 
+function isUnsafeCurrentWeekPlanningDate(dateInput?: string | null): boolean {
+  const parsedDate = parseDateInput(dateInput);
+
+  if (!parsedDate) return false;
+
+  const currentWeek = getWeekRange(new Date());
+  const selectedWeek = getWeekRange(parsedDate);
+  const todayDay = new Date().getDay();
+
+  return (
+    selectedWeek.startOfWeek.getTime() === currentWeek.startOfWeek.getTime() &&
+    [5, 6, 0].includes(todayDay)
+  );
+}
+
+function getNextSafePlanningDateInput(dateInput?: string | null): {
+  dateInput: string | null;
+  redirected: boolean;
+  message?: string;
+} {
+  if (!isUnsafeCurrentWeekPlanningDate(dateInput)) {
+    return { dateInput: dateInput || null, redirected: false };
+  }
+
+  const nextWeekStart = getWeekRange(new Date()).endOfWeek;
+
+  return {
+    dateInput: formatDateInput(nextWeekStart),
+    redirected: true,
+    message: "Esta semana já não possui janela segura de execução. O planejamento foi direcionado para a próxima semana.",
+  };
+}
+
+
 function getPreferredWorkoutOffsets(weeklyLimit?: number | null): number[] {
   const limit = Math.max(Number(weeklyLimit || 0), 0);
 
@@ -307,6 +341,7 @@ export default function MontarTreinoPage() {
   const [lockStudentSelection, setLockStudentSelection] = useState(false);
   const [openedFromPendingList, setOpenedFromPendingList] = useState(false);
   const [pendingWeekLabelFromUrl, setPendingWeekLabelFromUrl] = useState<string | null>(null);
+  const [safeWindowNotice, setSafeWindowNotice] = useState<string | null>(null);
   const [aiDraftBatch, setAiDraftBatch] = useState<AiWorkoutDraftBatch | null>(null);
   const [aiDraftIndex, setAiDraftIndex] = useState(0);
   const [openedFromAiDraft, setOpenedFromAiDraft] = useState(false);
@@ -475,7 +510,13 @@ export default function MontarTreinoPage() {
     }
 
     if (dateFromUrl) {
-      setDate(dateFromUrl);
+      const safeDate = getNextSafePlanningDateInput(dateFromUrl);
+      setDate(safeDate.dateInput || dateFromUrl);
+
+      if (safeDate.redirected && safeDate.message) {
+        setSafeWindowNotice(safeDate.message);
+        setPendingWeekLabelFromUrl("próxima semana por janela segura");
+      }
     }
   }
   useEffect(() => {
@@ -527,6 +568,7 @@ export default function MontarTreinoPage() {
   );
   const selectedDateIsExpected =
     !date || expectedWorkoutDates.length === 0 || expectedWorkoutDates.includes(date);
+  const selectedDateHasUnsafeWindow = isUnsafeCurrentWeekPlanningDate(date);
   const weeklyRemaining =
     weeklyWorkoutLimit == null ? null : Math.max(weeklyWorkoutLimit - weeklyPlansCount, 0);
   const nextWeeklyCount =
@@ -546,7 +588,12 @@ export default function MontarTreinoPage() {
     if (!activeWorkoutContract || expectedWorkoutDates.length === 0) return;
 
     if (!date || !expectedWorkoutDates.includes(date)) {
-      setDate(expectedWorkoutDates[0]);
+      const safeDate = getNextSafePlanningDateInput(expectedWorkoutDates[0]);
+      setDate(safeDate.dateInput || expectedWorkoutDates[0]);
+
+      if (safeDate.redirected && safeDate.message) {
+        setSafeWindowNotice(safeDate.message);
+      }
     }
   }, [activeWorkoutContract?.id, date, expectedWorkoutDates.join("|")]);
 
@@ -837,6 +884,14 @@ export default function MontarTreinoPage() {
       return;
     }
 
+    if (isUnsafeCurrentWeekPlanningDate(date)) {
+      setReleaseMessage({
+        type: "error",
+        text: "Esta semana já não possui janela segura de execução. Direcione a liberação para a próxima semana.",
+      });
+      return;
+    }
+
     setReleaseLoading(true);
     setReleaseMessage(null);
 
@@ -897,6 +952,11 @@ export default function MontarTreinoPage() {
         contractWarning ||
           "Este aluno não possui contrato ativo para a data do treino. Regularize o ciclo no Financeiro antes de montar novos treinos."
       );
+      return;
+    }
+
+    if (isUnsafeCurrentWeekPlanningDate(date)) {
+      alert("Esta semana já não possui janela segura de execução. Planeje a próxima semana para não iniciar o aluno atrasado.");
       return;
     }
 
@@ -1075,6 +1135,11 @@ export default function MontarTreinoPage() {
                 ? " Esta tela foi aberta a partir de uma pendência real do dashboard."
                 : " Para maior segurança, prefira iniciar pelo card de pendências do dashboard."}
             </p>
+            {safeWindowNotice && (
+              <p className="text-xs text-amber-400 mt-2">
+                {safeWindowNotice}
+              </p>
+            )}
           </div>
 
           {selectedStudent && (
@@ -1312,6 +1377,12 @@ export default function MontarTreinoPage() {
                           Revise antes de salvar.
                         </p>
                       )}
+
+                      {selectedDateHasUnsafeWindow && (
+                        <p className="text-[11px] text-red-400 mt-2">
+                          Esta semana já não possui janela segura de execução. O sistema deve direcionar o planejamento para a próxima semana.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -1495,7 +1566,15 @@ export default function MontarTreinoPage() {
                 <input
                   type="date"
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => {
+                    const nextDate = e.target.value;
+                    setDate(nextDate);
+                    setSafeWindowNotice(
+                      isUnsafeCurrentWeekPlanningDate(nextDate)
+                        ? "Esta semana já não possui janela segura de execução. Planeje a próxima semana para não iniciar o aluno atrasado."
+                        : null
+                    );
+                  }}
                   required
                   className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] [color-scheme:dark]"
                 />
