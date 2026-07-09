@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type CommercialImpact = {
   applies: boolean;
@@ -352,17 +353,26 @@ export default function CuidadoAlunoPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <div>
-        <p className="text-xs text-[#D4A373] uppercase tracking-[0.3em] mb-2">
-          Experiência e retenção
-        </p>
-        <h1 className="text-2xl md:text-3xl font-bold text-[#D4A373]">
-          Central de Cuidado do Aluno
-        </h1>
-        <p className="text-sm text-[#a1a1a1] mt-2 max-w-4xl">
-          Aqui aparecem sinais importantes do aluno: treino difícil, dor/desconforto, falta de tempo,
-          dúvida de execução, desmotivação, baixa aderência e impactos comerciais de pausas por cuidado. O professor trata os alertas dos próprios alunos; a gestão acompanha em modo leitura.
-        </p>
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div>
+          <p className="text-xs text-[#D4A373] uppercase tracking-[0.3em] mb-2">
+            Experiência e retenção
+          </p>
+          <h1 className="text-2xl md:text-3xl font-bold text-[#D4A373]">
+            Central de Cuidado do Aluno
+          </h1>
+          <p className="text-sm text-[#a1a1a1] mt-2 max-w-4xl">
+            Aqui aparecem sinais importantes do aluno: treino difícil, dor/desconforto, falta de tempo,
+            dúvida de execução, desmotivação, baixa aderência e impactos comerciais de pausas por cuidado. O professor trata os alertas dos próprios alunos; a gestão acompanha em modo leitura.
+          </p>
+        </div>
+
+        <Link
+          href="/dashboard/indicadores-cuidado"
+          className="inline-flex items-center justify-center rounded-xl bg-[#1a1a1a] border border-[#D4A373]/30 text-[#D4A373] px-4 py-3 text-sm font-semibold hover:border-[#D4A373] transition"
+        >
+          Ver indicadores comerciais
+        </Link>
       </div>
 
       {message && (
