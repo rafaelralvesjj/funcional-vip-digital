@@ -699,6 +699,7 @@ export default function AlunoPage() {
     return (
       Boolean(activePauseCareEvent) ||
       uiState === "PAUSA_POR_CUIDADO" ||
+      uiState === "EXPERIENCIA_AGENDADA" ||
       uiState === "SEM_CONTRATO_ATIVO" ||
       uiState === "SUSPENSO_POR_PAGAMENTO" ||
       uiState === "AGUARDANDO_PAGAMENTO" ||
@@ -713,6 +714,10 @@ export default function AlunoPage() {
       return String(activePauseCareEvent?.status || "").toUpperCase() === "EM_REVISAO"
         ? "Retomada em revisão"
         : "Treinos pausados por cuidado";
+    }
+
+    if (uiState === "EXPERIENCIA_AGENDADA") {
+      return "Treinos começam na próxima janela segura";
     }
 
     if (uiState === "SUSPENSO_POR_PAGAMENTO") {
@@ -733,6 +738,10 @@ export default function AlunoPage() {
       }
 
       return "Existe uma pausa por cuidado aberta. Seus treinos ficam pausados até você sinalizar aptidão de retomada e o professor revisar o caso.";
+    }
+
+    if (uiState === "EXPERIENCIA_AGENDADA") {
+      return "Seu cadastro foi ativado, mas a primeira semana real de treino ainda não começou. Isso evita começar atrasado ou receber treinos corridos no fim da semana.";
     }
 
     if (uiState === "SUSPENSO_POR_PAGAMENTO") {
