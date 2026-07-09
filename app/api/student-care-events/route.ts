@@ -453,6 +453,88 @@ function getCarePermissions(role: string) {
   };
 }
 
+function buildCommercialImpact(event: any) {
+  if (event.eventType !== "PAUSA_POR_CUIDADO") {
+    return {
+      applies: false,
+      status: "SEM_IMPACTO_ESPECIFICO",
+      label: "Sem impacto comercial específico",
+      message: "Evento de cuidado sem regra comercial automática específica.",
+      countsAsCompletedWorkout: null,
+      countsAsAbsence: null,
+      countsAsLowAdherence: null,
+      shouldBlockTrainingUntilResolved: false,
+    };
+  }
+
+  const contract = event.contract || null;
+  const pauseStartedAt = event.createdAt ? new Date(event.createdAt) : new Date();
+  const pauseResolvedAt = event.resolvedAt ? new Date(event.resolvedAt) : null;
+  const referenceEnd = pauseResolvedAt || new Date();
+  const pauseDays = calculatePauseDays(pauseStartedAt, referenceEnd);
+  const isResolved = event.status === "RESOLVIDO" || Boolean(event.resolvedAt);
+
+  const base = {
+    applies: true,
+    eventType: event.eventType,
+    pauseStartedAt: pauseStartedAt.toISOString(),
+    pauseResolvedAt: pauseResolvedAt ? pauseResolvedAt.toISOString() : null,
+    pauseDays,
+    shouldBlockTrainingUntilResolved: !isResolved,
+    countsAsCompletedWorkout: false,
+    countsAsAbsence: false,
+    countsAsLowAdherence: false,
+    contractId: contract?.id || null,
+    contractType: contract?.type || null,
+    contractStatus: contract?.status || null,
+    contractCommercialStatus: contract?.commercialStatus || null,
+    contractStartDate: contract?.startDate || null,
+    contractEndDate: contract?.endDate || null,
+    contractPriceCents: typeof contract?.priceCents === "number" ? contract.priceCents : null,
+    workoutsPerWeek: typeof contract?.workoutsPerWeek === "number" ? contract.workoutsPerWeek : null,
+    workoutsPerMonth: typeof contract?.workoutsPerMonth === "number" ? contract.workoutsPerMonth : null,
+    totalContractedWorkouts: typeof contract?.totalContractedWorkouts === "number" ? contract.totalContractedWorkouts : null,
+    planName: contract?.plan?.name || null,
+  };
+
+  if (!contract) {
+    return {
+      ...base,
+      status: "SEM_CONTRATO_VINCULADO",
+      label: "Sem contrato vinculado",
+      message:
+        "Pausa por cuidado registrada sem contrato/experiência vinculado. Gestão deve avaliar manualmente se há impacto comercial.",
+      managementAction: "Avaliar manualmente se existe ciclo comercial associado ao período pausado.",
+    };
+  }
+
+  if (contract.type === "TRIAL") {
+    return {
+      ...base,
+      status: isResolved ? "EXPERIENCIA_PRORROGADA" : "EXPERIENCIA_A_PRORROGAR",
+      label: isResolved ? "Experiência prorrogada" : "Experiência a preservar",
+      message: isResolved
+        ? `Experiência gratuita preservada por pausa de cuidado. O ciclo foi ajustado em ${pauseDays} dia(s) quando o professor liberou a retomada.`
+        : `Experiência gratuita em pausa por cuidado. Ao resolver/liberar retomada, o sistema deve preservar aproximadamente ${pauseDays} dia(s) de experiência.`,
+      managementAction: isResolved
+        ? "Conferir se a nova data de vencimento ficou coerente com o período pausado."
+        : "Aguardar professor liberar retomada; ao resolver, o sistema prorroga a experiência pelo período pausado.",
+    };
+  }
+
+  return {
+    ...base,
+    status: isResolved ? "COMPENSACAO_COMERCIAL_REGISTRADA" : "COMPENSACAO_COMERCIAL_PENDENTE",
+    label: isResolved ? "Avaliação comercial registrada" : "Avaliação comercial pendente",
+    message: isResolved
+      ? `Plano pago teve pausa por cuidado resolvida. O sistema registrou ${pauseDays} dia(s) para avaliação comercial, sem desconto automático.`
+      : `Plano pago em pausa por cuidado. Até agora são ${pauseDays} dia(s) sem treino normal; não contar como falta, baixa adesão comum ou treino feito.`,
+    managementAction: isResolved
+      ? "Gestão decide se haverá compensação, crédito ou prorrogação conforme política comercial."
+      : "Gestão acompanha impacto potencial; professor só libera retomada quando houver segurança.",
+  };
+}
+
 function normalizeEvent(event: any) {
   return {
     id: event.id,
@@ -478,6 +560,7 @@ function normalizeEvent(event: any) {
     resolutionNotes: event.resolutionNotes,
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
+    commercialImpact: buildCommercialImpact(event),
   };
 }
 
@@ -587,6 +670,25 @@ export async function GET(request: NextRequest) {
             id: true,
             date: true,
             status: true,
+          },
+        },
+        contract: {
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            commercialStatus: true,
+            startDate: true,
+            endDate: true,
+            priceCents: true,
+            workoutsPerWeek: true,
+            workoutsPerMonth: true,
+            totalContractedWorkouts: true,
+            plan: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
@@ -859,6 +961,25 @@ export async function POST(request: NextRequest) {
             id: true,
             date: true,
             status: true,
+          },
+        },
+        contract: {
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            commercialStatus: true,
+            startDate: true,
+            endDate: true,
+            priceCents: true,
+            workoutsPerWeek: true,
+            workoutsPerMonth: true,
+            totalContractedWorkouts: true,
+            plan: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
@@ -1238,6 +1359,25 @@ export async function PUT(request: NextRequest) {
             id: true,
             date: true,
             status: true,
+          },
+        },
+        contract: {
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            commercialStatus: true,
+            startDate: true,
+            endDate: true,
+            priceCents: true,
+            workoutsPerWeek: true,
+            workoutsPerMonth: true,
+            totalContractedWorkouts: true,
+            plan: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
