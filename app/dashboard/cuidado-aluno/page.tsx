@@ -2,6 +2,32 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+type CommercialImpact = {
+  applies: boolean;
+  status: string;
+  label: string;
+  message: string;
+  managementAction?: string | null;
+  pauseStartedAt?: string | null;
+  pauseResolvedAt?: string | null;
+  pauseDays?: number | null;
+  shouldBlockTrainingUntilResolved?: boolean | null;
+  countsAsCompletedWorkout?: boolean | null;
+  countsAsAbsence?: boolean | null;
+  countsAsLowAdherence?: boolean | null;
+  contractId?: string | null;
+  contractType?: string | null;
+  contractStatus?: string | null;
+  contractCommercialStatus?: string | null;
+  contractStartDate?: string | null;
+  contractEndDate?: string | null;
+  contractPriceCents?: number | null;
+  workoutsPerWeek?: number | null;
+  workoutsPerMonth?: number | null;
+  totalContractedWorkouts?: number | null;
+  planName?: string | null;
+};
+
 type CareEvent = {
   id: string;
   studentId: string;
@@ -23,6 +49,7 @@ type CareEvent = {
   weekEnd?: string | null;
   resolvedAt?: string | null;
   resolutionNotes?: string | null;
+  commercialImpact?: CommercialImpact | null;
   createdAt: string;
 };
 
@@ -107,6 +134,55 @@ function formatDate(value?: string | null): string {
   });
 }
 
+function formatDateOnly(value?: string | null): string {
+  if (!value) return "-";
+
+  return new Date(value).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatMoney(valueInCents?: number | null): string {
+  if (typeof valueInCents !== "number") return "-";
+
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(valueInCents / 100);
+}
+
+function getContractTypeLabel(type?: string | null): string {
+  if (type === "TRIAL") return "Experiência gratuita";
+  if (type === "PAID") return "Plano pago";
+  return type || "Sem contrato vinculado";
+}
+
+function getCommercialImpactStyle(status?: string | null): string {
+  if (!status || status === "SEM_IMPACTO_ESPECIFICO") {
+    return "border-[#ffffff10] bg-[#0a0a0a] text-[#a1a1a1]";
+  }
+
+  if (status.includes("EXPERIENCIA")) {
+    return "border-emerald-500/20 bg-emerald-500/10 text-emerald-200";
+  }
+
+  if (status.includes("COMPENSACAO")) {
+    return "border-amber-500/20 bg-amber-500/10 text-amber-200";
+  }
+
+  return "border-blue-500/20 bg-blue-500/10 text-blue-200";
+}
+
+function getCommercialImpactLabel(event: CareEvent): string {
+  const impact = event.commercialImpact;
+
+  if (!impact?.applies) return "Sem impacto comercial específico";
+
+  return impact.label || "Impacto comercial";
+}
+
 function buildContextForAi(event: CareEvent): string {
   return [
     "CONTEXTO DE CUIDADO DO ALUNO PARA APOIO NA PRÓXIMA MONTAGEM DE TREINO",
@@ -119,6 +195,10 @@ function buildContextForAi(event: CareEvent): string {
     `Mensagem sugerida ao professor: ${event.professorMessage || "não informada"}`,
     `Treino relacionado: ${event.relatedWorkoutPlanName || "não informado"}`,
     `Data do treino: ${event.relatedWorkoutDate ? formatDate(event.relatedWorkoutDate) : "não informada"}`,
+    `Impacto comercial: ${getCommercialImpactLabel(event)}`,
+    event.commercialImpact?.applies
+      ? `Dias em pausa/impacto: ${event.commercialImpact.pauseDays || 0}. Regra: não conta como treino feito, falta ou baixa adesão comum.`
+      : "",
     "",
     "Orientação para IA:",
     "- Não gere SQL.",
@@ -195,6 +275,11 @@ export default function CuidadoAlunoPage() {
         event.eventType,
         event.severity,
         event.status,
+        event.commercialImpact?.label,
+        event.commercialImpact?.status,
+        event.commercialImpact?.message,
+        event.commercialImpact?.planName,
+        event.commercialImpact?.contractType,
       ]
         .filter(Boolean)
         .join(" ")
@@ -209,6 +294,7 @@ export default function CuidadoAlunoPage() {
       cuidado: events.filter((event) => event.severity === "CUIDADO" && event.status !== "RESOLVIDO").length,
       revisar: events.filter((event) => event.status === "REQUER_REVISAO" || event.status === "EM_REVISAO").length,
       abertos: events.filter((event) => event.status === "ABERTO").length,
+      comercial: events.filter((event) => event.commercialImpact?.applies).length,
     };
   }, [events]);
 
@@ -237,7 +323,13 @@ export default function CuidadoAlunoPage() {
       const data = await res.json().catch(() => null);
 
       if (res.ok) {
-        setMessage({ type: "success", text: "Evento atualizado com sucesso." });
+        const adjustmentMessage = data?.commercialAdjustment?.message;
+        setMessage({
+          type: "success",
+          text: adjustmentMessage
+            ? `Evento atualizado com sucesso. ${adjustmentMessage}`
+            : "Evento atualizado com sucesso.",
+        });
         await loadEvents();
       } else {
         setMessage({ type: "error", text: data?.error || "Erro ao atualizar evento." });
@@ -269,7 +361,7 @@ export default function CuidadoAlunoPage() {
         </h1>
         <p className="text-sm text-[#a1a1a1] mt-2 max-w-4xl">
           Aqui aparecem sinais importantes do aluno: treino difícil, dor/desconforto, falta de tempo,
-          dúvida de execução, desmotivação e baixa aderência. O professor trata os alertas dos próprios alunos; a gestão acompanha em modo leitura.
+          dúvida de execução, desmotivação, baixa aderência e impactos comerciais de pausas por cuidado. O professor trata os alertas dos próprios alunos; a gestão acompanha em modo leitura.
         </p>
       </div>
 
@@ -291,7 +383,7 @@ export default function CuidadoAlunoPage() {
       </div>
 
       <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="bg-[#1a1a1a] rounded-xl p-4">
             <p className="text-[10px] uppercase text-[#6b6b6b]">Histórico</p>
             <p className="text-2xl font-bold text-[#f5f5f5]">{counters.total}</p>
@@ -310,6 +402,11 @@ export default function CuidadoAlunoPage() {
           <div className="bg-[#1a1a1a] rounded-xl p-4">
             <p className="text-[10px] uppercase text-[#6b6b6b]">Abertos</p>
             <p className="text-2xl font-bold text-blue-400">{counters.abertos}</p>
+          </div>
+
+          <div className="bg-[#1a1a1a] rounded-xl p-4">
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Impacto comercial</p>
+            <p className="text-2xl font-bold text-amber-400">{counters.comercial}</p>
           </div>
         </div>
 
@@ -348,7 +445,7 @@ export default function CuidadoAlunoPage() {
             Como usar
           </p>
           <p className="text-xs text-[#a1a1a1] leading-relaxed">
-            Antes de montar ou liberar a próxima semana, veja se há eventos em aberto. Dor leve/desconforto entra como alerta; dor forte, torção, inchaço, tontura, falta de ar, formigamento, queda ou travamento entram como cuidado crítico. Se relatou dificuldade, simplifique. Se relatou falta de tempo, reduza complexidade e aumente aderência. A IA apoia, mas o professor responsável valida e resolve os alertas; a gestão apenas acompanha.
+            Antes de montar ou liberar a próxima semana, veja se há eventos em aberto. Dor leve/desconforto entra como alerta; dor forte, torção, inchaço, tontura, falta de ar, formigamento, queda ou travamento entram como cuidado crítico. Pausa por cuidado aparece também com impacto comercial: não conta como treino feito, falta ou baixa adesão comum. Em experiência gratuita, o sistema preserva o período ao liberar retomada; em plano pago, registra avaliação comercial para a gestão.
           </p>
         </div>
       </div>
@@ -376,7 +473,7 @@ export default function CuidadoAlunoPage() {
                     </span>
 
                     <span className="text-[10px] px-2 py-1 rounded-full bg-[#1a1a1a] text-[#a1a1a1]">
-                      {getStatusLabel(event.status)}
+                      {getCareEventStatusLabel(event)}
                     </span>
 
                     <span className="text-[10px] px-2 py-1 rounded-full bg-[#D4A373]/10 text-[#D4A373]">
@@ -402,6 +499,24 @@ export default function CuidadoAlunoPage() {
                     <p className="text-xs text-[#6b6b6b] mt-1">
                       Treino relacionado: {event.relatedWorkoutPlanName} · {formatDate(event.relatedWorkoutDate)}
                     </p>
+                  )}
+
+                  {event.commercialImpact?.applies && (
+                    <div className={`mt-3 rounded-xl border px-3 py-3 text-xs ${getCommercialImpactStyle(event.commercialImpact.status)}`}>
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
+                        <div>
+                          <p className="font-semibold">
+                            {event.commercialImpact.label}
+                          </p>
+                          <p className="mt-1 leading-relaxed opacity-90">
+                            {event.commercialImpact.message}
+                          </p>
+                        </div>
+                        <div className="shrink-0 rounded-lg bg-black/20 px-2 py-1 text-[10px] font-semibold">
+                          {event.commercialImpact.pauseDays || 0} dia(s) em pausa
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -463,6 +578,66 @@ export default function CuidadoAlunoPage() {
                   </p>
                 </div>
               </div>
+
+              {event.commercialImpact?.applies && (
+                <div className="bg-[#0a0a0a] border border-amber-500/20 rounded-xl p-4 space-y-3">
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-amber-300 font-semibold mb-1">
+                        Visão comercial da pausa
+                      </p>
+                      <p className="text-sm text-[#e5e5e5] leading-relaxed">
+                        {event.commercialImpact.managementAction || event.commercialImpact.message}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[10px] font-semibold text-amber-300">
+                      {getContractTypeLabel(event.commercialImpact.contractType)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="rounded-lg bg-[#111] border border-[#ffffff10] p-2">
+                      <p className="text-[8px] uppercase text-[#6b6b6b]">Plano/ciclo</p>
+                      <p className="text-[10px] font-semibold text-[#e5e5e5]">
+                        {event.commercialImpact.planName || getContractTypeLabel(event.commercialImpact.contractType)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-[#111] border border-[#ffffff10] p-2">
+                      <p className="text-[8px] uppercase text-[#6b6b6b]">Dias pausados</p>
+                      <p className="text-[10px] font-semibold text-[#e5e5e5]">
+                        {event.commercialImpact.pauseDays || 0} dia(s)
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-[#111] border border-[#ffffff10] p-2">
+                      <p className="text-[8px] uppercase text-[#6b6b6b]">Vigência</p>
+                      <p className="text-[10px] font-semibold text-[#e5e5e5]">
+                        {formatDateOnly(event.commercialImpact.contractStartDate)} a {formatDateOnly(event.commercialImpact.contractEndDate)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-[#111] border border-[#ffffff10] p-2">
+                      <p className="text-[8px] uppercase text-[#6b6b6b]">Valor</p>
+                      <p className="text-[10px] font-semibold text-[#e5e5e5]">
+                        {formatMoney(event.commercialImpact.contractPriceCents)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px]">
+                    <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-2 text-green-300">
+                      Não conta como treino feito
+                    </div>
+                    <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-2 text-green-300">
+                      Não conta como falta
+                    </div>
+                    <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-2 text-green-300">
+                      Não conta como baixa adesão comum
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs text-[#a1a1a1] block mb-1">
