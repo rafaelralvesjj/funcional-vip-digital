@@ -471,10 +471,16 @@ model ExerciseLibrary {
   name              String
   description       String
   muscleGroup       String
-  imageUrl          String?
-  videoUrl          String?  @map("video_url") @db.Text
-  active            Boolean  @default(true)
-  objectiveTags     String?  @map("objective_tags") @db.Text
+  imageUrl              String?
+  videoUrl              String?  @map("video_url") @db.Text
+  sequenceImageUrl      String?  @map("sequence_image_url") @db.Text
+  sequenceImageLabel    String?  @map("sequence_image_label")
+  sequenceImageNotes    String?  @map("sequence_image_notes") @db.Text
+  sequenceFramesCount   Int?     @default(0) @map("sequence_frames_count")
+  sequenceGeneratedByAi Boolean  @default(false) @map("sequence_generated_by_ai")
+  sequencePrompt        String?  @map("sequence_prompt") @db.Text
+  active                Boolean  @default(true)
+  objectiveTags         String?  @map("objective_tags") @db.Text
   locationTags      String?  @map("location_tags") @db.Text
   equipmentTags     String?  @map("equipment_tags") @db.Text
   restrictionTags   String?  @map("restriction_tags") @db.Text
