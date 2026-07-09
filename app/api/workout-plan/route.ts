@@ -591,8 +591,23 @@ async function buildReleaseReviewContext({
   baselineDate: Date;
 }) {
   const previousWeek = getPreviousWeekRangeFromStart(startOfWeek);
+  const sensitiveCareTypes = [
+    "DOR_DESCONFORTO",
+    "RELATO_DOR_DUVIDA",
+    "PAUSA_POR_CUIDADO",
+    "EXERCICIO_DIFICIL",
+    "DESMOTIVACAO",
+    "FALTA_TEMPO",
+  ];
 
-  const [previousWeekWorkouts, openCareEvents, newStudentQuestions, student] = await Promise.all([
+  const [
+    previousWeekWorkouts,
+    openCareEvents,
+    careEventsAfterPlanning,
+    openStudentQuestions,
+    studentQuestionsAfterPlanning,
+    student,
+  ] = await Promise.all([
     prisma.workout.findMany({
       where: {
         studentId,
@@ -626,7 +641,7 @@ async function buildReleaseReviewContext({
           },
           {
             eventType: {
-              in: ["DOR_DESCONFORTO", "RELATO_DOR_DUVIDA", "PAUSA_POR_CUIDADO", "EXERCICIO_DIFICIL", "DESMOTIVACAO", "FALTA_TEMPO"],
+              in: sensitiveCareTypes,
             },
           },
         ],
@@ -635,6 +650,31 @@ async function buildReleaseReviewContext({
         id: true,
         eventType: true,
         severity: true,
+        status: true,
+        title: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 8,
+    }),
+
+    prisma.studentCareEvent.findMany({
+      where: {
+        studentId,
+        status: {
+          not: "RESOLVIDO",
+        },
+        createdAt: {
+          gt: baselineDate,
+        },
+      },
+      select: {
+        id: true,
+        eventType: true,
+        severity: true,
+        status: true,
         title: true,
         createdAt: true,
       },
@@ -649,6 +689,26 @@ async function buildReleaseReviewContext({
         studentId,
         senderRole: "STUDENT",
         resolvedAt: null,
+      },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 8,
+    }),
+
+    prisma.question.findMany({
+      where: {
+        studentId,
+        senderRole: "STUDENT",
+        resolvedAt: null,
+        createdAt: {
+          gt: baselineDate,
+        },
       },
       select: {
         id: true,
@@ -688,9 +748,36 @@ async function buildReleaseReviewContext({
   const hasCriticalOpenCareEvent = openCareEvents.some(
     (event) => String(event.severity || "").toUpperCase() === "CUIDADO"
   );
-  const hasOpenPainQuestion = newStudentQuestions.some((question) =>
+  const hasOpenPainQuestion = openStudentQuestions.some((question) =>
     hasPainOrInjuryQuestionSignal(question.content)
   );
+  const painQuestionsAfterPlanning = studentQuestionsAfterPlanning.filter((question) =>
+    hasPainOrInjuryQuestionSignal(question.content)
+  );
+  const criticalCareEventsAfterPlanning = careEventsAfterPlanning.filter(
+    (event) => String(event.severity || "").toUpperCase() === "CUIDADO" || sensitiveCareTypes.includes(String(event.eventType || "").toUpperCase())
+  );
+  const studentProfileUpdatedAfterPlanning = Boolean(student?.updatedAt && student.updatedAt > baselineDate);
+  const executionChangedAfterPlanning = workoutUpdatesAfterPlanning > 0;
+
+  const latestContextDates = [
+    ...careEventsAfterPlanning.map((event) => event.createdAt),
+    ...studentQuestionsAfterPlanning.map((question) => question.createdAt),
+    ...(studentProfileUpdatedAfterPlanning && student?.updatedAt ? [student.updatedAt] : []),
+    ...previousWeekWorkouts
+      .filter((workout) => workout.updatedAt > baselineDate)
+      .map((workout) => workout.updatedAt),
+  ].filter(Boolean) as Date[];
+
+  const latestNewContextDate = latestContextDates.length > 0
+    ? latestContextDates.reduce((latest, item) => (item > latest ? item : latest), latestContextDates[0])
+    : null;
+
+  const stalePrescriptionBecauseOfNewContext =
+    careEventsAfterPlanning.length > 0 ||
+    studentQuestionsAfterPlanning.length > 0 ||
+    studentProfileUpdatedAfterPlanning ||
+    executionChangedAfterPlanning;
 
   if (previousWeekWorkouts.length === 0) {
     reviewAlerts.push(
@@ -708,9 +795,27 @@ async function buildReleaseReviewContext({
     );
   }
 
-  if (workoutUpdatesAfterPlanning > 0) {
+  if (executionChangedAfterPlanning) {
     reviewAlerts.push(
-      `Houve ${workoutUpdatesAfterPlanning} atualização(ões) em treinos anteriores depois que esta semana foi pré-planejada.`
+      `Houve ${workoutUpdatesAfterPlanning} atualização(ões) em treinos anteriores depois que esta semana foi montada/pré-planejada. Recomenda-se revisar a prescrição com base na execução mais recente.`
+    );
+  }
+
+  if (careEventsAfterPlanning.length > 0) {
+    reviewAlerts.push(
+      `Surgiu ${careEventsAfterPlanning.length} novo(s) evento(s) de cuidado depois que esta semana foi montada/pré-planejada. Para segurança, gere novo resumo IA ou ajuste manualmente o treino antes de liberar.`
+    );
+  }
+
+  if (studentQuestionsAfterPlanning.length > 0) {
+    reviewAlerts.push(
+      `Surgiu ${studentQuestionsAfterPlanning.length} nova(s) dúvida(s)/mensagem(ns) do aluno depois que esta semana foi montada/pré-planejada. Revisar a conversa antes de liberar.`
+    );
+  }
+
+  if (painQuestionsAfterPlanning.length > 0) {
+    reviewAlerts.push(
+      "Há nova dúvida/mensagem após o pré-planejamento com possível dor, torção, lesão ou desconforto. O treino antigo não deve ser liberado direto; gere novo resumo IA ou ajuste manualmente com foco em segurança."
     );
   }
 
@@ -732,9 +837,9 @@ async function buildReleaseReviewContext({
     );
   }
 
-  if (newStudentQuestions.length > 0) {
+  if (openStudentQuestions.length > 0) {
     reviewAlerts.push(
-      `Há ${newStudentQuestions.length} dúvida(s) aberta(s) do aluno sem resolução. Revisar/responder antes de liberar a semana.`
+      `Há ${openStudentQuestions.length} dúvida(s) aberta(s) do aluno sem resolução. Revisar/responder antes de liberar a semana.`
     );
   }
 
@@ -744,14 +849,23 @@ async function buildReleaseReviewContext({
     );
   }
 
-  if (student?.updatedAt && student.updatedAt > baselineDate) {
+  if (studentProfileUpdatedAfterPlanning) {
     reviewAlerts.push(
-      "O cadastro/ficha do aluno foi atualizado depois que esta semana foi pré-planejada. Revisar informações atuais antes de liberar."
+      "O cadastro/ficha do aluno foi atualizado depois que esta semana foi montada/pré-planejada. Revisar informações atuais antes de liberar."
     );
   }
 
+  const recommendedAction = hasTrainingPauseCareEvent
+    ? "PAUSA_POR_CUIDADO_BLOQUEIA_LIBERACAO"
+    : stalePrescriptionBecauseOfNewContext
+      ? "GERAR_NOVO_RESUMO_IA_OU_AJUSTAR_MANUALMENTE"
+      : reviewAlerts.length > 0
+        ? "REVISAO_PROFESSOR_OBRIGATORIA"
+        : "LIBERACAO_SEGURA";
+
   return {
     baselineDate: baselineDate.toISOString(),
+    latestNewContextDate: latestNewContextDate ? latestNewContextDate.toISOString() : null,
     previousWeek: {
       startOfWeek: previousWeek.startOfWeek.toISOString(),
       endOfWeek: previousWeek.endOfWeek.toISOString(),
@@ -762,10 +876,24 @@ async function buildReleaseReviewContext({
     pendingPreviousWeek,
     workoutUpdatesAfterPlanning,
     openCareEvents: openCareEvents.length,
-    newStudentQuestions: newStudentQuestions.length,
+    newCareEventsAfterPlanning: careEventsAfterPlanning.length,
+    criticalCareEventsAfterPlanning: criticalCareEventsAfterPlanning.length,
+    newStudentQuestions: openStudentQuestions.length,
+    newStudentQuestionsAfterPlanning: studentQuestionsAfterPlanning.length,
+    newPainQuestionsAfterPlanning: painQuestionsAfterPlanning.length,
     hasOpenPainQuestion,
     hasTrainingPauseCareEvent,
     hasCriticalOpenCareEvent,
+    studentProfileUpdatedAfterPlanning,
+    stalePrescriptionBecauseOfNewContext,
+    recommendedAction,
+    actionOptions: stalePrescriptionBecauseOfNewContext
+      ? [
+          "Gerar novo resumo IA com o alerta atualizado",
+          "Ajustar manualmente este treino antes de liberar",
+          "Manter bloqueado até obter mais informações do aluno",
+        ]
+      : [],
     blocksRelease: hasTrainingPauseCareEvent,
     requiresReviewBeforeRelease: reviewAlerts.length > 0,
     reviewAlerts,
@@ -901,10 +1029,25 @@ async function releaseWorkoutWeek({
     );
   }
 
+  if (reviewContext.stalePrescriptionBecauseOfNewContext && !forceRelease) {
+    return NextResponse.json(
+      {
+        code: "NEW_CONTEXT_AFTER_PRE_PLANNING",
+        error: "Este treino foi montado antes de um novo alerta do aluno.",
+        message: "Para segurança, gere um novo resumo IA com o contexto atualizado ou ajuste manualmente o treino antes de liberar a semana.",
+        reviewRequired: true,
+        staleContextRequiresAction: true,
+        reviewContext,
+      },
+      { status: 409 }
+    );
+  }
+
   if (reviewContext.requiresReviewBeforeRelease && !forceRelease) {
     return NextResponse.json(
       {
         error: "Revisão obrigatória antes de liberar a semana.",
+        message: "Revise os pontos listados. Se o treino tiver sido ajustado ou a revisão estiver concluída, confirme a liberação.",
         reviewRequired: true,
         reviewContext,
       },
