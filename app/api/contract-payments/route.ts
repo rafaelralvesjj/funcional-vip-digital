@@ -48,6 +48,22 @@ function parseDateTime(value?: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function startOfDay(value: Date): Date {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function isFutureStartDate(value?: Date | string | null): boolean {
+  if (!value) return false;
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return false;
+
+  return startOfDay(date).getTime() > startOfDay(new Date()).getTime();
+}
+
 function normalizePayment(payment: any) {
   return {
     id: payment.id,
@@ -79,11 +95,17 @@ function normalizePayment(payment: any) {
 function getStudentCommercialStatus(contract: {
   status: string;
   type: string;
+  startDate?: Date | string | null;
 }) {
   const status = String(contract.status || "").toUpperCase();
   const type = String(contract.type || "").toUpperCase();
+  const startsInFuture = isFutureStartDate(contract.startDate || null);
 
   if (status === "ACTIVE") {
+    if (startsInFuture) {
+      return type === "TRIAL" ? "EXPERIENCIA_AGENDADA" : "CONTRATO_AGENDADO";
+    }
+
     return type === "TRIAL" ? "EXPERIENCIA_ATIVA" : "CONTRATO_ATIVO";
   }
 
@@ -106,6 +128,14 @@ async function activateContractAfterPayment(tx: any, contractId: string) {
   }
 
   const now = new Date();
+  const startsInFuture = isFutureStartDate(contract.startDate);
+  const nextCommercialStatus = startsInFuture
+    ? contract.type === "TRIAL"
+      ? "EXPERIENCIA_AGENDADA"
+      : "CONTRATO_AGENDADO"
+    : contract.type === "TRIAL"
+      ? "EXPERIENCIA_ATIVA"
+      : "CONTRATO_ATIVO";
 
   await tx.studentContract.updateMany({
     where: {
@@ -128,7 +158,7 @@ async function activateContractAfterPayment(tx: any, contractId: string) {
     },
     data: {
       status: "ACTIVE",
-      commercialStatus: contract.type === "TRIAL" ? "EXPERIENCIA_ATIVA" : "CONTRATO_ATIVO",
+      commercialStatus: nextCommercialStatus,
       activatedAt: contract.activatedAt || now,
       acceptedAt: contract.acceptedAt || now,
       finalizedAt: null,
@@ -145,6 +175,7 @@ async function activateContractAfterPayment(tx: any, contractId: string) {
       commercialStatus: getStudentCommercialStatus({
         status: "ACTIVE",
         type: contract.type,
+        startDate: contract.startDate,
       }),
       contractedTrainingDaysPerMonth: contract.workoutsPerMonth,
       ...(contract.professorId ? { userId: contract.professorId } : {}),
@@ -277,11 +308,15 @@ async function notifyPaymentStatusChange({
   const paidAtText = formatDatePtBr(payment.paidAt || new Date());
   const loginUrl = getAppLoginUrl();
   const paymentLinkUrl = payment.paymentLinkUrl || null;
+  const contractStartsInFuture = contractActivated && isFutureStartDate(payment.contract?.startDate || null);
+  const contractStartDateText = formatDatePtBr(payment.contract?.startDate || null);
 
   const title =
     normalizedStatus === "PAGO"
       ? contractActivated
-        ? "Pagamento confirmado e contrato ativo"
+        ? contractStartsInFuture
+          ? "Pagamento confirmado e contrato agendado"
+          : "Pagamento confirmado e contrato ativo"
         : "Pagamento confirmado"
       : "Pagamento em atraso";
 
@@ -293,7 +328,9 @@ async function notifyPaymentStatusChange({
           `Confirmamos o pagamento de ${amountText} referente ao plano ${planName}.`,
           `Data da confirmação: ${paidAtText}.`,
           contractActivated
-            ? "Seu contrato está ativo e seu acesso aos treinos segue liberado."
+            ? contractStartsInFuture
+              ? `Seu contrato foi confirmado e o acesso aos treinos ficará liberado a partir de ${contractStartDateText}, respeitando a primeira janela segura de acompanhamento.`
+              : "Seu contrato está ativo e seu acesso aos treinos segue liberado."
             : "O pagamento foi registrado pela gestão.",
           "",
           "Acesse seu painel para acompanhar seus treinos e avisos.",
@@ -347,7 +384,7 @@ async function notifyPaymentStatusChange({
               Data da confirmação: <strong style="color:#f5f5f5;">${safePaidAtText}</strong>.
             </p>
             <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              ${contractActivated ? "Seu contrato está ativo e seu acesso aos treinos segue liberado." : "O pagamento foi registrado pela gestão."}
+              ${contractActivated ? contractStartsInFuture ? `Seu contrato foi confirmado e o acesso aos treinos ficará liberado a partir de ${contractStartDateText}, respeitando a primeira janela segura de acompanhamento.` : "Seu contrato está ativo e seu acesso aos treinos segue liberado." : "O pagamento foi registrado pela gestão."}
             </p>
             <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
               Acessar meu painel
