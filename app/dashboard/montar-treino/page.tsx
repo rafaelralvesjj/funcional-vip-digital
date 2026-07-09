@@ -24,6 +24,9 @@ interface LibraryExercise {
   intensity?: string | null;
   instructions?: string | null;
   safetyNotes?: string | null;
+  commonMistakes?: string | null;
+  substitutions?: string | null;
+  contraindications?: string | null;
 }
 
 interface WorkoutPlanSummary {
@@ -97,6 +100,11 @@ interface ExerciseItem {
   order: number;
   imageUrl?: string | null;
   videoUrl?: string | null;
+  purpose?: string | null;
+  instructions?: string | null;
+  safetyGuidance?: string | null;
+  commonMistakes?: string | null;
+  contraindications?: string | null;
 }
 
 interface AiWorkoutDraft {
@@ -322,6 +330,60 @@ function escapeHtmlForPrint(value?: string | number | null): string {
     .replaceAll("'", "&#039;");
 }
 
+function compactText(value?: string | number | null): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function joinTextParts(parts: Array<string | null | undefined>): string {
+  return parts
+    .map((part) => compactText(part))
+    .filter(Boolean)
+    .join(" ");
+}
+
+function buildExercisePurpose(exercise?: Partial<LibraryExercise> | null): string {
+  if (!exercise) return "";
+
+  const objectiveText = compactText(exercise.objectiveTags)
+    ? `Objetivo relacionado: ${compactText(exercise.objectiveTags)}.`
+    : "";
+
+  return joinTextParts([exercise.description, objectiveText]);
+}
+
+function buildExerciseInstructions(exercise?: Partial<LibraryExercise> | null): string {
+  if (!exercise) return "";
+
+  return compactText(exercise.instructions) || compactText(exercise.description);
+}
+
+function buildExerciseSafetyGuidance(exercise?: Partial<LibraryExercise> | null): string {
+  if (!exercise) return "";
+
+  return joinTextParts([
+    exercise.safetyNotes,
+    exercise.restrictionTags ? `Atenção: ${exercise.restrictionTags}.` : null,
+    exercise.commonMistakes ? `Evite: ${exercise.commonMistakes}.` : null,
+    exercise.contraindications ? `Contraindicação/atenção: ${exercise.contraindications}.` : null,
+  ]);
+}
+
+function getExercisePurpose(exercise: Partial<ExerciseItem>): string {
+  return compactText(exercise.purpose) || compactText(exercise.description);
+}
+
+function getExerciseInstructions(exercise: Partial<ExerciseItem>): string {
+  return compactText(exercise.instructions) || compactText(exercise.description);
+}
+
+function getExerciseSafetyGuidance(exercise: Partial<ExerciseItem>): string {
+  return joinTextParts([
+    exercise.safetyGuidance,
+    exercise.commonMistakes ? `Evite: ${exercise.commonMistakes}.` : null,
+    exercise.contraindications ? `Contraindicação/atenção: ${exercise.contraindications}.` : null,
+  ]);
+}
+
 export default function MontarTreinoPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [library, setLibrary] = useState<LibraryExercise[]>([]);
@@ -383,6 +445,11 @@ export default function MontarTreinoPage() {
       order: index,
       imageUrl: exercise?.imageUrl || libraryExercise?.imageUrl || null,
       videoUrl: exercise?.videoUrl || libraryExercise?.videoUrl || null,
+      purpose: String((exercise as any)?.purpose || buildExercisePurpose(libraryExercise) || exercise?.description || libraryExercise?.description || ""),
+      instructions: String((exercise as any)?.instructions || buildExerciseInstructions(libraryExercise) || ""),
+      safetyGuidance: String((exercise as any)?.safetyGuidance || buildExerciseSafetyGuidance(libraryExercise) || ""),
+      commonMistakes: String((exercise as any)?.commonMistakes || libraryExercise?.commonMistakes || "") || null,
+      contraindications: String((exercise as any)?.contraindications || libraryExercise?.contraindications || "") || null,
     };
   }
 
@@ -556,7 +623,11 @@ export default function MontarTreinoPage() {
         library.filter(
           (ex) =>
             ex.name.toLowerCase().includes(term) ||
-            ex.muscleGroup.toLowerCase().includes(term)
+            ex.muscleGroup.toLowerCase().includes(term) ||
+            String(ex.objectiveTags || "").toLowerCase().includes(term) ||
+            String(ex.equipmentTags || "").toLowerCase().includes(term) ||
+            String(ex.restrictionTags || "").toLowerCase().includes(term) ||
+            String(ex.description || "").toLowerCase().includes(term)
         )
       );
     } else {
@@ -741,6 +812,11 @@ export default function MontarTreinoPage() {
       order: exercises.length,
       imageUrl: ex.imageUrl || null,
       videoUrl: ex.videoUrl || null,
+      purpose: buildExercisePurpose(ex),
+      instructions: buildExerciseInstructions(ex),
+      safetyGuidance: buildExerciseSafetyGuidance(ex),
+      commonMistakes: ex.commonMistakes || null,
+      contraindications: ex.contraindications || null,
     };
     setExercises([...exercises, newExercise]);
     setShowLibrary(false);
@@ -785,7 +861,9 @@ export default function MontarTreinoPage() {
             <td>${index + 1}</td>
             <td>
               <strong>${escapeHtmlForPrint(exercise.name)}</strong>
-              ${exercise.description ? `<br/><span>${escapeHtmlForPrint(exercise.description)}</span>` : ""}
+              ${getExercisePurpose(exercise) ? `<br/><span><strong>Pra que serve:</strong> ${escapeHtmlForPrint(getExercisePurpose(exercise))}</span>` : ""}
+              ${getExerciseInstructions(exercise) ? `<br/><span><strong>Como executar:</strong> ${escapeHtmlForPrint(getExerciseInstructions(exercise))}</span>` : ""}
+              ${getExerciseSafetyGuidance(exercise) ? `<br/><span><strong>Cuidados:</strong> ${escapeHtmlForPrint(getExerciseSafetyGuidance(exercise))}</span>` : ""}
               ${exercise.notes ? `<br/><em>${escapeHtmlForPrint(exercise.notes)}</em>` : ""}
             </td>
             <td>${escapeHtmlForPrint(exercise.series)}</td>
@@ -1023,6 +1101,11 @@ export default function MontarTreinoPage() {
             order: ex.order,
             imageUrl: ex.imageUrl || null,
             videoUrl: ex.videoUrl || null,
+            purpose: getExercisePurpose(ex) || null,
+            instructions: getExerciseInstructions(ex) || null,
+            safetyGuidance: getExerciseSafetyGuidance(ex) || null,
+            commonMistakes: ex.commonMistakes || null,
+            contraindications: ex.contraindications || null,
           })),
         }),
       });
@@ -1808,6 +1891,16 @@ export default function MontarTreinoPage() {
                   >
                     <p className="text-[#f5f5f5] font-medium">{ex.name}</p>
                     <p className="text-[#a1a1a1] text-xs mt-0.5">{ex.muscleGroup}</p>
+                    {buildExercisePurpose(ex) && (
+                      <p className="text-[#6b6b6b] text-[10px] mt-1 line-clamp-2">
+                        {buildExercisePurpose(ex)}
+                      </p>
+                    )}
+                    {buildExerciseSafetyGuidance(ex) && (
+                      <p className="text-amber-300/80 text-[10px] mt-1 line-clamp-2">
+                        Cuidado: {buildExerciseSafetyGuidance(ex)}
+                      </p>
+                    )}
                   </button>
                 ))}
                 {filteredLibrary.length === 0 && (
@@ -1836,6 +1929,30 @@ export default function MontarTreinoPage() {
                       <button type="button" onClick={() => removeExercise(index)} className="text-red-400 hover:text-red-300 p-1 ml-2">✕</button>
                     </div>
                   </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                    {getExercisePurpose(ex) && (
+                      <div className="rounded-lg border border-[#ffffff10] bg-[#111] p-3">
+                        <p className="text-[10px] uppercase tracking-wide text-[#D4A373] font-semibold">
+                          Pra que serve
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-[#d4d4d4]">
+                          {getExercisePurpose(ex)}
+                        </p>
+                      </div>
+                    )}
+
+                    {getExerciseSafetyGuidance(ex) && (
+                      <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+                        <p className="text-[10px] uppercase tracking-wide text-amber-300 font-semibold">
+                          Cuidados de execução
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-amber-100/80">
+                          {getExerciseSafetyGuidance(ex)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div>
                       <label className="text-xs text-[#a1a1a1] block mb-0.5">Séries</label>
