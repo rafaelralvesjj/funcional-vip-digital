@@ -377,6 +377,7 @@ export default function AlunoPage() {
         });
         await fetchCareEvents(studentId);
         await fetchNotices(studentId);
+        await fetchDashboardSummary();
       } else {
         setMessage({
           type: "error",
@@ -695,14 +696,21 @@ export default function AlunoPage() {
   function isStudentTrainingBlocked(): boolean {
     const uiState = getCommercialUiState();
 
-    return Boolean(activePauseCareEvent) || uiState === "SEM_CONTRATO_ATIVO" || uiState === "SUSPENSO_POR_PAGAMENTO";
+    return (
+      Boolean(activePauseCareEvent) ||
+      uiState === "PAUSA_POR_CUIDADO" ||
+      uiState === "SEM_CONTRATO_ATIVO" ||
+      uiState === "SUSPENSO_POR_PAGAMENTO" ||
+      uiState === "AGUARDANDO_PAGAMENTO" ||
+      uiState === "AGUARDANDO_VINCULO_PROFESSOR"
+    );
   }
 
   function getTrainingBlockedTitle(): string {
     const uiState = getCommercialUiState();
 
-    if (activePauseCareEvent) {
-      return String(activePauseCareEvent.status || "").toUpperCase() === "EM_REVISAO"
+    if (activePauseCareEvent || uiState === "PAUSA_POR_CUIDADO") {
+      return String(activePauseCareEvent?.status || "").toUpperCase() === "EM_REVISAO"
         ? "Retomada em revisão"
         : "Treinos pausados por cuidado";
     }
@@ -717,8 +725,8 @@ export default function AlunoPage() {
   function getTrainingBlockedMessage(): string {
     const uiState = getCommercialUiState();
 
-    if (activePauseCareEvent) {
-      const status = String(activePauseCareEvent.status || "").toUpperCase();
+    if (activePauseCareEvent || uiState === "PAUSA_POR_CUIDADO") {
+      const status = String(activePauseCareEvent?.status || "").toUpperCase();
 
       if (status === "EM_REVISAO") {
         return "Você já avisou que se sente apto(a) para retomar. Agora o professor precisa revisar e liberar sua retomada com segurança.";
