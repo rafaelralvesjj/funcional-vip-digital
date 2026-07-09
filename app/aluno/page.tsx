@@ -8,7 +8,19 @@ interface LibraryExercise {
   name: string;
   description: string;
   muscleGroup: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
+  videoUrl?: string | null;
+  objectiveTags?: string | null;
+  locationTags?: string | null;
+  equipmentTags?: string | null;
+  restrictionTags?: string | null;
+  levelTags?: string | null;
+  intensity?: string | null;
+  instructions?: string | null;
+  safetyNotes?: string | null;
+  commonMistakes?: string | null;
+  substitutions?: string | null;
+  contraindications?: string | null;
 }
 export default function AlunoPage() {
   const [studentId, setStudentId] = useState<string>("");
@@ -32,7 +44,8 @@ export default function AlunoPage() {
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
   const [imgError, setImgError] = useState(false);
-  const [exerciseImages, setExerciseImages] = useState<Record<string, string>>({});
+  const [exerciseLibraryByName, setExerciseLibraryByName] = useState<Record<string, LibraryExercise>>({});
+  const [exerciseLibraryById, setExerciseLibraryById] = useState<Record<string, LibraryExercise>>({});
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
   const [sendingCareEvent, setSendingCareEvent] = useState(false);
   const [careEventDetail, setCareEventDetail] = useState("");
@@ -61,23 +74,105 @@ export default function AlunoPage() {
   };
   async function fetchExerciseLibrary() {
     try {
-      const res = await fetch("/api/exercise-library");
+      const res = await fetch("/api/exercise-library?active=1", {
+        cache: "no-store",
+      });
+
       if (res.ok) {
         const data = await res.json();
         const exercises: LibraryExercise[] = data.exercises || [];
-        const imageMap: Record<string, string> = {};
-        exercises.forEach((ex) => {
-          if (ex.imageUrl) {
-            imageMap[ex.name.toLowerCase()] = ex.imageUrl;
+        const byName: Record<string, LibraryExercise> = {};
+        const byId: Record<string, LibraryExercise> = {};
+
+        exercises.forEach((exercise) => {
+          if (exercise.id) {
+            byId[exercise.id] = exercise;
+          }
+
+          if (exercise.name) {
+            byName[exercise.name.toLowerCase()] = exercise;
           }
         });
-        setExerciseImages(imageMap);
+
+        setExerciseLibraryByName(byName);
+        setExerciseLibraryById(byId);
       }
     } catch {}
   }
-  function getExerciseImageUrl(exerciseName: string): string | null {
-    const key = exerciseName.toLowerCase();
-    return exerciseImages[key] || null;
+
+  function compactText(value?: unknown): string {
+    return String(value ?? "").replace(/\s+/g, " ").trim();
+  }
+
+  function joinTextParts(parts: Array<string | null | undefined>): string {
+    return parts
+      .map((part) => compactText(part))
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function getExerciseLibraryInfo(exercise: any): LibraryExercise | null {
+    const id = String(
+      exercise?.libraryExerciseId ||
+        exercise?.exerciseId ||
+        exercise?.exerciseLibraryId ||
+        ""
+    ).trim();
+
+    if (id && exerciseLibraryById[id]) {
+      return exerciseLibraryById[id];
+    }
+
+    const name = String(exercise?.name || "").toLowerCase();
+    return name ? exerciseLibraryByName[name] || null : null;
+  }
+
+  function getExerciseImageUrl(exercise: any): string | null {
+    const libraryExercise = getExerciseLibraryInfo(exercise);
+    return String(libraryExercise?.imageUrl || "") || null;
+  }
+
+  function getExercisePurpose(exercise: any): string {
+    const libraryExercise = getExerciseLibraryInfo(exercise);
+    const objectiveText = compactText(exercise?.objectiveTags || libraryExercise?.objectiveTags)
+      ? `Objetivo relacionado: ${compactText(exercise?.objectiveTags || libraryExercise?.objectiveTags)}.`
+      : "";
+
+    return joinTextParts([
+      exercise?.purpose,
+      libraryExercise?.description,
+      !exercise?.purpose && !libraryExercise?.description ? exercise?.description : null,
+      objectiveText,
+    ]);
+  }
+
+  function getExerciseInstructions(exercise: any): string {
+    const libraryExercise = getExerciseLibraryInfo(exercise);
+
+    return (
+      compactText(exercise?.instructions) ||
+      compactText(libraryExercise?.instructions) ||
+      compactText(exercise?.description) ||
+      compactText(libraryExercise?.description)
+    );
+  }
+
+  function getExerciseSafetyGuidance(exercise: any): string {
+    const libraryExercise = getExerciseLibraryInfo(exercise);
+
+    return joinTextParts([
+      exercise?.safetyGuidance,
+      libraryExercise?.safetyNotes,
+      exercise?.restrictionTags || libraryExercise?.restrictionTags
+        ? `Atenção: ${compactText(exercise?.restrictionTags || libraryExercise?.restrictionTags)}.`
+        : null,
+      exercise?.commonMistakes || libraryExercise?.commonMistakes
+        ? `Evite: ${compactText(exercise?.commonMistakes || libraryExercise?.commonMistakes)}.`
+        : null,
+      exercise?.contraindications || libraryExercise?.contraindications
+        ? `Contraindicação/atenção: ${compactText(exercise?.contraindications || libraryExercise?.contraindications)}.`
+        : null,
+    ]);
   }
 
   useEffect(() => {
@@ -1496,7 +1591,7 @@ export default function AlunoPage() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
             {(() => {
-              const imgUrl = getImageUrl(selectedExercise.imageUrl) || getExerciseImageUrl(selectedExercise.name);
+              const imgUrl = getImageUrl(selectedExercise.imageUrl) || getExerciseImageUrl(selectedExercise);
               return imgUrl && !imgError ? (
                 <div className="w-full bg-[#1a1a1a] rounded-t-2xl overflow-hidden flex items-center justify-center" style={{ maxHeight: '280px' }}>
                   <img src={imgUrl} alt={selectedExercise.name} className="w-full h-auto max-h-[280px] object-contain" onError={() => setImgError(true)} />
@@ -1540,14 +1635,45 @@ export default function AlunoPage() {
                   <p className="text-[8px] text-[#6b6b6b]">Descanso</p>
                 </div>
               </div>
-              {selectedExercise.description && (
+              {getExercisePurpose(selectedExercise) && (
                 <div>
-                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Descricao</h3>
+                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">
+                    Pra que serve este exercício
+                  </h3>
                   <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
-                    <p className="text-xs text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedExercise.description}</p>
+                    <p className="text-xs text-[#e5e5e5] leading-relaxed whitespace-pre-line">
+                      {getExercisePurpose(selectedExercise)}
+                    </p>
                   </div>
                 </div>
               )}
+
+              {getExerciseInstructions(selectedExercise) && (
+                <div>
+                  <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">
+                    Como executar
+                  </h3>
+                  <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
+                    <p className="text-xs text-[#e5e5e5] leading-relaxed whitespace-pre-line">
+                      {getExerciseInstructions(selectedExercise)}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {getExerciseSafetyGuidance(selectedExercise) && (
+                <div>
+                  <h3 className="text-[10px] font-semibold text-amber-300 mb-1">
+                    Cuidados para executar com segurança
+                  </h3>
+                  <div className="bg-amber-500/10 rounded-lg p-2.5 border border-amber-500/20">
+                    <p className="text-xs text-amber-100/90 leading-relaxed whitespace-pre-line">
+                      {getExerciseSafetyGuidance(selectedExercise)}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {selectedExercise.notes && (
                 <div>
                   <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">Observacoes</h3>
