@@ -18,6 +18,7 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File;
+    const folderRaw = String(formData.get("folder") || "").trim();
 
     if (!file) {
       return NextResponse.json({ error: "Nenhum arquivo enviado" }, { status: 400 });
@@ -57,10 +58,22 @@ export async function POST(req: Request) {
     const originalName = file.name
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9._-]/g, "-")
+      .replace(/-+/g, "-")
       .toLowerCase();
 
-    const path = `public/images/exercices/${originalName}`;
+    const safeFolder = folderRaw
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9_-]/g, "-")
+      .replace(/-+/g, "-")
+      .toLowerCase();
+
+    const allowedFolders = ["", "biblioteca", "sequencias", "videos", "chat", "perfil"];
+    const folder = allowedFolders.includes(safeFolder) ? safeFolder : "biblioteca";
+    const uniqueName = `${Date.now()}-${originalName}`;
+    const relativePath = folder ? `${folder}/${uniqueName}` : uniqueName;
+    const path = `public/images/exercices/${relativePath}`;
 
     // Verifica se já existe
     const getUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
@@ -102,8 +115,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      url: `/images/exercices/${originalName}`,
-      fileName: originalName,
+      url: `/images/exercices/${relativePath}`,
+      fileName: uniqueName,
     });
   } catch {
     return NextResponse.json(
