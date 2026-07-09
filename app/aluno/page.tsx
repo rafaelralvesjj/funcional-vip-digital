@@ -11,6 +11,12 @@ interface LibraryExercise {
   muscleGroup: string;
   imageUrl?: string | null;
   videoUrl?: string | null;
+  sequenceImageUrl?: string | null;
+  sequenceImageLabel?: string | null;
+  sequenceImageNotes?: string | null;
+  sequenceFramesCount?: number | null;
+  sequenceGeneratedByAi?: boolean | null;
+  sequencePrompt?: string | null;
   objectiveTags?: string | null;
   locationTags?: string | null;
   equipmentTags?: string | null;
@@ -45,6 +51,8 @@ export default function AlunoPage() {
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
   const [imgError, setImgError] = useState(false);
+  const [showSequenceImage, setShowSequenceImage] = useState(false);
+  const [showExerciseVideo, setShowExerciseVideo] = useState(false);
   const [exerciseLibraryByName, setExerciseLibraryByName] = useState<Record<string, LibraryExercise>>({});
   const [exerciseLibraryById, setExerciseLibraryById] = useState<Record<string, LibraryExercise>>({});
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
@@ -160,6 +168,26 @@ export default function AlunoPage() {
   function getExerciseImageUrl(exercise: any): string | null {
     const libraryExercise = getExerciseLibraryInfo(exercise);
     return String(libraryExercise?.imageUrl || "") || null;
+  }
+
+  function getExerciseVideoUrl(exercise: any): string | null {
+    const libraryExercise = getExerciseLibraryInfo(exercise);
+    return String(exercise?.videoUrl || libraryExercise?.videoUrl || "") || null;
+  }
+
+  function getExerciseSequenceImageUrl(exercise: any): string | null {
+    const libraryExercise = getExerciseLibraryInfo(exercise);
+    return String(exercise?.sequenceImageUrl || libraryExercise?.sequenceImageUrl || "") || null;
+  }
+
+  function getExerciseSequenceLabel(exercise: any): string {
+    const libraryExercise = getExerciseLibraryInfo(exercise);
+    return compactText(exercise?.sequenceImageLabel || libraryExercise?.sequenceImageLabel) || "Sequência de execução";
+  }
+
+  function getExerciseSequenceNotes(exercise: any): string {
+    const libraryExercise = getExerciseLibraryInfo(exercise);
+    return compactText(exercise?.sequenceImageNotes || libraryExercise?.sequenceImageNotes);
   }
 
   function getExercisePurpose(exercise: any): string {
@@ -1444,7 +1472,7 @@ export default function AlunoPage() {
 
               {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
                 <div key={ex.id || idx}
-                  onClick={() => { setSelectedExercise(ex); setImgError(false); }}
+                  onClick={() => { setSelectedExercise(ex); setImgError(false); setShowSequenceImage(false); setShowExerciseVideo(false); }}
                   className="bg-[#1a1a1a] rounded-xl p-2.5 border border-[#ffffff08] cursor-pointer hover:border-[#D4A373]/40 transition active:scale-[0.98]">
                   <div className="flex items-start gap-2">
                     <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
@@ -1655,6 +1683,84 @@ export default function AlunoPage() {
                   <p className="text-[8px] text-[#6b6b6b]">Descanso</p>
                 </div>
               </div>
+              {(() => {
+                const sequenceUrl = getImageUrl(getExerciseSequenceImageUrl(selectedExercise) || undefined);
+                const videoUrl = getImageUrl(getExerciseVideoUrl(selectedExercise) || undefined);
+
+                if (!sequenceUrl && !videoUrl) return null;
+
+                return (
+                  <div className="space-y-2">
+                    {sequenceUrl && (
+                      <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="text-[10px] font-semibold text-blue-300">
+                              {getExerciseSequenceLabel(selectedExercise)}
+                            </h3>
+                            <p className="mt-1 text-[10px] leading-relaxed text-blue-100/70">
+                              Veja a execução em etapas antes de iniciar o exercício.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowSequenceImage((current) => !current)}
+                            className="shrink-0 rounded-lg border border-blue-400/30 px-3 py-1.5 text-[10px] font-semibold text-blue-200"
+                          >
+                            {showSequenceImage ? "Ocultar" : "Ver sequência"}
+                          </button>
+                        </div>
+
+                        {showSequenceImage && (
+                          <div className="mt-3 space-y-2">
+                            <img
+                              src={sequenceUrl}
+                              alt={getExerciseSequenceLabel(selectedExercise)}
+                              className="max-h-[360px] w-full rounded-xl border border-blue-500/20 bg-[#0a0a0a] object-contain"
+                            />
+                            {getExerciseSequenceNotes(selectedExercise) && (
+                              <p className="text-[10px] leading-relaxed text-blue-100/80">
+                                {getExerciseSequenceNotes(selectedExercise)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {videoUrl && (
+                      <div className="rounded-xl border border-[#ffffff10] bg-[#1a1a1a] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-[10px] font-semibold text-[#D4A373]">
+                              Vídeo demonstrativo
+                            </h3>
+                            <p className="mt-1 text-[10px] text-[#a1a1a1]">
+                              Abra somente se quiser ver o movimento em vídeo.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowExerciseVideo((current) => !current)}
+                            className="shrink-0 rounded-lg border border-[#D4A373]/30 px-3 py-1.5 text-[10px] font-semibold text-[#D4A373]"
+                          >
+                            {showExerciseVideo ? "Ocultar" : "Ver vídeo"}
+                          </button>
+                        </div>
+
+                        {showExerciseVideo && (
+                          <video
+                            src={videoUrl}
+                            controls
+                            className="mt-3 max-h-[320px] w-full rounded-xl border border-[#ffffff10] bg-black"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {getExercisePurpose(selectedExercise) && (
                 <div>
                   <h3 className="text-[10px] font-semibold text-[#D4A373] mb-1">
