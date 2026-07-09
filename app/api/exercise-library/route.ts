@@ -86,6 +86,9 @@ function buildExerciseLibraryWhere(searchParams: URLSearchParams) {
         buildContainsFilter("levelTags", search),
         buildContainsFilter("instructions", search),
         buildContainsFilter("safetyNotes", search),
+        buildContainsFilter("sequenceImageLabel", search),
+        buildContainsFilter("sequenceImageNotes", search),
+        buildContainsFilter("sequencePrompt", search),
       ],
     });
   }
@@ -194,6 +197,15 @@ export async function POST(req: NextRequest) {
         muscleGroup,
         imageUrl: cleanNullableText(body?.imageUrl || body?.imagemUrl || body?.fotoUrl),
         videoUrl: cleanNullableText(body?.videoUrl || body?.video_url),
+        sequenceImageUrl: cleanNullableText(body?.sequenceImageUrl || body?.sequence_image_url || body?.imagemSequencialUrl),
+        sequenceImageLabel: cleanNullableText(body?.sequenceImageLabel || body?.sequence_image_label || body?.tituloSequencia),
+        sequenceImageNotes: cleanNullableText(body?.sequenceImageNotes || body?.sequence_image_notes || body?.observacoesSequencia),
+        sequenceFramesCount:
+          body?.sequenceFramesCount !== undefined || body?.sequence_frames_count !== undefined || body?.quadrosSequencia !== undefined
+            ? Math.max(Number(body?.sequenceFramesCount || body?.sequence_frames_count || body?.quadrosSequencia || 0), 0)
+            : 0,
+        sequenceGeneratedByAi: Boolean(body?.sequenceGeneratedByAi || body?.sequence_generated_by_ai || body?.geradoPorIa),
+        sequencePrompt: cleanNullableText(body?.sequencePrompt || body?.sequence_prompt || body?.promptSequencia),
         active: body?.active === false ? false : true,
         objectiveTags: cleanTagText(body?.objectiveTags || body?.objetivos || body?.objective),
         locationTags: cleanTagText(body?.locationTags || body?.locais || body?.trainingEnvironment),
@@ -255,6 +267,12 @@ export async function PUT(req: NextRequest) {
     if (body?.muscleGroup !== undefined || body?.grupoMuscular !== undefined) data.muscleGroup = cleanText(body?.muscleGroup || body?.grupoMuscular);
     if (body?.imageUrl !== undefined || body?.imagemUrl !== undefined || body?.fotoUrl !== undefined) data.imageUrl = cleanNullableText(body?.imageUrl || body?.imagemUrl || body?.fotoUrl);
     if (body?.videoUrl !== undefined || body?.video_url !== undefined) data.videoUrl = cleanNullableText(body?.videoUrl || body?.video_url);
+    if (body?.sequenceImageUrl !== undefined || body?.sequence_image_url !== undefined || body?.imagemSequencialUrl !== undefined) data.sequenceImageUrl = cleanNullableText(body?.sequenceImageUrl || body?.sequence_image_url || body?.imagemSequencialUrl);
+    if (body?.sequenceImageLabel !== undefined || body?.sequence_image_label !== undefined || body?.tituloSequencia !== undefined) data.sequenceImageLabel = cleanNullableText(body?.sequenceImageLabel || body?.sequence_image_label || body?.tituloSequencia);
+    if (body?.sequenceImageNotes !== undefined || body?.sequence_image_notes !== undefined || body?.observacoesSequencia !== undefined) data.sequenceImageNotes = cleanNullableText(body?.sequenceImageNotes || body?.sequence_image_notes || body?.observacoesSequencia);
+    if (body?.sequenceFramesCount !== undefined || body?.sequence_frames_count !== undefined || body?.quadrosSequencia !== undefined) data.sequenceFramesCount = Math.max(Number(body?.sequenceFramesCount || body?.sequence_frames_count || body?.quadrosSequencia || 0), 0);
+    if (body?.sequenceGeneratedByAi !== undefined || body?.sequence_generated_by_ai !== undefined || body?.geradoPorIa !== undefined) data.sequenceGeneratedByAi = Boolean(body?.sequenceGeneratedByAi || body?.sequence_generated_by_ai || body?.geradoPorIa);
+    if (body?.sequencePrompt !== undefined || body?.sequence_prompt !== undefined || body?.promptSequencia !== undefined) data.sequencePrompt = cleanNullableText(body?.sequencePrompt || body?.sequence_prompt || body?.promptSequencia);
     if (body?.active !== undefined) data.active = Boolean(body.active);
     if (body?.objectiveTags !== undefined || body?.objetivos !== undefined || body?.objective !== undefined) data.objectiveTags = cleanTagText(body?.objectiveTags || body?.objetivos || body?.objective);
     if (body?.locationTags !== undefined || body?.locais !== undefined || body?.trainingEnvironment !== undefined) data.locationTags = cleanTagText(body?.locationTags || body?.locais || body?.trainingEnvironment);
