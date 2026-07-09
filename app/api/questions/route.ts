@@ -38,6 +38,99 @@ function cleanText(value: unknown): string {
   return value.trim();
 }
 
+
+async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
+  const contentType = req.headers.get("content-type") || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const form = await req.formData();
+    const body: Record<string, unknown> = {};
+
+    form.forEach((value, key) => {
+      if (typeof value === "string") {
+        body[key] = value;
+      } else if (value instanceof File) {
+        body[key] = value;
+      }
+    });
+
+    return body;
+  }
+
+  try {
+    const json = await req.json();
+
+    if (json && typeof json === "object" && !Array.isArray(json)) {
+      return json as Record<string, unknown>;
+    }
+
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+
+type ChatAttachmentResult = {
+  imageUrl: string | null;
+  videoUrl: string | null;
+  error?: string;
+};
+
+const MAX_CHAT_ATTACHMENT_BYTES = 3 * 1024 * 1024;
+
+function getFileFromBody(body: Record<string, unknown>): File | null {
+  const value = body.file || body.attachment || body.image || body.video;
+
+  if (!value || typeof value === "string") return null;
+  if (!(value instanceof File)) return null;
+
+  return value;
+}
+
+async function getChatAttachmentFromBody(body: Record<string, unknown>): Promise<ChatAttachmentResult> {
+  const file = getFileFromBody(body);
+
+  if (!file) {
+    return {
+      imageUrl: cleanId(body.imageUrl) || cleanId(body.image) || null,
+      videoUrl: cleanId(body.videoUrl) || cleanId(body.video) || null,
+    };
+  }
+
+  if (!file.size) {
+    return { imageUrl: null, videoUrl: null };
+  }
+
+  const fileType = String(file.type || "").toLowerCase();
+  const isImage = fileType.startsWith("image/");
+  const isVideo = fileType.startsWith("video/");
+
+  if (!isImage && !isVideo) {
+    return {
+      imageUrl: null,
+      videoUrl: null,
+      error: "Envie apenas imagem ou vídeo no chat.",
+    };
+  }
+
+  if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+    return {
+      imageUrl: null,
+      videoUrl: null,
+      error: "O anexo precisa ter até 3MB. Envie uma foto comprimida ou um vídeo curto.",
+    };
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const dataUrl = `data:${file.type};base64,${buffer.toString("base64")}`;
+
+  return {
+    imageUrl: isImage ? dataUrl : null,
+    videoUrl: isVideo ? dataUrl : null,
+  };
+}
+
 function getAppLoginUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -819,14 +912,28 @@ export async function POST(req: NextRequest) {
 
     const userId = sessionUser.id;
     const loggedRole = normalizeRole(sessionUser.role);
-    const body = await req.json().catch(() => ({}));
+    const body = await readBody(req);
+    const attachment = await getChatAttachmentFromBody(body);
 
-    const content = cleanText(body.content);
+    if (attachment.error) {
+      return NextResponse.json(
+        { error: attachment.error },
+        { status: 400 }
+      );
+    }
+
+    let content = cleanText(body.content);
+    const hasAttachment = Boolean(attachment.imageUrl || attachment.videoUrl);
+
+    if (!content && hasAttachment) {
+      content = attachment.videoUrl ? "Vídeo enviado na conversa." : "Imagem enviada na conversa.";
+    }
+
     const requestedParentId = cleanId(body.parentId);
     const requestedStudentId = cleanId(body.studentId);
     const requestedTeacherId = cleanId(body.teacherId);
-    const videoUrl = cleanId(body.videoUrl);
-    const imageUrl = cleanId(body.imageUrl);
+    const videoUrl = attachment.videoUrl || cleanId(body.videoUrl);
+    const imageUrl = attachment.imageUrl || cleanId(body.imageUrl);
     const senderRole: SenderRole =
       loggedRole === "TEACHER"
         ? "TEACHER"
