@@ -396,6 +396,67 @@ async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
   }
 }
 
+
+type ChatAttachmentResult = {
+  imageUrl: string | null;
+  videoUrl: string | null;
+  error?: string;
+};
+
+const MAX_CHAT_ATTACHMENT_BYTES = 3 * 1024 * 1024;
+
+function getFileFromBody(body: Record<string, unknown>): File | null {
+  const value = body.file || body.attachment || body.image || body.video;
+
+  if (!value || typeof value === "string") return null;
+  if (!(value instanceof File)) return null;
+
+  return value;
+}
+
+async function getChatAttachmentFromBody(body: Record<string, unknown>): Promise<ChatAttachmentResult> {
+  const file = getFileFromBody(body);
+
+  if (!file) {
+    return {
+      imageUrl: cleanId(body.imageUrl) || cleanId(body.image) || null,
+      videoUrl: cleanId(body.videoUrl) || cleanId(body.video) || null,
+    };
+  }
+
+  if (!file.size) {
+    return { imageUrl: null, videoUrl: null };
+  }
+
+  const fileType = String(file.type || "").toLowerCase();
+  const isImage = fileType.startsWith("image/");
+  const isVideo = fileType.startsWith("video/");
+
+  if (!isImage && !isVideo) {
+    return {
+      imageUrl: null,
+      videoUrl: null,
+      error: "Envie apenas imagem ou vídeo no chat.",
+    };
+  }
+
+  if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+    return {
+      imageUrl: null,
+      videoUrl: null,
+      error: "O anexo precisa ter até 3MB. Envie uma foto comprimida ou um vídeo curto.",
+    };
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const dataUrl = `data:${file.type};base64,${buffer.toString("base64")}`;
+
+  return {
+    imageUrl: isImage ? dataUrl : null,
+    videoUrl: isVideo ? dataUrl : null,
+  };
+}
+
 async function getStudentFromSessionOrId(userId: string, studentId?: string | null) {
   if (studentId) {
     return prisma.student.findUnique({
@@ -716,7 +777,22 @@ export async function POST(req: NextRequest) {
 
     const body = await readBody(req);
     const userId = String(sessionUser.id);
-    const content = cleanText(body.content || body.question || body.message);
+    const attachment = await getChatAttachmentFromBody(body);
+
+    if (attachment.error) {
+      return NextResponse.json(
+        { error: attachment.error },
+        { status: 400 }
+      );
+    }
+
+    let content = cleanText(body.content || body.question || body.message);
+    const hasAttachment = Boolean(attachment.imageUrl || attachment.videoUrl);
+
+    if (!content && hasAttachment) {
+      content = attachment.videoUrl ? "Vídeo enviado pelo aluno." : "Imagem enviada pelo aluno.";
+    }
+
     const studentIdFromBody = cleanId(body.studentId);
     const parentId = cleanId(body.parentId);
     const target = String(body.target || body.targetType || "PROFESSOR").toUpperCase();
@@ -828,6 +904,8 @@ export async function POST(req: NextRequest) {
         parentId: rootQuestion?.id || null,
         senderRole: "STUDENT",
         answeredById: userId,
+        imageUrl: attachment.imageUrl,
+        videoUrl: attachment.videoUrl,
       },
       include: getQuestionIncludes(),
     });
