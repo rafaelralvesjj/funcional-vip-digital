@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
 import ProfilePhotoEditor from "@/components/ProfilePhotoEditor";
+import StudentSurveyPanel from "@/components/aluno/StudentSurveyPanel";
 interface LibraryExercise {
   id: string;
   name: string;
@@ -916,6 +917,8 @@ export default function AlunoPage() {
       )}
 
       <AlunoCommercialStatusPanel />
+
+      <StudentSurveyPanel />
 
       {activePauseCareEvent && (
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 space-y-3">
