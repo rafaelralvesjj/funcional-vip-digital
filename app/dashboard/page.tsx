@@ -489,6 +489,8 @@ export default async function DashboardPage() {
       teacherId: true,
       senderRole: true,
       content: true,
+      imageUrl: true,
+      videoUrl: true,
       answer: true,
       answeredAt: true,
       answeredById: true,
@@ -513,6 +515,8 @@ export default async function DashboardPage() {
           teacherId: true,
           senderRole: true,
           content: true,
+          imageUrl: true,
+          videoUrl: true,
           createdAt: true,
           resolvedAt: true,
           answeredBy: {
