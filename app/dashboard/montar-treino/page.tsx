@@ -16,6 +16,12 @@ interface LibraryExercise {
   muscleGroup: string;
   imageUrl?: string | null;
   videoUrl?: string | null;
+  sequenceImageUrl?: string | null;
+  sequenceImageLabel?: string | null;
+  sequenceImageNotes?: string | null;
+  sequenceFramesCount?: number | null;
+  sequenceGeneratedByAi?: boolean | null;
+  sequencePrompt?: string | null;
   objectiveTags?: string | null;
   locationTags?: string | null;
   equipmentTags?: string | null;
@@ -100,6 +106,11 @@ interface ExerciseItem {
   order: number;
   imageUrl?: string | null;
   videoUrl?: string | null;
+  sequenceImageUrl?: string | null;
+  sequenceImageLabel?: string | null;
+  sequenceImageNotes?: string | null;
+  sequenceFramesCount?: number | null;
+  sequenceGeneratedByAi?: boolean | null;
   purpose?: string | null;
   instructions?: string | null;
   safetyGuidance?: string | null;
@@ -445,6 +456,11 @@ export default function MontarTreinoPage() {
       order: index,
       imageUrl: exercise?.imageUrl || libraryExercise?.imageUrl || null,
       videoUrl: exercise?.videoUrl || libraryExercise?.videoUrl || null,
+      sequenceImageUrl: (exercise as any)?.sequenceImageUrl || libraryExercise?.sequenceImageUrl || null,
+      sequenceImageLabel: (exercise as any)?.sequenceImageLabel || libraryExercise?.sequenceImageLabel || null,
+      sequenceImageNotes: (exercise as any)?.sequenceImageNotes || libraryExercise?.sequenceImageNotes || null,
+      sequenceFramesCount: Number((exercise as any)?.sequenceFramesCount || libraryExercise?.sequenceFramesCount || 0) || null,
+      sequenceGeneratedByAi: Boolean((exercise as any)?.sequenceGeneratedByAi || libraryExercise?.sequenceGeneratedByAi),
       purpose: String((exercise as any)?.purpose || buildExercisePurpose(libraryExercise) || exercise?.description || libraryExercise?.description || ""),
       instructions: String((exercise as any)?.instructions || buildExerciseInstructions(libraryExercise) || ""),
       safetyGuidance: String((exercise as any)?.safetyGuidance || buildExerciseSafetyGuidance(libraryExercise) || ""),
@@ -627,7 +643,9 @@ export default function MontarTreinoPage() {
             String(ex.objectiveTags || "").toLowerCase().includes(term) ||
             String(ex.equipmentTags || "").toLowerCase().includes(term) ||
             String(ex.restrictionTags || "").toLowerCase().includes(term) ||
-            String(ex.description || "").toLowerCase().includes(term)
+            String(ex.description || "").toLowerCase().includes(term) ||
+            String(ex.sequenceImageLabel || "").toLowerCase().includes(term) ||
+            String(ex.sequenceImageNotes || "").toLowerCase().includes(term)
         )
       );
     } else {
@@ -812,6 +830,11 @@ export default function MontarTreinoPage() {
       order: exercises.length,
       imageUrl: ex.imageUrl || null,
       videoUrl: ex.videoUrl || null,
+      sequenceImageUrl: ex.sequenceImageUrl || null,
+      sequenceImageLabel: ex.sequenceImageLabel || null,
+      sequenceImageNotes: ex.sequenceImageNotes || null,
+      sequenceFramesCount: ex.sequenceFramesCount || null,
+      sequenceGeneratedByAi: Boolean(ex.sequenceGeneratedByAi),
       purpose: buildExercisePurpose(ex),
       instructions: buildExerciseInstructions(ex),
       safetyGuidance: buildExerciseSafetyGuidance(ex),
@@ -1901,6 +1924,11 @@ export default function MontarTreinoPage() {
                         Cuidado: {buildExerciseSafetyGuidance(ex)}
                       </p>
                     )}
+                    {ex.sequenceImageUrl && (
+                      <p className="text-blue-300/80 text-[10px] mt-1 line-clamp-1">
+                        Sequência visual disponível
+                      </p>
+                    )}
                   </button>
                 ))}
                 {filteredLibrary.length === 0 && (
@@ -1930,6 +1958,17 @@ export default function MontarTreinoPage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                    {ex.sequenceImageUrl && (
+                      <div className="md:col-span-2 rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
+                        <p className="text-[10px] uppercase tracking-wide text-blue-300 font-semibold">
+                          Sequência visual
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-blue-100/80">
+                          {ex.sequenceImageLabel || "Imagem sequencial de execução disponível para o aluno."}
+                          {ex.sequenceImageNotes ? ` ${ex.sequenceImageNotes}` : ""}
+                        </p>
+                      </div>
+                    )}
                     {getExercisePurpose(ex) && (
                       <div className="rounded-lg border border-[#ffffff10] bg-[#111] p-3">
                         <p className="text-[10px] uppercase tracking-wide text-[#D4A373] font-semibold">
