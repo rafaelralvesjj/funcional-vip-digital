@@ -18,6 +18,7 @@ type DashboardSummary = {
     startDate: string;
     endDate: string;
     daysLeft: number;
+    daysUntilStart?: number | null;
     workoutsPerWeek: number;
     workoutsPerMonth: number;
     totalContractedWorkouts: number;
@@ -70,11 +71,14 @@ type DashboardSummary = {
     hasCarePauseAwaitingReturn?: boolean;
     hasCarePauseUnderReview?: boolean;
     shouldEvaluateCommercialCompensation?: boolean;
+    isTrialScheduledToStart?: boolean;
+    daysUntilTrialStart?: number | null;
   };
   uiState:
     | "EXPERIENCIA_ATIVA"
     | "CONTRATO_ATIVO"
     | "PAUSA_POR_CUIDADO"
+    | "EXPERIENCIA_AGENDADA"
     | "AGUARDANDO_PAGAMENTO"
     | "AGUARDANDO_VINCULO_PROFESSOR"
     | "SUSPENSO_POR_PAGAMENTO"
@@ -116,6 +120,7 @@ function getCycleLabel(summary: DashboardSummary) {
 
 function getStatusTitle(summary: DashboardSummary) {
   if (summary.uiState === "PAUSA_POR_CUIDADO") return "Treinos pausados por cuidado";
+  if (summary.uiState === "EXPERIENCIA_AGENDADA") return "Experiência agendada para início seguro";
   if (summary.uiState === "EXPERIENCIA_ATIVA") return "Experiência gratuita ativa";
   if (summary.uiState === "AGUARDANDO_VINCULO_PROFESSOR") return "Experiência ativa, aguardando professor";
   if (summary.uiState === "CONTRATO_ATIVO") return "Plano ativo";
@@ -215,10 +220,12 @@ export function AlunoCommercialStatusPanel() {
 
   const cycle = summary.currentCycle;
   const isCarePause = summary.uiState === "PAUSA_POR_CUIDADO" || Boolean(summary.flags?.hasOpenCarePause);
+  const isTrialScheduled = summary.uiState === "EXPERIENCIA_AGENDADA" || Boolean(summary.flags?.isTrialScheduledToStart);
   const canRequestTrialContinuation =
     summary.flags?.isTrial &&
     Boolean(cycle) &&
     !isCarePause &&
+    !isTrialScheduled &&
     summary.uiState !== "SEM_CONTRATO_ATIVO" &&
     summary.uiState !== "SUSPENSO_POR_PAGAMENTO";
 
@@ -241,10 +248,31 @@ export function AlunoCommercialStatusPanel() {
 
         {cycle && (
           <div className="shrink-0 rounded-full border border-[#ffffff10] bg-[#1a1a1a] px-3 py-1 text-[10px] text-[#e5e5e5]">
-            {cycle.daysLeft >= 0 ? `${cycle.daysLeft} dia(s) restante(s)` : "Ciclo vencido"}
+            {isTrialScheduled && (cycle.daysUntilStart || summary.flags?.daysUntilTrialStart)
+              ? `Começa em ${cycle.daysUntilStart || summary.flags?.daysUntilTrialStart} dia(s)`
+              : cycle.daysLeft >= 0
+                ? `${cycle.daysLeft} dia(s) restante(s)`
+                : "Ciclo vencido"}
           </div>
         )}
       </div>
+
+      {isTrialScheduled && (
+        <div className="mt-3 rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 p-3">
+          <p className="text-[11px] font-semibold text-[#D4A373]">
+            Início direcionado para a próxima janela segura
+          </p>
+          <p className="mt-1 text-[10px] leading-relaxed text-[#e8d6c0]">
+            Como o cadastro aconteceu no fim da semana, seus treinos começam na primeira semana real de acompanhamento. Assim evitamos treino corrido ou acumulado só para cumprir quantidade.
+          </p>
+
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <InfoItem label="Início" value={formatDate(cycle?.startDate)} />
+            <InfoItem label="Vencimento" value={formatDate(cycle?.endDate)} />
+            <InfoItem label="Treinos" value="Aguardando semana segura" />
+          </div>
+        </div>
+      )}
 
       {isCarePause && (
         <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
