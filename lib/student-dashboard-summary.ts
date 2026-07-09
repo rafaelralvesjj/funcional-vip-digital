@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 export type StudentDashboardUiState =
   | "EXPERIENCIA_ATIVA"
   | "CONTRATO_ATIVO"
+  | "PAUSA_POR_CUIDADO"
   | "AGUARDANDO_PAGAMENTO"
   | "AGUARDANDO_VINCULO_PROFESSOR"
   | "SUSPENSO_POR_PAGAMENTO"
@@ -53,6 +54,26 @@ export type StudentDashboardSummary = {
     method: string | null;
     paymentLinkUrl: string | null;
   } | null;
+  currentCarePause: {
+    id: string;
+    eventType: string;
+    severity: string;
+    status: string;
+    title: string;
+    description: string | null;
+    studentMessage: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  commercialImpact: {
+    status: "SEM_IMPACTO" | "CONGELAR_EXPERIENCIA" | "AVALIAR_COMPENSACAO";
+    affectsTrainingDelivery: boolean;
+    countsAsCompletedWorkout: boolean;
+    countsAsAbsence: boolean;
+    recommendedAction: string | null;
+    preservedTrialDays: number | null;
+    message: string | null;
+  };
   flags: {
     isTrial: boolean;
     isPaid: boolean;
@@ -61,6 +82,10 @@ export type StudentDashboardSummary = {
     isTrainingBlocked: boolean;
     hasProfessor: boolean;
     hasPaymentIssue: boolean;
+    hasOpenCarePause: boolean;
+    hasCarePauseAwaitingReturn: boolean;
+    hasCarePauseUnderReview: boolean;
+    shouldEvaluateCommercialCompensation: boolean;
   };
   uiState: StudentDashboardUiState;
   hasActiveAccess: boolean;
@@ -88,6 +113,19 @@ function getDaysLeft(endDate: Date) {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+function getDaysLeftAtPauseStart(endDate: Date, pauseCreatedAt?: Date | string | null): number | null {
+  if (!pauseCreatedAt) return null;
+
+  const pauseStart = startOfDay(new Date(pauseCreatedAt));
+  const end = startOfDay(new Date(endDate));
+
+  if (Number.isNaN(pauseStart.getTime()) || Number.isNaN(end.getTime())) return null;
+
+  const diff = end.getTime() - pauseStart.getTime();
+
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
 function normalizeEmail(email?: string | null) {
   return email?.trim().toLowerCase() || null;
 }
@@ -109,7 +147,7 @@ function moneyRelevantPayment(payments: any[]) {
   })[0];
 }
 
-function pickCurrentContract(contracts: any[]) {
+function pickCurrentContract(contracts: any[], activeCarePause?: any | null) {
   if (!contracts?.length) return null;
 
   const today = startOfDay(new Date());
@@ -133,6 +171,24 @@ function pickCurrentContract(contracts: any[]) {
 
   if (trialStillValid) return trialStillValid;
 
+  if (activeCarePause) {
+    const pauseCreatedAt = startOfDay(new Date(activeCarePause.createdAt));
+
+    const frozenTrial = contracts.find((contract) => {
+      const endDate = startOfDay(new Date(contract.endDate));
+      const inactiveContractStatus = ["FINALIZED", "CANCELLED"].includes(contract.status);
+
+      return (
+        contract.type === "TRIAL" &&
+        !inactiveContractStatus &&
+        !Number.isNaN(pauseCreatedAt.getTime()) &&
+        pauseCreatedAt.getTime() <= endDate.getTime()
+      );
+    });
+
+    if (frozenTrial) return frozenTrial;
+  }
+
   return contracts[0] || null;
 }
 
@@ -140,8 +196,9 @@ function buildUiState(params: {
   contract: any | null;
   payment: any | null;
   professor: any | null;
+  activeCarePause?: any | null;
 }): StudentDashboardUiState {
-  const { contract, payment, professor } = params;
+  const { contract, payment, professor, activeCarePause } = params;
 
   if (!contract) return "SEM_CONTRATO_ATIVO";
 
@@ -149,7 +206,13 @@ function buildUiState(params: {
   const isExpired = daysLeft < 0;
   const inactiveContractStatus = ["FINALIZED", "CANCELLED"].includes(contract.status);
 
-  if (isExpired || inactiveContractStatus) return "SEM_CONTRATO_ATIVO";
+  if (isExpired || inactiveContractStatus) {
+    if (!(contract.type === "TRIAL" && activeCarePause)) {
+      return "SEM_CONTRATO_ATIVO";
+    }
+  }
+
+  if (activeCarePause) return "PAUSA_POR_CUIDADO";
 
   if (contract.status === "SUSPENDED") return "SUSPENSO_POR_PAGAMENTO";
 
@@ -189,6 +252,12 @@ function buildText(uiState: StudentDashboardUiState, daysLeft?: number) {
       title: "Plano ativo",
       message: `Seu contrato está ativo.${endingText} Você já pode seguir seu ciclo de treinos normalmente.`,
       actionLabel: "Continuar treinando",
+    },
+    PAUSA_POR_CUIDADO: {
+      title: "Treinos pausados por cuidado",
+      message:
+        "Existe uma pausa por cuidado aberta. Seus treinos ficam pausados até você sinalizar aptidão de retomada e o professor revisar/liberar com segurança. Esse período não deve ser tratado como falta ou baixa adesão comum.",
+      actionLabel: "Sinalizar retomada quando estiver apto(a)",
     },
     AGUARDANDO_PAGAMENTO: {
       title: "Pagamento pendente",
@@ -282,12 +351,37 @@ export async function getStudentDashboardSummary(
           },
         },
       },
+      careEvents: {
+        where: {
+          eventType: "PAUSA_POR_CUIDADO",
+          status: {
+            not: "RESOLVIDO",
+          },
+          resolvedAt: null,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 1,
+        select: {
+          id: true,
+          eventType: true,
+          severity: true,
+          status: true,
+          title: true,
+          description: true,
+          studentMessage: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
     },
   });
 
   if (!student) return null;
 
-  const contract = pickCurrentContract(student.contracts);
+  const activeCarePause = student.careEvents?.[0] || null;
+  const contract = pickCurrentContract(student.contracts, activeCarePause);
   const payment = moneyRelevantPayment(contract?.payments || []);
 
   const fallbackProfessor = ["PROFESSOR", "TEACHER"].includes(student.user?.role)
@@ -295,13 +389,21 @@ export async function getStudentDashboardSummary(
     : null;
 
   const professor = contract?.professor || fallbackProfessor || null;
-  const uiState = buildUiState({ contract, payment, professor });
-  const daysLeft = contract ? getDaysLeft(contract.endDate) : undefined;
+  const uiState = buildUiState({ contract, payment, professor, activeCarePause });
+  const preservedTrialDays = contract?.type === "TRIAL" && activeCarePause
+    ? getDaysLeftAtPauseStart(contract.endDate, activeCarePause.createdAt)
+    : null;
+  const daysLeft = contract
+    ? activeCarePause && contract.type === "TRIAL" && preservedTrialDays !== null
+      ? preservedTrialDays
+      : getDaysLeft(contract.endDate)
+    : undefined;
   const text = buildText(uiState, daysLeft);
 
   const shouldBlockTraining = [
     "SEM_CONTRATO_ATIVO",
     "SUSPENSO_POR_PAGAMENTO",
+    "PAUSA_POR_CUIDADO",
     "AGUARDANDO_PAGAMENTO",
     "AGUARDANDO_VINCULO_PROFESSOR",
   ].includes(uiState);
@@ -314,6 +416,34 @@ export async function getStudentDashboardSummary(
     isTrainingBlocked: shouldBlockTraining,
     hasProfessor: Boolean(professor),
     hasPaymentIssue: ["ATRASADO", "EM_ABERTO", "PARCIAL"].includes(payment?.status || ""),
+    hasOpenCarePause: Boolean(activeCarePause),
+    hasCarePauseAwaitingReturn: Boolean(activeCarePause && activeCarePause.status === "REQUER_REVISAO"),
+    hasCarePauseUnderReview: Boolean(activeCarePause && activeCarePause.status === "EM_REVISAO"),
+    shouldEvaluateCommercialCompensation: Boolean(activeCarePause),
+  };
+
+  const commercialImpactStatus = activeCarePause
+    ? contract?.type === "TRIAL"
+      ? "CONGELAR_EXPERIENCIA"
+      : "AVALIAR_COMPENSACAO"
+    : "SEM_IMPACTO";
+
+  const commercialImpact = {
+    status: commercialImpactStatus as "SEM_IMPACTO" | "CONGELAR_EXPERIENCIA" | "AVALIAR_COMPENSACAO",
+    affectsTrainingDelivery: Boolean(activeCarePause),
+    countsAsCompletedWorkout: false,
+    countsAsAbsence: false,
+    recommendedAction: activeCarePause
+      ? contract?.type === "TRIAL"
+        ? "Preservar os dias restantes da experiência até a revisão/liberação de retomada."
+        : "Registrar para a gestão avaliar compensação, prorrogação ou crédito conforme política comercial."
+      : null,
+    preservedTrialDays,
+    message: activeCarePause
+      ? contract?.type === "TRIAL"
+        ? "Pausa por cuidado ativa: a experiência não deve queimar dias sem janela real de treino."
+        : "Pausa por cuidado ativa: não contar como falta, treino feito ou baixa adesão comum."
+      : null,
   };
 
   return {
@@ -332,7 +462,7 @@ export async function getStudentDashboardSummary(
           commercialStatus: contract.commercialStatus,
           startDate: toDateOnlyISOString(contract.startDate),
           endDate: toDateOnlyISOString(contract.endDate),
-          daysLeft: getDaysLeft(contract.endDate),
+          daysLeft: typeof daysLeft === "number" ? daysLeft : getDaysLeft(contract.endDate),
           workoutsPerWeek: contract.workoutsPerWeek,
           workoutsPerMonth: contract.workoutsPerMonth,
           totalContractedWorkouts: contract.totalContractedWorkouts,
@@ -358,6 +488,20 @@ export async function getStudentDashboardSummary(
           paymentLinkUrl: payment.paymentLinkUrl || null,
         }
       : null,
+    currentCarePause: activeCarePause
+      ? {
+          id: activeCarePause.id,
+          eventType: activeCarePause.eventType,
+          severity: activeCarePause.severity,
+          status: activeCarePause.status,
+          title: activeCarePause.title,
+          description: activeCarePause.description,
+          studentMessage: activeCarePause.studentMessage,
+          createdAt: toDateOnlyISOString(activeCarePause.createdAt),
+          updatedAt: toDateOnlyISOString(activeCarePause.updatedAt),
+        }
+      : null,
+    commercialImpact,
     flags,
     uiState,
     hasActiveAccess: !shouldBlockTraining,
