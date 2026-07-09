@@ -53,10 +53,21 @@ function normalizeSearchText(value: string): string {
 }
 
 function hasCareSignal(content: string): boolean {
+  return classifyCareSignal(content).hasSignal;
+}
+
+type CareSignalClassification = {
+  hasSignal: boolean;
+  isCritical: boolean;
+  severity: "ALERTA" | "CUIDADO";
+  status: "ABERTO" | "REQUER_REVISAO";
+};
+
+function classifyCareSignal(content: string): CareSignalClassification {
   const text = normalizeSearchText(content);
   const paddedText = ` ${text} `;
 
-  const careKeywords = [
+  const generalCareKeywords = [
     "dor",
     "doendo",
     "dolorido",
@@ -94,12 +105,61 @@ function hasCareSignal(content: string): boolean {
     "inflamada",
   ];
 
-  if (careKeywords.some((keyword) => text.includes(keyword))) {
-    return true;
+  const hasShortFootSignal = /(^|\s)pe(\s|$)/.test(paddedText);
+  const hasGeneralCareSignal =
+    generalCareKeywords.some((keyword) => text.includes(keyword)) || hasShortFootSignal;
+
+  if (!hasGeneralCareSignal) {
+    return {
+      hasSignal: false,
+      isCritical: false,
+      severity: "ALERTA",
+      status: "ABERTO",
+    };
   }
 
-  // Termo curto para pé, evitando falso positivo dentro de palavras maiores.
-  return /(^|\s)pe(\s|$)/.test(paddedText);
+  const criticalCareKeywords = [
+    "dor forte",
+    "dor intensa",
+    "dor aguda",
+    "dor insuportavel",
+    "muita dor",
+    "muito dolorido",
+    "muito dolorida",
+    "nao consigo",
+    "torci",
+    "torceu",
+    "torsao",
+    "torcao",
+    "inchado",
+    "inchada",
+    "inchou",
+    "inchei",
+    "fisgada",
+    "travou",
+    "travei",
+    "queda",
+    "cai",
+    "caiu",
+    "machuquei",
+    "lesionei",
+    "lesao",
+    "tontura",
+    "tonto",
+    "falta de ar",
+    "formigamento",
+    "desmaio",
+    "desmaiei",
+  ];
+
+  const isCritical = criticalCareKeywords.some((keyword) => text.includes(keyword));
+
+  return {
+    hasSignal: true,
+    isCritical,
+    severity: isCritical ? "CUIDADO" : "ALERTA",
+    status: isCritical ? "REQUER_REVISAO" : "ABERTO",
+  };
 }
 
 function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
@@ -443,13 +503,18 @@ async function maybeCreateCareEventFromStudentQuestion({
   if (studentCareMessages.length === 0) return;
 
   const firstCareMessage = studentCareMessages[0];
+  const careClassification = classifyCareSignal(firstCareMessage.content);
+
+  if (!careClassification.hasSignal) return;
 
   const alreadyExists = await prisma.studentCareEvent.findFirst({
     where: {
       studentId,
       source: "CHAT_DUVIDAS",
       eventType: "RELATO_DOR_DUVIDA",
-      status: "ABERTO",
+      status: {
+        in: ["ABERTO", "REQUER_REVISAO", "EM_REVISAO"],
+      },
       description: {
         contains: `Conversa: ${rootConversationId}`,
       },
@@ -475,7 +540,9 @@ async function maybeCreateCareEventFromStudentQuestion({
   const effectiveProfessorId = professorId || student?.userId || null;
   const { startOfWeek, endOfWeek } = getWeekRange(firstCareMessage.createdAt || new Date());
   const contractId = await findActiveContractIdForCareEvent(studentId);
-  const title = "Relato de dor/desconforto em dúvida do aluno";
+  const title = careClassification.isCritical
+    ? "Relato crítico de dor/desconforto em dúvida do aluno"
+    : "Relato de dor/desconforto em dúvida do aluno";
   const description = [
     `Conversa: ${rootConversationId}`,
     `Mensagem: ${firstCareMessage.id}`,
@@ -493,7 +560,7 @@ async function maybeCreateCareEventFromStudentQuestion({
         data: {
           title,
           content: [
-            `${student?.name || "Aluno"} registrou um possível relato de dor/desconforto no chat/dúvidas.`,
+            `${student?.name || "Aluno"} registrou ${careClassification.isCritical ? "um possível cuidado crítico" : "um alerta"} de dor/desconforto no chat/dúvidas.`,
             "Revise a conversa antes de liberar ou evoluir a próxima semana de treinos.",
             "",
             `Relato: ${firstCareMessage.content}`,
@@ -522,8 +589,8 @@ async function maybeCreateCareEventFromStudentQuestion({
       professorId: effectiveProfessorId,
       authorId,
       eventType: "RELATO_DOR_DUVIDA",
-      severity: "ALERTA",
-      status: "ABERTO",
+      severity: careClassification.severity,
+      status: careClassification.status,
       source: "CHAT_DUVIDAS",
       title,
       description,
@@ -986,7 +1053,9 @@ export async function PATCH(req: NextRequest) {
             studentId: rootQuestion.studentId,
             source: "CHAT_DUVIDAS",
             eventType: "RELATO_DOR_DUVIDA",
-            status: "ABERTO",
+            status: {
+              in: ["ABERTO", "REQUER_REVISAO", "EM_REVISAO"],
+            },
             description: {
               contains: `Conversa: ${rootQuestionId}`,
             },
