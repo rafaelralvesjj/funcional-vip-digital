@@ -86,6 +86,36 @@ function getNextMonday(referenceDate = new Date()): Date {
   return date;
 }
 
+function getSafePlanningWeekStartIso(dateValue?: string | null): {
+  weekStartIso: string;
+  redirectedToNextWeek: boolean;
+  reason?: string;
+} {
+  const parsedDate = parseDateInput(dateValue);
+  const requestedWeekStart = parsedDate
+    ? getWeekRange(parsedDate).startOfWeek
+    : getNextMonday();
+
+  const currentWeek = getWeekRange(new Date());
+  const todayDay = new Date().getDay();
+  const selectedCurrentWeek = requestedWeekStart.getTime() === currentWeek.startOfWeek.getTime();
+  const unsafeCurrentWeekWindow = selectedCurrentWeek && [5, 6, 0].includes(todayDay);
+
+  if (unsafeCurrentWeekWindow) {
+    return {
+      weekStartIso: formatIsoDate(currentWeek.endOfWeek),
+      redirectedToNextWeek: true,
+      reason: "Esta semana já não possui janela segura de execução. O planejamento foi direcionado para a próxima semana.",
+    };
+  }
+
+  return {
+    weekStartIso: formatIsoDate(requestedWeekStart),
+    redirectedToNextWeek: false,
+  };
+}
+
+
 function formatIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -378,6 +408,7 @@ export default function ResumoAlunoPage() {
   const [aiJsonText, setAiJsonText] = useState("");
   const [targetWeekStart, setTargetWeekStart] = useState("");
   const [targetExpectedWorkoutDates, setTargetExpectedWorkoutDates] = useState<string[]>([]);
+  const [safeWindowNotice, setSafeWindowNotice] = useState<string | null>(null);
   const [exerciseLibrary, setExerciseLibrary] = useState<LibraryExercise[]>([]);
   const [loadingExerciseLibrary, setLoadingExerciseLibrary] = useState(true);
 
@@ -441,8 +472,16 @@ export default function ResumoAlunoPage() {
       params.get("expectedWorkoutDates") || params.get("expectedDates")
     );
 
-    setTargetWeekStart(resolveWeekStartIso(weekDateFromUrl));
-    setTargetExpectedWorkoutDates(expectedDatesFromUrl);
+    const safeWeek = getSafePlanningWeekStartIso(weekDateFromUrl);
+
+    setTargetWeekStart(safeWeek.weekStartIso);
+    setTargetExpectedWorkoutDates(safeWeek.redirectedToNextWeek ? [] : expectedDatesFromUrl);
+    setSafeWindowNotice(safeWeek.reason || null);
+
+    if (safeWeek.reason) {
+      setMessage({ type: "error", text: safeWeek.reason });
+    }
+
     loadStudents(params.get("studentId"));
     loadExerciseLibrary();
   }, []);
@@ -556,6 +595,12 @@ export default function ResumoAlunoPage() {
       "- Só use EVOLUCAO_PERMITIDA quando houver dados suficientes de execução/adesão e ausência de alertas críticos.",
       "- Não evolua carga, impacto, volume, complexidade ou intensidade sem evidência de resposta do aluno.",
       "- Mesmo em pré-planejamento, crie treino seguro, conservador e revisável pelo professor antes da liberação ao aluno.",
+      "",
+      "REGRA DE JANELA SEGURA DE INÍCIO:",
+      "- O aluno não começa atrasado; ele começa na primeira janela segura de acompanhamento.",
+      "- Se a entrada ou tentativa de planejamento cair em sexta-feira, sábado ou domingo, não gere treino para a semana atual. Direcione para a próxima semana.",
+      "- Treino atrasado não acumula. A próxima prescrição deve respeitar a semana real de execução do aluno.",
+      "- Sábado e domingo não devem ser usados para iniciar uma semana de treino normal.",
       "",
       "REGRA DE SEGURANÇA DO SISTEMA:",
       "- O JSON deve devolver o bloco aiValidation exatamente como informado no formato obrigatório.",
@@ -1000,6 +1045,11 @@ export default function ResumoAlunoPage() {
                 {displaySchedule.length > 0 && (
                   <p>
                     Datas esperadas: {displaySchedule.map((item) => `${item.weekday} (${item.date})`).join(" · ")}
+                  </p>
+                )}
+                {safeWindowNotice && (
+                  <p className="text-amber-400">
+                    {safeWindowNotice}
                   </p>
                 )}
               </div>
