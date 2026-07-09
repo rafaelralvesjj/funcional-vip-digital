@@ -4,6 +4,7 @@ export type StudentDashboardUiState =
   | "EXPERIENCIA_ATIVA"
   | "CONTRATO_ATIVO"
   | "PAUSA_POR_CUIDADO"
+  | "EXPERIENCIA_AGENDADA"
   | "AGUARDANDO_PAGAMENTO"
   | "AGUARDANDO_VINCULO_PROFESSOR"
   | "SUSPENSO_POR_PAGAMENTO"
@@ -34,6 +35,7 @@ export type StudentDashboardSummary = {
     startDate: string;
     endDate: string;
     daysLeft: number;
+    daysUntilStart?: number | null;
     workoutsPerWeek: number;
     workoutsPerMonth: number;
     totalContractedWorkouts: number;
@@ -85,6 +87,8 @@ export type StudentDashboardSummary = {
     hasOpenCarePause: boolean;
     hasCarePauseAwaitingReturn: boolean;
     hasCarePauseUnderReview: boolean;
+    isTrialScheduledToStart: boolean;
+    daysUntilTrialStart: number | null;
     shouldEvaluateCommercialCompensation: boolean;
   };
   uiState: StudentDashboardUiState;
@@ -110,6 +114,18 @@ function getDaysLeft(endDate: Date) {
   const today = startOfDay(new Date());
   const end = startOfDay(new Date(endDate));
   const diff = end.getTime() - today.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+function getDaysUntilStart(startDate: Date | string | null | undefined): number | null {
+  if (!startDate) return null;
+
+  const today = startOfDay(new Date());
+  const start = startOfDay(new Date(startDate));
+
+  if (Number.isNaN(start.getTime())) return null;
+
+  const diff = start.getTime() - today.getTime();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
@@ -212,6 +228,12 @@ function buildUiState(params: {
     }
   }
 
+  const daysUntilStart = getDaysUntilStart(contract.startDate);
+
+  if (contract.type === "TRIAL" && daysUntilStart !== null && daysUntilStart > 0) {
+    return "EXPERIENCIA_AGENDADA";
+  }
+
   if (activeCarePause) return "PAUSA_POR_CUIDADO";
 
   if (contract.status === "SUSPENDED") return "SUSPENSO_POR_PAGAMENTO";
@@ -258,6 +280,12 @@ function buildText(uiState: StudentDashboardUiState, daysLeft?: number) {
       message:
         "Existe uma pausa por cuidado aberta. Seus treinos ficam pausados até você sinalizar aptidão de retomada e o professor revisar/liberar com segurança. Esse período não deve ser tratado como falta ou baixa adesão comum.",
       actionLabel: "Sinalizar retomada quando estiver apto(a)",
+    },
+    EXPERIENCIA_AGENDADA: {
+      title: "Experiência agendada",
+      message:
+        "Seu cadastro foi ativado, mas sua primeira janela segura de treino começa na próxima semana. Isso evita começar atrasado ou receber treino corrido no fim da semana. A experiência passa a contar a partir da primeira semana real de acompanhamento.",
+      actionLabel: "Aguardar início seguro",
     },
     AGUARDANDO_PAGAMENTO: {
       title: "Pagamento pendente",
@@ -404,9 +432,12 @@ export async function getStudentDashboardSummary(
     "SEM_CONTRATO_ATIVO",
     "SUSPENSO_POR_PAGAMENTO",
     "PAUSA_POR_CUIDADO",
+    "EXPERIENCIA_AGENDADA",
     "AGUARDANDO_PAGAMENTO",
     "AGUARDANDO_VINCULO_PROFESSOR",
   ].includes(uiState);
+
+  const daysUntilTrialStart = contract?.type === "TRIAL" ? getDaysUntilStart(contract.startDate) : null;
 
   const flags = {
     isTrial: contract?.type === "TRIAL",
@@ -419,6 +450,8 @@ export async function getStudentDashboardSummary(
     hasOpenCarePause: Boolean(activeCarePause),
     hasCarePauseAwaitingReturn: Boolean(activeCarePause && activeCarePause.status === "REQUER_REVISAO"),
     hasCarePauseUnderReview: Boolean(activeCarePause && activeCarePause.status === "EM_REVISAO"),
+    isTrialScheduledToStart: uiState === "EXPERIENCIA_AGENDADA",
+    daysUntilTrialStart,
     shouldEvaluateCommercialCompensation: Boolean(activeCarePause),
   };
 
