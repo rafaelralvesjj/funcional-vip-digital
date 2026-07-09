@@ -588,6 +588,7 @@ export default function StudentDetailPage() {
   const [questions, setQuestions] = useState<AnyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [selectedQuestionForView, setSelectedQuestionForView] = useState<AnyItem | null>(null);
 
   useEffect(() => {
     if (!studentId) return;
@@ -676,6 +677,197 @@ export default function StudentDetailPage() {
     );
   }
 
+
+  function getQuestionRole(item: AnyItem): "STUDENT" | "TEACHER" | "GESTOR" {
+    const role = String(item?.senderRole || item?.answeredBy?.role || "").toUpperCase();
+
+    if (role === "TEACHER" || role === "PROFESSOR") return "TEACHER";
+    if (role === "GESTOR" || role === "ADMIN") return "GESTOR";
+
+    return "STUDENT";
+  }
+
+  function getQuestionAuthorLabel(item: AnyItem): string {
+    const role = getQuestionRole(item);
+
+    if (role === "STUDENT") {
+      return item?.student?.name || student?.name || "Aluno";
+    }
+
+    if (role === "GESTOR") {
+      return item?.answeredBy?.name || item?.teacher?.name || "Gestão";
+    }
+
+    return item?.teacher?.name || item?.answeredBy?.name || professorName || "Professor";
+  }
+
+  function getQuestionRoleBadge(item: AnyItem): string {
+    const role = getQuestionRole(item);
+
+    if (role === "STUDENT") return "Aluno";
+    if (role === "GESTOR") return "Gestão";
+
+    return "Professor";
+  }
+
+  function getQuestionBubbleClass(item: AnyItem): string {
+    const role = getQuestionRole(item);
+
+    if (role === "STUDENT") {
+      return "border-green-500/15 bg-green-500/5";
+    }
+
+    if (role === "GESTOR") {
+      return "border-blue-500/15 bg-blue-500/5";
+    }
+
+    return "border-[#D4A373]/20 bg-[#D4A373]/5";
+  }
+
+  function getQuestionBadgeClass(item: AnyItem): string {
+    const role = getQuestionRole(item);
+
+    if (role === "STUDENT") return "bg-green-500/10 text-green-300";
+    if (role === "GESTOR") return "bg-blue-500/10 text-blue-300";
+
+    return "bg-[#D4A373]/15 text-[#D4A373]";
+  }
+
+  function getQuestionConversationMessages(question: AnyItem | null): AnyItem[] {
+    if (!question) return [];
+
+    const children = Array.isArray(question.children) ? question.children : [];
+
+    return [question, ...children].sort((a, b) => {
+      const dateA = new Date(a?.createdAt || 0).getTime();
+      const dateB = new Date(b?.createdAt || 0).getTime();
+
+      return dateA - dateB;
+    });
+  }
+
+  function shouldShowLegacyAnswer(item: AnyItem): boolean {
+    return Boolean(item?.answer) && getQuestionRole(item) === "STUDENT";
+  }
+
+  function renderQuestionConversationModal() {
+    if (!selectedQuestionForView) return null;
+
+    const messages = getQuestionConversationMessages(selectedQuestionForView);
+    const title = getItemTitle(selectedQuestionForView, "Dúvida");
+    const status = selectedQuestionForView.resolvedAt ? "Resolvida" : "Em aberto";
+
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+        onClick={() => setSelectedQuestionForView(null)}
+      >
+        <div
+          className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl border border-[#ffffff15] bg-[#111] shadow-2xl"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-[#ffffff10] p-4">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-[#D4A373] font-semibold">
+                Conversa da dúvida
+              </p>
+              <h2 className="mt-1 text-base font-bold text-[#f5f5f5]">
+                {title}
+              </h2>
+              <p className="mt-1 text-xs text-[#6b6b6b]">
+                {status} · {messages.length} mensagem(ns)
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSelectedQuestionForView(null)}
+              className="rounded-full bg-[#1a1a1a] border border-[#ffffff10] px-3 py-1.5 text-xs font-semibold text-[#a1a1a1] hover:text-white"
+            >
+              Fechar
+            </button>
+          </div>
+
+          <div className="max-h-[65vh] overflow-y-auto p-4 space-y-3">
+            {messages.map((item, index) => (
+              <div key={item.id || index} className="space-y-3">
+                <div className={`rounded-2xl border p-4 ${getQuestionBubbleClass(item)}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-[#f5f5f5]">
+                        {getQuestionAuthorLabel(item)}
+                      </span>
+                      <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${getQuestionBadgeClass(item)}`}>
+                        {getQuestionRoleBadge(item)}
+                      </span>
+                    </div>
+
+                    <span className="text-[11px] text-[#6b6b6b]">
+                      {formatDate(item.createdAt)}
+                    </span>
+                  </div>
+
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#e5e5e5]">
+                    {item.content || item.message || "Mensagem sem conteúdo."}
+                  </p>
+
+                  {(item.imageUrl || item.videoUrl) && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.imageUrl && (
+                        <a
+                          href={item.imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300"
+                        >
+                          Ver imagem enviada
+                        </a>
+                      )}
+
+                      {item.videoUrl && (
+                        <a
+                          href={item.videoUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300"
+                        >
+                          Ver vídeo enviado
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {shouldShowLegacyAnswer(item) && (
+                  <div className="ml-0 md:ml-8 rounded-2xl border border-[#D4A373]/20 bg-[#D4A373]/5 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-[#f5f5f5]">
+                          {item?.answeredBy?.name || professorName || "Professor"}
+                        </span>
+                        <span className="rounded-full bg-[#D4A373]/15 px-2 py-1 text-[10px] font-semibold text-[#D4A373]">
+                          Resposta
+                        </span>
+                      </div>
+
+                      <span className="text-[11px] text-[#6b6b6b]">
+                        {formatDate(item.answeredAt)}
+                      </span>
+                    </div>
+
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#e5e5e5]">
+                      {item.answer}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderGenericList(items: AnyItem[], emptyText: string, kind: "notice" | "workout" | "question") {
     if (items.length === 0) return renderEmpty(emptyText);
 
@@ -688,7 +880,22 @@ export default function StudentDetailPage() {
           const status = item.status || item.type || item.senderRole || item.targetRole || "";
 
           return (
-            <div key={item.id || index} className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-4 space-y-3">
+            <div
+              key={item.id || index}
+              role={kind === "question" ? "button" : undefined}
+              tabIndex={kind === "question" ? 0 : undefined}
+              onClick={kind === "question" ? () => setSelectedQuestionForView(item) : undefined}
+              onKeyDown={kind === "question" ? (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedQuestionForView(item);
+                }
+              } : undefined}
+              className={
+                "rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-4 space-y-3 " +
+                (kind === "question" ? "cursor-pointer hover:border-[#D4A373]/40 hover:bg-[#141414] transition" : "")
+              }
+            >
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -709,6 +916,12 @@ export default function StudentDetailPage() {
                   <p className="text-xs text-[#6b6b6b] mt-2">
                     Data: {formatDate(date)}
                   </p>
+
+                  {kind === "question" && (
+                    <p className="text-xs text-[#D4A373] mt-2 font-semibold">
+                      Clique para ver a conversa completa
+                    </p>
+                  )}
                 </div>
 
                 {kind === "workout" && (
@@ -944,6 +1157,8 @@ export default function StudentDetailPage() {
           </>
         )}
       </div>
+
+      {renderQuestionConversationModal()}
     </main>
   );
 }
