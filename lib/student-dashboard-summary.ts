@@ -25,6 +25,7 @@ export type StudentDashboardSummary = {
     name: string;
     email: string | null;
     phone: string | null;
+    image: string | null;
     commercialStatus: string;
   };
   currentCycle: {
@@ -348,6 +349,7 @@ export async function getStudentDashboardSummary(
           id: true,
           name: true,
           email: true,
+          image: true,
           role: true,
         },
       },
@@ -356,6 +358,7 @@ export async function getStudentDashboardSummary(
           id: true,
           name: true,
           email: true,
+          image: true,
         },
       },
       contracts: {
@@ -485,6 +488,7 @@ export async function getStudentDashboardSummary(
       name: student.name,
       email: student.email,
       phone: student.phone,
+      image: student.image || student.userAuth?.image || null,
       commercialStatus: student.commercialStatus,
     },
     currentCycle: contract
