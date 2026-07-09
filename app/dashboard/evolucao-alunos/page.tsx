@@ -108,15 +108,18 @@ export default function EvolucaoAlunosPage() {
         return;
       }
 
-      const list = Array.isArray(data?.feedbacks) ? data.feedbacks : [];
+      const list: FeedbackItem[] = Array.isArray(data?.feedbacks)
+        ? (data.feedbacks as FeedbackItem[])
+        : [];
+      const nextDrafts: Record<string, string> = {};
+
+      list.forEach((item) => {
+        nextDrafts[item.id] = getDefaultContent(item);
+      });
+
       setFeedbacks(list);
-      setCounts(data?.counts || {});
-      setDrafts(
-        list.reduce<Record<string, string>>((acc, item: FeedbackItem) => {
-          acc[item.id] = getDefaultContent(item);
-          return acc;
-        }, {})
-      );
+      setCounts((data?.counts || {}) as Record<string, number>);
+      setDrafts(nextDrafts);
     } catch {
       setMessage({ type: "error", text: "Erro ao carregar feedbacks de evolução." });
       setFeedbacks([]);
