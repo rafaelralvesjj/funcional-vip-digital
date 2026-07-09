@@ -242,6 +242,71 @@ function getAiValidationContext({
   };
 }
 
+function normalizeCareText(value?: string | null): string {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+}
+
+function hasOpenCarePause(summaryData?: SummaryResponse | null): boolean {
+  if (!summaryData) return false;
+
+  const evolution = summaryData.evolutionContext || null;
+  const status = normalizeCareText(evolution?.status);
+  const summaryText = normalizeCareText(summaryData.summaryText);
+  const reason = normalizeCareText(evolution?.reason);
+  const alerts = normalizeCareText((evolution?.reviewAlerts || []).join(" | "));
+  const combinedText = [summaryText, reason, alerts].join(" ");
+
+  const mentionsCarePause =
+    combinedText.includes("PAUSA_POR_CUIDADO") ||
+    combinedText.includes("PAUSA POR CUIDADO") ||
+    combinedText.includes("SEM CONDICAO DE TREINAR") ||
+    combinedText.includes("SEM CONDIÇÃO DE TREINAR");
+
+  const isOpenOrBlocking =
+    combinedText.includes("STATUS: REQUER_REVISAO") ||
+    combinedText.includes("STATUS: REQUER REVISAO") ||
+    combinedText.includes("EM ABERTO") ||
+    combinedText.includes("EVENTO DE PAUSA POR CUIDADO EM ABERTO") ||
+    combinedText.includes("ALUNO EM PAUSA POR CUIDADO") ||
+    combinedText.includes("NAO MONTAR/LIBERAR TREINO NORMAL") ||
+    combinedText.includes("NÃO MONTAR/LIBERAR TREINO NORMAL");
+
+  return mentionsCarePause && (isOpenOrBlocking || status === "REVISAO_HUMANA_OBRIGATORIA");
+}
+
+function getCarePauseBlockedText(summaryData: SummaryResponse): string {
+  const alerts = summaryData.evolutionContext?.reviewAlerts || [];
+
+  return [
+    "BLOQUEIO DE SEGURANÇA — PAUSA POR CUIDADO",
+    "",
+    `Aluno: ${summaryData.student.name}`,
+    "Status da IA: REVISAO_HUMANA_OBRIGATORIA",
+    "",
+    "Este aluno possui pausa por cuidado aberta ou sinal de que está sem condição de treinar.",
+    "Não gere JSON de treino normal enquanto este evento estiver aberto.",
+    "",
+    "O que fazer agora:",
+    "1. Revisar a Central de Cuidado do Aluno.",
+    "2. Responder/orientar o aluno se ainda houver dúvida aberta.",
+    "3. Aguardar o aluno sinalizar que está apto para retomar.",
+    "4. O professor deve revisar a retomada antes de montar/liberar novo treino.",
+    "",
+    "Regras do sistema:",
+    "- Não montar treino evolutivo.",
+    "- Não liberar treino normal.",
+    "- Não usar este caso como baixa adesão comum.",
+    "- Se houver dor persistente, limitação, queda, torção importante ou orientação médica pendente, orientar avaliação com profissional habilitado.",
+    "",
+    alerts.length > 0 ? "Alertas registrados:" : "Alertas registrados: nenhum alerta adicional informado.",
+    ...alerts.map((alert) => `- ${alert}`),
+  ].join("\n");
+}
+
+
 function applyContractScheduleToWorkouts(
   workouts: any[],
   contractedTrainingDaysPerMonth?: number | null,
@@ -432,6 +497,10 @@ export default function ResumoAlunoPage() {
   }
 
   function getJsonPrompt(summaryData: SummaryResponse): string {
+    if (hasOpenCarePause(summaryData)) {
+      return getCarePauseBlockedText(summaryData);
+    }
+
     const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || null;
     const validationContext = getAiValidationContext({
       studentId: summaryData.student.id,
@@ -736,6 +805,14 @@ export default function ResumoAlunoPage() {
   }
 
   function openJsonInWorkoutBuilder() {
+    if (hasOpenCarePause(summary)) {
+      setMessage({
+        type: "error",
+        text: "Aluno em pausa por cuidado. Não é permitido importar JSON de treino normal enquanto o evento estiver aberto.",
+      });
+      return;
+    }
+
     try {
       const parsed = extractJsonFromText(aiJsonText);
       const normalized = normalizeAiWorkoutPayload(parsed);
@@ -781,7 +858,15 @@ export default function ResumoAlunoPage() {
       if (res.ok && data?.ok) {
         setSummary(data);
         setViewMode("jsonPrompt");
-        setMessage({ type: "success", text: "Resumo gerado com sucesso." });
+
+        if (hasOpenCarePause(data)) {
+          setMessage({
+            type: "error",
+            text: "Resumo gerado, mas o aluno está em pausa por cuidado. Não gere JSON de treino normal enquanto o evento estiver aberto.",
+          });
+        } else {
+          setMessage({ type: "success", text: "Resumo gerado com sucesso." });
+        }
       } else {
         setMessage({ type: "error", text: data?.error || "Erro ao gerar resumo." });
       }
@@ -817,11 +902,14 @@ export default function ResumoAlunoPage() {
     URL.revokeObjectURL(url);
   }
 
+  const hasCarePauseBlock = hasOpenCarePause(summary);
   const textToShow = summary
     ? viewMode === "jsonPrompt"
       ? getJsonPrompt(summary)
       : viewMode === "prompt"
-        ? summary.aiPrompt
+        ? hasCarePauseBlock
+          ? getCarePauseBlockedText(summary)
+          : summary.aiPrompt
         : summary.summaryText
     : "";
   const displayWeekStart = targetWeekStart || resolveWeekStartIso(null);
@@ -1013,6 +1101,19 @@ export default function ResumoAlunoPage() {
             </div>
           </div>
 
+          {hasCarePauseBlock && (
+            <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4">
+              <p className="text-sm text-red-400 font-semibold mb-1">
+                Bloqueio de segurança: pausa por cuidado aberta
+              </p>
+              <p className="text-xs text-[#f5b7b7] leading-relaxed">
+                Este aluno sinalizou que está sem condição de treinar ou possui pausa por cuidado em aberto.
+                Não gere nem importe JSON de treino normal enquanto o evento estiver aberto. O professor deve revisar a Central de Cuidado,
+                orientar o aluno e aguardar sinalização de aptidão para retomada antes de liberar novo treino.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="bg-[#1a1a1a] rounded-xl p-3">
               <p className="text-[10px] text-[#6b6b6b] uppercase">Treinos</p>
@@ -1057,22 +1158,34 @@ export default function ResumoAlunoPage() {
               </p>
             </div>
 
+            {hasCarePauseBlock && (
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-xs text-[#f5b7b7] leading-relaxed">
+                Importação bloqueada para este aluno enquanto houver pausa por cuidado aberta.
+                Resolva/revise o evento de cuidado antes de montar ou liberar nova semana.
+              </div>
+            )}
+
             <textarea
               value={aiJsonText}
               onChange={(event) => setAiJsonText(event.target.value)}
-              placeholder='Cole aqui o JSON gerado pela IA, começando com {"studentId": "...", "workouts": [...]}'
-              className="w-full min-h-[220px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-xs md:text-sm text-[#e5e5e5] font-mono leading-relaxed outline-none focus:border-[#D4A373]"
+              disabled={hasCarePauseBlock}
+              placeholder={
+                hasCarePauseBlock
+                  ? "Importação bloqueada: aluno em pausa por cuidado."
+                  : 'Cole aqui o JSON gerado pela IA, começando com {"studentId": "...", "workouts": [...]}'
+              }
+              className="w-full min-h-[220px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-xs md:text-sm text-[#e5e5e5] font-mono leading-relaxed outline-none focus:border-[#D4A373] disabled:opacity-50"
             />
 
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <p className="text-xs text-[#6b6b6b]">
-                Segurança: o JSON não grava nada sozinho. Se for de outro aluno, outra semana ou outra data, será bloqueado.
+                Segurança: o JSON não grava nada sozinho. Se for de outro aluno, outra semana, outra data ou aluno em pausa por cuidado, será bloqueado.
               </p>
 
               <button
                 type="button"
                 onClick={openJsonInWorkoutBuilder}
-                disabled={!aiJsonText.trim()}
+                disabled={hasCarePauseBlock || !aiJsonText.trim()}
                 className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
               >
                 Abrir em Montar Treino
