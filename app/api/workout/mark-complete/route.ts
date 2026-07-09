@@ -118,6 +118,305 @@ function normalizeDateFromBody(value: unknown, fallback?: Date | null): Date {
   return new Date();
 }
 
+
+function getAppCareUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/dashboard/cuidado-aluno`;
+}
+
+function normalizeWorkoutCareEventType(value?: string | null): string | null {
+  const eventType = String(value || "").trim().toUpperCase();
+
+  if (!eventType) return null;
+
+  const allowed = new Set([
+    "FALTA_TEMPO",
+    "EXERCICIO_DIFICIL",
+    "DOR_DESCONFORTO",
+    "NAO_ENTENDI",
+    "DESMOTIVACAO",
+    "BAIXA_ADERENCIA",
+    "OUTRO",
+    "PAUSA_POR_CUIDADO",
+  ]);
+
+  return allowed.has(eventType) ? eventType : "OUTRO";
+}
+
+function textHasAnyKeyword(text: string, keywords: string[]): boolean {
+  const normalized = text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return keywords.some((keyword) => normalized.includes(keyword));
+}
+
+function shouldTreatWorkoutCareAsPause(eventType: string | null, description?: string | null): boolean {
+  if (eventType === "PAUSA_POR_CUIDADO") return true;
+
+  const detail = String(description || "");
+
+  const pauseKeywords = [
+    "nao consigo treinar",
+    "não consigo treinar",
+    "nao consegui concluir",
+    "não consegui concluir",
+    "nao posso treinar",
+    "não posso treinar",
+    "me machuquei",
+    "me acidentei",
+    "acidente",
+    "fui ao medico",
+    "fui ao médico",
+    "medico",
+    "médico",
+    "repouso",
+    "gesso",
+    "muleta",
+    "fraturei",
+    "fratura",
+    "rompi",
+    "ruptura",
+    "nao consigo apoiar",
+    "não consigo apoiar",
+    "nao consigo andar",
+    "não consigo andar",
+    "travou",
+    "travada",
+    "dor forte",
+    "muita dor",
+    "inchado",
+    "inchaço",
+    "tontura",
+    "falta de ar",
+    "formigamento",
+  ];
+
+  return eventType === "DOR_DESCONFORTO" && textHasAnyKeyword(detail, pauseKeywords);
+}
+
+function getWorkoutCareCopy({
+  eventType,
+  studentName,
+  description,
+}: {
+  eventType: string;
+  studentName: string;
+  description?: string | null;
+}) {
+  const detail = String(description || "").trim();
+
+  const copies: Record<
+    string,
+    {
+      severity: string;
+      status: string;
+      title: string;
+      studentMessage: string;
+      professorMessage: string;
+    }
+  > = {
+    PAUSA_POR_CUIDADO: {
+      severity: "CUIDADO",
+      status: "REQUER_REVISAO",
+      title: "Pausa por cuidado: aluno sem condição de treinar",
+      studentMessage:
+        "Recebemos seu relato. Sua segurança vem primeiro. O treino foi encerrado como interrompido por cuidado, e o professor foi sinalizado para revisar antes de qualquer retomada.",
+      professorMessage:
+        `${studentName} sinalizou que não conseguiu concluir o treino ou está sem condição de treinar. Não liberar treino normal enquanto este evento estiver aberto. Oriente avaliação profissional quando necessário e revise a retomada segura quando o aluno informar aptidão.`,
+    },
+    DOR_DESCONFORTO: {
+      severity: "ALERTA",
+      status: "ABERTO",
+      title: "Relato de dor/desconforto no encerramento do treino",
+      studentMessage:
+        "Recebemos seu relato de dor ou desconforto. O professor foi sinalizado para revisar a próxima prescrição. Se a dor persistir, piorar ou limitar seus movimentos, procure avaliação de um profissional de saúde.",
+      professorMessage:
+        `${studentName} concluiu o treino, mas relatou dor ou desconforto. Revise antes de evoluir carga, impacto, volume, complexidade ou intensidade.`,
+    },
+    EXERCICIO_DIFICIL: {
+      severity: "REVISAO",
+      status: "REQUER_REVISAO",
+      title: "Treino encerrado com exercício difícil",
+      studentMessage:
+        "Recebemos seu relato. O professor foi sinalizado para revisar carga, exercício, volume ou uma variação mais adequada.",
+      professorMessage:
+        `${studentName} informou dificuldade no treino. Revise complexidade, carga, volume, instruções e possível regressão antes da próxima montagem.`,
+    },
+    NAO_ENTENDI: {
+      severity: "REVISAO",
+      status: "REQUER_REVISAO",
+      title: "Treino encerrado por falta de entendimento",
+      studentMessage:
+        "Recebemos seu relato. O professor foi sinalizado para revisar a explicação e te ajudar a executar com mais segurança.",
+      professorMessage:
+        `${studentName} informou que não entendeu o treino ou parte da execução. Revise descrição, observações e clareza das instruções antes da próxima montagem.`,
+    },
+    FALTA_TEMPO: {
+      severity: "ATENCAO",
+      status: "ABERTO",
+      title: "Treino não concluído por falta de tempo",
+      studentMessage:
+        "Recebemos seu relato. Rotina corrida acontece. O professor vai considerar isso para ajustar sua próxima semana com mais aderência e realidade.",
+      professorMessage:
+        `${studentName} não concluiu o treino por falta de tempo. Avalie uma estratégia mais simples, objetiva e possível de cumprir.`,
+    },
+    DESMOTIVACAO: {
+      severity: "ATENCAO",
+      status: "ABERTO",
+      title: "Treino não concluído por desmotivação",
+      studentMessage:
+        "Recebemos seu relato. A motivação oscila, mas você não precisa recomeçar do zero. O professor vai considerar uma retomada mais leve e possível.",
+      professorMessage:
+        `${studentName} sinalizou desmotivação e não concluiu o treino. Considere uma semana de retomada com metas curtas, exercícios simples e reforço positivo.`,
+    },
+    BAIXA_ADERENCIA: {
+      severity: "ATENCAO",
+      status: "ABERTO",
+      title: "Baixa aderência registrada no treino",
+      studentMessage:
+        "Recebemos seu relato. Vamos usar essa informação para ajustar melhor sua próxima programação.",
+      professorMessage:
+        `${studentName} teve baixa aderência no treino. Antes de progredir, avalie retomada, volume, complexidade e possíveis barreiras.`,
+    },
+    OUTRO: {
+      severity: "ATENCAO",
+      status: "ABERTO",
+      title: "Treino encerrado com relato do aluno",
+      studentMessage:
+        "Recebemos seu relato. Sua resposta ajuda o professor a cuidar melhor da sua rotina e ajustar o treino de forma mais humana e realista.",
+      professorMessage:
+        `${studentName} registrou uma observação ao encerrar o treino. Revise o contexto antes da próxima montagem.`,
+    },
+  };
+
+  const selected = copies[eventType] || copies.OUTRO;
+
+  if (!detail) return selected;
+
+  return {
+    ...selected,
+    professorMessage: `${selected.professorMessage}\n\nRelato do aluno: ${detail}`,
+  };
+}
+
+async function createWorkoutCareEvent({
+  student,
+  plan,
+  workout,
+  authorId,
+  requestedEventType,
+  description,
+}: {
+  student: any;
+  plan: any;
+  workout: any;
+  authorId: string;
+  requestedEventType: string;
+  description?: string | null;
+}) {
+  const finalEventType = shouldTreatWorkoutCareAsPause(requestedEventType, description)
+    ? "PAUSA_POR_CUIDADO"
+    : requestedEventType;
+
+  const copy = getWorkoutCareCopy({
+    eventType: finalEventType,
+    studentName: student.name || "Aluno",
+    description,
+  });
+
+  const week = getWeekRange(workout.date || plan.date || new Date());
+
+  const careEvent = await prisma.studentCareEvent.create({
+    data: {
+      studentId: student.id,
+      professorId: student.userId || null,
+      authorId,
+      contractId: workout.contractId || plan.contractId || null,
+      eventType: finalEventType,
+      severity: copy.severity,
+      status: copy.status,
+      source: "APP_ALUNO_ENCERRAMENTO_TREINO",
+      title: copy.title,
+      description: description || null,
+      studentMessage: copy.studentMessage,
+      professorMessage: copy.professorMessage,
+      relatedWorkoutPlanId: plan.id,
+      relatedWorkoutId: workout.id,
+      weekStart: week.startOfWeek,
+      weekEnd: week.endOfWeek,
+    },
+    select: {
+      id: true,
+      eventType: true,
+      severity: true,
+      status: true,
+      title: true,
+    },
+  });
+
+  await createStudentNotice({
+    studentId: student.id,
+    authorId,
+    title: copy.title,
+    content: copy.studentMessage,
+    type: "CUIDADO_ALUNO",
+    expiresAt: addDays(finalEventType === "PAUSA_POR_CUIDADO" ? 30 : 14),
+  });
+
+  if (student.userId) {
+    await prisma.notice.create({
+      data: {
+        title:
+          finalEventType === "PAUSA_POR_CUIDADO"
+            ? `Pausa por cuidado: ${student.name}`
+            : `Revisar treino: ${student.name}`,
+        content: copy.professorMessage,
+        type: "CUIDADO_ALUNO",
+        authorId,
+        studentId: student.id,
+        professorId: student.userId,
+        targetRole: "TEACHER",
+        expiresAt: addDays(30),
+      },
+    });
+  }
+
+  if (finalEventType === "PAUSA_POR_CUIDADO" && student.user?.email) {
+    try {
+      await sendEmail({
+        to: student.user.email,
+        subject: `Pausa por cuidado: ${student.name}`,
+        text: [
+          `Olá, ${student.user?.name || "professor(a)"}.`,
+          "",
+          copy.professorMessage,
+          "",
+          "Antes de montar ou liberar novo treino, revise a Central de Cuidado do Aluno.",
+          getAppCareUrl(),
+        ].join("\n"),
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
+            <p>Olá, ${escapeHtml(student.user?.name || "professor(a)")}.</p>
+            <p>${escapeHtml(copy.professorMessage).replaceAll("\n", "<br />")}</p>
+            <p>Antes de montar ou liberar novo treino, revise a Central de Cuidado do Aluno.</p>
+            <p><a href="${getAppCareUrl()}">Abrir Central de Cuidado</a></p>
+          </div>
+        `,
+      });
+    } catch (error) {
+      console.error("Erro ao enviar e-mail de pausa por cuidado ao professor:", error);
+    }
+  }
+
+  return careEvent;
+}
+
 async function getNoticeAuthorId(studentProfessorId?: string | null): Promise<string | null> {
   if (studentProfessorId) return studentProfessorId;
 
@@ -668,6 +967,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const studentId = typeof body?.studentId === "string" ? body.studentId : null;
     const workoutPlanId = typeof body?.workoutPlanId === "string" ? body.workoutPlanId : null;
+    const requestedCareEventType = normalizeWorkoutCareEventType(body?.careEventType);
+    const careEventDescription = String(body?.careEventDescription || "").trim() || null;
+    const requestedCompletionStatus = String(body?.completionStatus || "CONCLUIDO").toUpperCase();
 
     if (!studentId || !workoutPlanId) {
       return NextResponse.json(
@@ -687,6 +989,13 @@ export async function POST(req: NextRequest) {
         contractedTrainingDaysPerMonth: true,
         userAuth: {
           select: {
+            email: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
             email: true,
           },
         },
@@ -717,6 +1026,7 @@ export async function POST(req: NextRequest) {
         id: true,
         date: true,
         name: true,
+        contractId: true,
       },
     });
 
@@ -740,6 +1050,31 @@ export async function POST(req: NextRequest) {
         },
         { status: 403 }
       );
+    }
+
+    if (!["CONCLUIDO", "NAO_CONCLUIDO_COM_RELATO", "INTERROMPIDO_CUIDADO"].includes(requestedCompletionStatus)) {
+      return NextResponse.json(
+        { error: "Status de encerramento inválido." },
+        { status: 400 }
+      );
+    }
+
+    if (requestedCareEventType && !careEventDescription) {
+      return NextResponse.json(
+        { error: "Descreva em poucas palavras o que aconteceu antes de encerrar o treino com relato." },
+        { status: 400 }
+      );
+    }
+
+    const shouldPauseForCare = shouldTreatWorkoutCareAsPause(requestedCareEventType, careEventDescription);
+    const finalCareEventType = shouldPauseForCare ? "PAUSA_POR_CUIDADO" : requestedCareEventType;
+
+    let workoutStatus = "CONCLUIDO";
+
+    if (shouldPauseForCare || requestedCompletionStatus === "INTERROMPIDO_CUIDADO") {
+      workoutStatus = "INTERROMPIDO_CUIDADO";
+    } else if (requestedCompletionStatus === "NAO_CONCLUIDO_COM_RELATO") {
+      workoutStatus = "NAO_CONCLUIDO_COM_RELATO";
     }
 
     const authorId = await getNoticeAuthorId(student.userId);
@@ -776,7 +1111,7 @@ export async function POST(req: NextRequest) {
       ? await prisma.workout.update({
           where: { id: existingWorkout.id },
           data: {
-            status: "CONCLUIDO",
+            status: workoutStatus,
             date: workoutDate,
             contractId: existingWorkout.contractId || workoutPlanForContract?.contractId || null,
           },
@@ -795,7 +1130,7 @@ export async function POST(req: NextRequest) {
             workoutPlanId,
             contractId: workoutPlanForContract?.contractId || null,
             date: workoutDate,
-            status: "CONCLUIDO",
+            status: workoutStatus,
           },
           select: {
             id: true,
@@ -807,31 +1142,66 @@ export async function POST(req: NextRequest) {
           },
         });
 
-    const completedCountAfter = await prisma.workout.count({
-      where: {
-        studentId,
-        status: "CONCLUIDO",
-        ...(workout.contractId ? { contractId: workout.contractId } : {}),
-      },
-    });
+    let careEvent: any = null;
 
-    const completionNotification = await notifyWorkoutCompleted({
-      student,
-      workout,
-      authorId,
-      completedCountAfter,
-    });
+    if (finalCareEventType) {
+      careEvent = await createWorkoutCareEvent({
+        student,
+        plan,
+        workout,
+        authorId,
+        requestedEventType: finalCareEventType,
+        description: careEventDescription,
+      });
+    }
 
-    const weekNotification = await notifyWeekCompletedIfNeeded({
-      student,
-      workoutDate,
-      workoutId: workout.id,
-      authorId,
-    });
+    let completionNotification: any = {
+      sent: false,
+      reason: "Treino encerrado sem conclusão.",
+    };
+
+    let weekNotification: any = {
+      sent: false,
+      reason: "Treino não concluído; semana não reconhecida como completa.",
+    };
+
+    if (workoutStatus === "CONCLUIDO") {
+      const completedCountAfter = await prisma.workout.count({
+        where: {
+          studentId,
+          status: "CONCLUIDO",
+          ...(workout.contractId ? { contractId: workout.contractId } : {}),
+        },
+      });
+
+      completionNotification = await notifyWorkoutCompleted({
+        student,
+        workout,
+        authorId,
+        completedCountAfter,
+      });
+
+      weekNotification = await notifyWeekCompletedIfNeeded({
+        student,
+        workoutDate,
+        workoutId: workout.id,
+        authorId,
+      });
+    }
+
+    const responseMessage = finalCareEventType === "PAUSA_POR_CUIDADO"
+      ? "Recebemos seu relato. O treino foi encerrado como interrompido por cuidado, e o professor foi sinalizado antes de qualquer retomada."
+      : finalCareEventType
+        ? workoutStatus === "CONCLUIDO"
+          ? "Treino concluído com relato enviado ao professor."
+          : "Treino encerrado com relato enviado ao professor."
+        : "Treino concluído!";
 
     return NextResponse.json({
       ok: true,
       workout,
+      careEvent,
+      message: responseMessage,
       notifications: {
         completion: completionNotification,
         week: weekNotification,
