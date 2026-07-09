@@ -836,6 +836,239 @@ async function notifyWeekCompletedIfNeeded({
   };
 }
 
+
+
+function getAppEvolutionUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/dashboard/evolucao-alunos`;
+}
+
+function getEvolutionMilestone(completedCount: number): number | null {
+  const count = Number(completedCount || 0);
+
+  if (!Number.isFinite(count) || count <= 0) return null;
+  if (count % 20 !== 0) return null;
+
+  return count;
+}
+
+function buildEvolutionFeedbackDraft({
+  studentName,
+  milestone,
+  completedCount,
+}: {
+  studentName: string;
+  milestone: number;
+  completedCount: number;
+}): string {
+  return [
+    `Olá, ${studentName}!`,
+    "",
+    `Você completou ${milestone} treinos executados no Funcional VIP Digital. Esse é um marco importante, porque evolução de verdade nasce da constância e do cuidado com o processo.`,
+    "",
+    "O que observamos neste ciclo:",
+    `- Você registrou ${completedCount} treino(s) concluído(s).`,
+    "- Cada treino registrado ajuda o professor a entender melhor sua rotina, sua adesão e os ajustes necessários.",
+    "- A continuidade é um sinal positivo para seguirmos evoluindo com segurança.",
+    "",
+    "Pontos para o próximo ciclo:",
+    "- Continue registrando seus treinos com sinceridade.",
+    "- Avise sempre que sentir dor, desconforto, dificuldade ou falta de clareza na execução.",
+    "- O professor vai usar essas informações para ajustar volume, intensidade, exercícios e progressão.",
+    "",
+    "Próximo passo: seguir com consistência, técnica e atenção ao corpo. Estamos acompanhando sua evolução de perto.",
+  ].join("\n");
+}
+
+async function notifyEvolutionFeedbackMilestone({
+  student,
+  workout,
+  authorId,
+  completedCountAfter,
+}: {
+  student: {
+    id: string;
+    name: string;
+    userId: string | null;
+    user?: { id?: string | null; name?: string | null; email?: string | null } | null;
+  };
+  workout: {
+    id: string;
+    contractId?: string | null;
+  };
+  authorId: string;
+  completedCountAfter: number;
+}) {
+  const milestone = getEvolutionMilestone(completedCountAfter);
+
+  if (!milestone) {
+    return {
+      sent: false,
+      reason: "Ainda não atingiu marco de 20 treinos.",
+    };
+  }
+
+  const contractId = workout.contractId || null;
+  const eventKey = contractId ? `${contractId}|${milestone}` : `GERAL|${milestone}`;
+
+  if (await alreadySent({ studentId: student.id, eventType: "EVOLUTION_FEEDBACK_DUE", eventKey })) {
+    return {
+      sent: false,
+      milestone,
+      reason: "Marco de feedback já registrado.",
+    };
+  }
+
+  const existingRows = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM evolution_feedbacks
+    WHERE student_id = ${student.id}
+      AND milestone = ${milestone}
+      AND (
+        (${contractId}::text IS NULL AND contract_id IS NULL)
+        OR contract_id = ${contractId}
+      )
+    LIMIT 1
+  `;
+
+  if (existingRows.length > 0) {
+    await registerSent({
+      studentId: student.id,
+      workoutId: workout.id,
+      noticeId: null,
+      eventType: "EVOLUTION_FEEDBACK_DUE",
+      eventKey,
+      channel: "SISTEMA",
+    });
+
+    return {
+      sent: false,
+      milestone,
+      reason: "Feedback já existia na fila.",
+    };
+  }
+
+  const draft = buildEvolutionFeedbackDraft({
+    studentName: student.name || "Aluno",
+    milestone,
+    completedCount: completedCountAfter,
+  });
+
+  const insertedRows = await prisma.$queryRaw<Array<{ id: string }>>`
+    INSERT INTO evolution_feedbacks (
+      id,
+      student_id,
+      professor_id,
+      milestone,
+      status,
+      completed_workouts_count,
+      contract_id,
+      draft,
+      ready_at,
+      created_at,
+      updated_at
+    ) VALUES (
+      gen_random_uuid()::text,
+      ${student.id},
+      ${student.userId},
+      ${milestone},
+      'PENDENTE_PROFESSOR',
+      ${completedCountAfter},
+      ${contractId},
+      ${draft},
+      NOW(),
+      NOW(),
+      NOW()
+    )
+    RETURNING id
+  `;
+
+  const evolutionFeedbackId = insertedRows[0]?.id || null;
+
+  let professorNoticeId: string | null = null;
+
+  if (student.userId) {
+    const notice = await prisma.notice.create({
+      data: {
+        title: `Feedback de evolução pendente: ${milestone} treinos`,
+        content: [
+          `${student.name} completou ${milestone} treinos concluídos.`,
+          "",
+          "Revise o histórico, ajustes, dúvidas, sinais de cuidado e envie uma devolutiva humanizada ao aluno.",
+          "",
+          `Acesse a central de evolução: ${getAppEvolutionUrl()}`,
+        ].join("\n"),
+        type: "EVOLUTION_FEEDBACK_PENDING",
+        authorId,
+        studentId: student.id,
+        professorId: student.userId,
+        targetRole: "TEACHER",
+        expiresAt: addDays(30),
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    professorNoticeId = notice.id;
+
+    if (evolutionFeedbackId) {
+      await prisma.$executeRaw`
+        UPDATE evolution_feedbacks
+        SET professor_notice_id = ${professorNoticeId}, updated_at = NOW()
+        WHERE id = ${evolutionFeedbackId}
+      `;
+    }
+  }
+
+  await registerSent({
+    studentId: student.id,
+    workoutId: workout.id,
+    noticeId: professorNoticeId,
+    eventType: "EVOLUTION_FEEDBACK_DUE",
+    eventKey,
+    channel: "AVISO_PROFESSOR",
+  });
+
+  if (student.user?.email) {
+    try {
+      await sendEmail({
+        to: student.user.email,
+        subject: `Feedback de evolução pendente: ${student.name}`,
+        text: [
+          `Olá, ${student.user?.name || "professor(a)"}.`,
+          "",
+          `${student.name} completou ${milestone} treinos concluídos.`,
+          "Revise e envie uma devolutiva de evolução para o aluno.",
+          "",
+          getAppEvolutionUrl(),
+        ].join("\n"),
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
+            <p>Olá, ${escapeHtml(student.user?.name || "professor(a)")}.</p>
+            <p><strong>${escapeHtml(student.name)}</strong> completou <strong>${milestone} treinos concluídos</strong>.</p>
+            <p>Revise e envie uma devolutiva de evolução para o aluno.</p>
+            <p><a href="${getAppEvolutionUrl()}">Abrir central de evolução</a></p>
+          </div>
+        `,
+      });
+    } catch (error) {
+      console.error("Erro ao enviar e-mail de feedback de evolução ao professor:", error);
+    }
+  }
+
+  return {
+    sent: true,
+    milestone,
+    evolutionFeedbackId,
+    professorNoticeId,
+  };
+}
+
 async function canAccessStudent({
   userId,
   userEmail,
@@ -1189,6 +1422,28 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    let evolutionFeedbackNotification: any = {
+      sent: false,
+      reason: "Treino não gerou marco de feedback evolutivo.",
+    };
+
+    if (workoutStatus === "CONCLUIDO") {
+      const completedCountAfterForEvolution = await prisma.workout.count({
+        where: {
+          studentId,
+          status: "CONCLUIDO",
+          ...(workout.contractId ? { contractId: workout.contractId } : {}),
+        },
+      });
+
+      evolutionFeedbackNotification = await notifyEvolutionFeedbackMilestone({
+        student,
+        workout,
+        authorId,
+        completedCountAfter: completedCountAfterForEvolution,
+      });
+    }
+
     const responseMessage = finalCareEventType === "PAUSA_POR_CUIDADO"
       ? "Recebemos seu relato. O treino foi encerrado como interrompido por cuidado, e o professor foi sinalizado antes de qualquer retomada."
       : finalCareEventType
@@ -1205,6 +1460,7 @@ export async function POST(req: NextRequest) {
       notifications: {
         completion: completionNotification,
         week: weekNotification,
+        evolutionFeedback: evolutionFeedbackNotification,
       },
     });
   } catch (error: any) {
