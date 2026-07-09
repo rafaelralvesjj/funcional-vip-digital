@@ -498,6 +498,7 @@ function getTrendText(first: any | null, latest: any | null): string[] {
 
 function getEvolutionDecisionStatus({
   hasInjuryCare,
+  hasTrainingPauseCare,
   hasDifficultExercise,
   hasLowMotivation,
   hasOpenPainQuestion,
@@ -511,6 +512,7 @@ function getEvolutionDecisionStatus({
   overdueWorkoutsCount,
 }: {
   hasInjuryCare: boolean;
+  hasTrainingPauseCare: boolean;
   hasDifficultExercise: boolean;
   hasLowMotivation: boolean;
   hasOpenPainQuestion: boolean;
@@ -524,6 +526,16 @@ function getEvolutionDecisionStatus({
   overdueWorkoutsCount: number;
 }): { status: string; reason: string; requiresReviewBeforeRelease: boolean; reviewAlerts: string[] } {
   const reviewAlerts: string[] = [];
+
+  if (hasTrainingPauseCare) {
+    reviewAlerts.push("Aluno em pausa por cuidado: sem condição de treinar ou com impedimento relatado. Não gerar/liberar treino normal enquanto o evento estiver aberto.");
+    return {
+      status: "REVISAO_HUMANA_OBRIGATORIA",
+      reason: "Existe evento de pausa por cuidado em aberto. O aluno não deve receber treino normal até sinalizar aptidão de retomada e o professor revisar.",
+      requiresReviewBeforeRelease: true,
+      reviewAlerts,
+    };
+  }
 
   if (hasInjuryCare || hasOpenPainQuestion || openQuestionsCount > 0 || openCareEventsCount > 0) {
     if (hasInjuryCare) reviewAlerts.push("Existe relato/evento de dor ou desconforto em aberto.");
@@ -1044,7 +1056,12 @@ export async function GET(
     const openCareEvents = careEvents.filter((event) => event.status !== "RESOLVIDO");
     const openQuestions = questions.filter((question) => !question.resolvedAt);
     const openQuestionTexts = openQuestions.map(getQuestionConversationText);
-    const hasInjuryCare = openCareEvents.some((event) => event.eventType === "DOR_DESCONFORTO");
+    const hasTrainingPauseCare = openCareEvents.some((event) => event.eventType === "PAUSA_POR_CUIDADO");
+    const hasInjuryCare = openCareEvents.some((event) => {
+      const eventType = String(event.eventType || "").toUpperCase();
+      const severity = String(event.severity || "").toUpperCase();
+      return eventType === "DOR_DESCONFORTO" || eventType === "RELATO_DOR_DUVIDA" || severity === "CUIDADO";
+    });
     const hasDifficultExercise = openCareEvents.some((event) => event.eventType === "EXERCICIO_DIFICIL");
     const hasLowMotivation = openCareEvents.some((event) => event.eventType === "DESMOTIVACAO" || event.eventType === "FALTA_TEMPO");
     const hasOpenPainQuestion = openQuestionTexts.some(hasPainOrInjurySignal);
@@ -1052,6 +1069,7 @@ export async function GET(
     const hasOpenLowMotivationQuestion = openQuestionTexts.some(hasLowMotivationSignal);
     const evolutionDecision = getEvolutionDecisionStatus({
       hasInjuryCare,
+      hasTrainingPauseCare,
       hasDifficultExercise,
       hasLowMotivation,
       hasOpenPainQuestion,
@@ -1167,6 +1185,9 @@ export async function GET(
       onboardingOperationalLines.length
         ? onboardingOperationalLines.join("\n")
         : "Ficha inicial ainda não trouxe dados suficientes. Confirmar objetivo, nível, ambiente, equipamentos e restrições antes de montar treino.",
+      hasTrainingPauseCare
+        ? "Aluno em PAUSA POR CUIDADO. Não montar/liberar treino normal enquanto o evento estiver aberto. Aguardar aptidão de retomada e revisão do professor."
+        : "Sem pausa por cuidado registrada.",
       openCareEvents.length > 0
         ? `Existem ${openCareEvents.length} evento(s) de cuidado em aberto. Revisar antes de montar ou progredir treino.`
         : "Não há eventos de cuidado em aberto.",
