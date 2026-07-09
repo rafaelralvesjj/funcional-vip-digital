@@ -59,6 +59,17 @@ function getStatusLabel(status: string): string {
   return labels[status] || status;
 }
 
+function getSeverityLabel(severity: string): string {
+  const labels: Record<string, string> = {
+    CUIDADO: "Cuidado crítico",
+    REVISAO: "Revisão",
+    ALERTA: "Alerta",
+    ATENCAO: "Atenção",
+  };
+
+  return labels[severity] || severity;
+}
+
 function getSeverityStyle(severity: string): string {
   if (severity === "CUIDADO") {
     return "bg-red-500/10 text-red-400 border-red-500/20";
@@ -89,7 +100,7 @@ function buildContextForAi(event: CareEvent): string {
     "",
     `Aluno: ${event.studentName}`,
     `Tipo de sinal: ${getEventTypeLabel(event.eventType)}`,
-    `Severidade: ${event.severity}`,
+    `Severidade: ${getSeverityLabel(event.severity)}`,
     `Status: ${getStatusLabel(event.status)}`,
     `Relato do aluno: ${event.description || "não informado"}`,
     `Mensagem sugerida ao professor: ${event.professorMessage || "não informada"}`,
@@ -268,17 +279,17 @@ export default function CuidadoAlunoPage() {
       <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-[#1a1a1a] rounded-xl p-4">
-            <p className="text-[10px] uppercase text-[#6b6b6b]">Total</p>
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Histórico</p>
             <p className="text-2xl font-bold text-[#f5f5f5]">{counters.total}</p>
           </div>
 
           <div className="bg-[#1a1a1a] rounded-xl p-4">
-            <p className="text-[10px] uppercase text-[#6b6b6b]">Cuidado</p>
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Críticos ativos</p>
             <p className="text-2xl font-bold text-red-400">{counters.cuidado}</p>
           </div>
 
           <div className="bg-[#1a1a1a] rounded-xl p-4">
-            <p className="text-[10px] uppercase text-[#6b6b6b]">Revisar</p>
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Revisão</p>
             <p className="text-2xl font-bold text-yellow-400">{counters.revisar}</p>
           </div>
 
@@ -323,9 +334,7 @@ export default function CuidadoAlunoPage() {
             Como usar
           </p>
           <p className="text-xs text-[#a1a1a1] leading-relaxed">
-            Antes de montar ou liberar a próxima semana, veja se há eventos em aberto. Se o aluno relatou dor,
-            não faça progressão automática. Se relatou dificuldade, simplifique. Se relatou falta de tempo,
-            reduza complexidade e aumente aderência. A IA apoia, mas o professor responsável valida e resolve os alertas; a gestão apenas acompanha.
+            Antes de montar ou liberar a próxima semana, veja se há eventos em aberto. Dor leve/desconforto entra como alerta; dor forte, torção, inchaço, tontura, falta de ar, formigamento, queda ou travamento entram como cuidado crítico. Se relatou dificuldade, simplifique. Se relatou falta de tempo, reduza complexidade e aumente aderência. A IA apoia, mas o professor responsável valida e resolve os alertas; a gestão apenas acompanha.
           </p>
         </div>
       </div>
@@ -349,7 +358,7 @@ export default function CuidadoAlunoPage() {
                 <div>
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     <span className={`text-[10px] px-2 py-1 rounded-full border font-semibold ${getSeverityStyle(event.severity)}`}>
-                      {event.severity}
+                      {getSeverityLabel(event.severity)}
                     </span>
 
                     <span className="text-[10px] px-2 py-1 rounded-full bg-[#1a1a1a] text-[#a1a1a1]">
