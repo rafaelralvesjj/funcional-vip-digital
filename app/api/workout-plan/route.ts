@@ -85,6 +85,32 @@ function isFutureWeek(startOfWeek: Date): boolean {
   return startOfWeek.getTime() > currentWeek.startOfWeek.getTime();
 }
 
+function isUnsafeCurrentWeekPlanningWindow(startOfWeek: Date): boolean {
+  const currentWeek = getWeekRange(new Date());
+  const todayDay = new Date().getDay();
+
+  return (
+    startOfWeek.getTime() === currentWeek.startOfWeek.getTime() &&
+    [5, 6, 0].includes(todayDay)
+  );
+}
+
+function getSafeWindowBlockedPayload() {
+  const currentWeek = getWeekRange(new Date());
+  const nextWeekStart = currentWeek.endOfWeek;
+  const nextWeekEndDisplay = new Date(nextWeekStart);
+  nextWeekEndDisplay.setDate(nextWeekStart.getDate() + 6);
+
+  return {
+    code: "UNSAFE_START_WINDOW",
+    error: "Esta semana já não possui janela segura de execução. O planejamento deve ser direcionado para a próxima semana.",
+    message: "O aluno não começa atrasado. Ele começa na primeira janela segura de acompanhamento.",
+    nextWeekStart: nextWeekStart.toISOString().slice(0, 10),
+    nextWeekLabel: `${formatDatePtBr(nextWeekStart)} a ${formatDatePtBr(nextWeekEndDisplay)}`,
+  };
+}
+
+
 function isWorkoutReleasedForStudent(status?: string | null): boolean {
   const value = String(status || "").toUpperCase();
 
@@ -816,6 +842,10 @@ async function releaseWorkoutWeek({
     );
   }
 
+  if (isUnsafeCurrentWeekPlanningWindow(week.startOfWeek)) {
+    return NextResponse.json(getSafeWindowBlockedPayload(), { status: 409 });
+  }
+
   const plans = await prisma.workoutPlan.findMany({
     where: {
       studentId,
@@ -1057,6 +1087,10 @@ export async function POST(req: NextRequest) {
     }
 
     const { startOfWeek, endOfWeek } = getWeekRange(workoutDate);
+
+    if (isUnsafeCurrentWeekPlanningWindow(startOfWeek)) {
+      return NextResponse.json(getSafeWindowBlockedPayload(), { status: 409 });
+    }
 
     const workoutPlansThisWeek = await prisma.workoutPlan.count({
       where: {
@@ -1508,6 +1542,11 @@ export async function PUT(req: NextRequest) {
       }
 
       data.date = normalizeWorkoutDateInsideContract(requestedDate, activeContract);
+
+      if (isUnsafeCurrentWeekPlanningWindow(getWeekRange(data.date).startOfWeek)) {
+        return NextResponse.json(getSafeWindowBlockedPayload(), { status: 409 });
+      }
+
       data.contractId = activeContract.id;
       nextContractId = activeContract.id;
     }
