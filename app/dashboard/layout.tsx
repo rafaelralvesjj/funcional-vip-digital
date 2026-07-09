@@ -20,19 +20,17 @@ export default function DashboardLayout({
   /*
    * Menu do professor
    *
-   * Ajuste Fase 10.2:
-   * - Professor não acessa mais "Montar Treino" solto pelo menu.
-   * - Professor não acessa mais "Resumo do Aluno IA" solto pelo menu.
-   * - A montagem de treino deve nascer do contexto correto:
-   *   Dashboard -> aluno pendente -> semana atual/próxima semana -> montar treino.
-   * - O resumo do aluno deve ficar dentro da ficha do aluno, não como tela isolada.
+   * Regra de produto:
+   * - Professor não acessa "Montar Treino" solto pelo menu.
+   * - Professor não acessa "Resumo do Aluno IA" solto pelo menu.
+   * - Feedbacks/Evolução ficam fora do menu enquanto não houver uso recorrente.
+   * - As rotas continuam existindo para acesso contextual pelo dashboard, ficha ou montagem.
    */
   const professorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
     { href: "/dashboard/cuidado-aluno", label: "Acompanhamento do Aluno", icon: "heart" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
-    { href: "/dashboard/feedbacks-evolucao", label: "Feedbacks de Evolução", icon: "message" },
   ];
 
   /*
@@ -41,6 +39,10 @@ export default function DashboardLayout({
    * Regra:
    * - Gestor não vê "Montar Treino".
    * - Gestão mantém acesso a financeiro, gestão de alunos/professores e acompanhamento.
+   * - "Resumo do Aluno IA" fica fora do menu porque é uma tela de apoio operacional,
+   *   acessada a partir da montagem de treino.
+   * - Feedbacks/Evolução ficam fora do menu enquanto o fluxo amadurece;
+   *   o acesso pode continuar por card/link contextual no dashboard.
    */
   const gestorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
@@ -48,8 +50,6 @@ export default function DashboardLayout({
     { href: "/dashboard/financeiro", label: "Financeiro", icon: "credit" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/gestao", label: "Gestão", icon: "message" },
-    { href: "/dashboard/feedbacks-evolucao", label: "Feedbacks de Evolução", icon: "message" },
-    { href: "/dashboard/resumo-aluno", label: "Resumo do Aluno IA", icon: "book" },
     { href: "/dashboard/gestor/voce-sabia", label: "Você Sabia", icon: "book" },
     { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
