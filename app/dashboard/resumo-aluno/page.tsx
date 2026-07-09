@@ -47,6 +47,9 @@ type LibraryExercise = {
   intensity?: string | null;
   instructions?: string | null;
   safetyNotes?: string | null;
+  commonMistakes?: string | null;
+  substitutions?: string | null;
+  contraindications?: string | null;
 };
 
 function parseDateInput(value?: string | null): Date | null {
@@ -490,6 +493,37 @@ export default function ResumoAlunoPage() {
     return students.find((student) => student.id === selectedStudentId) || null;
   }, [students, selectedStudentId]);
 
+  function compactText(value?: unknown): string {
+    return String(value ?? "").replace(/\s+/g, " ").trim();
+  }
+
+  function joinTextParts(parts: Array<string | null | undefined>): string {
+    return parts
+      .map((part) => compactText(part))
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function buildExercisePurpose(exercise: LibraryExercise): string {
+    const objectiveText = compactText(exercise.objectiveTags)
+      ? `objetivo=${compactText(exercise.objectiveTags)}`
+      : "";
+
+    return joinTextParts([
+      exercise.description ? `praQueServe=${exercise.description}` : null,
+      objectiveText,
+    ]);
+  }
+
+  function buildExerciseSafetyGuidance(exercise: LibraryExercise): string {
+    return joinTextParts([
+      exercise.safetyNotes ? `cuidadosExecucao=${exercise.safetyNotes}` : null,
+      exercise.restrictionTags ? `tagsCuidado=${exercise.restrictionTags}` : null,
+      exercise.commonMistakes ? `errosComuns=${exercise.commonMistakes}` : null,
+      exercise.contraindications ? `contraindicacoes=${exercise.contraindications}` : null,
+    ]);
+  }
+
   function getExerciseLibraryPromptLines(): string[] {
     if (exerciseLibrary.length === 0) {
       return [
@@ -511,13 +545,21 @@ export default function ResumoAlunoPage() {
         .filter(Boolean)
         .join("; ");
 
-      return `${index + 1}. exerciseId=${exercise.id} | nome=${exercise.name} | ${tags || "sem tags"} | descrição=${exercise.description}`;
+      const purpose = buildExercisePurpose(exercise);
+      const execution = compactText(exercise.instructions)
+        ? `comoExecutar=${compactText(exercise.instructions)}`
+        : "";
+      const safety = buildExerciseSafetyGuidance(exercise);
+
+      return `${index + 1}. exerciseId=${exercise.id} | nome=${exercise.name} | ${tags || "sem tags"} | ${purpose || `praQueServe=${exercise.description}`} | ${execution || "comoExecutar=não informado"} | ${safety || "cuidadosExecucao=não informado"}`;
     });
 
     return [
       "BIBLIOTECA DE EXERCÍCIOS PERMITIDOS:",
       "Use SOMENTE os exercícios abaixo. Cada exercício do JSON deve trazer exerciseId exatamente igual ao cadastrado.",
       "Não invente exercícios. Não use exercício sem exerciseId.",
+      "Use os campos praQueServe, comoExecutar e cuidadosExecucao da biblioteca para preencher finalidade, orientação e segurança do exercício.",
+      "Se a biblioteca não trouxer algum desses campos, deixe simples e sinalize revisão do professor; não invente contraindicações.",
       ...lines,
     ];
   }
@@ -658,7 +700,10 @@ export default function ResumoAlunoPage() {
       "        {",
       '          "exerciseId": "id-exato-da-biblioteca",',
       '          "name": "Nome do exercício cadastrado na biblioteca",',
-      '          "description": "como executar ou foco técnico",',
+      '          "description": "descrição curta do exercício conforme biblioteca",',
+      '          "purpose": "pra que serve este exercício, usando a biblioteca oficial",',
+      '          "instructions": "como executar, usando a biblioteca oficial",',
+      '          "safetyGuidance": "cuidados para executar com segurança, usando a biblioteca oficial",',
       '          "series": 3,',
       '          "reps": "10-12",',
       '          "weight": "carga leve/moderada ou a definir",',
@@ -815,6 +860,11 @@ export default function ResumoAlunoPage() {
             exerciseId: libraryExercise.id,
             name: libraryExercise.name,
             description: String(exercise?.description || exercise?.descricao || libraryExercise.description || ""),
+            purpose: String(exercise?.purpose || exercise?.praQueServe || libraryExercise.description || ""),
+            instructions: String(exercise?.instructions || exercise?.comoExecutar || libraryExercise.instructions || libraryExercise.description || ""),
+            safetyGuidance: String(exercise?.safetyGuidance || exercise?.cuidadosExecucao || buildExerciseSafetyGuidance(libraryExercise) || ""),
+            commonMistakes: String(exercise?.commonMistakes || exercise?.errosComuns || libraryExercise.commonMistakes || ""),
+            contraindications: String(exercise?.contraindications || exercise?.contraindicacoes || libraryExercise.contraindications || ""),
             series: Number(exercise?.series || exercise?.serie || exercise?.sets || 3),
             reps: String(exercise?.reps || exercise?.repeticoes || exercise?.repetições || "10"),
             weight: String(exercise?.weight || exercise?.carga || ""),
