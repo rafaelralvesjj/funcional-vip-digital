@@ -196,7 +196,7 @@ function buildStudentResponse(student: AnyStudent) {
     email: student.email,
     phone: student.phone || student.userAuth?.phone || null,
     notes: student.notes,
-    image: student.image,
+    image: student.image || student.userAuth?.image || null,
     active: student.active,
     onboardingCompleto: student.onboardingCompleto,
     contractedTrainingDaysPerMonth: student.contractedTrainingDaysPerMonth,
@@ -280,6 +280,7 @@ export async function GET(
             name: true,
             email: true,
             phone: true,
+            image: true,
             role: true,
           },
         },
@@ -555,6 +556,7 @@ export async function PUT(
           ...(name !== undefined && { name }),
           ...(email !== undefined && { email }),
           ...(phone !== undefined && { phone }),
+          ...(image !== undefined && { image }),
         };
 
         if (password) {
