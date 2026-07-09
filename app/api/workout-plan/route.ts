@@ -600,7 +600,7 @@ async function buildReleaseReviewContext({
           },
           {
             eventType: {
-              in: ["DOR_DESCONFORTO", "EXERCICIO_DIFICIL", "DESMOTIVACAO", "FALTA_TEMPO"],
+              in: ["DOR_DESCONFORTO", "RELATO_DOR_DUVIDA", "PAUSA_POR_CUIDADO", "EXERCICIO_DIFICIL", "DESMOTIVACAO", "FALTA_TEMPO"],
             },
           },
         ],
@@ -656,6 +656,12 @@ async function buildReleaseReviewContext({
   ).length;
 
   const reviewAlerts: string[] = [];
+  const hasTrainingPauseCareEvent = openCareEvents.some(
+    (event) => String(event.eventType || "").toUpperCase() === "PAUSA_POR_CUIDADO"
+  );
+  const hasCriticalOpenCareEvent = openCareEvents.some(
+    (event) => String(event.severity || "").toUpperCase() === "CUIDADO"
+  );
   const hasOpenPainQuestion = newStudentQuestions.some((question) =>
     hasPainOrInjuryQuestionSignal(question.content)
   );
@@ -679,6 +685,18 @@ async function buildReleaseReviewContext({
   if (workoutUpdatesAfterPlanning > 0) {
     reviewAlerts.push(
       `Houve ${workoutUpdatesAfterPlanning} atualização(ões) em treinos anteriores depois que esta semana foi pré-planejada.`
+    );
+  }
+
+  if (hasTrainingPauseCareEvent) {
+    reviewAlerts.push(
+      "Aluno em pausa por cuidado: não liberar novo treino normal enquanto o evento estiver aberto. Aguardar aptidão de retomada e revisão do professor."
+    );
+  }
+
+  if (hasCriticalOpenCareEvent && !hasTrainingPauseCareEvent) {
+    reviewAlerts.push(
+      "Há cuidado crítico em aberto. Resolver/revisar o alerta antes de liberar a próxima semana ao aluno."
     );
   }
 
@@ -720,6 +738,9 @@ async function buildReleaseReviewContext({
     openCareEvents: openCareEvents.length,
     newStudentQuestions: newStudentQuestions.length,
     hasOpenPainQuestion,
+    hasTrainingPauseCareEvent,
+    hasCriticalOpenCareEvent,
+    blocksRelease: hasTrainingPauseCareEvent,
     requiresReviewBeforeRelease: reviewAlerts.length > 0,
     reviewAlerts,
   };
@@ -836,6 +857,19 @@ async function releaseWorkoutWeek({
     startOfWeek: week.startOfWeek,
     baselineDate,
   });
+
+  if (reviewContext.blocksRelease) {
+    return NextResponse.json(
+      {
+        error: "Aluno em pausa por cuidado. Não é permitido liberar novo treino normal enquanto o alerta estiver aberto.",
+        reviewRequired: true,
+        releaseBlocked: true,
+        reviewContext,
+        message: "Aguarde o aluno sinalizar aptidão de retomada e resolva o alerta de cuidado antes de liberar a próxima semana.",
+      },
+      { status: 409 }
+    );
+  }
 
   if (reviewContext.requiresReviewBeforeRelease && !forceRelease) {
     return NextResponse.json(
