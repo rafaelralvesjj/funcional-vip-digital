@@ -753,6 +753,239 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
+    const body = await request.json();
+    const id = String(body?.id || "").trim();
+    const action = String(body?.action || "").trim().toUpperCase();
+
+    if (!id) {
+      return NextResponse.json({ error: "ID do evento é obrigatório." }, { status: 400 });
+    }
+
+    if (action === "REQUEST_RETURN") {
+      if (role !== "STUDENT") {
+        return NextResponse.json(
+          { error: "Somente o aluno pode sinalizar aptidão de retomada." },
+          { status: 403 }
+        );
+      }
+
+      const existing = await prisma.studentCareEvent.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              userId: true,
+              userAuthId: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+              userAuth: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          professor: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          relatedWorkoutPlan: {
+            select: {
+              id: true,
+              name: true,
+              date: true,
+            },
+          },
+          relatedWorkout: {
+            select: {
+              id: true,
+              date: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      if (!existing) {
+        return NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
+      }
+
+      const hasAccess = await canAccessStudent({
+        userId,
+        role,
+        student: existing.student,
+      });
+
+      if (!hasAccess) {
+        return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+      }
+
+      if (existing.eventType !== "PAUSA_POR_CUIDADO") {
+        return NextResponse.json(
+          { error: "A retomada só pode ser solicitada para eventos de pausa por cuidado." },
+          { status: 400 }
+        );
+      }
+
+      if (existing.status === "RESOLVIDO") {
+        return NextResponse.json(
+          { error: "Este evento já foi resolvido pelo professor." },
+          { status: 400 }
+        );
+      }
+
+      const returnMessage = String(
+        body?.returnMessage ||
+          "Confirmo que me sinto apto(a) para retomar os treinos. Entendo que, caso ainda exista dor, limitação ou orientação médica pendente, devo informar o professor antes de voltar."
+      ).trim();
+      const now = new Date();
+      const noteToAdd = `[${formatDatePtBr(now)}] Aluno sinalizou aptidão de retomada: ${returnMessage}`;
+      const resolutionNotes = [existing.resolutionNotes, noteToAdd]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const updated = await prisma.studentCareEvent.update({
+        where: {
+          id,
+        },
+        data: {
+          status: "EM_REVISAO",
+          resolutionNotes,
+          resolvedAt: null,
+          resolvedById: null,
+        },
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+              userAuth: {
+                select: {
+                  email: true,
+                },
+              },
+            },
+          },
+          professor: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          relatedWorkoutPlan: {
+            select: {
+              id: true,
+              name: true,
+              date: true,
+            },
+          },
+          relatedWorkout: {
+            select: {
+              id: true,
+              date: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      const professorId = existing.professorId || existing.student.userId || null;
+      const professorEmail = existing.professor?.email || existing.student.user?.email || null;
+      const professorName = existing.professor?.name || existing.student.user?.name || "professor(a)";
+      const studentName = existing.student.name || "Aluno";
+      const professorContent = [
+        `${studentName} sinalizou que se sente apto(a) para retomar os treinos.`,
+        "",
+        "A retomada ainda não foi liberada automaticamente. Revise o evento de cuidado, confirme se há segurança para retorno e resolva o evento somente quando a programação puder voltar ao normal.",
+        "",
+        `Mensagem do aluno: ${returnMessage}`,
+      ].join("\n");
+
+      if (professorId) {
+        await prisma.notice.create({
+          data: {
+            title: `Retomada solicitada: ${studentName}`,
+            content: professorContent,
+            type: "CUIDADO_ALUNO",
+            authorId: userId,
+            studentId: existing.studentId,
+            professorId,
+            targetRole: "TEACHER",
+            expiresAt: addDays(21),
+          },
+        });
+      }
+
+      await prisma.notice.create({
+        data: {
+          title: "Retomada enviada para revisão",
+          content:
+            "Recebemos sua sinalização de que você se sente apto(a) para retomar os treinos. Agora o professor precisa revisar e liberar a retomada com segurança.",
+          type: "CUIDADO_ALUNO",
+          authorId: userId,
+          studentId: existing.studentId,
+          targetRole: "ALUNO",
+          expiresAt: addDays(14),
+        },
+      });
+
+      if (professorEmail) {
+        try {
+          await sendEmail({
+            to: professorEmail,
+            subject: `Retomada solicitada: ${studentName}`,
+            text: [
+              `Olá, ${professorName}.`,
+              "",
+              professorContent,
+              "",
+              "Acesse a Central de Cuidado para revisar:",
+              getAppCareUrl(),
+            ].join("\n"),
+            html: `
+              <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
+                <p>Olá, ${escapeHtml(professorName)}.</p>
+                <p>${escapeHtml(professorContent).replaceAll("\n", "<br />")}</p>
+                <p><a href="${getAppCareUrl()}">Abrir Central de Cuidado</a></p>
+              </div>
+            `,
+          });
+        } catch (error) {
+          console.error("Erro ao enviar e-mail de solicitação de retomada:", error);
+        }
+      }
+
+      return NextResponse.json({
+        ok: true,
+        event: normalizeEvent(updated),
+        message: "Seu professor foi avisado para revisar sua retomada. Aguarde a liberação antes de voltar aos treinos.",
+      });
+    }
+
     if (role !== "TEACHER") {
       return NextResponse.json(
         { error: "Somente o professor responsável pode alterar eventos de cuidado. A gestão visualiza e acompanha em modo leitura." },
@@ -760,14 +993,8 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const id = String(body?.id || "").trim();
     const status = String(body?.status || "").trim().toUpperCase();
     const resolutionNotes = String(body?.resolutionNotes || "").trim() || null;
-
-    if (!id) {
-      return NextResponse.json({ error: "ID do evento é obrigatório." }, { status: 400 });
-    }
 
     if (!["ABERTO", "EM_REVISAO", "REQUER_REVISAO", "RESOLVIDO"].includes(status)) {
       return NextResponse.json({ error: "Status inválido." }, { status: 400 });
