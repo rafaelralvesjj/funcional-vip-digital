@@ -60,6 +60,18 @@ function getStatusLabel(status: string): string {
   return labels[status] || status;
 }
 
+function getCareEventStatusLabel(event: CareEvent): string {
+  if (event.eventType === "PAUSA_POR_CUIDADO" && event.status === "EM_REVISAO") {
+    return "Retomada solicitada";
+  }
+
+  if (event.eventType === "PAUSA_POR_CUIDADO" && event.status === "REQUER_REVISAO") {
+    return "Aguardando aptidão";
+  }
+
+  return getStatusLabel(event.status);
+}
+
 function getSeverityLabel(severity: string): string {
   const labels: Record<string, string> = {
     CUIDADO: "Cuidado crítico",
@@ -102,7 +114,7 @@ function buildContextForAi(event: CareEvent): string {
     `Aluno: ${event.studentName}`,
     `Tipo de sinal: ${getEventTypeLabel(event.eventType)}`,
     `Severidade: ${getSeverityLabel(event.severity)}`,
-    `Status: ${getStatusLabel(event.status)}`,
+    `Status: ${getCareEventStatusLabel(event)}`,
     `Relato do aluno: ${event.description || "não informado"}`,
     `Mensagem sugerida ao professor: ${event.professorMessage || "não informada"}`,
     `Treino relacionado: ${event.relatedWorkoutPlanName || "não informado"}`,
@@ -380,6 +392,12 @@ export default function CuidadoAlunoPage() {
                     Professor: {event.professorName || "Não informado"} · Criado em {formatDate(event.createdAt)}
                   </p>
 
+                  {event.eventType === "PAUSA_POR_CUIDADO" && event.status === "EM_REVISAO" && (
+                    <p className="text-xs text-green-300 mt-2 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
+                      Aluno sinalizou aptidão para retomar. Revise e resolva o evento somente quando puder liberar a retomada com segurança.
+                    </p>
+                  )}
+
                   {event.relatedWorkoutPlanName && (
                     <p className="text-xs text-[#6b6b6b] mt-1">
                       Treino relacionado: {event.relatedWorkoutPlanName} · {formatDate(event.relatedWorkoutDate)}
@@ -414,7 +432,7 @@ export default function CuidadoAlunoPage() {
                       onClick={() => updateEvent(event, "RESOLVIDO")}
                       className="text-xs px-3 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20"
                     >
-                      Resolver
+                      {event.eventType === "PAUSA_POR_CUIDADO" ? "Resolver e liberar retomada" : "Resolver"}
                     </button>
                   )}
 
