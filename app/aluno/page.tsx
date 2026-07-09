@@ -37,6 +37,9 @@ export default function AlunoPage() {
   const [careEventSentForPlanId, setCareEventSentForPlanId] = useState<Record<string, boolean>>({});
   const [dashboardSummary, setDashboardSummary] = useState<any>(null);
   const [loadingDashboardSummary, setLoadingDashboardSummary] = useState(true);
+  const [careEvents, setCareEvents] = useState<any[]>([]);
+  const [loadingCareEvents, setLoadingCareEvents] = useState(false);
+  const [sendingCareReturn, setSendingCareReturn] = useState(false);
 
   // Estados para o modal de dúvidas (thread)
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
@@ -82,6 +85,7 @@ export default function AlunoPage() {
     if (studentId) {
       fetchPlans(studentId); fetchWorkouts(studentId);
       fetchNotices(studentId); fetchQuestions(studentId);
+      fetchCareEvents(studentId);
       fetchExerciseLibrary();
     }
   }, [studentId, currentMonth, currentYear]);
@@ -169,6 +173,23 @@ export default function AlunoPage() {
         setQuestions(Array.isArray(data) ? data : []);
       }
     } catch {}
+  }
+  async function fetchCareEvents(id: string) {
+    setLoadingCareEvents(true);
+
+    try {
+      const res = await fetch("/api/student-care-events?studentId=" + id, {
+        cache: "no-store",
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setCareEvents(Array.isArray(data?.events) ? data.events : []);
+      }
+    } catch {}
+
+    setLoadingCareEvents(false);
   }
   async function markNoticeAsRead(noticeId: string) {
     try {
@@ -263,6 +284,7 @@ export default function AlunoPage() {
 
         await fetchWorkouts(studentId);
         await fetchNotices(studentId);
+        await fetchCareEvents(studentId);
         await fetchDashboardSummary();
         setShowWorkoutModal(false);
       } else {
@@ -326,6 +348,50 @@ export default function AlunoPage() {
     } finally {
       setSendingCareEvent(false);
     }
+  }
+
+  async function requestCareReturn() {
+    if (!studentId || !activePauseCareEvent) return;
+
+    setSendingCareReturn(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/student-care-events", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: activePauseCareEvent.id,
+          action: "REQUEST_RETURN",
+          returnMessage:
+            "Confirmo que me sinto apto(a) para retomar os treinos. Entendo que, caso ainda exista dor, limitação ou orientação médica pendente, devo informar o professor antes de voltar.",
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text: data?.message || "Seu professor foi avisado para revisar sua retomada.",
+        });
+        await fetchCareEvents(studentId);
+        await fetchNotices(studentId);
+      } else {
+        setMessage({
+          type: "error",
+          text: data?.error || "Não foi possível solicitar retomada agora.",
+        });
+      }
+    } catch {
+      setMessage({
+        type: "error",
+        text: "Não foi possível solicitar retomada agora.",
+      });
+    }
+
+    setSendingCareReturn(false);
+    setTimeout(() => setMessage(null), 5000);
   }
 
   async function handleSendQuestion(parentId?: string) {
@@ -629,11 +695,17 @@ export default function AlunoPage() {
   function isStudentTrainingBlocked(): boolean {
     const uiState = getCommercialUiState();
 
-    return uiState === "SEM_CONTRATO_ATIVO" || uiState === "SUSPENSO_POR_PAGAMENTO";
+    return Boolean(activePauseCareEvent) || uiState === "SEM_CONTRATO_ATIVO" || uiState === "SUSPENSO_POR_PAGAMENTO";
   }
 
   function getTrainingBlockedTitle(): string {
     const uiState = getCommercialUiState();
+
+    if (activePauseCareEvent) {
+      return String(activePauseCareEvent.status || "").toUpperCase() === "EM_REVISAO"
+        ? "Retomada em revisão"
+        : "Treinos pausados por cuidado";
+    }
 
     if (uiState === "SUSPENSO_POR_PAGAMENTO") {
       return "Acesso aos treinos pausado";
@@ -645,6 +717,16 @@ export default function AlunoPage() {
   function getTrainingBlockedMessage(): string {
     const uiState = getCommercialUiState();
 
+    if (activePauseCareEvent) {
+      const status = String(activePauseCareEvent.status || "").toUpperCase();
+
+      if (status === "EM_REVISAO") {
+        return "Você já avisou que se sente apto(a) para retomar. Agora o professor precisa revisar e liberar sua retomada com segurança.";
+      }
+
+      return "Existe uma pausa por cuidado aberta. Seus treinos ficam pausados até você sinalizar aptidão de retomada e o professor revisar o caso.";
+    }
+
     if (uiState === "SUSPENSO_POR_PAGAMENTO") {
       return "Existe uma pendência de pagamento no seu ciclo. Fale com a equipe para regularizar e voltar a acessar os treinos.";
     }
@@ -655,6 +737,15 @@ export default function AlunoPage() {
 
     return "Seu acesso aos treinos está temporariamente indisponível. Fale com a equipe para regularizar.";
   }
+
+  const activePauseCareEvent = careEvents.find((event: any) => {
+    const eventType = String(event?.eventType || "").toUpperCase();
+    const status = String(event?.status || "").toUpperCase();
+
+    return eventType === "PAUSA_POR_CUIDADO" && status !== "RESOLVIDO";
+  }) || null;
+  const activePauseStatus = String(activePauseCareEvent?.status || "").toUpperCase();
+  const hasRequestedCareReturn = activePauseStatus === "EM_REVISAO";
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
@@ -677,6 +768,37 @@ export default function AlunoPage() {
       )}
 
       <AlunoCommercialStatusPanel />
+
+      {activePauseCareEvent && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-red-300">
+              {hasRequestedCareReturn ? "Retomada em revisão pelo professor" : "Treinos pausados por cuidado"}
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-red-100/80">
+              {hasRequestedCareReturn
+                ? "Recebemos sua sinalização de retomada. Aguarde o professor revisar e liberar com segurança antes de voltar aos treinos."
+                : "Existe uma pausa por cuidado aberta. Se você ainda sente dor, limitação ou tem orientação médica pendente, não retome o treino. Quando se sentir apto(a), avise seu professor pelo botão abaixo."}
+            </p>
+            {activePauseCareEvent.description && (
+              <p className="mt-2 text-[10px] leading-relaxed text-red-100/60">
+                Último relato: {activePauseCareEvent.description}
+              </p>
+            )}
+          </div>
+
+          {!hasRequestedCareReturn && (
+            <button
+              type="button"
+              onClick={requestCareReturn}
+              disabled={sendingCareReturn || loadingCareEvents}
+              className="inline-flex rounded-lg bg-red-400 px-3 py-2 text-[11px] font-semibold text-[#0a0a0a] hover:bg-red-300 transition disabled:opacity-50"
+            >
+              {sendingCareReturn ? "Enviando..." : "Estou apto para retomar os treinos"}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row gap-3">
         {/* AVISOS E FEEDBACKS */}
