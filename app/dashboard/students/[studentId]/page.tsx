@@ -764,6 +764,35 @@ export default function StudentDetailPage() {
     return Boolean(item?.answer) && getQuestionRole(item) === "STUDENT";
   }
 
+
+  function renderQuestionAttachment(item: AnyItem) {
+    if (!item?.imageUrl && !item?.videoUrl) return null;
+
+    return (
+      <div className="mt-3 space-y-2">
+        {item.imageUrl && (
+          <a href={item.imageUrl} target="_blank" rel="noreferrer" className="block">
+            <img
+              src={item.imageUrl}
+              alt="Imagem enviada na dúvida"
+              className="max-h-64 max-w-full rounded-xl border border-[#ffffff10] bg-[#0a0a0a] object-contain"
+            />
+            <span className="mt-1 block text-xs font-semibold text-blue-300">Abrir imagem enviada</span>
+          </a>
+        )}
+
+        {item.videoUrl && (
+          <div className="space-y-1">
+            <video src={item.videoUrl} controls className="max-h-64 w-full rounded-xl border border-[#ffffff10] bg-black" />
+            <a href={item.videoUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-blue-300 hover:underline">
+              Abrir vídeo enviado
+            </a>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderQuestionConversationModal() {
     if (!selectedQuestionForView) return null;
 
@@ -825,31 +854,7 @@ export default function StudentDetailPage() {
                     {item.content || item.message || "Mensagem sem conteúdo."}
                   </p>
 
-                  {(item.imageUrl || item.videoUrl) && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {item.imageUrl && (
-                        <a
-                          href={item.imageUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300"
-                        >
-                          Ver imagem enviada
-                        </a>
-                      )}
-
-                      {item.videoUrl && (
-                        <a
-                          href={item.videoUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300"
-                        >
-                          Ver vídeo enviado
-                        </a>
-                      )}
-                    </div>
-                  )}
+                  {renderQuestionAttachment(item)}
                 </div>
 
                 {shouldShowLegacyAnswer(item) && (
