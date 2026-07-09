@@ -78,13 +78,44 @@ function buildRoleWhere(role: string, userId: string) {
   return null;
 }
 
-function buildCommercialImpact(event: any) {
+type CommercialImpact = {
+  applies: boolean;
+  status: string;
+  label: string;
+  managementAction: string;
+  pauseDays: number;
+  startedAt?: string | null;
+  resolvedAt?: string | null;
+  contractId?: string | null;
+  contractType?: string | null;
+  contractTypeLabel?: string;
+  contractStatus?: string | null;
+  contractCommercialStatus?: string | null;
+  contractStartDate?: string | null;
+  contractEndDate?: string | null;
+  contractPriceCents?: number | null;
+  workoutsPerWeek?: number | null;
+  workoutsPerMonth?: number | null;
+  planName?: string | null;
+  countsAsCompletedWorkout?: boolean;
+  countsAsAbsence?: boolean;
+  countsAsLowAdherence?: boolean;
+};
+
+function buildCommercialImpact(event: any): CommercialImpact {
   if (event.eventType !== "PAUSA_POR_CUIDADO") {
     return {
       applies: false,
       status: "SEM_IMPACTO_ESPECIFICO",
       label: "Sem impacto comercial específico",
       managementAction: "Acompanhar pelo fluxo comum de cuidado/adesão.",
+      pauseDays: 0,
+      contractId: null,
+      contractType: null,
+      contractTypeLabel: "Sem contrato vinculado",
+      countsAsCompletedWorkout: false,
+      countsAsAbsence: false,
+      countsAsLowAdherence: false,
     };
   }
 
