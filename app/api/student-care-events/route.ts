@@ -74,6 +74,146 @@ function formatDatePtBr(date: Date): string {
   });
 }
 
+function startOfDay(date: Date): Date {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function addDaysToDate(date: Date, days: number): Date {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function calculatePauseDays(start: Date, end: Date): number {
+  const startDate = startOfDay(start);
+  const endDate = startOfDay(end);
+  const diff = endDate.getTime() - startDate.getTime();
+
+  return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+async function registerContractLifecycleEventSafe({
+  contractId,
+  studentId,
+  eventType,
+  eventKey,
+  channel = "SISTEMA",
+}: {
+  contractId: string;
+  studentId: string;
+  eventType: string;
+  eventKey: string;
+  channel?: string;
+}) {
+  try {
+    await prisma.contractLifecycleEvent.create({
+      data: {
+        contractId,
+        studentId,
+        eventType,
+        eventKey,
+        channel,
+      },
+    });
+  } catch (error: any) {
+    if (error?.code !== "P2002") {
+      throw error;
+    }
+  }
+}
+
+async function applyCommercialAdjustmentOnCareResolution({
+  event,
+  resolvedAt,
+}: {
+  event: {
+    id: string;
+    studentId: string;
+    contractId?: string | null;
+    eventType: string;
+    createdAt: Date;
+    contract?: {
+      id: string;
+      type: string;
+      status: string;
+      endDate: Date;
+    } | null;
+  };
+  resolvedAt: Date;
+}) {
+  if (event.eventType !== "PAUSA_POR_CUIDADO") {
+    return null;
+  }
+
+  const contract = event.contract || (await prisma.studentContract.findFirst({
+    where: {
+      studentId: event.studentId,
+      ...(event.contractId ? { id: event.contractId } : {}),
+    },
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      endDate: true,
+    },
+    orderBy: [{ endDate: "desc" }, { createdAt: "desc" }],
+  }));
+
+  if (!contract) {
+    return {
+      status: "SEM_CONTRATO",
+      message: "Pausa resolvida, mas não havia contrato/experiência vinculado para ajuste comercial automático.",
+    };
+  }
+
+  const pauseDays = calculatePauseDays(event.createdAt, resolvedAt);
+
+  if (contract.type === "TRIAL") {
+    const newEndDate = addDaysToDate(contract.endDate, pauseDays);
+
+    await prisma.studentContract.update({
+      where: {
+        id: contract.id,
+      },
+      data: {
+        endDate: newEndDate,
+      },
+    });
+
+    await registerContractLifecycleEventSafe({
+      contractId: contract.id,
+      studentId: event.studentId,
+      eventType: "TRIAL_EXTENDED_BY_CARE_PAUSE",
+      eventKey: `care_pause_${event.id}`,
+    });
+
+    return {
+      status: "EXPERIENCIA_PRORROGADA",
+      contractId: contract.id,
+      pauseDays,
+      previousEndDate: contract.endDate.toISOString(),
+      newEndDate: newEndDate.toISOString(),
+      message: `Experiência prorrogada em ${pauseDays} dia(s) por pausa de cuidado.`,
+    };
+  }
+
+  await registerContractLifecycleEventSafe({
+    contractId: contract.id,
+    studentId: event.studentId,
+    eventType: "PAID_CARE_PAUSE_COMPENSATION_REVIEW",
+    eventKey: `care_pause_${event.id}`,
+  });
+
+  return {
+    status: "COMPENSACAO_COMERCIAL_PENDENTE",
+    contractId: contract.id,
+    pauseDays,
+    message: "Pausa de cuidado registrada para avaliação comercial da gestão. Não contar como falta, baixa adesão comum ou treino realizado.",
+  };
+}
+
 async function getNoticeAuthorId(fallbackUserId?: string | null): Promise<string> {
   if (fallbackUserId) return fallbackUserId;
 
@@ -1012,6 +1152,14 @@ export async function PUT(request: NextRequest) {
             userId: true,
           },
         },
+        contract: {
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            endDate: true,
+          },
+        },
       },
     });
 
@@ -1023,17 +1171,27 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
     }
 
+    const resolvedAt = status === "RESOLVIDO" ? new Date() : null;
+    let commercialAdjustment: any = null;
+
     const data: any = {
       status,
       resolutionNotes,
     };
 
-    if (status === "RESOLVIDO") {
-      data.resolvedAt = new Date();
+    if (resolvedAt) {
+      data.resolvedAt = resolvedAt;
       data.resolvedById = userId;
     } else {
       data.resolvedAt = null;
       data.resolvedById = null;
+    }
+
+    if (resolvedAt && existing.status !== "RESOLVIDO") {
+      commercialAdjustment = await applyCommercialAdjustmentOnCareResolution({
+        event: existing,
+        resolvedAt,
+      });
     }
 
     const updated = await prisma.studentCareEvent.update({
@@ -1088,6 +1246,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       event: normalizeEvent(updated),
+      commercialAdjustment,
     });
   } catch (error: any) {
     console.error("PUT /api/student-care-events error:", error);
