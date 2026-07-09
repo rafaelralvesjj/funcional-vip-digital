@@ -32,8 +32,23 @@ export default async function DashboardPage() {
     },
     select: {
       createdAt: true,
+      image: true,
     },
   });
+
+  const profileImageUrl = currentUser?.image || sessionUser?.image || null;
+
+  function getInitials(name?: string | null): string {
+    const cleanName = String(name || 'Usuário').trim();
+
+    if (!cleanName) return 'U';
+
+    const parts = cleanName.split(/\s+/).filter(Boolean);
+    const first = parts[0]?.[0] || 'U';
+    const second = parts.length > 1 ? parts[parts.length - 1]?.[0] || '' : '';
+
+    return `${first}${second}`.toUpperCase();
+  }
 
   const labels = {
     studentsCard: isGestor ? 'Todos os alunos' : 'Meus alunos',
@@ -1116,13 +1131,36 @@ export default async function DashboardPage() {
 
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-          <h1 className="text-2xl md:text-3xl font-semibold text-[#f5f5f5]">
-            Olá, {userName}
-          </h1>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#1a1a1a] flex items-center justify-center">
+                {profileImageUrl ? (
+                  <img
+                    src={profileImageUrl}
+                    alt={userName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-lg font-bold text-[#D4A373]">
+                    {getInitials(userName)}
+                  </span>
+                )}
+              </div>
 
-          <p className="mt-2 text-[#a1a1a1]">
-            Bem-vindo ao painel administrativo. Aqui está o resumo das atividades pendentes.
-          </p>
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-[#D4A373]">
+                  {isGestor ? 'Gestão' : isTeacher ? 'Professor' : 'Painel'}
+                </p>
+                <h1 className="mt-1 text-2xl md:text-3xl font-semibold text-[#f5f5f5]">
+                  Olá, {userName}
+                </h1>
+
+                <p className="mt-2 text-[#a1a1a1]">
+                  Bem-vindo ao painel administrativo. Aqui está o resumo das atividades pendentes.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {isGestor && <TrialContinuationDashboardShortcut />}
