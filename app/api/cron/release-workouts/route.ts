@@ -11,6 +11,9 @@ type StudentForRelease = {
   userAuthId: string | null;
   userId: string | null;
   contractedTrainingDaysPerMonth: number | null;
+  user?: {
+    name: string | null;
+  } | null;
 };
 
 function getAppLoginUrl(): string {
@@ -117,6 +120,7 @@ async function notifyWorkoutAvailableForCurrentWeek({
   lastPlanName: string;
 }) {
   const studentName = student.name || "Aluno";
+  const professorName = student.user?.name || "seu professor";
   const studentEmail = await getStudentEmail(student);
   const authorId = await getFallbackNoticeAuthorId(student.userId);
   const loginUrl = getAppLoginUrl();
@@ -125,22 +129,38 @@ async function notifyWorkoutAvailableForCurrentWeek({
   const weekLabel = `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`;
 
   const title = isFirstWorkoutPackage
-    ? "Seus primeiros treinos da semana estão disponíveis"
+    ? "Seus primeiros treinos já estão disponíveis"
     : "Seus treinos da semana estão disponíveis";
 
   const content = isFirstWorkoutPackage
     ? [
-        `Seus ${weeklyLimit} treino(s) da semana já estão disponíveis no painel do aluno.`,
-        `Semana de referência: ${weekLabel}.`,
+        `Oi, ${studentName}!`,
         "",
-        "Como este é seu primeiro pacote de treinos no sistema, separe uns 10 minutinhos antes de começar para olhar tudo com calma.",
-        "Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.",
+        `Eu sou ${professorName} e vou acompanhar seus treinos e sua evolução no Funcional VIP Digital.`,
+        `Seus ${weeklyLimit} treino(s) da semana de ${weekLabel} já estão disponíveis.`,
+        "",
+        "Como este é o seu primeiro treino, separe cerca de 10 minutos antes de começar para olhar tudo com calma: exercícios, imagens, orientações, séries, repetições e cuidados de execução.",
+        "Se surgir qualquer dúvida, fale comigo pelo chat da plataforma antes de executar. Esse será nosso principal canal de comunicação sobre treino, porque mantém o acompanhamento registrado e organizado.",
+        "Acompanhe também seus e-mails e os avisos da plataforma. Para dúvidas de treino, não responda pelo WhatsApp; esse canal fica reservado para contatos específicos da gestão.",
+        "",
+        "Conte comigo nesse processo. Vamos evoluir com segurança, consistência e respeitando o seu momento.",
+        "",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
       ].join("\n")
     : [
-        `Seus ${weeklyLimit} treino(s) da semana já estão disponíveis no painel do aluno.`,
-        `Semana de referência: ${weekLabel}.`,
+        `Oi, ${studentName}!`,
         "",
-        "Acesse o sistema para visualizar as orientações e seguir sua programação.",
+        `Sou ${professorName}. Seus ${weeklyLimit} treino(s) da semana de ${weekLabel} já estão disponíveis.`,
+        "Antes de começar, confira as orientações, imagens, séries, repetições e cuidados de cada exercício.",
+        "Se tiver dúvida ou precisar contar como foi a execução, use o chat da plataforma. Assim, consigo acompanhar seu histórico e ajustar os próximos treinos com mais segurança.",
+        "Para assuntos de treino, não responda pelo WhatsApp. A gestão pode usar esse canal em situações específicas.",
+        "",
+        "Bom treino!",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
       ].join("\n");
 
   const existingWeekNotice = await prisma.notice.findFirst({
@@ -181,60 +201,31 @@ async function notifyWorkoutAvailableForCurrentWeek({
 
   if (studentEmail) {
     const safeStudentName = escapeHtml(studentName);
+    const safeProfessorName = escapeHtml(professorName);
     const safeWeekLabel = escapeHtml(weekLabel);
     const safeLastPlanName = escapeHtml(lastPlanName || "Treino da semana");
 
     const subject = title;
-
-    const text = isFirstWorkoutPackage
-      ? [
-          `Olá, ${studentName}!`,
-          "",
-          `Seus ${weeklyLimit} treino(s) da semana estão disponíveis no Funcional Vip Digital.`,
-          `Semana de referência: ${weekLabel}.`,
-          "",
-          "Como este é seu primeiro pacote de treinos no sistema, separe uns 10 minutinhos antes de começar para olhar tudo com calma.",
-          "Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.",
-          "",
-          `Acessar o sistema: ${loginUrl}`,
-        ].join("\n")
-      : [
-          `Olá, ${studentName}!`,
-          "",
-          `Seus ${weeklyLimit} treino(s) da semana estão disponíveis no Funcional Vip Digital.`,
-          `Semana de referência: ${weekLabel}.`,
-          "",
-          "Acesse seu painel do aluno para visualizar as orientações e seguir sua programação.",
-          "",
-          `Acessar o sistema: ${loginUrl}`,
-        ].join("\n");
+    const text = `${content}\n\nAcessar meus treinos: ${loginUrl}`;
 
     const introHtml = isFirstWorkoutPackage
       ? `
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana estão disponíveis no Funcional Vip Digital.
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+            Eu sou <strong style="color:#f5f5f5;">${safeProfessorName}</strong> e vou acompanhar seus treinos e sua evolução no Funcional VIP Digital.
           </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Semana de referência: <strong style="color:#f5f5f5;">${safeWeekLabel}</strong>.
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+            Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana de <strong style="color:#f5f5f5;">${safeWeekLabel}</strong> já estão disponíveis.
           </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Como este é seu primeiro pacote de treinos no sistema, separe uns 10 minutinhos antes de começar para olhar tudo com calma.
-            Veja os exercícios, imagens e orientações. Se surgir alguma dúvida, envie uma mensagem pelo chat antes de executar.
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+            Como este é o seu primeiro treino, separe cerca de 10 minutos antes de começar para conferir exercícios, imagens, orientações, séries, repetições e cuidados de execução.
           </p>
         `
       : `
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana estão disponíveis no Funcional Vip Digital.
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+            Sou <strong style="color:#f5f5f5;">${safeProfessorName}</strong>. Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana de <strong style="color:#f5f5f5;">${safeWeekLabel}</strong> já estão disponíveis.
           </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Semana de referência: <strong style="color:#f5f5f5;">${safeWeekLabel}</strong>.
-          </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Acesse seu painel do aluno para visualizar as orientações e seguir sua programação.
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+            Antes de começar, confira as orientações, imagens, séries, repetições e cuidados de cada exercício.
           </p>
         `;
 
@@ -242,24 +233,13 @@ async function notifyWorkoutAvailableForCurrentWeek({
       <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
         <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
           <h2 style="color:#D4A373; margin:0 0 16px;">${escapeHtml(title)}</h2>
-
-          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-            Olá, <strong>${safeStudentName}</strong>!
-          </p>
-
+          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
           ${introHtml}
-
-          <p style="color:#6b6b6b; font-size:11px; line-height:1.5;">
-            Último treino salvo neste pacote: ${safeLastPlanName}.
-          </p>
-
-          <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
-            Acessar meus treinos
-          </a>
-
-          <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-            Este é um aviso automático do Funcional Vip Digital.
-          </p>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se surgir qualquer dúvida, use o chat da plataforma antes de executar. Esse é o canal principal entre você e o professor, porque mantém o acompanhamento registrado e organizado.</p>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Para dúvidas de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.</p>
+          <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meus treinos</a>
+          <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional VIP Digital</p>
+          <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">Mensagem automática de acompanhamento enviada em nome do seu professor.<br />Último treino salvo neste pacote: ${safeLastPlanName}.</p>
         </div>
       </div>
     `;
@@ -300,6 +280,11 @@ export async function GET(request: NextRequest) {
       userAuthId: true,
       userId: true,
       contractedTrainingDaysPerMonth: true,
+      user: {
+        select: {
+          name: true,
+        },
+      },
     },
     orderBy: {
       name: "asc",
