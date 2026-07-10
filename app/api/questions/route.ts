@@ -363,49 +363,48 @@ async function sendNewConversationEmail({
       .filter((recipient) => Boolean(recipient.email))
       .map((recipient) => {
         const recipientName = recipient.name || "usuário";
-        const panelText =
-          recipient.panelKind === "STUDENT"
-            ? "seu painel do aluno"
-            : recipient.panelKind === "TEACHER"
-              ? "seu painel do professor"
-              : "seu painel da gestão";
-
-        const subject = "Nova mensagem no Funcional Vip Digital";
+        const isStudent = recipient.panelKind === "STUDENT";
+        const isTeacher = recipient.panelKind === "TEACHER";
+        const panelText = isStudent
+          ? "seu painel do aluno"
+          : isTeacher
+            ? "seu painel do professor"
+            : "seu painel da gestão";
+        const subject = isStudent
+          ? `${recipientName}, você recebeu uma nova mensagem na plataforma`
+          : `Nova mensagem de ${senderLabel} para acompanhar`;
+        const actionText = isStudent
+          ? "Entre no chat para ler a mensagem e responder por lá. Assim, seu professor consegue acompanhar o histórico e manter as orientações organizadas."
+          : isTeacher
+            ? "Acesse o chat para ler e responder. Manter a conversa na plataforma ajuda a registrar o acompanhamento e dá segurança para os próximos ajustes."
+            : "Acesse a conversa para acompanhar o contexto e apoiar quando necessário. A resposta deve permanecer registrada na plataforma.";
 
         const text = [
-          `Olá, ${recipientName}!`,
+          `Oi, ${recipientName}!`,
           "",
-          `Você recebeu uma nova mensagem de ${senderLabel} no Funcional Vip Digital.`,
+          `Há uma nova mensagem de ${senderLabel} no Funcional VIP Digital.`,
           "",
-          `Para visualizar, acesse ${panelText}.`,
+          actionText,
           "",
-          `Entrar no sistema: ${loginUrl}`,
-        ].join("\n");
+          isStudent
+            ? "Para assuntos de treino e acompanhamento, use o chat. O WhatsApp fica reservado para contatos específicos da gestão."
+            : `Abrir ${panelText}: ${loginUrl}`,
+          isStudent ? `Abrir ${panelText}: ${loginUrl}` : "",
+          "",
+          "Funcional VIP Digital",
+          "Aviso automático sobre uma conversa real registrada na plataforma.",
+        ].filter(Boolean).join("\n");
 
         const html = `
-          <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-            <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-              <h2 style="color:#D4A373; margin:0 0 16px;">Nova mensagem</h2>
-
-              <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-                Olá, ${escapeHtml(recipientName)}!
-              </p>
-
-              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                Você recebeu uma nova mensagem de <strong style="color:#f5f5f5;">${safeSenderLabel}</strong> no Funcional Vip Digital.
-              </p>
-
-              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                Para visualizar, acesse ${panelText}.
-              </p>
-
-              <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
-                Acessar o sistema
-              </a>
-
-              <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-                Este é um aviso automático do Funcional Vip Digital.
-              </p>
+          <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+            <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+              <h2 style="color:#D4A373;margin:0 0 16px;">Você tem uma nova mensagem</h2>
+              <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(recipientName)}</strong>!</p>
+              <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Há uma nova mensagem de <strong style="color:#f5f5f5;">${safeSenderLabel}</strong> no Funcional VIP Digital.</p>
+              <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(actionText)}</p>
+              ${isStudent ? `<p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Para assuntos de treino e acompanhamento, use o chat. O WhatsApp fica reservado para contatos específicos da gestão.</p>` : ""}
+              <a href="${loginUrl}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir conversa</a>
+              <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Aviso automático sobre uma conversa real registrada na plataforma.</p>
             </div>
           </div>
         `;
@@ -690,10 +689,10 @@ async function maybeCreateCareEventFromQuestion({
   const { startOfWeek, endOfWeek } = getWeekRange(firstCareMessage.createdAt || new Date());
   const contractId = await findActiveContractIdForCareEvent(studentId);
   const title = careClassification.requiresTrainingPause
-    ? "Pausa por cuidado: aluno sem condição de treinar"
+    ? `${student?.name || "Aluno"} precisa de revisão antes de voltar a treinar`
     : careClassification.isCritical
-      ? "Relato crítico de dor/desconforto em dúvida do aluno"
-      : "Relato de dor/desconforto em dúvida do aluno";
+      ? `Atenção prioritária ao relato de ${student?.name || "aluno"}`
+      : `Revisar relato de cuidado de ${student?.name || "aluno"}`;
   const description = [
     `Conversa: ${rootConversationId}`,
     `Mensagem: ${firstCareMessage.id}`,
