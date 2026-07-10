@@ -55,6 +55,22 @@ type ExerciseForm = {
   active: boolean;
 };
 
+
+type ImportAiImagesResult = {
+  ok?: boolean;
+  imported?: Array<{
+    fileName: string;
+    exerciseName: string;
+    kind: "MAIN" | "SEQUENCE";
+    url: string;
+  }>;
+  skipped?: Array<{
+    fileName: string;
+    reason: string;
+  }>;
+  updatedExercises?: Exercise[];
+};
+
 const emptyForm: ExerciseForm = {
   name: "",
   description: "",
@@ -85,6 +101,27 @@ function compactText(value?: string | null): string {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function slugifyExerciseName(value?: string | null): string {
+  const slug = String(value || "exercicio")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return slug || "exercicio";
+}
+
+function getExpectedAiImageFileNames(exerciseName?: string | null) {
+  const slug = slugifyExerciseName(exerciseName);
+
+  return {
+    main: `${slug}__principal.png`,
+    sequence: `${slug}__sequencia.png`,
+  };
+}
+
 function shortText(value?: string | null, maxLength = 130): string {
   const text = compactText(value);
   if (text.length <= maxLength) return text;
@@ -110,6 +147,10 @@ export default function ExerciseGrid({
   const [form, setForm] = useState<ExerciseForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importFiles, setImportFiles] = useState<File[]>([]);
+  const [importResult, setImportResult] = useState<ImportAiImagesResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sequenceFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -200,37 +241,169 @@ export default function ExerciseGrid({
     return uploadFileToField(event, "sequenceImageUrl", "sequencias");
   }
 
+  function buildMainImagePromptFromForm(): string {
+    return [
+      `Crie uma imagem principal didática e padronizada para o exercício "${form.name || "nome do exercício"}".`,
+      "Objetivo da imagem: servir como capa visual do exercício na biblioteca e no treino do aluno.",
+      "Estilo visual obrigatório: ilustração 3D realista, limpa, profissional, fundo neutro claro, boa iluminação, corpo inteiro visível, roupa esportiva neutra, sem logos, sem marcas d’água e sem texto dentro da imagem.",
+      form.description ? `Finalidade do exercício: ${form.description}.` : "",
+      form.muscleGroup ? `Grupo muscular principal: ${form.muscleGroup}.` : "",
+      form.instructions ? `Como executar: ${form.instructions}.` : "",
+      form.safetyNotes ? `Cuidados de segurança: ${form.safetyNotes}.` : "",
+      form.commonMistakes ? `Não representar estes erros: ${form.commonMistakes}.` : "",
+      form.contraindications ? `Atenções/contraindicações: ${form.contraindications}.` : "",
+      "A imagem deve mostrar uma posição tecnicamente segura e representativa do exercício, sem exagero de amplitude e sem postura perigosa.",
+      "Formato: imagem quadrada 1:1, alta qualidade, adequada para capa do exercício.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   function buildSequenceImagePromptFromForm(): string {
-    const framesCount = Math.max(Number(form.sequenceFramesCount || 6), 3);
+    const framesCount = Math.min(Math.max(Number(form.sequenceFramesCount || 6), 3), 8);
 
     return [
-      `Crie uma imagem sequencial didática com ${framesCount} quadros para demonstrar o exercício "${form.name || "nome do exercício"}".`,
-      "A imagem deve mostrar a mesma pessoa executando o movimento do início ao fim, em quadros numerados, com fundo limpo, estilo realista e instrutivo, sem texto pequeno demais.",
+      `Crie uma imagem sequencial didática com ${framesCount} quadros para demonstrar o exercício "${form.name || "nome do exercício"}" do início ao fim.`,
+      "Objetivo da imagem: ensinar visualmente a execução do exercício para o aluno, em etapas claras.",
+      "Estilo visual obrigatório: mesma pessoa em todos os quadros, ilustração 3D realista, limpa, profissional, fundo neutro claro, boa iluminação, corpo inteiro visível, roupa esportiva neutra, sem logos, sem marcas d’água e sem texto dentro da imagem.",
       form.description ? `Finalidade do exercício: ${form.description}.` : "",
       form.muscleGroup ? `Grupo muscular principal: ${form.muscleGroup}.` : "",
       form.instructions ? `Como executar: ${form.instructions}.` : "",
       form.safetyNotes ? `Cuidados de segurança: ${form.safetyNotes}.` : "",
       form.commonMistakes ? `Evite representar estes erros: ${form.commonMistakes}.` : "",
       form.contraindications ? `Atenções/contraindicações: ${form.contraindications}.` : "",
-      "Priorize alinhamento corporal, postura neutra, execução controlada e progressão clara do movimento. Não criar posições perigosas, amplitude exagerada ou articulações desalinhadas.",
-      "Formato sugerido: imagem horizontal 16:9, com quadros lado a lado ou em grade, boa iluminação e foco total na execução do exercício.",
+      "A sequência deve mostrar progressão clara do movimento, alinhamento corporal, postura neutra, controle, início, meio e final. Não criar posições perigosas, amplitude exagerada ou articulações desalinhadas.",
+      "Formato: imagem horizontal 16:9, com quadros lado a lado ou em grade organizada, alta qualidade, adequada para visualização completa no celular.",
     ]
       .filter(Boolean)
       .join("\n");
   }
 
-  async function handleBuildSequencePrompt() {
-    const prompt = buildSequenceImagePromptFromForm();
+  function buildAiImagePackagePromptFromForm(): string {
+    const fileNames = getExpectedAiImageFileNames(form.name);
+    const framesCount = Math.min(Math.max(Number(form.sequenceFramesCount || 6), 3), 8);
+
+    return [
+      "PACOTE DE IMAGENS PARA BIBLIOTECA DE EXERCÍCIOS — FUNCIONAL VIP DIGITAL",
+      "",
+      "Gere 2 imagens separadas para o mesmo exercício, mantendo o mesmo padrão visual entre elas.",
+      "Não coloque textos, números, legendas, setas, logotipos ou marcas d’água dentro das imagens.",
+      "Use sempre visual didático, limpo, profissional e seguro para orientação de exercício físico.",
+      "Após gerar, salve/renomeie os arquivos exatamente com os nomes indicados abaixo para importação automática no sistema.",
+      "",
+      `EXERCÍCIO: ${form.name || "nome do exercício"}`,
+      `GRUPO MUSCULAR: ${form.muscleGroup || "não informado"}`,
+      `QUADROS DA SEQUÊNCIA: ${framesCount}`,
+      "",
+      "ARQUIVOS ESPERADOS PARA IMPORTAÇÃO EM LOTE:",
+      `1. ${fileNames.main}`,
+      `2. ${fileNames.sequence}`,
+      "",
+      "IMAGEM 1 — PRINCIPAL / CAPA DO EXERCÍCIO",
+      `Nome do arquivo: ${fileNames.main}`,
+      buildMainImagePromptFromForm(),
+      "",
+      "IMAGEM 2 — SEQUÊNCIA DE EXECUÇÃO",
+      `Nome do arquivo: ${fileNames.sequence}`,
+      buildSequenceImagePromptFromForm(),
+      "",
+      "CHECKLIST DE QUALIDADE ANTES DE SALVAR:",
+      "- corpo inteiro visível;",
+      "- postura segura;",
+      "- execução coerente com o exercício;",
+      "- sem texto dentro da imagem;",
+      "- sem marcas/logos;",
+      "- imagem principal em 1:1;",
+      "- imagem sequencial em 16:9;",
+      "- mesma identidade visual nas duas imagens.",
+    ].join("\n");
+  }
+
+  async function handleBuildAiImagePackage() {
+    const prompt = buildAiImagePackagePromptFromForm();
+    const fileNames = getExpectedAiImageFileNames(form.name);
+
     updateForm("sequencePrompt", prompt);
     updateForm("sequenceGeneratedByAi", true);
 
+    if (!form.sequenceImageLabel.trim() && form.name.trim()) {
+      updateForm("sequenceImageLabel", `Execução de ${form.name.trim()} em ${form.sequenceFramesCount || 6} etapas`);
+    }
+
+    if (!form.sequenceImageNotes.trim()) {
+      updateForm(
+        "sequenceImageNotes",
+        "Observe a postura, o alinhamento corporal e o controle do movimento em cada etapa."
+      );
+    }
+
     try {
       await navigator.clipboard?.writeText(prompt);
-      alert("Prompt da imagem sequencial copiado. Gere a imagem na IA, revise e depois suba o arquivo no campo de imagem sequencial.");
+      alert(`Pacote IA copiado. Gere as imagens no ChatGPT e salve como: ${fileNames.main} e ${fileNames.sequence}. Depois use “Importar imagens IA em lote”.`);
     } catch {
-      alert("Prompt gerado. Copie o texto do campo de prompt para usar na IA.");
+      alert("Pacote IA gerado. Copie o texto do campo de prompt para usar no ChatGPT.");
     }
   }
+
+  function handleImportFileSelection(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []);
+    setImportFiles(files);
+    setImportResult(null);
+  }
+
+  async function handleImportAiImages() {
+    if (importFiles.length === 0) {
+      alert("Selecione as imagens geradas pela IA antes de importar.");
+      return;
+    }
+
+    setImporting(true);
+    setImportResult(null);
+
+    const formData = new FormData();
+    importFiles.forEach((file) => formData.append("files", file));
+
+    try {
+      const res = await fetch("/api/exercise-library/import-ai-images", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await res.json().catch(() => null)) as ImportAiImagesResult | null;
+
+      if (!res.ok || !data) {
+        alert((data as any)?.error || "Não foi possível importar as imagens.");
+        return;
+      }
+
+      setImportResult(data);
+
+      if (Array.isArray(data.updatedExercises) && data.updatedExercises.length > 0) {
+        setExercises((current) => {
+          let next = current;
+
+          data.updatedExercises!.forEach((updatedExercise) => {
+            next = next.map((exercise) =>
+              exercise.id === updatedExercise.id ? updatedExercise : exercise
+            );
+          });
+
+          return next;
+        });
+      }
+
+      if ((data.imported || []).length > 0) {
+        alert(`${data.imported?.length || 0} imagem(ns) importada(s) e vinculada(s) aos exercícios.`);
+      } else {
+        alert("Nenhuma imagem foi importada. Confira os nomes dos arquivos.");
+      }
+    } catch {
+      alert("Erro ao importar imagens IA.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -329,20 +502,117 @@ export default function ExerciseGrid({
 
   return (
     <div>
-      <button
-        onClick={() => {
-          if (showForm) {
-            resetForm();
-          } else {
-            setForm(emptyForm);
-            setEditingId(null);
-            setShowForm(true);
-          }
-        }}
-        className="mb-6 bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#b88a5e]"
-      >
-        {showForm ? "Cancelar" : "+ Novo Exercício"}
-      </button>
+      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <button
+          onClick={() => {
+            if (showForm) {
+              resetForm();
+            } else {
+              setForm(emptyForm);
+              setEditingId(null);
+              setShowForm(true);
+            }
+          }}
+          className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#b88a5e]"
+        >
+          {showForm ? "Cancelar" : "+ Novo Exercício"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowImportPanel((current) => !current)}
+          className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-5 py-3 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20"
+        >
+          {showImportPanel ? "Fechar importação IA" : "Importar imagens IA em lote"}
+        </button>
+      </div>
+
+      {showImportPanel && (
+        <div className="mb-8 rounded-xl border border-blue-500/20 bg-blue-500/10 p-5 space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-blue-300">
+              Importação automática das imagens geradas no ChatGPT
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-blue-100/75">
+              Depois de gerar as imagens com o pacote IA, salve os arquivos com os nomes sugeridos, por exemplo
+              <span className="text-blue-100"> agachamento__principal.png</span> e
+              <span className="text-blue-100"> agachamento__sequencia.png</span>. Depois selecione todas as imagens aqui de uma vez.
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-[#ffffff10] bg-[#0a0a0a] p-3">
+            <p className="text-[11px] font-semibold text-[#f5f5f5]">Padrão de nome obrigatório</p>
+            <p className="mt-1 text-xs text-[#a1a1a1]">
+              nome-do-exercicio__principal.png e nome-do-exercicio__sequencia.png
+            </p>
+            <p className="mt-1 text-[10px] text-[#6b6b6b]">
+              O sistema usa o nome do arquivo para encontrar o exercício na biblioteca e preencher imagem principal e imagem sequencial automaticamente.
+            </p>
+          </div>
+
+          <input
+            type="file"
+            multiple
+            accept="image/png,image/jpeg,image/webp"
+            onChange={handleImportFileSelection}
+            className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-400 file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-blue-300"
+          />
+
+          {importFiles.length > 0 && (
+            <div className="rounded-lg border border-[#ffffff10] bg-[#111] p-3">
+              <p className="text-xs font-semibold text-[#f5f5f5]">
+                {importFiles.length} arquivo(s) selecionado(s)
+              </p>
+              <div className="mt-2 max-h-24 overflow-y-auto space-y-1">
+                {importFiles.map((file) => (
+                  <p key={`${file.name}-${file.size}`} className="text-[10px] text-[#a1a1a1]">
+                    {file.name}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleImportAiImages}
+            disabled={importing || importFiles.length === 0}
+            className="rounded-lg bg-blue-400 px-5 py-3 text-sm font-semibold text-[#0a0a0a] transition hover:bg-blue-300 disabled:opacity-50"
+          >
+            {importing ? "Importando imagens..." : "Importar e vincular aos exercícios"}
+          </button>
+
+          {importResult && (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
+                <p className="text-xs font-semibold text-emerald-300">
+                  Importadas: {importResult.imported?.length || 0}
+                </p>
+                <div className="mt-2 max-h-28 overflow-y-auto space-y-1">
+                  {(importResult.imported || []).map((item) => (
+                    <p key={`${item.fileName}-${item.kind}`} className="text-[10px] text-emerald-100/80">
+                      {item.fileName} → {item.exerciseName} ({item.kind === "MAIN" ? "principal" : "sequência"})
+                    </p>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+                <p className="text-xs font-semibold text-amber-300">
+                  Não importadas: {importResult.skipped?.length || 0}
+                </p>
+                <div className="mt-2 max-h-28 overflow-y-auto space-y-1">
+                  {(importResult.skipped || []).map((item) => (
+                    <p key={`${item.fileName}-${item.reason}`} className="text-[10px] text-amber-100/80">
+                      {item.fileName}: {item.reason}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <form
@@ -657,15 +927,21 @@ export default function ExerciseGrid({
                 <div>
                   <p className="text-sm font-semibold text-blue-300">Apoio de IA</p>
                   <p className="text-xs text-blue-100/70 mt-1">
-                    Gere um prompt para criar a imagem sequencial em uma IA de imagem. Depois revise a execução e suba a imagem aprovada.
+                    Gere um pacote padronizado para criar a imagem principal e a imagem sequencial no ChatGPT. Depois salve com os nomes sugeridos e use a importação em lote.
                   </p>
+                  {form.name.trim() && (
+                    <div className="mt-2 rounded-lg border border-blue-500/20 bg-[#0a0a0a] p-2 text-[10px] text-blue-100/80">
+                      <p>Salvar imagem principal como: <span className="font-semibold text-blue-100">{getExpectedAiImageFileNames(form.name).main}</span></p>
+                      <p>Salvar imagem sequencial como: <span className="font-semibold text-blue-100">{getExpectedAiImageFileNames(form.name).sequence}</span></p>
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
-                  onClick={handleBuildSequencePrompt}
+                  onClick={handleBuildAiImagePackage}
                   className="rounded-lg bg-blue-400 px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-blue-300 transition"
                 >
-                  Gerar prompt IA
+                  Gerar pacote IA das imagens
                 </button>
               </div>
 
@@ -685,7 +961,7 @@ export default function ExerciseGrid({
                   onChange={(event) => updateForm("sequenceGeneratedByAi", event.target.checked)}
                   className="accent-blue-400"
                 />
-                Imagem sequencial criada com apoio de IA e revisada pelo professor
+                Imagens criadas com apoio de IA e revisadas pela gestão
               </label>
             </div>
           </div>
