@@ -294,7 +294,9 @@ function detectMovementNature(form: ExerciseForm) {
     return {
       natureLabel: "Exercício isométrico / sustentação",
       sequenceGuidance:
-        "A sequência deve mostrar a montagem da posição, o alinhamento correto, a manutenção estável da postura e a saída controlada.",
+        "A sequência deve mostrar a montagem da posição, o alinhamento correto, a manutenção estável da postura e a saída controlada. Cada quadro deve ser visualmente distinto, evitando repetições quase idênticas.",
+      specialSequenceRule:
+        "Nos exercícios isométricos, os quadros devem mostrar etapas visualmente diferentes da montagem, alinhamento, sustentação e saída, sem repetir seis imagens quase iguais da mesma postura.",
       structureLines: [
         "1. posição inicial / preparação;",
         "2. montagem dos apoios;",
@@ -318,6 +320,8 @@ function detectMovementNature(form: ExerciseForm) {
       natureLabel: "Exercício de mobilidade / amplitude progressiva",
       sequenceGuidance:
         "A sequência deve mostrar entrada gradual na posição, ganho progressivo de amplitude segura, ponto principal da mobilidade e retorno controlado.",
+      specialSequenceRule:
+        "Em exercícios de mobilidade, evitar parecer alongamento forçado; a progressão deve ser suave, segura e visualmente gradual.",
       structureLines: [
         "1. posição inicial;",
         "2. ajuste corporal / preparação;",
@@ -343,6 +347,8 @@ function detectMovementNature(form: ExerciseForm) {
       natureLabel: "Exercício cíclico / dinâmico repetitivo",
       sequenceGuidance:
         "A sequência deve mostrar preparação, início do gesto, fase principal do movimento, repetição do gesto e finalização organizada.",
+      specialSequenceRule:
+        "Em exercícios cíclicos, os quadros devem mostrar fases diferentes do gesto, sem congelar a mesma posição repetidas vezes.",
       structureLines: [
         "1. preparação;",
         "2. início do gesto;",
@@ -365,6 +371,8 @@ function detectMovementNature(form: ExerciseForm) {
       natureLabel: "Exercício dinâmico unilateral",
       sequenceGuidance:
         "A sequência deve destacar claramente o lado trabalhado, a estabilidade do corpo e a progressão segura da fase de descida e retorno.",
+      specialSequenceRule:
+        "Em exercícios unilaterais, manter o mesmo lado de trabalho durante toda a sequência e evitar trocar pernas ou braços entre os quadros.",
       structureLines: [
         "1. posição inicial;",
         "2. preparação da base unilateral;",
@@ -380,6 +388,8 @@ function detectMovementNature(form: ExerciseForm) {
     natureLabel: "Exercício dinâmico controlado",
     sequenceGuidance:
       "A sequência deve mostrar posição inicial, preparação, fase principal do movimento, retorno controlado e finalização clara.",
+    specialSequenceRule:
+      "Em exercícios dinâmicos controlados, os quadros devem evidenciar fases diferentes do movimento, incluindo preparação, execução, ponto principal e retorno.",
     structureLines: [
       "1. posição inicial;",
       "2. preparação;",
@@ -389,6 +399,79 @@ function detectMovementNature(form: ExerciseForm) {
       "6. posição final.",
     ],
   };
+}
+
+function getSequenceStructureLines(lines: string[], frames: number): string[] {
+  const safeFrames = Math.min(Math.max(Number(frames) || 6, 4), 6);
+
+  if (lines.length === safeFrames) {
+    return lines;
+  }
+
+  if (lines.length < safeFrames) {
+    const completedLines = [...lines];
+    while (completedLines.length < safeFrames) {
+      completedLines.push(`${completedLines.length + 1}. finalização estável e segura.`);
+    }
+    return completedLines.map((line, index) => line.replace(/^\d+\./, `${index + 1}.`));
+  }
+
+  const selectedIndexes = Array.from({ length: safeFrames }, (_, index) => {
+    return Math.round((index * (lines.length - 1)) / (safeFrames - 1));
+  });
+
+  return selectedIndexes.map((lineIndex, index) => {
+    return lines[lineIndex].replace(/^\d+\./, `${index + 1}.`);
+  });
+}
+
+function isGenericSafetyText(value: string): boolean {
+  const text = compactText(value).toLowerCase();
+
+  if (!text) return true;
+
+  const genericFragments = [
+    "qualidade vale mais",
+    "cuidado",
+    "fazer com atenção",
+    "executar com cuidado",
+    "sem pressa",
+    "respeitar limite",
+    "pare se sentir dor",
+  ];
+
+  return text.length < 45 || genericFragments.some((fragment) => text.includes(fragment));
+}
+
+function buildVisualSafetyGuidance(form: ExerciseForm, natureLabel: string): string {
+  const text = `${form.name} ${form.muscleGroup} ${form.instructions} ${form.description}`.toLowerCase();
+  const base = "priorizar alinhamento corporal, controle de amplitude, postura estável, respiração natural e ausência de compensações visíveis.";
+
+  if (natureLabel.toLowerCase().includes("isométrico")) {
+    return "manter coluna neutra, abdômen ativo, quadris alinhados, pescoço relaxado e apoios estáveis durante a sustentação.";
+  }
+
+  if (natureLabel.toLowerCase().includes("mobilidade")) {
+    return "mostrar amplitude progressiva e confortável, sem forçar articulações, sem dor aparente e com retorno gradual.";
+  }
+
+  if (natureLabel.toLowerCase().includes("cíclico")) {
+    return "mostrar controle de impacto, aterrissagem ou apoio seguro, tronco organizado e continuidade do gesto sem desequilíbrio.";
+  }
+
+  if (natureLabel.toLowerCase().includes("unilateral")) {
+    return "mostrar estabilidade do lado de apoio, joelho alinhado, tronco controlado e equilíbrio durante toda a execução.";
+  }
+
+  if (text.includes("agach") || text.includes("afundo") || text.includes("passada")) {
+    return "manter joelhos alinhados aos pés, tronco controlado, base estável e amplitude segura, sem colapso dos joelhos.";
+  }
+
+  if (text.includes("abdominal") || text.includes("prancha") || text.includes("core")) {
+    return "manter coluna neutra, abdômen ativo, pescoço relaxado e evitar compensações lombares ou cervicais.";
+  }
+
+  return base;
 }
 
 function buildPackagePrompt(form: ExerciseForm): string {
@@ -411,11 +494,14 @@ function buildPackagePrompt(form: ExerciseForm): string {
   );
   const profile = detectExercisePromptProfile(form);
   const movementNature = detectMovementNature(form);
-  const aiVisualDetails = safeSentence(
-    form.aiVisualDetails,
-    "Se não houver detalhe visual extra, manter apenas a execução tecnicamente correta e o padrão visual definido."
-  );
-  const effectiveFrames = Math.max(frames, movementNature.structureLines.length);
+  const aiVisualDetails = compactText(form.aiVisualDetails);
+  const sequenceStructureLines = getSequenceStructureLines(movementNature.structureLines, frames);
+  const effectiveFrames = sequenceStructureLines.length;
+  const visualSafetyGuidance = buildVisualSafetyGuidance(form, movementNature.natureLabel);
+  const safetyTextForPrompt = safety;
+  const safetyComplement = isGenericSafetyText(form.safetyNotes)
+    ? `Orientação visual de segurança complementar: como o cuidado informado está genérico, priorize na imagem ${visualSafetyGuidance}`
+    : `Orientação visual de segurança complementar: ${visualSafetyGuidance}`;
 
   return [
     "PACOTE DE IMAGENS PARA BIBLIOTECA DE EXERCÍCIOS — FUNCIONAL VIP DIGITAL",
@@ -446,7 +532,7 @@ function buildPackagePrompt(form: ExerciseForm): string {
     `- ambiente recomendado: ${profile.environmentHint}`,
     `- enquadramento preferencial: ${profile.mainFraming}`,
     `- elementos de cena: ${profile.sceneElements}`,
-    `- detalhe técnico visual extra: ${aiVisualDetails}`,
+    ...(aiVisualDetails ? [`- detalhe técnico visual extra: ${aiVisualDetails}`] : []),
     "",
     "IMAGEM 1 — PRINCIPAL / CAPA DO EXERCÍCIO",
     `Nome do arquivo: ${mainFile}`,
@@ -456,7 +542,8 @@ function buildPackagePrompt(form: ExerciseForm): string {
     `Finalidade do exercício: ${purpose}`,
     `Grupo muscular principal: ${safeSentence(form.muscleGroup, "Não informado.")}`,
     `Como executar: ${instructions}`,
-    `Cuidados de segurança: ${safety}`,
+    `Cuidados de segurança: ${safetyTextForPrompt}`,
+    safetyComplement,
     `Não representar estes erros: ${mistakes}`,
     `Atenções/contraindicações: ${contraindications}`,
     "A imagem deve mostrar uma posição tecnicamente segura e representativa do exercício, sem exagero de amplitude e sem postura perigosa.",
@@ -470,11 +557,13 @@ function buildPackagePrompt(form: ExerciseForm): string {
     `Título da sequência: ${sequenceLabel}.`,
     `Lógica da sequência: ${movementNature.sequenceGuidance}`,
     "Estrutura sugerida da sequência:",
-    ...movementNature.structureLines,
+    ...sequenceStructureLines,
+    `Regra específica da sequência: ${movementNature.specialSequenceRule}`,
     `Finalidade do exercício: ${purpose}`,
     `Grupo muscular principal: ${safeSentence(form.muscleGroup, "Não informado.")}`,
     `Como executar: ${instructions}`,
-    `Cuidados de segurança: ${safety}`,
+    `Cuidados de segurança: ${safetyTextForPrompt}`,
+    safetyComplement,
     `Evite representar estes erros: ${mistakes}`,
     `Atenções/contraindicações: ${contraindications}`,
     `Observação adicional da sequência: ${sequenceNotes}`,
@@ -894,8 +983,11 @@ export default function ExerciseGrid({
               onChange={(event) => updateForm("instructions", event.target.value)}
               rows={3}
               className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-              placeholder="Ex: Apoie os pés no chão, sente e levante controlando o movimento, mantendo joelhos alinhados."
+              placeholder="Ex: apoiar antebraços e pés, manter cabeça, tronco, quadris e pernas alinhados, ativando abdômen e glúteos."
             />
+            <p className="text-[10px] text-[#6b6b6b] mt-1">
+              Escreva como a imagem deve representar a execução: apoios, posição inicial, movimento principal e retorno.
+            </p>
           </div>
 
           <div>
@@ -907,8 +999,11 @@ export default function ExerciseGrid({
               onChange={(event) => updateForm("safetyNotes", event.target.value)}
               rows={3}
               className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-              placeholder="Ex: Não deixe o joelho cair para dentro. Pare se sentir dor fora do esperado e avise o professor."
+              placeholder="Ex: manter coluna neutra, joelhos alinhados, abdômen ativo e amplitude segura, evitando compensações na lombar ou no pescoço."
             />
+            <p className="text-[10px] text-[#6b6b6b] mt-1">
+              Para melhorar as imagens da IA, prefira cuidados visuais e técnicos, como alinhamento, apoio, amplitude, coluna, joelhos, pescoço e respiração.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
