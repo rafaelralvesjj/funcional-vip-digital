@@ -117,14 +117,23 @@ async function sendFeedbackEmail({
   if (!to) return false;
 
   const alunoUrl = getAppAlunoUrl();
-  const title = `Seu feedback de evolução - ${milestone} treinos`;
+  const professorName = student?.user?.name || "seu professor";
+  const title = `Uma mensagem sobre sua evolução - ${milestone} treinos`;
   const safeStudentName = escapeHtml(student?.name || "Aluno");
+  const safeProfessorName = escapeHtml(professorName);
   const safeContent = escapeHtml(content).replaceAll("\n", "<br />");
 
   const text = [
-    `Olá, ${student?.name || "Aluno"}!`,
+    `Oi, ${student?.name || "Aluno"}!`,
     "",
     content,
+    "",
+    "Se quiser conversar sobre essa devolutiva ou combinar o próximo foco, use o chat da plataforma.",
+    "Para assuntos de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.",
+    "",
+    professorName,
+    "Funcional VIP Digital",
+    "Mensagem enviada pelo seu professor por meio da plataforma.",
     "",
     `Acesse sua área do aluno: ${alunoUrl}`,
   ].join("\n");
@@ -132,34 +141,19 @@ async function sendFeedbackEmail({
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:680px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <h2 style="color:#D4A373; margin:0 0 16px;">${title}</h2>
-
-        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Olá, <strong>${safeStudentName}</strong>!
-        </p>
-
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          ${safeContent}
-        </p>
-
-        <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
-          Acessar minha área
-        </a>
-
-        <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-          Este é um aviso do Funcional Vip Digital.
-        </p>
+        <h2 style="color:#D4A373; margin:0 0 16px;">${escapeHtml(title)}</h2>
+        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">${safeContent}</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se quiser conversar sobre essa devolutiva ou combinar o próximo foco, use o chat da plataforma.</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Para assuntos de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.</p>
+        <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
+        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional VIP Digital</p>
+        <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem enviada pelo seu professor por meio da plataforma.</p>
       </div>
     </div>
   `;
 
-  await sendEmail({
-    to,
-    subject: title,
-    text,
-    html,
-  });
-
+  await sendEmail({ to, subject: title, text, html });
   return true;
 }
 
@@ -339,7 +333,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Aluno não encontrado" }, { status: 404 });
     }
 
-    const title = `Seu feedback de evolução - ${feedback.milestone} treinos`;
+    const title = `Uma mensagem sobre sua evolução - ${feedback.milestone} treinos`;
 
     const notice = await prisma.notice.create({
       data: {
