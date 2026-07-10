@@ -119,7 +119,7 @@ function detectExercisePromptProfile(form: ExerciseForm) {
   const base = {
     categoryLabel: "Exercício geral",
     environmentHint:
-      "Ambiente neutro claro, sem poluição visual, com enquadramento que mostre o corpo inteiro e a mecânica do exercício com clareza.",
+      "Ambiente premium escuro, em preto ou grafite, com visual limpo e sofisticado. O enquadramento deve mostrar o corpo inteiro e a mecânica do exercício com clareza, mantendo harmonia com a identidade visual preta e laranja do sistema.",
     sceneElements:
       "Somente os elementos realmente necessários para entender o exercício. Não incluir acessórios irrelevantes.",
     mainFraming:
@@ -142,7 +142,7 @@ function detectExercisePromptProfile(form: ExerciseForm) {
       ...base,
       categoryLabel: "Exercício de chão / core",
       environmentHint:
-        "Usar colchonete visível sobre fundo neutro claro, com composição limpa e foco na postura.",
+        "Usar colchonete visível sobre fundo premium escuro em preto ou grafite, com composição limpa, alto contraste e foco total na postura.",
       sceneElements:
         "Colchonete sempre visível. Se houver apoio específico, ele deve aparecer de forma discreta e clara.",
       mainFraming:
@@ -169,7 +169,7 @@ function detectExercisePromptProfile(form: ExerciseForm) {
       ...base,
       categoryLabel: "Exercício de mobilidade / alongamento",
       environmentHint:
-        "Ambiente limpo, postura relaxada e visual didático. A imagem deve transmitir amplitude segura e controle, não esforço máximo.",
+        "Ambiente premium escuro, limpo e sofisticado, com postura relaxada e visual didático. A imagem deve transmitir amplitude segura, controle e elegância, não esforço máximo.",
       sceneElements:
         "Usar colchonete ou apoio somente se necessário para a leitura do exercício.",
       mainFraming:
@@ -193,7 +193,7 @@ function detectExercisePromptProfile(form: ExerciseForm) {
       ...base,
       categoryLabel: "Exercício dinâmico / cardio / corrida",
       environmentHint:
-        "Fundo neutro claro com sensação de espaço livre. O movimento deve parecer dinâmico, mas ainda didático e fácil de entender.",
+        "Fundo premium escuro com sensação de espaço livre e contraste elegante. O movimento deve parecer dinâmico, mas ainda didático, legível e coerente com a identidade preta e laranja do sistema.",
       sceneElements:
         "Não adicionar elementos de cenário desnecessários. O foco deve estar no gesto motor.",
       mainFraming:
@@ -215,7 +215,7 @@ function detectExercisePromptProfile(form: ExerciseForm) {
       ...base,
       categoryLabel: "Exercício com apoio / cadeira / banco",
       environmentHint:
-        "Ambiente neutro com o apoio claramente visível e proporcional, sem elementos que distraiam a leitura do exercício.",
+        "Ambiente premium escuro com o apoio claramente visível e proporcional, sem elementos que distraiam a leitura do exercício.",
       sceneElements:
         "O banco, cadeira, step ou apoio deve aparecer de forma nítida e segura, bem posicionado no cenário.",
       mainFraming:
@@ -240,7 +240,7 @@ function detectExercisePromptProfile(form: ExerciseForm) {
       ...base,
       categoryLabel: "Exercício com implemento / carga",
       environmentHint:
-        "Ambiente neutro claro com o implemento bem visível, proporcional e fácil de reconhecer.",
+        "Ambiente premium escuro com o implemento bem visível, proporcional e fácil de reconhecer, valorizando contraste e leitura do movimento.",
       sceneElements:
         "Mostrar apenas o equipamento necessário para o exercício, sem poluição visual.",
       mainFraming:
@@ -268,7 +268,7 @@ function detectExercisePromptProfile(form: ExerciseForm) {
       ...base,
       categoryLabel: "Exercício em pé / força funcional",
       environmentHint:
-        "Ambiente neutro claro, com o praticante de pé e espaço suficiente para ver toda a postura e base de apoio.",
+        "Ambiente premium escuro, com o praticante de pé e espaço suficiente para ver toda a postura e base de apoio, mantendo aparência sofisticada e consistente com o sistema.",
       sceneElements:
         "Somente os elementos necessários para entender o exercício. Se houver equipamento, ele deve aparecer claramente.",
       mainFraming:
@@ -507,9 +507,9 @@ function buildPackagePrompt(form: ExerciseForm): string {
   return [
     "PACOTE DE IMAGENS PARA BIBLIOTECA DE EXERCÍCIOS — FUNCIONAL VIP DIGITAL",
     "",
-    "Gere 2 imagens separadas para o mesmo exercício, mantendo exatamente o mesmo padrão visual entre elas.",
+    "Gere 2 imagens separadas para o mesmo exercício, mantendo exatamente o mesmo padrão visual entre elas e tratando ambas como parte da identidade premium do Funcional VIP Digital.",
     "Não coloque textos, números, legendas, setas, logotipos, marcas d’água ou qualquer elemento gráfico sobreposto dentro das imagens.",
-    "Use visual didático, limpo, profissional e seguro para orientação de exercício físico.",
+    "Use visual didático, premium, limpo, profissional e seguro para orientação de exercício físico, com estética sofisticada e coerente com o sistema.",
     "Após gerar, salve ou renomeie os arquivos exatamente com os nomes indicados abaixo para importação automática no sistema.",
     "",
     `EXERCÍCIO: ${form.name || "Não informado"}`,
@@ -523,13 +523,14 @@ function buildPackagePrompt(form: ExerciseForm): string {
     `2. ${sequenceFile}`,
     "",
     "PADRÃO VISUAL OBRIGATÓRIO PARA AS DUAS IMAGENS:",
-    "- ilustração 3D realista, limpa e profissional;",
-    "- fundo neutro claro;",
-    "- boa iluminação;",
-    "- corpo inteiro visível;",
-    "- roupa esportiva neutra;",
-    "- sem logos, sem marcas d’água e sem texto dentro da imagem;",
+    "- ilustração 3D semi-realista premium, limpa, sofisticada e profissional;",
+    "- fundo escuro premium em preto ou grafite, evitando fundo branco;",
+    "- iluminação elegante e contrastada, valorizando a leitura do corpo sem perder a atmosfera premium;",
+    "- corpo inteiro visível, com leitura clara da mecânica do exercício;",
+    "- roupa esportiva premium em tons escuros neutros, com detalhes discretos em laranja ou dourado para harmonizar com o sistema;",
+    "- sem logos, sem marcas d’água, sem texto dentro da imagem e sem aparência de foto de banco de imagens;",
     "- mesma pessoa e mesma identidade visual nas duas imagens;",
+    "- usar figura humana adulta, atlética e neutra, sem foco em rosto e sem alternar gênero aleatoriamente;",
     `- ambiente recomendado: ${profile.environmentHint}`,
     `- enquadramento preferencial: ${profile.mainFraming}`,
     `- elementos de cena: ${profile.sceneElements}`,
@@ -538,7 +539,7 @@ function buildPackagePrompt(form: ExerciseForm): string {
     "IMAGEM 1 — PRINCIPAL / CAPA DO EXERCÍCIO",
     `Nome do arquivo: ${mainFile}`,
     `Crie uma imagem principal didática e padronizada para o exercício "${form.name}".`,
-    "Objetivo da imagem: servir como capa visual do exercício na biblioteca e no treino do aluno.",
+    "Objetivo da imagem: servir como capa visual premium do exercício na biblioteca e no treino do aluno, reforçando uma experiência sofisticada e consistente com o sistema.",
     `${profile.executionHint}`,
     `Finalidade do exercício: ${purpose}`,
     `Grupo muscular principal: ${safeSentence(form.muscleGroup, "Não informado.")}`,
@@ -547,13 +548,13 @@ function buildPackagePrompt(form: ExerciseForm): string {
     safetyComplement,
     `Não representar estes erros: ${mistakes}`,
     `Atenções/contraindicações: ${contraindications}`,
-    "A imagem deve mostrar uma posição tecnicamente segura e representativa do exercício, sem exagero de amplitude e sem postura perigosa.",
-    "Formato: imagem quadrada 1:1, alta qualidade, adequada para capa do exercício.",
+    "A imagem deve mostrar uma posição tecnicamente segura e representativa do exercício, sem exagero de amplitude e sem postura perigosa. O resultado deve parecer premium, harmonizado com a plataforma e visualmente forte mesmo em telas escuras.",
+    "Formato: imagem quadrada 1:1, alta qualidade, adequada para capa do exercício. Evite fundo branco e preserve aparência premium.",
     "",
     "IMAGEM 2 — SEQUÊNCIA DE EXECUÇÃO",
     `Nome do arquivo: ${sequenceFile}`,
     `Crie uma imagem sequencial didática com ${effectiveFrames} quadros para demonstrar o exercício "${form.name}" do início ao fim.`,
-    "Objetivo da imagem: ensinar visualmente a execução do exercício para o aluno, em etapas claras.",
+    "Objetivo da imagem: ensinar visualmente a execução do exercício para o aluno, em etapas claras, sem perder a identidade premium e sofisticada do sistema.",
     `${profile.executionHint}`,
     `Título da sequência: ${sequenceLabel}.`,
     `Lógica da sequência: ${movementNature.sequenceGuidance}`,
@@ -568,15 +569,15 @@ function buildPackagePrompt(form: ExerciseForm): string {
     `Evite representar estes erros: ${mistakes}`,
     `Atenções/contraindicações: ${contraindications}`,
     `Observação adicional da sequência: ${sequenceNotes}`,
-    "A sequência deve ser coerente com a natureza do movimento, sem inventar fases irreais, sem posições perigosas e sem amplitudes exageradas.",
-    `Formato: imagem horizontal 16:9, com ${effectiveFrames} quadros organizados de forma limpa e legível, alta qualidade, adequada para visualização completa no celular.`,
+    "A sequência deve ser coerente com a natureza do movimento, sem inventar fases irreais, sem posições perigosas e sem amplitudes exageradas. Apesar de didática, ela deve continuar bonita, premium e coerente com a plataforma.",
+    `Formato: imagem horizontal 16:9, com ${effectiveFrames} quadros organizados de forma limpa e legível, alta qualidade, adequada para visualização completa no celular. Evite fundo branco e preserve contraste premium.`,
     "",
     "CHECKLIST DE QUALIDADE ANTES DE SALVAR:",
-    "- corpo inteiro visível;",
-    "- postura segura;",
+    "- corpo inteiro visível, com leitura clara da mecânica do exercício;",
+    "- postura segura e tecnicamente correta;",
     "- execução coerente com o exercício;",
     "- sem texto dentro da imagem;",
-    "- sem marcas/logos;",
+    "- sem marcas/logos e sem aparência genérica;",
     "- imagem principal em 1:1;",
     "- imagem sequencial em 16:9;",
     "- mesma identidade visual nas duas imagens.",
@@ -1303,7 +1304,7 @@ export default function ExerciseGrid({
               <div>
                 <p className="text-sm font-semibold text-[#f5f5f5]">Pacote IA das imagens</p>
                 <p className="text-[11px] text-[#c9c9c9] mt-1">
-                  Gere um prompt mais completo e padronizado para criar a imagem principal e a imagem sequencial no ChatGPT. O sistema agora ajusta o texto conforme o tipo do exercício e a natureza do movimento. Depois salve as imagens com os nomes sugeridos para importar em lote.
+                  Gere um prompt mais completo e padronizado para criar a imagem principal e a imagem sequencial no ChatGPT. O sistema agora ajusta o texto conforme o tipo do exercício, a natureza do movimento e uma direção visual premium alinhada ao preto, grafite e laranja do Funcional VIP Digital. Depois salve as imagens com os nomes sugeridos para importar em lote.
                 </p>
               </div>
 
