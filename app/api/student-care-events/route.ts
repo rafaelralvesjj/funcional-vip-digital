@@ -282,99 +282,99 @@ function getCareCopy({
     FALTA_TEMPO: {
       severity: "ATENCAO",
       status: "ABERTO",
-      title: "Entendemos que sua rotina apertou",
+      title: "Vamos adaptar o treino à sua rotina",
       studentMessage:
-        "Obrigado por avisar. Rotina corrida acontece, e o mais importante é não transformar uma semana difícil em desistência. Vamos usar essa informação para o professor ajustar sua próxima semana com mais aderência e realidade.",
+        "Obrigado por contar como sua semana está. Tem períodos em que a rotina aperta, e isso não significa que você perdeu o caminho. Seu professor recebeu essa informação e poderá ajustar a próxima programação para algo mais possível, objetivo e alinhado ao seu momento.",
       professorMessage:
-        `${studentName} informou dificuldade por falta de tempo. Antes de montar a próxima semana, avalie uma estratégia mais simples, objetiva e possível de cumprir.`,
+        `${studentName} relatou dificuldade para encaixar os treinos na rotina. Antes de montar a próxima semana, faça uma abordagem pelo chat e avalie uma proposta mais curta, simples e possível de cumprir.`,
       shouldEmailStudent: false,
       shouldEmailProfessor: false,
     },
     EXERCICIO_DIFICIL: {
       severity: "REVISAO",
       status: "REQUER_REVISAO",
-      title: "Vamos ajustar esse treino juntos",
+      title: "Você fez certo em avisar",
       studentMessage:
-        "Obrigado por contar. Treino bom não é o treino impossível; é o treino que desafia na medida certa e permite evolução com segurança. Já sinalizamos o professor para revisar carga, exercício, volume ou uma variação mais adequada para você.",
+        "Obrigado por contar que o exercício ou treino ficou difícil. O treino precisa desafiar na medida certa, sem deixar você inseguro ou travar sua evolução. Seu professor foi avisado e vai revisar carga, volume, explicação ou uma variação mais adequada para você.",
       professorMessage:
-        `${studentName} relatou que o exercício ou treino está difícil. Revise complexidade, carga, volume, variação regressiva e clareza das instruções antes da próxima montagem.`,
+        `${studentName} relatou dificuldade com um exercício ou com o treino. Revise complexidade, carga, volume, variação regressiva e clareza das instruções. Responda pelo chat para que a orientação fique registrada.`,
       shouldEmailStudent: false,
       shouldEmailProfessor: true,
     },
     DOR_DESCONFORTO: {
       severity: "CUIDADO",
       status: "REQUER_REVISAO",
-      title: "Sua segurança vem primeiro",
+      title: "Você fez certo em parar e avisar",
       studentMessage:
-        "Sentimos muito que você tenha sentido dor ou desconforto. Sua segurança vem em primeiro lugar. Evite insistir no exercício que gerou desconforto. Se a dor persistir, piorar ou limitar seus movimentos, procure orientação de um profissional de saúde ou fisioterapia. Já sinalizamos o professor para revisar sua programação antes de qualquer progressão.",
+        "Obrigado por nos avisar sobre a dor ou o desconforto. Sua segurança vem primeiro: não insista no exercício que provocou o incômodo. Seu professor recebeu o alerta e precisa revisar sua programação antes de qualquer progressão. Se a dor persistir, piorar ou limitar seus movimentos, procure avaliação de um profissional de saúde habilitado.",
       professorMessage:
-        `${studentName} relatou dor, desconforto ou possível lesão. Não seguir com progressão automática. Revise o treino, o exercício envolvido, intensidade e necessidade de adaptação. Se necessário, oriente avaliação com profissional de saúde.`,
+        `${studentName} relatou dor, desconforto ou possível lesão. Não faça progressão automática. Revise o exercício envolvido, intensidade, volume e necessidade de adaptação. Converse com o aluno pelo chat e, quando necessário, oriente avaliação com profissional de saúde habilitado.`,
       shouldEmailStudent: true,
       shouldEmailProfessor: true,
     },
     RELATO_DOR_DUVIDA: {
       severity: "CUIDADO",
       status: "REQUER_REVISAO",
-      title: "Sua segurança vem primeiro",
+      title: "Seu relato foi encaminhado ao professor",
       studentMessage:
-        "Obrigado por avisar. Dor ou desconforto não devem ser ignorados. Já sinalizamos o professor para revisar sua próxima programação antes de qualquer progressão. Se a dor persistir, piorar ou limitar movimentos, procure avaliação de um profissional de saúde.",
+        "Obrigado por avisar pelo chat. Dor ou desconforto não devem ser ignorados. Seu professor recebeu o relato e precisa revisar a próxima programação antes de evoluir carga, impacto, volume ou complexidade. Se a dor persistir, piorar ou limitar movimentos, procure avaliação de um profissional de saúde habilitado.",
       professorMessage:
-        `${studentName} relatou dor/desconforto no chat. Revisar antes de liberar, evoluir carga, impacto, volume ou complexidade da próxima semana.`,
+        `${studentName} relatou dor ou desconforto no chat. Revise a conversa e a programação antes de liberar, repetir ou evoluir a próxima semana. Registre a orientação e os ajustes pelo chat da plataforma.`,
       shouldEmailStudent: true,
       shouldEmailProfessor: true,
     },
     PAUSA_POR_CUIDADO: {
       severity: "CUIDADO",
       status: "REQUER_REVISAO",
-      title: "Pausa por cuidado registrada",
+      title: "Sua pausa por cuidado foi registrada",
       studentMessage:
-        "Sua segurança vem primeiro. Registramos uma pausa por cuidado porque você informou que não está em condição de treinar agora. Evite insistir em exercícios. Quando se sentir apto(a) para retomar, avise no sistema ou fale com o professor. Se houver dor persistente, piora ou limitação de movimento, procure avaliação de um profissional de saúde.",
+        "Registramos uma pausa por cuidado porque você informou que não está em condição de treinar agora. Não insista nos exercícios. Seu professor foi avisado e os treinos normais ficam bloqueados até uma revisão segura. Quando se sentir apto para retomar, envie a solicitação pelo sistema. Se houver dor persistente, piora ou limitação de movimento, procure avaliação de um profissional de saúde habilitado.",
       professorMessage:
-        `${studentName} sinalizou que está sem condição de treinar. Não liberar treino normal enquanto este evento estiver aberto. Orientar avaliação profissional quando necessário e revisar retomada segura quando o aluno informar aptidão.`,
+        `${studentName} sinalizou que está sem condição de treinar. Não libere treino normal enquanto este evento estiver aberto. Faça contato pelo chat, oriente avaliação profissional quando necessário e revise uma retomada segura somente depois que o aluno informar aptidão.`,
       shouldEmailStudent: true,
       shouldEmailProfessor: true,
     },
     NAO_ENTENDI: {
       severity: "ATENCAO",
       status: "REQUER_REVISAO",
-      title: "Vamos deixar o treino mais claro",
+      title: "Vamos deixar esse treino mais claro",
       studentMessage:
-        "Obrigado por avisar. Quando uma orientação não fica clara, o melhor caminho é perguntar mesmo. Já sinalizamos o professor para revisar a explicação e te ajudar a executar com mais segurança.",
+        "Você fez certo em perguntar. Quando uma orientação não fica clara, o melhor caminho é não tentar adivinhar. Seu professor recebeu o aviso e poderá explicar ou ajustar o exercício pelo chat para você executar com mais segurança.",
       professorMessage:
-        `${studentName} informou que não entendeu parte do treino. Revise a descrição, observações, nomes dos exercícios e, se possível, simplifique a próxima orientação.`,
+        `${studentName} informou que não entendeu parte do treino. Revise descrição, observações, nomes dos exercícios e recursos visuais. Responda pelo chat com uma orientação simples e registrada.`,
       shouldEmailStudent: false,
       shouldEmailProfessor: false,
     },
     DESMOTIVACAO: {
       severity: "ATENCAO",
       status: "ABERTO",
-      title: "Vamos retomar sem culpa",
+      title: "Vamos encontrar uma forma possível de continuar",
       studentMessage:
-        "Obrigado por ser sincero. A motivação oscila, mas você não precisa recomeçar do zero. Vamos usar essa informação para tornar a próxima semana mais leve, possível e consistente.",
+        "Obrigado por falar com sinceridade. A motivação pode oscilar, e você não precisa enfrentar isso sozinho nem recomeçar do zero. Seu professor poderá usar esse relato para deixar a próxima semana mais leve, possível e conectada ao seu momento.",
       professorMessage:
-        `${studentName} sinalizou desmotivação. Considere uma semana de retomada com metas curtas, exercícios simples e reforço positivo.`,
+        `${studentName} sinalizou desmotivação. Faça uma abordagem acolhedora pelo chat e considere uma semana de retomada com metas curtas, exercícios simples e reforço positivo.`,
       shouldEmailStudent: false,
       shouldEmailProfessor: false,
     },
     BAIXA_ADERENCIA: {
       severity: "ATENCAO",
       status: "ABERTO",
-      title: "Vamos entender sua semana",
+      title: "Queremos entender como foi sua semana",
       studentMessage:
-        "Percebemos que sua semana ficou mais difícil para manter os treinos. Queremos entender o que aconteceu para ajustar melhor sua próxima programação, sem culpa e com mais aderência.",
+        "Percebemos que ficou mais difícil manter os treinos nesta semana. Isso não é uma cobrança. Queremos entender o que aconteceu para que seu professor consiga ajustar a próxima programação à sua rotina, sem culpa e com mais chance de continuidade.",
       professorMessage:
-        `${studentName} teve baixa aderência recente. Antes de progredir treino, avalie retomada, volume, complexidade e possíveis barreiras.`,
+        `${studentName} apresentou baixa aderência recente. Antes de progredir o treino, converse pelo chat para entender as barreiras e avalie retomada, volume, duração e complexidade.`,
       shouldEmailStudent: false,
       shouldEmailProfessor: false,
     },
     OUTRO: {
       severity: "ATENCAO",
       status: "ABERTO",
-      title: "Obrigado por avisar",
+      title: "Obrigado por compartilhar com a gente",
       studentMessage:
-        "Obrigado por compartilhar. Sua resposta ajuda o professor a cuidar melhor da sua rotina e ajustar o treino de forma mais humana e realista.",
+        "Obrigado por compartilhar essa informação. Seu relato ajuda o professor a compreender melhor sua rotina e a ajustar o acompanhamento de forma mais próxima, segura e realista.",
       professorMessage:
-        `${studentName} registrou uma observação sobre o treino. Revise o contexto antes da próxima montagem.`,
+        `${studentName} registrou uma observação sobre o treino. Leia o contexto e, quando necessário, converse pelo chat antes de montar ou liberar a próxima programação.`,
       shouldEmailStudent: false,
       shouldEmailProfessor: false,
     },
@@ -811,10 +811,19 @@ export async function POST(request: NextRequest) {
     let studentEmailSentAt: Date | null = null;
     let professorEmailSentAt: Date | null = null;
 
+    const professorName = student.user?.name || "seu professor";
+    const studentNoticeContent = [
+      `Oi, ${student.name}!`,
+      "",
+      copy.studentMessage,
+      "",
+      "Para manter seu acompanhamento organizado e registrado, converse com o professor pelo chat da plataforma. O WhatsApp fica reservado para contatos específicos da gestão.",
+    ].join("\n");
+
     const studentNotice = await prisma.notice.create({
       data: {
         title: copy.title,
-        content: copy.studentMessage,
+        content: studentNoticeContent,
         type: "CUIDADO_ALUNO",
         authorId,
         studentId,
@@ -833,9 +842,15 @@ export async function POST(request: NextRequest) {
         data: {
           title:
             copy.severity === "CUIDADO"
-              ? `Cuidado urgente: ${student.name}`
-              : `Revisar cuidado do aluno: ${student.name}`,
-          content: copy.professorMessage,
+              ? `Atenção prioritária para ${student.name}`
+              : `Revisão necessária no acompanhamento de ${student.name}`,
+          content: [
+            `Olá, ${professorName}.`,
+            "",
+            copy.professorMessage,
+            "",
+            "Acesse a Central de Cuidado, revise o contexto e registre a orientação ao aluno pelo chat da plataforma.",
+          ].join("\n"),
           type: "CUIDADO_ALUNO",
           authorId,
           studentId,
@@ -857,25 +872,42 @@ export async function POST(request: NextRequest) {
       if (email) {
         await sendEmail({
           to: email,
-          subject: "Sua segurança vem primeiro",
+          subject: `${student.name}, ${copy.title.toLowerCase()}`,
           text: [
-            `Oi, ${student.name}.`,
+            `Oi, ${student.name}!`,
             "",
             copy.studentMessage,
             "",
-            `Acesse sua área do aluno: ${getAppAlunoUrl()}`,
+            `${professorName} foi avisado e poderá acompanhar você pelo chat da plataforma.`,
+            "Para manter as orientações registradas, use o chat para falar sobre treino e cuidado. O WhatsApp fica reservado para contatos específicos da gestão.",
             "",
-            "Esta é uma orientação de cuidado e acompanhamento. Em caso de dor persistente, piora ou limitação de movimento, procure avaliação de um profissional habilitado.",
+            `Acessar minha área: ${getAppAlunoUrl()}`,
+            "",
+            "Em caso de dor persistente, piora ou limitação de movimento, procure avaliação de um profissional de saúde habilitado.",
+            "",
+            "Funcional VIP Digital",
+            "Mensagem automática de cuidado enviada para apoiar seu acompanhamento.",
           ].join("\n"),
           html: `
-            <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
-              <p>Oi, ${escapeHtml(student.name)}.</p>
-              <p>${escapeHtml(copy.studentMessage)}</p>
-              <p>Você pode acessar sua área para consultar seus treinos e avisos:</p>
-              <p><a href="${getAppAlunoUrl()}">Abrir minha área do aluno</a></p>
-              <p style="font-size:12px;color:#6b7280">
-                Esta é uma orientação de cuidado e acompanhamento. Em caso de dor persistente, piora ou limitação de movimento, procure avaliação de um profissional habilitado.
-              </p>
+            <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+              <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+                <h2 style="color:#D4A373;margin:0 0 16px;">${escapeHtml(copy.title)}</h2>
+                <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(student.name)}</strong>!</p>
+                <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(copy.studentMessage)}</p>
+                <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
+                  <strong style="color:#f5f5f5;">${escapeHtml(professorName)}</strong> foi avisado e poderá acompanhar você pelo chat da plataforma.
+                </p>
+                <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
+                  Para manter as orientações registradas, use o chat para falar sobre treino e cuidado. O WhatsApp fica reservado para contatos específicos da gestão.
+                </p>
+                <a href="${getAppAlunoUrl()}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir meu acompanhamento</a>
+                <p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
+                  Em caso de dor persistente, piora ou limitação de movimento, procure avaliação de um profissional de saúde habilitado.
+                </p>
+                <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">
+                  Mensagem automática de cuidado enviada pelo Funcional VIP Digital para apoiar seu acompanhamento.
+                </p>
+              </div>
             </div>
           `,
         });
@@ -889,22 +921,29 @@ export async function POST(request: NextRequest) {
         to: student.user.email,
         subject:
           copy.severity === "CUIDADO"
-            ? `Cuidado do aluno: ${student.name}`
-            : `Revisão de treino solicitada: ${student.name}`,
+            ? `Atenção prioritária: ${student.name}`
+            : `Revisão necessária: ${student.name}`,
         text: [
-          `Olá, ${student.user?.name || "professor(a)"}.`,
+          `Olá, ${student.user?.name || "professor(a)"}!`,
           "",
           copy.professorMessage,
           "",
-          "Antes de montar a próxima semana, revise a Central de Cuidado do Aluno.",
+          "Acesse a Central de Cuidado, revise o contexto antes de liberar ou evoluir a programação e registre sua orientação pelo chat.",
           getAppCareUrl(),
+          "",
+          "Funcional VIP Digital",
+          "Mensagem automática de acompanhamento enviada ao professor responsável.",
         ].join("\n"),
         html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
-            <p>Olá, ${escapeHtml(student.user?.name || "professor(a)")}.</p>
-            <p>${escapeHtml(copy.professorMessage).replaceAll("\n", "<br />")}</p>
-            <p>Antes de montar a próxima semana, revise a Central de Cuidado do Aluno.</p>
-            <p><a href="${getAppCareUrl()}">Abrir Central de Cuidado</a></p>
+          <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+            <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+              <h2 style="color:#D4A373;margin:0 0 16px;">Acompanhamento de ${escapeHtml(student.name)}</h2>
+              <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Olá, ${escapeHtml(student.user?.name || "professor(a)")}!</p>
+              <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(copy.professorMessage).replaceAll("\n", "<br />")}</p>
+              <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Revise o contexto antes de liberar ou evoluir a programação e registre sua orientação pelo chat.</p>
+              <a href="${getAppCareUrl()}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir Central de Cuidado</a>
+              <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Mensagem automática de acompanhamento enviada ao professor responsável.</p>
+            </div>
           </div>
         `,
       });
@@ -1179,9 +1218,11 @@ export async function PUT(request: NextRequest) {
       const professorName = existing.professor?.name || existing.student.user?.name || "professor(a)";
       const studentName = existing.student.name || "Aluno";
       const professorContent = [
-        `${studentName} sinalizou que se sente apto(a) para retomar os treinos.`,
+        `Olá, ${professorName}!`,
         "",
-        "A retomada ainda não foi liberada automaticamente. Revise o evento de cuidado, confirme se há segurança para retorno e resolva o evento somente quando a programação puder voltar ao normal.",
+        `${studentName} informou que se sente apto(a) para retomar os treinos e pediu uma nova avaliação do acompanhamento.`,
+        "",
+        "A retomada não é liberada automaticamente. Revise o evento de cuidado, converse com o aluno pelo chat e confirme se a programação pode voltar com segurança. Resolva o evento somente depois dessa revisão.",
         "",
         `Mensagem do aluno: ${returnMessage}`,
       ].join("\n");
@@ -1189,7 +1230,7 @@ export async function PUT(request: NextRequest) {
       if (professorId) {
         await prisma.notice.create({
           data: {
-            title: `Retomada solicitada: ${studentName}`,
+            title: `${studentName} pediu revisão para retomar`,
             content: professorContent,
             type: "CUIDADO_ALUNO",
             authorId: userId,
@@ -1203,9 +1244,14 @@ export async function PUT(request: NextRequest) {
 
       await prisma.notice.create({
         data: {
-          title: "Retomada enviada para revisão",
-          content:
-            "Recebemos sua sinalização de que você se sente apto(a) para retomar os treinos. Agora o professor precisa revisar e liberar a retomada com segurança.",
+          title: "Recebemos seu pedido de retomada",
+          content: [
+            `Oi, ${studentName}!`,
+            "",
+            "Que bom que você nos contou como está se sentindo. Seu pedido foi encaminhado ao professor responsável.",
+            "",
+            "Antes de voltar aos treinos, aguarde a revisão e a liberação pelo sistema. Se precisar complementar alguma informação, use o chat da plataforma para manter o acompanhamento registrado.",
+          ].join("\n"),
           type: "CUIDADO_ALUNO",
           authorId: userId,
           studentId: existing.studentId,
@@ -1218,20 +1264,24 @@ export async function PUT(request: NextRequest) {
         try {
           await sendEmail({
             to: professorEmail,
-            subject: `Retomada solicitada: ${studentName}`,
+            subject: `${studentName} pediu revisão para retomar os treinos`,
             text: [
-              `Olá, ${professorName}.`,
-              "",
               professorContent,
               "",
               "Acesse a Central de Cuidado para revisar:",
               getAppCareUrl(),
+              "",
+              "Funcional VIP Digital",
+              "Mensagem automática de acompanhamento enviada ao professor responsável.",
             ].join("\n"),
             html: `
-              <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
-                <p>Olá, ${escapeHtml(professorName)}.</p>
-                <p>${escapeHtml(professorContent).replaceAll("\n", "<br />")}</p>
-                <p><a href="${getAppCareUrl()}">Abrir Central de Cuidado</a></p>
+              <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+                <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+                  <h2 style="color:#D4A373;margin:0 0 16px;">Pedido de retomada de ${escapeHtml(studentName)}</h2>
+                  <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(professorContent).replaceAll("\n", "<br />")}</p>
+                  <a href="${getAppCareUrl()}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Revisar retomada</a>
+                  <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Mensagem automática de acompanhamento enviada ao professor responsável.</p>
+                </div>
               </div>
             `,
           });
@@ -1243,7 +1293,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({
         ok: true,
         event: normalizeEvent(updated),
-        message: "Seu professor foi avisado para revisar sua retomada. Aguarde a liberação antes de voltar aos treinos.",
+        message: "Recebemos seu pedido e avisamos o professor. Aguarde a revisão e a liberação no sistema antes de voltar aos treinos.",
       });
     }
 
