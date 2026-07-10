@@ -149,8 +149,9 @@ function buildNoticeContent(content: DidYouKnowContent): string {
   return [
     content.content,
     "",
-    "Esse conteúdo faz parte do acompanhamento educativo da Funcional Vip Digital.",
-    "Se tiver dúvida sobre como aplicar isso na sua rotina, fale com seu professor pelo sistema.",
+    "Esta é uma informação educativa para apoiar sua rotina e complementar seu acompanhamento.",
+    "Quer entender como aplicar isso no seu caso? Converse com seu professor pelo chat da plataforma. Assim, a orientação fica registrada e pode ser acompanhada com segurança.",
+    "O WhatsApp fica reservado para contatos específicos da gestão.",
   ].join("\n");
 }
 
@@ -167,26 +168,35 @@ async function sendDidYouKnowEmail({
   const subject = `Você sabia? ${content.title.replace(/^Você sabia que\s*/i, "")}`;
 
   const text = [
-    `Olá, ${student.name}.`,
+    `Oi, ${student.name}! Tudo bem?`,
+    "",
+    "A equipe do Funcional VIP Digital separou uma informação rápida para apoiar sua rotina:",
     "",
     content.title,
     "",
     content.content,
     "",
-    "Esse conteúdo faz parte do acompanhamento educativo da Funcional Vip Digital.",
-    "Se tiver dúvida sobre como aplicar isso na sua rotina, fale com seu professor pelo sistema.",
+    "Esta é uma orientação educativa geral. Quer entender como aplicar isso no seu caso? Converse com seu professor pelo chat da plataforma.",
+    "O WhatsApp fica reservado para contatos específicos da gestão.",
     "",
     `Acesse sua área do aluno: ${studentUrl}`,
+    "",
+    "Equipe Funcional VIP Digital",
+    "Mensagem automática de conteúdo educativo.",
   ].join("\n");
 
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:640px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <p style="color:#a1a1a1; font-size:13px; margin:0 0 8px;">Conteúdo educativo da semana</p>
+        <p style="color:#a1a1a1; font-size:13px; margin:0 0 8px;">Uma informação rápida para sua semana</p>
         <h2 style="color:#D4A373; margin:0 0 16px; font-size:22px; line-height:1.3;">${escapeHtml(content.title)}</h2>
 
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Olá, <strong>${escapeHtml(student.name || "Aluno")}</strong>.
+          Oi, <strong>${escapeHtml(student.name || "Aluno")}</strong>! Tudo bem?
+        </p>
+
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+          A equipe do Funcional VIP Digital separou esta informação para apoiar sua rotina e complementar seu acompanhamento.
         </p>
 
         <p style="color:#d4d4d4; font-size:15px; line-height:1.6; white-space:pre-line;">
@@ -194,17 +204,24 @@ async function sendDidYouKnowEmail({
         </p>
 
         <div style="background:#D4A37314; border:1px solid #D4A37333; border-radius:12px; padding:14px; margin-top:18px;">
-          <p style="color:#D4A373; font-size:13px; line-height:1.5; margin:0;">
-            Se tiver dúvida sobre como aplicar isso na sua rotina, fale com seu professor pelo sistema.
+          <p style="color:#D4A373; font-size:13px; line-height:1.6; margin:0;">
+            Quer entender como aplicar isso no seu caso? Converse com seu professor pelo chat da plataforma. Assim, a orientação fica registrada e pode ser acompanhada com segurança.
           </p>
         </div>
 
-        <a href="${studentUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:20px;">
-          Acessar área do aluno
+        <p style="color:#a1a1a1; font-size:12px; line-height:1.5; margin-top:14px;">
+          O WhatsApp fica reservado para contatos específicos da gestão.
+        </p>
+
+        <a href="${studentUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
+          Acessar minha área
         </a>
 
-        <p style="color:#6b6b6b; font-size:11px; margin-top:20px; line-height:1.5;">
-          Informação educativa geral. Para orientação alimentar individual, procure um nutricionista.
+        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">
+          Equipe Funcional VIP Digital
+        </p>
+        <p style="color:#6b6b6b; font-size:11px; margin-top:8px; line-height:1.5;">
+          Mensagem automática de conteúdo educativo. Informação geral; para orientação alimentar individual, procure um nutricionista.
         </p>
       </div>
     </div>
