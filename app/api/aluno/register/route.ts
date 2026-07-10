@@ -255,29 +255,33 @@ function buildTrialWelcomeContent({
   shiftedToNextWeek: boolean;
 }): string {
   return [
-    `Olá, ${studentName}!`,
+    `Oi, ${studentName}! Que bom ter você com a gente.`,
     "",
     shiftedToNextWeek
-      ? "Seu cadastro no Funcional Vip Digital foi criado com sucesso. Como sua entrada aconteceu no fim da semana, sua experiência vai começar na próxima janela segura de acompanhamento."
-      : "Seu cadastro no Funcional Vip Digital foi criado com sucesso e sua experiência gratuita já está ativa.",
-    shiftedToNextWeek ? `Início da experiência: ${startDateText}.` : null,
-    `Validade da experiência: até ${endDateText}.`,
-    "",
+      ? `Seu cadastro está concluído e sua experiência foi organizada para começar em ${startDateText}, na primeira janela segura de acompanhamento.`
+      : "Seu cadastro está concluído e sua experiência gratuita já começou.",
     shiftedToNextWeek
-      ? "Isso evita montar treinos corridos ou acumulados apenas para cumprir quantidade. A ideia é começar bem, com uma semana organizada e acompanhada."
+      ? "Isso não significa atraso: escolhemos essa data para que você comece com uma semana inteira, sem treinos corridos ou acumulados."
       : null,
-    shiftedToNextWeek ? "" : null,
-    `Nesta experiência, seu plano prevê ${workoutsPerWeek} treino(s) por semana, totalizando ${workoutsPerMonth} treino(s) no ciclo.`,
+    `Sua experiência fica válida até ${endDateText}.`,
+    `Nesse período, estão previstos ${workoutsPerWeek} treino(s) por semana, totalizando ${workoutsPerMonth} treino(s) no ciclo.`,
     "",
     onboardingComplete
-      ? "Recebemos sua ficha inicial. O professor usará essas informações para preparar treinos mais seguros e direcionados."
-      : `Ainda precisamos confirmar algumas informações antes de personalizar melhor seus treinos: ${missingOnboardingLabels.join(", ")}.`,
+      ? "Recebemos sua ficha inicial. Ela será usada pelo professor para conhecer seu momento e preparar uma proposta mais segura e direcionada."
+      : `Ainda precisamos confirmar algumas informações para personalizar melhor seus treinos: ${missingOnboardingLabels.join(", ")}.`,
     "",
-    "Agora a equipe fará o vínculo com um professor responsável. Assim que os primeiros treinos forem preparados e liberados, você receberá um novo aviso por aqui e por e-mail.",
+    "Agora a gestão vai vincular um professor responsável. Quando isso acontecer, ele será apresentado a você e acompanhará seus treinos e sua evolução.",
+    "Assim que a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.",
     "",
-    "Você já pode acessar seu painel com o e-mail e senha cadastrados para acompanhar os avisos e sua evolução.",
+    "Depois do vínculo, use o chat da plataforma para falar com o professor sobre dúvidas de treino. Assim, todo o acompanhamento fica registrado e organizado.",
+    "O WhatsApp fica reservado para contatos específicos da gestão, quando necessário.",
     "",
-    "Este é um ciclo gratuito de experiência. Para continuar após o período experimental, será necessário contratar um plano.",
+    "Você já pode acessar sua área com o e-mail e a senha cadastrados para acompanhar avisos, treinos e próximos passos.",
+    "",
+    "Este é um ciclo gratuito de experiência. Perto do encerramento, a gestão vai orientar você sobre as opções para continuar.",
+    "",
+    "Gestão do Funcional VIP Digital",
+    "Mensagem automática de boas-vindas enviada pela plataforma.",
   ]
     .filter((item): item is string => item !== null)
     .join("\n");
@@ -311,17 +315,18 @@ function buildManagementNewTrialStudentContent({
   shiftedToNextWeek: boolean;
 }): string {
   return [
-    `Novo aluno iniciou experiência gratuita: ${studentName}.`,
+    "Olá, equipe de gestão.",
     "",
+    `${studentName} concluiu o cadastro para a experiência gratuita.`,
     `E-mail: ${studentEmail}`,
-    studentPhone ? `WhatsApp: ${studentPhone}` : null,
-    `Origem: ${source}.`,
-    shiftedToNextWeek
-      ? "Entrada tardia/fim de semana: experiência direcionada para a próxima janela segura."
-      : null,
+    studentPhone ? `Telefone/WhatsApp cadastrado: ${studentPhone}` : null,
+    `Origem do cadastro: ${source}.`,
     `Início da experiência: ${startDateText}.`,
-    `Experiência válida até: ${endDateText}.`,
-    `Plano da experiência: ${workoutsPerWeek} treino(s)/semana e ${workoutsPerMonth} treino(s)/mês.`,
+    `Término previsto: ${endDateText}.`,
+    `Programação contratada: ${workoutsPerWeek} treino(s) por semana e ${workoutsPerMonth} treino(s) no ciclo.`,
+    shiftedToNextWeek
+      ? "Como o cadastro aconteceu no fim da semana, o início foi direcionado para a próxima janela segura. Não é necessário recuperar treinos da semana do cadastro."
+      : null,
     "",
     buildOnboardingStatusText({
       onboardingComplete,
@@ -332,10 +337,12 @@ function buildManagementNewTrialStudentContent({
     ...onboardingLines.map((line) => `- ${line}`),
     "",
     shiftedToNextWeek
-      ? "Ação recomendada: vincular professor e preparar a primeira semana de treinos para a janela segura de início, sem tentar recuperar treinos da semana do cadastro."
+      ? "Próximo passo: vincular um professor responsável e garantir que a primeira semana esteja preparada para a data de início."
       : onboardingComplete
-        ? "Ação recomendada: acessar Vincular Alunos, definir o professor responsável e orientar a montagem dos primeiros treinos com base na ficha inicial."
-        : "Ação recomendada: acessar Vincular Alunos, definir o professor responsável e confirmar os dados faltantes antes de montar treinos personalizados. Enquanto isso, usar treino inicial conservador.",
+        ? "Próximo passo: vincular um professor responsável e orientar a preparação dos primeiros treinos com base na ficha inicial."
+        : "Próximo passo: vincular um professor, confirmar os dados que faltam e manter a primeira prescrição conservadora até a ficha estar completa.",
+    "",
+    "Mensagem automática de apoio operacional para a gestão.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -720,8 +727,8 @@ export async function POST(req: NextRequest) {
       const notice = await tx.notice.create({
         data: {
           title: safeWindow.shiftedToNextWeek
-            ? "Sua experiência gratuita foi agendada"
-            : "Sua experiência gratuita foi ativada",
+            ? "Sua experiência está agendada para começar bem"
+            : "Sua experiência gratuita começou",
           content: buildTrialWelcomeContent({
             studentName: student.name,
             startDateText,
@@ -743,8 +750,8 @@ export async function POST(req: NextRequest) {
       const managementNotice = await tx.notice.create({
         data: {
           title: safeWindow.shiftedToNextWeek
-            ? "Novo aluno em experiência com início seguro agendado"
-            : "Novo aluno em experiência aguardando professor",
+            ? "Novo aluno em experiência: organizar início seguro"
+            : "Novo aluno em experiência: vincular professor",
           content: buildManagementNewTrialStudentContent({
             studentName: student.name,
             studentEmail: email,
@@ -838,35 +845,30 @@ export async function POST(req: NextRequest) {
       const safeEndDateText = escapeHtml(formatDatePtBr(result.endDate));
       const safeLoginUrl = escapeHtml(loginUrl);
       const title = result.shiftedToNextWeek
-        ? "Sua experiência gratuita foi agendada"
-        : "Sua experiência gratuita foi ativada";
-      const text = result.shiftedToNextWeek
-        ? [
-            `Olá, ${name}!`,
-            "",
-            "Seu cadastro no Funcional Vip Digital foi criado com sucesso.",
-            "Como sua entrada aconteceu no fim da semana, sua experiência começará na próxima janela segura de acompanhamento.",
-            `Início da experiência: ${formatDatePtBr(result.startDate)}.`,
-            `Validade da experiência: até ${formatDatePtBr(result.endDate)}.`,
-            "",
-            "Isso evita começar atrasado ou receber treinos corridos. Seu professor será avisado para preparar a primeira semana de treinos com segurança.",
-            "",
-            `Acesse o painel com seu e-mail e senha cadastrados: ${loginUrl}`,
-          ].join("\n")
-        : [
-            `Olá, ${name}!`,
-            "",
-            "Sua experiência gratuita no Funcional Vip Digital foi ativada.",
-            `Validade da experiência: até ${formatDatePtBr(result.endDate)}.`,
-            "",
-            `Seu plano de experiência prevê ${result.workoutsPerWeek} treino(s) por semana, totalizando ${result.workoutsPerMonth} treino(s) no ciclo.`,
-            "",
-            "Agora a equipe irá vincular um professor responsável. Assim que seus primeiros treinos forem preparados, você receberá um novo aviso.",
-            "",
-            `Acesse o painel com seu e-mail e senha cadastrados: ${loginUrl}`,
-            "",
-            "Este é um ciclo gratuito de experiência. Para continuar após o período experimental, será necessário contratar um plano.",
-          ].join("\n");
+        ? "Sua experiência está agendada para começar bem"
+        : "Sua experiência gratuita começou";
+      const text = [
+        `Oi, ${name}! Que bom ter você com a gente.`,
+        "",
+        result.shiftedToNextWeek
+          ? `Seu cadastro está concluído e sua experiência foi organizada para começar em ${formatDatePtBr(result.startDate)}, na primeira janela segura de acompanhamento.`
+          : "Seu cadastro está concluído e sua experiência gratuita já começou.",
+        result.shiftedToNextWeek
+          ? "Isso não significa atraso. A data foi escolhida para que você comece com uma semana inteira, sem treinos corridos ou acumulados."
+          : null,
+        `Sua experiência fica válida até ${formatDatePtBr(result.endDate)}.`,
+        `Nesse período, estão previstos ${result.workoutsPerWeek} treino(s) por semana, totalizando ${result.workoutsPerMonth} treino(s) no ciclo.`,
+        "",
+        "Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.",
+        "Depois do vínculo, use o chat da plataforma para falar com o professor sobre dúvidas de treino. O WhatsApp fica reservado para contatos específicos da gestão.",
+        "",
+        `Acesse sua área com o e-mail e a senha cadastrados: ${loginUrl}`,
+        "",
+        "Gestão do Funcional VIP Digital",
+        "Mensagem automática de boas-vindas enviada pela plataforma.",
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       await sendEmail({
         to: email,
@@ -876,35 +878,25 @@ export async function POST(req: NextRequest) {
           <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
             <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
               <h2 style="color:#D4A373; margin:0 0 16px;">${escapeHtml(title)}</h2>
-
-              <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-                Olá, <strong>${safeName}</strong>!
+              <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeName}</strong>! Que bom ter você com a gente.</p>
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+                ${result.shiftedToNextWeek
+                  ? `Seu cadastro está concluído e sua experiência foi organizada para começar em <strong style="color:#f5f5f5;">${safeStartDateText}</strong>, na primeira janela segura de acompanhamento.`
+                  : "Seu cadastro está concluído e sua experiência gratuita já começou."}
               </p>
-
-              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                Seu cadastro no <strong style="color:#f5f5f5;">Funcional Vip Digital</strong> foi criado com sucesso.
-              </p>
-
               ${result.shiftedToNextWeek
-                ? `<p style="color:#d4d4d4; font-size:14px; line-height:1.5;">Como sua entrada aconteceu no fim da semana, sua experiência começará na primeira janela segura de acompanhamento.</p>`
+                ? `<p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Isso não significa atraso. Escolhemos essa data para que você comece com uma semana inteira, sem treinos corridos ou acumulados.</p>`
                 : ""}
-
               <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
                 <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Início: <strong style="color:#f5f5f5;">${safeStartDateText}</strong></p>
-                <p style="color:#d4d4d4; font-size:13px; margin:0;">Validade: <strong style="color:#f5f5f5;">${safeEndDateText}</strong></p>
+                <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Validade: <strong style="color:#f5f5f5;">${safeEndDateText}</strong></p>
+                <p style="color:#d4d4d4; font-size:13px; margin:0;">Programação: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
               </div>
-
-              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                Seu plano de experiência prevê ${result.workoutsPerWeek} treino(s) por semana, totalizando ${result.workoutsPerMonth} treino(s) no ciclo.
-              </p>
-
-              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                A equipe irá vincular um professor responsável. Assim que seus primeiros treinos forem preparados, você receberá um novo aviso.
-              </p>
-
-              <a href="${safeLoginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
-                Acessar minha área
-              </a>
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.</p>
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Depois do vínculo, use o chat da plataforma para dúvidas de treino. Assim, o acompanhamento fica registrado e organizado. O WhatsApp fica reservado para contatos específicos da gestão.</p>
+              <a href="${safeLoginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
+              <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">Gestão do Funcional VIP Digital</p>
+              <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">Mensagem automática de boas-vindas enviada pela plataforma.</p>
             </div>
           </div>
         `,
