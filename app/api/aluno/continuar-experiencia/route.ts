@@ -134,7 +134,7 @@ export async function POST() {
         ok: true,
         alreadyRequested: true,
         message:
-          "Seu interesse em continuar já está registrado. A equipe irá acompanhar seu pedido.",
+          "Seu pedido já está com a gestão. Que bom saber que você quer continuar! Assim que houver uma atualização, a equipe vai orientar os próximos passos.",
       });
     }
 
@@ -144,8 +144,16 @@ export async function POST() {
 
     const notice = await prisma.notice.create({
       data: {
-        title: "Aluno quer continuar após experiência",
-        content: `${studentName} sinalizou interesse em continuar após a experiência gratuita. Acesse o Financeiro para avaliar a conversão para um plano pago.`,
+        title: `${studentName} quer continuar com o acompanhamento`,
+        content: [
+          "Olá, equipe de gestão.",
+          "",
+          `${studentName} sinalizou, pelo painel do aluno, que deseja continuar após a experiência gratuita.`,
+          studentEmail ? `E-mail: ${studentEmail}.` : null,
+          "Próximo passo: acessar o Financeiro, avaliar o plano mais adequado e entrar em contato para orientar a continuidade.",
+          "",
+          "Mensagem automática gerada a partir da manifestação do aluno.",
+        ].filter(Boolean).join("\n"),
         type: "COMERCIAL",
         targetRole: "GESTOR",
         authorId,
@@ -162,12 +170,12 @@ export async function POST() {
         severity: "ATENCAO",
         status: "ABERTO",
         source: "APP_ALUNO",
-        title: "Aluno quer continuar após experiência",
+        title: `${studentName} quer continuar com o acompanhamento`,
         description: `${studentName} clicou em “Quero continuar” no painel do aluno durante a experiência gratuita.`,
         studentMessage:
-          "Recebemos seu interesse em continuar. A equipe irá acompanhar seu pedido e orientar os próximos passos.",
+          "Que bom saber que você quer continuar! Seu pedido já foi encaminhado para a gestão, que vai avaliar as opções e orientar os próximos passos.",
         professorMessage:
-          "Aluno sinalizou interesse em continuar após a experiência gratuita. Avaliar conversão para plano pago.",
+          `${studentName} quer continuar após a experiência gratuita. A gestão deve avaliar a conversão e alinhar o próximo plano com o aluno.`,
         contractId: trialContract.id,
         professorNoticeId: notice.id,
       },
@@ -179,12 +187,25 @@ export async function POST() {
       try {
         await sendEmail({
           to: notifyEmail,
-          subject: "Aluno quer continuar após experiência",
-          text: `${studentName} sinalizou interesse em continuar após a experiência gratuita. E-mail do aluno: ${studentEmail || "não informado"}.`,
+          subject: `${studentName} quer continuar com o acompanhamento`,
+          text: [
+            "Olá, equipe de gestão.",
+            "",
+            `${studentName} sinalizou que deseja continuar após a experiência gratuita.`,
+            `E-mail do aluno: ${studentEmail || "não informado"}.`,
+            "Acesse o Financeiro para avaliar o plano mais adequado e orientar os próximos passos.",
+            "",
+            "Mensagem automática gerada a partir da manifestação do aluno.",
+          ].join("\n"),
           html: `
-            <p><strong>${studentName}</strong> sinalizou interesse em continuar após a experiência gratuita.</p>
-            <p><strong>E-mail:</strong> ${studentEmail || "não informado"}</p>
-            <p>Acesse o Financeiro para avaliar a conversão para um plano pago.</p>
+            <div style="font-family: Arial, sans-serif; line-height:1.6; color:#222;">
+              <h2>${studentName} quer continuar com o acompanhamento</h2>
+              <p>Olá, equipe de gestão.</p>
+              <p><strong>${studentName}</strong> sinalizou, pelo painel, que deseja continuar após a experiência gratuita.</p>
+              <p><strong>E-mail:</strong> ${studentEmail || "não informado"}</p>
+              <p>Próximo passo: acessar o Financeiro, avaliar o plano mais adequado e entrar em contato para orientar a continuidade.</p>
+              <p style="font-size:12px; color:#666;">Mensagem automática gerada a partir da manifestação do aluno.</p>
+            </div>
           `,
         });
       } catch (emailError) {
@@ -196,7 +217,7 @@ export async function POST() {
       ok: true,
       alreadyRequested: false,
       message:
-        "Recebemos seu interesse em continuar. A equipe irá acompanhar seu pedido e orientar os próximos passos.",
+        "Que bom saber que você quer continuar! Seu pedido já foi encaminhado para a gestão, que vai avaliar as opções e orientar os próximos passos.",
     });
   } catch (error) {
     console.error("Erro ao registrar interesse em continuar após experiência", error);
