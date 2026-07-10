@@ -18,7 +18,7 @@ export default async function DashboardPage() {
   const sessionUser = session?.user as any;
 
   if (!sessionUser?.id) {
-    redirect('/login');
+    redirect('/auth/signin');
   }
 
   const userId = String(sessionUser.id);
@@ -227,6 +227,23 @@ export default async function DashboardPage() {
       contractedTrainingDaysPerMonth: true,
       commercialStatus: true,
       createdAt: true,
+      contracts: {
+        orderBy: [
+          { startDate: 'asc' },
+          { createdAt: 'desc' },
+        ],
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          status: true,
+          commercialStatus: true,
+          workoutsPerWeek: true,
+          workoutsPerMonth: true,
+          totalContractedWorkouts: true,
+          createdAt: true,
+        },
+      },
       user: {
         select: {
           id: true,
@@ -303,19 +320,108 @@ export default async function DashboardPage() {
     if (student.active === false) return false;
 
     /*
-     * Regra do controle de treino semanal ajustada:
-     * aluno ativo + professor vinculado já entra no radar do dashboard,
-     * mesmo que o status comercial ou os dias contratados ainda estejam vazios.
+     * Regra-base do controle semanal:
+     * aluno ativo + professor vinculado entra no radar operacional.
      *
-     * Isso evita o problema do aluno novo aparecer em "Meus alunos", mas não
-     * aparecer como "sem treino da semana atual" ou "sem pré-planejamento".
+     * A elegibilidade de cada semana é validada separadamente logo abaixo,
+     * usando o início e o fim da experiência/contrato. Assim, um aluno com
+     * experiência agendada para a próxima semana não aparece como pendência
+     * da semana atual.
      */
-    const hasProfessorLinked = Boolean(student.userId) && professorIds.includes(student.userId || '');
+    const hasProfessorLinked =
+      Boolean(student.userId) && professorIds.includes(student.userId || '');
 
     return hasProfessorLinked;
   });
 
-  const eligibleStudentIds = studentsEligibleForWeeklyWorkout.map((student) => student.id);
+  function toLocalDateOnly(value: Date | string): Date | null {
+    const rawDate = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(rawDate.getTime())) {
+      return null;
+    }
+
+    /*
+     * Datas de contrato são tratadas como datas civis, sem deslocamento de fuso.
+     * Usar os componentes UTC evita transformar 13/07 em 12/07 no horário de
+     * Brasília quando o banco devolve meia-noite UTC.
+     */
+    return new Date(
+      rawDate.getUTCFullYear(),
+      rawDate.getUTCMonth(),
+      rawDate.getUTCDate(),
+      12,
+      0,
+      0,
+      0
+    );
+  }
+
+  function getStudentContractForWeek(
+    student: (typeof students)[number],
+    week: { startOfWeek: Date; endOfWeek: Date }
+  ) {
+    const contracts = student.contracts || [];
+
+    return contracts.find((contract) => {
+      const status = String(contract.status || '').toUpperCase();
+
+      if (['CANCELADO', 'CANCELLED', 'INATIVO', 'ENCERRADO'].includes(status)) {
+        return false;
+      }
+
+      const contractStart = toLocalDateOnly(contract.startDate);
+      const contractEnd = toLocalDateOnly(contract.endDate);
+
+      if (!contractStart || !contractEnd) {
+        return false;
+      }
+
+      /*
+       * O fim da semana é exclusivo.
+       * O fim do contrato é considerado inclusivo.
+       */
+      return (
+        contractStart.getTime() < week.endOfWeek.getTime() &&
+        contractEnd.getTime() >= week.startOfWeek.getTime()
+      );
+    }) || null;
+  }
+
+  function getStudentsEligibleForWeek(
+    week: { startOfWeek: Date; endOfWeek: Date }
+  ) {
+    return studentsEligibleForWeeklyWorkout.filter((student) => {
+      const contracts = student.contracts || [];
+
+      /*
+       * Mantém o comportamento operacional anterior para cadastros antigos ou
+       * de teste que ainda não possuem contrato registrado: aluno ativo e com
+       * professor continua visível.
+       *
+       * Quando existe contrato/experiência, a semana precisa estar dentro do
+       * período válido. Isso impede que experiência agendada para a próxima
+       * segunda-feira gere pendência indevida na semana atual.
+       */
+      if (contracts.length === 0) {
+        return true;
+      }
+
+      return Boolean(getStudentContractForWeek(student, week));
+    });
+  }
+
+  const studentsEligibleForCurrentWeek = getStudentsEligibleForWeek(currentWorkoutWeek);
+  const studentsEligibleForNextWeek = getStudentsEligibleForWeek(nextWorkoutWeek);
+
+  const eligibleStudentIds = Array.from(
+    new Set(
+      [
+        ...studentsEligibleForCurrentWeek,
+        ...studentsEligibleForNextWeek,
+      ].map((student) => student.id)
+    )
+  );
 
   const workoutPlansInControlWeeks = eligibleStudentIds.length > 0
     ? await prisma.workoutPlan.findMany({
@@ -354,11 +460,12 @@ export default async function DashboardPage() {
   }
 
   function buildStudentsMissingWeeklyWorkouts(
+    eligibleStudents: typeof studentsEligibleForWeeklyWorkout,
     countByStudent: Map<string, number>,
     weekLabel: string,
     weekStartDateInput: string
   ) {
-    return studentsEligibleForWeeklyWorkout
+    return eligibleStudents
       .map((student) => {
         const weeklyLimit = getDashboardWeeklyWorkoutLimit(student);
         const createdCount = countByStudent.get(student.id) || 0;
@@ -380,12 +487,14 @@ export default async function DashboardPage() {
   const nextWeekWorkoutPlansCountByStudent = getWorkoutPlansCountByStudentForWeek(nextWorkoutWeek);
 
   const studentsMissingCurrentWeekWorkouts = buildStudentsMissingWeeklyWorkouts(
+    studentsEligibleForCurrentWeek,
     currentWeekWorkoutPlansCountByStudent,
     currentWorkoutWeekLabel,
     formatDateInput(currentWorkoutWeek.startOfWeek)
   );
 
   const studentsMissingNextWeekWorkouts = buildStudentsMissingWeeklyWorkouts(
+    studentsEligibleForNextWeek,
     nextWeekWorkoutPlansCountByStudent,
     nextWorkoutWeekLabel,
     formatDateInput(nextWorkoutWeek.startOfWeek)
@@ -1403,7 +1512,7 @@ export default async function DashboardPage() {
                 </h2>
 
                 <p className="text-sm text-[#a1a1a1] mt-1">
-                  Semana de referência: {currentWorkoutWeekLabel}. Pendência urgente: aluno ativo, com professor vinculado e dias contratados, mas ainda sem a quantidade de treinos prevista para a semana vigente.
+                  Semana de referência: {currentWorkoutWeekLabel}. Pendência urgente: aluno ativo, com professor vinculado e elegível para treinar nesta semana, mas ainda sem a quantidade prevista de treinos.
                 </p>
               </div>
             </div>
@@ -1423,7 +1532,7 @@ export default async function DashboardPage() {
                       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
-                            PRÉ-PLANEJAMENTO PENDENTE
+                            TREINO DA SEMANA PENDENTE
                           </span>
 
                           <span className="text-sm font-bold text-[#f5f5f5] truncate">
@@ -1476,7 +1585,7 @@ export default async function DashboardPage() {
 
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <p className="text-xs text-[#a1a1a1]">
-                          {isGestor ? 'Acompanhe o professor responsável. O aluno sai desta lista quando a quantidade prevista de treinos da próxima semana estiver pré-planejada.' : 'O aluno sai desta lista quando a quantidade prevista de treinos estiver pré-planejada. Antes da liberação final, revise os dados atualizados do aluno.'}
+                          {isGestor ? 'Acompanhe o professor responsável. O aluno sai desta lista quando a quantidade prevista de treinos da semana atual estiver cadastrada.' : 'O aluno sai desta lista quando a quantidade prevista de treinos da semana atual estiver cadastrada. Revise os dados atualizados antes de liberar.'}
                         </p>
 
                         {isTeacher && (
