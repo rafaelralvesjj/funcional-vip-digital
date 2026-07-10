@@ -145,29 +145,39 @@ async function notifyStudentAboutConversion({
   });
 
   const title = isPaid
-    ? "Seu contrato pago está ativo"
-    : "Seu plano pago foi gerado e aguarda pagamento";
+    ? "Sua continuidade está confirmada"
+    : "Seu plano está pronto para continuar";
 
   const content = isPaid
     ? [
-        `Olá, ${studentName}!`,
+        `Oi, ${studentName}! Temos uma boa notícia.`,
         "",
-        `Sua experiência gratuita foi convertida para o plano ${planName}.`,
-        "Seu contrato pago já está ativo no Funcional Vip Digital.",
-        `Período do contrato: ${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}.`,
-        `Treinos previstos: ${paidContract.workoutsPerWeek} por semana e ${paidContract.workoutsPerMonth} por mês.`,
+        `Sua experiência foi convertida para o plano ${planName}, e o contrato já está ativo.`,
+        `Novo período de acompanhamento: ${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}.`,
+        `Programação prevista: ${paidContract.workoutsPerWeek} treino(s) por semana e ${paidContract.workoutsPerMonth} treino(s) por mês.`,
         "",
-        "Você já pode continuar acompanhando seus treinos pelo painel do aluno.",
+        "Seu histórico, suas conversas e sua evolução continuam salvos. Você pode seguir acompanhando os treinos normalmente pelo painel.",
+        "Para dúvidas de treino, use o chat da plataforma. Para assuntos financeiros, fale com a gestão pelo canal indicado por ela.",
+        "",
+        "Que bom seguir com você nessa jornada!",
+        "Gestão do Funcional VIP Digital",
+        "Mensagem automática de confirmação enviada pela plataforma.",
       ].join("\n")
     : [
-        `Olá, ${studentName}!`,
+        `Oi, ${studentName}!`,
         "",
-        `Seu plano ${planName} foi gerado no Funcional Vip Digital.`,
-        `O pagamento está ${paymentStatusLabel(payment?.status)} e vence em ${formatDatePtBr(payment?.dueDate)}.`,
+        `A gestão deixou seu plano ${planName} preparado para dar continuidade ao acompanhamento.`,
+        `O pagamento ainda aparece como ${paymentStatusLabel(payment?.status)}.`,
+        `Vencimento: ${formatDatePtBr(payment?.dueDate)}.`,
         `Valor: ${formatMoneyPtBr(payment?.amountCents)}.`,
         paymentLinkUrl ? `Link de pagamento: ${paymentLinkUrl}.` : null,
         "",
-        "Assim que o pagamento for confirmado, seu contrato pago será ativado.",
+        "Assim que o pagamento for confirmado, o contrato será ativado e a continuidade ficará regularizada.",
+        "Se você já realizou o pagamento, pode desconsiderar este lembrete e aguardar a atualização do sistema.",
+        "Se precisar de ajuda com pagamento ou contratação, fale com a gestão. Para dúvidas de treino, continue usando o chat da plataforma.",
+        "",
+        "Gestão do Funcional VIP Digital",
+        "Mensagem automática de acompanhamento comercial enviada pela plataforma.",
       ]
         .filter(Boolean)
         .join("\n");
@@ -192,65 +202,23 @@ async function notifyStudentAboutConversion({
     const safeAlunoUrl = escapeHtml(alunoUrl);
     const safePaymentLinkUrl = paymentLinkUrl ? escapeHtml(paymentLinkUrl) : null;
 
-    const subject = title;
-
-    const text = isPaid
-      ? [
-          `Olá, ${studentName}!`,
-          "",
-          `Sua experiência gratuita foi convertida para o plano ${planName}.`,
-          "Seu contrato pago já está ativo no Funcional Vip Digital.",
-          `Período: ${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}.`,
-          `Treinos: ${paidContract.workoutsPerWeek} por semana e ${paidContract.workoutsPerMonth} por mês.`,
-          "",
-          `Acesse seu painel: ${alunoUrl}`,
-        ].join("\n")
-      : [
-          `Olá, ${studentName}!`,
-          "",
-          `Seu plano ${planName} foi gerado no Funcional Vip Digital.`,
-          `Pagamento: ${paymentStatusLabel(payment?.status)}.`,
-          `Vencimento: ${formatDatePtBr(payment?.dueDate)}.`,
-          `Valor: ${formatMoneyPtBr(payment?.amountCents)}.`,
-          paymentLinkUrl ? `Link de pagamento: ${paymentLinkUrl}` : null,
-          "",
-          "Assim que o pagamento for confirmado, seu contrato pago será ativado.",
-          `Acesse seu painel: ${alunoUrl}`,
-        ]
-          .filter(Boolean)
-          .join("\n");
+    const text = `${content}\n\nAcessar meu painel: ${alunoUrl}`;
 
     const html = isPaid
       ? `
         <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
           <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
             <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
-
-            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-              Olá, <strong>${safeStudentName}</strong>!
-            </p>
-
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Sua experiência gratuita foi convertida para o plano <strong style="color:#f5f5f5;">${safePlanName}</strong>.
-              Seu contrato pago já está ativo no Funcional Vip Digital.
-            </p>
-
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Período: <strong style="color:#f5f5f5;">${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}</strong>.
-            </p>
-
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Treinos previstos: <strong style="color:#f5f5f5;">${paidContract.workoutsPerWeek} por semana</strong> e
-              <strong style="color:#f5f5f5;">${paidContract.workoutsPerMonth} por mês</strong>.
-            </p>
-
-            <a href="${safeAlunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
-              Acessar painel do aluno
-            </a>
-
-            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-              Este é um aviso automático do Funcional Vip Digital.
-            </p>
+            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Temos uma boa notícia.</p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Sua experiência foi convertida para o plano <strong style="color:#f5f5f5;">${safePlanName}</strong>, e seu contrato já está ativo.</p>
+            <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
+              <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Período: <strong style="color:#f5f5f5;">${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}</strong></p>
+              <p style="color:#d4d4d4; font-size:13px; margin:0;">Programação: <strong style="color:#f5f5f5;">${paidContract.workoutsPerWeek} treino(s) por semana</strong></p>
+            </div>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Seu histórico, suas conversas e sua evolução continuam salvos. Para dúvidas de treino, use o chat da plataforma.</p>
+            <a href="${safeAlunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meu painel</a>
+            <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional VIP Digital</p>
+            <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de confirmação enviada pela plataforma.</p>
           </div>
         </div>
       `
@@ -258,41 +226,19 @@ async function notifyStudentAboutConversion({
         <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
           <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
             <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
-
-            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-              Olá, <strong>${safeStudentName}</strong>!
-            </p>
-
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Seu plano <strong style="color:#f5f5f5;">${safePlanName}</strong> foi gerado no Funcional Vip Digital.
-            </p>
-
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Status do pagamento: <strong style="color:#f5f5f5;">${paymentStatusLabel(payment?.status)}</strong>.<br />
-              Vencimento: <strong style="color:#f5f5f5;">${formatDatePtBr(payment?.dueDate)}</strong>.<br />
-              Valor: <strong style="color:#f5f5f5;">${formatMoneyPtBr(payment?.amountCents)}</strong>.
-            </p>
-
-            ${
-              safePaymentLinkUrl
-                ? `<p style="color:#d4d4d4; font-size:14px; line-height:1.5;">Para facilitar, acesse o link de pagamento abaixo:</p>
-                   <a href="${safePaymentLinkUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-bottom:12px;">
-                     Abrir link de pagamento
-                   </a>`
-                : ""
-            }
-
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Assim que o pagamento for confirmado, seu contrato pago será ativado.
-            </p>
-
-            <a href="${safeAlunoUrl}" style="display:inline-block; color:#D4A373; font-weight:bold; font-size:13px; margin-top:8px;">
-              Acessar painel do aluno
-            </a>
-
-            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-              Este é um aviso automático do Funcional Vip Digital.
-            </p>
+            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">A gestão deixou seu plano <strong style="color:#f5f5f5;">${safePlanName}</strong> preparado para continuar o acompanhamento.</p>
+            <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
+              <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Situação: <strong style="color:#f5f5f5;">${paymentStatusLabel(payment?.status)}</strong></p>
+              <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Vencimento: <strong style="color:#f5f5f5;">${formatDatePtBr(payment?.dueDate)}</strong></p>
+              <p style="color:#d4d4d4; font-size:13px; margin:0;">Valor: <strong style="color:#f5f5f5;">${formatMoneyPtBr(payment?.amountCents)}</strong></p>
+            </div>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Assim que o pagamento for confirmado, o contrato será ativado. Se você já pagou, pode desconsiderar este lembrete e aguardar a atualização.</p>
+            ${safePaymentLinkUrl ? `<a href="${safePaymentLinkUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-bottom:12px;">Abrir pagamento</a>` : ""}
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se precisar de apoio financeiro, fale com a gestão. Para dúvidas de treino, use o chat da plataforma.</p>
+            <a href="${safeAlunoUrl}" style="display:inline-block; color:#D4A373; font-weight:bold; font-size:13px; margin-top:8px;">Acessar meu painel</a>
+            <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional VIP Digital</p>
+            <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de acompanhamento comercial enviada pela plataforma.</p>
           </div>
         </div>
       `;
@@ -300,7 +246,7 @@ async function notifyStudentAboutConversion({
     notificationTasks.push(
       sendEmail({
         to: studentEmail,
-        subject,
+        subject: title,
         text,
         html,
       })
