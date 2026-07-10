@@ -95,13 +95,15 @@ function getSurveyEmailContent(type: SurveyType, reminder = false) {
   if (type === "TRIAL_END") {
     return {
       subject: reminder
-        ? "Lembrete: conte como foi sua experiência inicial"
-        : "Como foi sua experiência inicial?",
-      title: "Sua opinião sobre a experiência inicial",
+        ? "Quando puder, conte para a gente como foi seu começo"
+        : "Queremos ouvir como foi sua experiência inicial",
+      title: reminder
+        ? "Sua opinião continua sendo importante"
+        : "Como foi seu começo com a gente?",
       intro: reminder
-        ? "Passando para lembrar: sua resposta ajuda a gente a entender o que funcionou e o que pode melhorar depois do período experimental."
-        : "Seu período experimental chegou ao fim. Queremos entender como foi sua experiência com os treinos, o sistema e o acompanhamento.",
-      action: "Responder pesquisa de experiência",
+        ? "Passando com carinho para lembrar que sua pesquisa ainda está disponível. Sua resposta ajuda a equipe a entender o que funcionou bem e o que pode ser melhorado para você e para os próximos alunos."
+        : "Seu período de experiência chegou ao fim e queremos ouvir você. Conte como se sentiu com os treinos, a plataforma e o acompanhamento recebido.",
+      action: "Compartilhar minha experiência",
       url: alunoUrl,
     };
   }
@@ -109,26 +111,30 @@ function getSurveyEmailContent(type: SurveyType, reminder = false) {
   if (type === "PAID_START") {
     return {
       subject: reminder
-        ? "Lembrete: complete seu formulário de acompanhamento"
-        : "Vamos conhecer melhor sua rotina e seus objetivos",
-      title: "Formulário de acompanhamento do aluno",
+        ? "Seu formulário de acompanhamento ainda está disponível"
+        : "Vamos deixar seu acompanhamento ainda mais com a sua cara",
+      title: reminder
+        ? "Quando puder, complete seu formulário"
+        : "Queremos conhecer melhor sua rotina",
       intro: reminder
-        ? "Seu formulário ainda está pendente. Ele ajuda o professor a ajustar melhor seus próximos treinos."
-        : "Agora que você virou aluno(a), queremos entender melhor sua rotina, objetivo, preferências e pontos de atenção para personalizar o acompanhamento.",
-      action: "Preencher formulário",
+        ? "Seu formulário ainda está pendente. Quando você responder, seu professor terá mais informações para adaptar os próximos treinos à sua rotina, aos seus objetivos e aos seus pontos de atenção."
+        : "Agora que seu acompanhamento começou, queremos conhecer melhor sua rotina, seus objetivos, suas preferências e os cuidados que devemos considerar. Essas informações ajudam seu professor a personalizar os próximos treinos.",
+      action: "Preencher meu formulário",
       url: alunoUrl,
     };
   }
 
   return {
     subject: reminder
-      ? "Lembrete: conte como foi seu primeiro mês"
-      : "Como foi seu primeiro mês de acompanhamento?",
-    title: "Pesquisa de evolução do primeiro mês",
+      ? "Quando puder, conte como foi seu primeiro mês"
+      : "Vamos conversar sobre seu primeiro mês de acompanhamento?",
+    title: reminder
+      ? "Sua pesquisa do primeiro mês continua disponível"
+      : "Como você está se sentindo depois do primeiro mês?",
     intro: reminder
-      ? "Sua pesquisa do primeiro mês ainda está pendente. Ela ajuda o professor a ajustar o próximo ciclo com mais precisão."
-      : "Você completou o primeiro mês de acompanhamento pago. Conte como está se sentindo para ajustarmos seu próximo ciclo.",
-    action: "Responder pesquisa",
+      ? "Sua resposta ajuda seu professor a entender o que está funcionando, o que precisa de ajuste e como tornar o próximo ciclo mais adequado para você."
+      : "Você completou o primeiro mês de acompanhamento. Conte como está se sentindo, o que percebeu de evolução e o que podemos ajustar para o próximo ciclo.",
+    action: "Compartilhar minha percepção",
     url: alunoUrl,
   };
 }
@@ -399,9 +405,11 @@ async function sendSurveyEmail(row: SurveyEmailRow, reminder = false) {
 
   const type = row.survey_type;
   const studentName = row.student_name || "Aluno";
+  const professorName = row.professor_name || "seu professor";
   const surveyLabel = getSurveyLabel(type);
   const content = getSurveyEmailContent(type, reminder);
   const safeStudentName = escapeHtml(studentName);
+  const safeProfessorName = escapeHtml(professorName);
   const safeTitle = escapeHtml(content.title);
   const safeIntro = escapeHtml(content.intro);
   const safeSurveyLabel = escapeHtml(surveyLabel);
@@ -409,13 +417,20 @@ async function sendSurveyEmail(row: SurveyEmailRow, reminder = false) {
   const alunoUrl = content.url;
 
   const text = [
-    `Olá, ${studentName}!`,
+    `Oi, ${studentName}! Tudo bem?`,
     "",
     content.intro,
     "",
     `Pesquisa: ${surveyLabel}`,
+    `Sua resposta ajudará ${professorName} e a equipe a cuidar melhor do seu acompanhamento.`,
     "",
-    `Acesse sua área do aluno para responder: ${alunoUrl}`,
+    "Para dúvidas sobre seus treinos, use o chat da plataforma. Assim, a conversa fica registrada e pode ser acompanhada com segurança.",
+    "O WhatsApp fica reservado para contatos específicos da gestão.",
+    "",
+    `Responder pela área do aluno: ${alunoUrl}`,
+    "",
+    "Equipe Funcional VIP Digital",
+    "Mensagem automática de acompanhamento.",
   ].join("\n");
 
   const html = `
@@ -425,13 +440,28 @@ async function sendSurveyEmail(row: SurveyEmailRow, reminder = false) {
           ${safeSurveyLabel}
         </p>
         <h2 style="color:#f5f5f5; margin:0 0 16px; font-size:22px;">${safeTitle}</h2>
-        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Olá, <strong>${safeStudentName}</strong>!</p>
+        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Tudo bem?</p>
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">${safeIntro}</p>
+
+        <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:18px 0;">
+          <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin:0;">
+            Sua resposta ajudará <strong style="color:#f5f5f5;">${safeProfessorName}</strong> e a equipe a entender o que está funcionando e o que pode ser ajustado no seu acompanhamento.
+          </p>
+        </div>
+
+        <p style="color:#d4d4d4; font-size:13px; line-height:1.6;">
+          Para dúvidas sobre seus treinos, use o chat da plataforma. Assim, a conversa fica registrada e pode ser acompanhada com segurança. O WhatsApp fica reservado para contatos específicos da gestão.
+        </p>
+
         <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
           ${safeAction}
         </a>
-        <p style="color:#6b6b6b; font-size:11px; margin-top:20px; line-height:1.5;">
-          Este é um envio automático do Funcional Vip Digital. A pesquisa aparece na sua área do aluno.
+
+        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">
+          Equipe Funcional VIP Digital
+        </p>
+        <p style="color:#6b6b6b; font-size:11px; margin-top:8px; line-height:1.5;">
+          Mensagem automática de acompanhamento. A pesquisa está disponível na sua área do aluno.
         </p>
       </div>
     </div>
@@ -452,6 +482,7 @@ async function sendSurveyEmail(row: SurveyEmailRow, reminder = false) {
 
   return { sent: true, skipped: false, reason: null };
 }
+
 
 async function processEmailQueue(rows: SurveyEmailRow[], reminder = false) {
   let sent = 0;
