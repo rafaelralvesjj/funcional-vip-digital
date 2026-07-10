@@ -129,10 +129,19 @@ export default function DashboardLayout({
 
     setLoggingOut(true);
 
+    const loginPath = "/auth/signin";
+
     try {
-      await signOut({ redirect: false, callbackUrl: "/" });
+      await signOut({
+        redirect: false,
+        callbackUrl: loginPath,
+      });
     } finally {
-      window.location.assign("/");
+      /*
+       * O replace evita que o botão "voltar" do navegador tente reabrir
+       * o dashboard depois que a sessão já foi encerrada.
+       */
+      window.location.replace(loginPath);
     }
   }
 
