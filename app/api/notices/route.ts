@@ -77,12 +77,22 @@ async function sendNoticeEmailToRecipients({
 }) {
   const loginUrl = getAppLoginUrl();
   const safeTitle = escapeHtml(title);
-  const subject = `Novo aviso da gestão: ${title}`;
+  const subject = `A gestão deixou um aviso para você: ${title}`;
 
   const panelText =
     recipientKind === "STUDENT"
-      ? "seu painel do aluno"
+      ? "sua área do aluno"
       : "seu painel do professor";
+
+  const contextText =
+    recipientKind === "STUDENT"
+      ? "A equipe de gestão deixou uma informação para apoiar a organização do seu acompanhamento."
+      : "A equipe de gestão deixou uma informação relacionada à sua atuação e ao acompanhamento dos alunos.";
+
+  const channelText =
+    recipientKind === "STUDENT"
+      ? "Para dúvidas sobre treino, converse com seu professor pelo chat da plataforma. O WhatsApp será usado pela gestão apenas quando houver necessidade de um contato específico."
+      : "Abra o aviso no sistema para conferir o contexto completo e registrar qualquer ação necessária no canal adequado.";
 
   await Promise.allSettled(
     recipients
@@ -92,45 +102,56 @@ async function sendNoticeEmailToRecipients({
           recipient.name || (recipientKind === "STUDENT" ? "aluno" : "professor");
 
         const text = [
-          `Olá, ${recipientName}!`,
+          `Oi, ${recipientName}! Tudo bem?`,
           "",
-          "Você recebeu um novo aviso da gestão no Funcional Vip Digital.",
+          contextText,
           "",
-          `Título: ${title}`,
+          `Assunto do aviso: ${title}`,
           "",
-          `Para ler o aviso completo, acesse ${panelText}.`,
+          `Para ler a mensagem completa, acesse ${panelText}.`,
+          channelText,
           "",
           `Entrar no sistema: ${loginUrl}`,
+          "",
+          "Equipe de Gestão — Funcional VIP Digital",
+          "Mensagem automática sobre um aviso registrado pela gestão.",
         ].join("\n");
 
         const html = `
           <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
             <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-              <h2 style="color:#D4A373; margin:0 0 16px;">Novo aviso da gestão</h2>
+              <h2 style="color:#D4A373; margin:0 0 16px;">A gestão deixou um aviso para você</h2>
 
               <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-                Olá, ${escapeHtml(recipientName)}!
+                Oi, <strong>${escapeHtml(recipientName)}</strong>! Tudo bem?
               </p>
 
-              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                Você recebeu um novo aviso da gestão no Funcional Vip Digital.
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+                ${escapeHtml(contextText)}
               </p>
 
               <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:16px; margin:20px 0;">
-                <p style="color:#a1a1a1; font-size:12px; margin:0 0 6px;">Título do aviso</p>
+                <p style="color:#a1a1a1; font-size:12px; margin:0 0 6px;">Assunto do aviso</p>
                 <p style="color:#f5f5f5; font-size:16px; font-weight:bold; margin:0;">${safeTitle}</p>
               </div>
 
-              <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                Para ler o aviso completo, acesse ${panelText}.
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+                Para ler a mensagem completa, acesse ${panelText}.
+              </p>
+
+              <p style="color:#a1a1a1; font-size:12px; line-height:1.6;">
+                ${escapeHtml(channelText)}
               </p>
 
               <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
-                Acessar o sistema
+                Abrir meu painel
               </a>
 
-              <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-                Este é um aviso automático do Funcional Vip Digital.
+              <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">
+                Equipe de Gestão — Funcional VIP Digital
+              </p>
+              <p style="color:#6b6b6b; font-size:11px; margin-top:8px;">
+                Mensagem automática sobre um aviso registrado pela gestão.
               </p>
             </div>
           </div>
