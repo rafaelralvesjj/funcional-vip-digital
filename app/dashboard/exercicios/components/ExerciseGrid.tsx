@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Exercise = {
   id: string;
@@ -601,6 +602,7 @@ export default function ExerciseGrid({
 }: {
   exercises: Exercise[];
 }) {
+  const router = useRouter();
   const [exercises, setExercises] = useState<Exercise[]>(initialExercises);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -835,22 +837,56 @@ export default function ExerciseGrid({
         return;
       }
 
-      if (Array.isArray(data?.exercises) && data.exercises.length) {
+      const updatedExercisesFromApi: Exercise[] = Array.isArray(data?.updatedExercises)
+        ? data.updatedExercises
+        : Array.isArray(data?.exercises)
+          ? data.exercises
+          : [];
+
+      if (updatedExercisesFromApi.length) {
         setExercises((current) => {
           const map = new Map(current.map((exercise) => [exercise.id, exercise]));
-          data.exercises.forEach((exercise: Exercise) => map.set(exercise.id, exercise));
+          updatedExercisesFromApi.forEach((exercise) => map.set(exercise.id, exercise));
           return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
         });
       }
 
-      const importedCount = Number(data?.importedCount || 0);
-      const ignoredCount = Number(data?.ignoredCount || 0);
-      const message = data?.message || `Importação concluída. ${importedCount} arquivo(s) aproveitado(s) e ${ignoredCount} ignorado(s).`;
-      const details = Array.isArray(data?.ignored)
-        ? data.ignored.map((item: any) => `- ${item.fileName}: ${item.reason}`).join("\n")
+      router.refresh();
+
+      const importedItems = Array.isArray(data?.imported) ? data.imported : [];
+      const skippedItems = Array.isArray(data?.skipped) ? data.skipped : [];
+      const importedCount = Number(data?.importedCount ?? importedItems.length ?? 0);
+      const ignoredCount = Number(data?.ignoredCount ?? skippedItems.length ?? 0);
+
+      const message =
+        data?.message ||
+        `Importação concluída. ${importedCount} arquivo(s) aproveitado(s) e ${ignoredCount} ignorado(s).`;
+
+      const importedDetails = importedItems.length
+        ? importedItems
+            .map((item: any) => {
+              const kindLabel = item.kind === "MAIN" ? "principal" : "sequência";
+              return `- ${item.fileName}: ${kindLabel} vinculada em ${item.exerciseName}`;
+            })
+            .join("\n")
         : "";
 
-      setBatchImportResult(details ? `${message}\n\nIgnorados:\n${details}` : message);
+      const ignoredDetails = skippedItems.length
+        ? skippedItems.map((item: any) => `- ${item.fileName}: ${item.reason}`).join("\n")
+        : "";
+
+      setBatchImportResult(
+        [
+          message,
+          importedDetails ? `Importados:\n${importedDetails}` : null,
+          ignoredDetails ? `Ignorados:\n${ignoredDetails}` : null,
+          updatedExercisesFromApi.length
+            ? "As imagens já foram atualizadas na tela. Se alguma imagem não carregar na hora, atualize a página."
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+      );
     } catch {
       alert("Erro ao importar imagens em lote.");
     } finally {
