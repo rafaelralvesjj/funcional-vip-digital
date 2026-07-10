@@ -266,9 +266,7 @@ async function notifyPaymentStatusChange({
   }
 
   const payment = await prisma.contractPayment.findUnique({
-    where: {
-      id: paymentId,
-    },
+    where: { id: paymentId },
     include: {
       student: {
         select: {
@@ -297,7 +295,6 @@ async function notifyPaymentStatusChange({
   if (!payment) return;
 
   const student = payment.student || payment.contract?.student;
-
   if (!student?.id) return;
 
   const studentName = student.name || "Aluno";
@@ -311,42 +308,46 @@ async function notifyPaymentStatusChange({
   const contractStartsInFuture = contractActivated && isFutureStartDate(payment.contract?.startDate || null);
   const contractStartDateText = formatDatePtBr(payment.contract?.startDate || null);
 
-  const title =
-    normalizedStatus === "PAGO"
-      ? contractActivated
-        ? contractStartsInFuture
-          ? "Pagamento confirmado e contrato agendado"
-          : "Pagamento confirmado e contrato ativo"
-        : "Pagamento confirmado"
-      : "Pagamento em atraso";
+  const title = normalizedStatus === "PAGO"
+    ? contractActivated
+      ? contractStartsInFuture
+        ? "Pagamento confirmado: seu contrato está agendado"
+        : "Pagamento confirmado: acompanhamento ativo"
+      : "Pagamento confirmado com sucesso"
+    : "Vamos regularizar seu pagamento?";
 
-  const content =
-    normalizedStatus === "PAGO"
-      ? [
-          `Olá, ${studentName}!`,
-          "",
-          `Confirmamos o pagamento de ${amountText} referente ao plano ${planName}.`,
-          `Data da confirmação: ${paidAtText}.`,
-          contractActivated
-            ? contractStartsInFuture
-              ? `Seu contrato foi confirmado e o acesso aos treinos ficará liberado a partir de ${contractStartDateText}, respeitando a primeira janela segura de acompanhamento.`
-              : "Seu contrato está ativo e seu acesso aos treinos segue liberado."
-            : "O pagamento foi registrado pela gestão.",
-          "",
-          "Acesse seu painel para acompanhar seus treinos e avisos.",
-        ].join("\n")
-      : [
-          `Olá, ${studentName}!`,
-          "",
-          `Identificamos que há um pagamento em atraso referente ao plano ${planName}.`,
-          `Valor: ${amountText}.`,
-          `Vencimento: ${dueDateText}.`,
-          paymentLinkUrl ? `Link de pagamento: ${paymentLinkUrl}.` : null,
-          "",
-          "Regularize o pagamento para manter seu acompanhamento ativo e evitar bloqueios no acesso aos treinos.",
-        ]
-          .filter(Boolean)
-          .join("\n");
+  const content = normalizedStatus === "PAGO"
+    ? [
+        `Oi, ${studentName}! Pagamento confirmado.`,
+        "",
+        `Recebemos ${amountText}, referente ao plano ${planName}, em ${paidAtText}.`,
+        contractActivated
+          ? contractStartsInFuture
+            ? `Seu contrato está confirmado e o acesso aos novos treinos começa em ${contractStartDateText}, respeitando a primeira janela segura de acompanhamento.`
+            : "Seu contrato está ativo e seu acompanhamento segue normalmente."
+          : "O pagamento foi registrado pela gestão e ficará disponível no seu histórico financeiro.",
+        "",
+        "Acesse o painel para acompanhar seus treinos e avisos. Para dúvidas de treino, use o chat da plataforma; para assuntos financeiros, fale com a gestão.",
+        "",
+        "Obrigado por continuar com a gente!",
+        "Gestão do Funcional VIP Digital",
+        "Mensagem automática de confirmação de pagamento.",
+      ].join("\n")
+    : [
+        `Oi, ${studentName}! Tudo bem?`,
+        "",
+        `O pagamento do plano ${planName}, no valor de ${amountText} e com vencimento em ${dueDateText}, ainda aparece como pendente no sistema.`,
+        "Sabemos que imprevistos acontecem. Confira a situação quando puder e use o link abaixo para regularizar, caso esteja disponível.",
+        paymentLinkUrl ? `Link de pagamento: ${paymentLinkUrl}.` : null,
+        "",
+        "Se você já realizou o pagamento, pode desconsiderar esta mensagem e aguardar a atualização. Se precisar de apoio, fale com a gestão.",
+        "Enquanto a pendência permanecer, a liberação de novos treinos pode ser pausada conforme as regras do plano, mas seu histórico continua salvo.",
+        "",
+        "Gestão do Funcional VIP Digital",
+        "Mensagem automática de acompanhamento financeiro.",
+      ]
+        .filter(Boolean)
+        .join("\n");
 
   await prisma.notice.create({
     data: {
@@ -370,54 +371,44 @@ async function notifyPaymentStatusChange({
   const safePaidAtText = escapeHtml(paidAtText);
   const safePaymentLinkUrl = paymentLinkUrl ? escapeHtml(paymentLinkUrl) : null;
 
-  const html =
-    normalizedStatus === "PAGO"
-      ? `
-        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-            <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
-            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Olá, <strong>${safeStudentName}</strong>!</p>
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Confirmamos o pagamento de <strong style="color:#f5f5f5;">${safeAmountText}</strong> referente ao plano <strong style="color:#f5f5f5;">${safePlanName}</strong>.
-            </p>
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Data da confirmação: <strong style="color:#f5f5f5;">${safePaidAtText}</strong>.
-            </p>
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              ${contractActivated ? contractStartsInFuture ? `Seu contrato foi confirmado e o acesso aos treinos ficará liberado a partir de ${contractStartDateText}, respeitando a primeira janela segura de acompanhamento.` : "Seu contrato está ativo e seu acesso aos treinos segue liberado." : "O pagamento foi registrado pela gestão."}
-            </p>
-            <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
-              Acessar meu painel
-            </a>
-            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">Este é um aviso automático do Funcional Vip Digital.</p>
-          </div>
+  const html = normalizedStatus === "PAGO"
+    ? `
+      <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+        <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+          <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
+          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Pagamento confirmado.</p>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Recebemos <strong style="color:#f5f5f5;">${safeAmountText}</strong>, referente ao plano <strong style="color:#f5f5f5;">${safePlanName}</strong>, em <strong style="color:#f5f5f5;">${safePaidAtText}</strong>.</p>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">${contractActivated ? contractStartsInFuture ? `Seu contrato está confirmado e o acesso aos novos treinos começa em ${contractStartDateText}, respeitando a primeira janela segura de acompanhamento.` : "Seu contrato está ativo e seu acompanhamento segue normalmente." : "O pagamento foi registrado pela gestão e ficará disponível no seu histórico financeiro."}</p>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Para dúvidas de treino, use o chat da plataforma. Para assuntos financeiros, fale com a gestão.</p>
+          <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meu painel</a>
+          <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional VIP Digital</p>
+          <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de confirmação de pagamento.</p>
         </div>
-      `
-      : `
-        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-            <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
-            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Olá, <strong>${safeStudentName}</strong>!</p>
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Identificamos que há um pagamento em atraso referente ao plano <strong style="color:#f5f5f5;">${safePlanName}</strong>.
-            </p>
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Valor: <strong style="color:#f5f5f5;">${safeAmountText}</strong><br />
-              Vencimento: <strong style="color:#f5f5f5;">${safeDueDateText}</strong>
-            </p>
-            ${safePaymentLinkUrl ? `<p><a href="${safePaymentLinkUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Regularizar pagamento</a></p>` : ""}
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Regularize o pagamento para manter seu acompanhamento ativo e evitar bloqueios no acesso aos treinos.
-            </p>
-            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">Este é um aviso automático do Funcional Vip Digital.</p>
+      </div>
+    `
+    : `
+      <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+        <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+          <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
+          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Tudo bem?</p>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">O pagamento do plano <strong style="color:#f5f5f5;">${safePlanName}</strong> ainda aparece como pendente no sistema.</p>
+          <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
+            <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Valor: <strong style="color:#f5f5f5;">${safeAmountText}</strong></p>
+            <p style="color:#d4d4d4; font-size:13px; margin:0;">Vencimento: <strong style="color:#f5f5f5;">${safeDueDateText}</strong></p>
           </div>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Sabemos que imprevistos acontecem. Confira quando puder. Se você já pagou, pode desconsiderar esta mensagem e aguardar a atualização.</p>
+          ${safePaymentLinkUrl ? `<p><a href="${safePaymentLinkUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Regularizar pagamento</a></p>` : ""}
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se precisar de apoio, fale com a gestão. Enquanto a pendência permanecer, a liberação de novos treinos pode ser pausada, mas seu histórico continua salvo.</p>
+          <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional VIP Digital</p>
+          <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de acompanhamento financeiro.</p>
         </div>
-      `;
+      </div>
+    `;
 
   await sendEmail({
     to: studentEmail,
     subject: title,
-    text: `${content}\n\nAcessar painel: ${loginUrl}`,
+    text: `${content}\n\nAcessar meu painel: ${loginUrl}`,
     html,
   });
 }
