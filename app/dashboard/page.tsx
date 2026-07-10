@@ -264,10 +264,14 @@ export default async function DashboardPage() {
     return String(student.commercialStatus || 'SEM_CONTRATO_ATIVO').toUpperCase();
   }
 
-  function hasActiveCommercialCycle(student: { commercialStatus?: string | null }) {
-    const status = getCommercialStatus(student);
-
-    return status === 'EXPERIENCIA_ATIVA' || status === 'CONTRATO_ATIVO';
+  function getDashboardWeeklyWorkoutLimit(student: { contractedTrainingDaysPerMonth?: number | null }) {
+    /*
+     * O dashboard precisa funcionar também para aluno recém-criado/teste,
+     * quando o contrato/dias por mês ainda não foram preenchidos.
+     * Nesses casos, usamos 1 treino como mínimo operacional apenas para
+     * o contador/lista de "sem treino" não ficar zerado indevidamente.
+     */
+    return getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth) || 1;
   }
 
   const studentsAwaitingAssignment = isGestor
@@ -278,12 +282,12 @@ export default async function DashboardPage() {
           Boolean(student.userId) && professorIds.includes(student.userId || '');
 
         /*
-         * Depois do fluxo experimental automático, o aluno pode ainda não ter
-         * preenchido avaliação/bioimpedância. Mesmo assim, se já tem experiência
-         * ativa ou contrato ativo e não tem professor, precisa aparecer no card
-         * "Alunos aguardando vínculo".
+         * Regra ajustada:
+         * se o aluno foi criado e ainda não tem professor vinculado, a gestão
+         * precisa enxergar no card "Alunos aguardando vínculo", mesmo que o
+         * status comercial ainda não tenha sido preenchido.
          */
-        return hasActiveCommercialCycle(student) && !hasProfessorLinked;
+        return !hasProfessorLinked;
       })
     : [];
 
@@ -299,18 +303,16 @@ export default async function DashboardPage() {
     if (student.active === false) return false;
 
     /*
-     * Regra do controle de treino semanal:
-     * Assim que o aluno estiver ativo, com professor vinculado e dias contratados,
-     * ele entra no controle de treino da semana atual e da próxima semana.
+     * Regra do controle de treino semanal ajustada:
+     * aluno ativo + professor vinculado já entra no radar do dashboard,
+     * mesmo que o status comercial ou os dias contratados ainda estejam vazios.
      *
-     * Não travamos esse controle no onboardingCompleto porque, na prática,
-     * o caso crítico é: gestão vinculou o professor, professor foi notificado,
-     * mas ainda não montou o treino do aluno novo.
+     * Isso evita o problema do aluno novo aparecer em "Meus alunos", mas não
+     * aparecer como "sem treino da semana atual" ou "sem pré-planejamento".
      */
     const hasProfessorLinked = Boolean(student.userId) && professorIds.includes(student.userId || '');
-    const weeklyLimit = getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth);
 
-    return hasActiveCommercialCycle(student) && hasProfessorLinked && Boolean(weeklyLimit);
+    return hasProfessorLinked;
   });
 
   const eligibleStudentIds = studentsEligibleForWeeklyWorkout.map((student) => student.id);
@@ -358,7 +360,7 @@ export default async function DashboardPage() {
   ) {
     return studentsEligibleForWeeklyWorkout
       .map((student) => {
-        const weeklyLimit = getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth) || 0;
+        const weeklyLimit = getDashboardWeeklyWorkoutLimit(student);
         const createdCount = countByStudent.get(student.id) || 0;
         const missingCount = Math.max(weeklyLimit - createdCount, 0);
 
