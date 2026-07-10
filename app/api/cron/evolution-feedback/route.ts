@@ -117,31 +117,33 @@ function buildFeedbackDraft({
     diffText("Glúteo", baseline.gluteo, current.gluteo, " cm"),
   ].filter(Boolean);
 
-  const comparisonText =
-    comparisons.length > 0
-      ? comparisons.map((item) => `- ${item}`).join("\n")
-      : "- Ainda não há medidas suficientes preenchidas para comparação numérica completa.";
+  const comparisonText = comparisons.length > 0
+    ? comparisons.map((item) => `- ${item}`).join("\n")
+    : "- Ainda não há medidas suficientes preenchidas para uma comparação numérica completa.";
+  const professorName = student.user?.name || "seu professor";
 
   return [
-    `${student.name}, parabéns por chegar ao marco de ${milestone} treinos concluídos!`,
+    `Oi, ${student.name}!`,
     "",
-    `Até aqui, você já registrou ${completedWorkouts} treino(s) concluído(s). Esse acompanhamento mostra seu compromisso com o processo e ajuda seu professor a orientar os próximos passos com mais segurança.`,
+    `Você chegou ao marco de ${milestone} treinos concluídos. Esse momento merece uma pausa para reconhecer sua constância e olhar com atenção para o que mudou ao longo do ciclo.`,
+    "",
+    `Até aqui, você registrou ${completedWorkouts} treino(s) concluído(s). Esses registros me ajudam a entender melhor sua rotina e tomar decisões mais seguras para os próximos passos.`,
     "",
     "Comparação das avaliações:",
     `Avaliação anterior: ${formatDatePtBr(baseline.createdAt)}`,
     `Avaliação atual: ${formatDatePtBr(current.createdAt)}`,
     comparisonText,
     "",
-    "Leitura do acompanhamento:",
-    "Sua evolução deve ser analisada considerando treino, constância, medidas, rotina e preenchimento correto das avaliações. O mais importante agora é manter regularidade para que os resultados continuem aparecendo de forma consistente.",
+    "Minha leitura deste ciclo:",
+    "[Professor: personalize este parágrafo considerando constância, resposta aos treinos, objetivo do aluno, medidas e contexto atual.]",
     "",
-    "Próximo foco sugerido:",
-    "- manter a frequência semanal dos treinos;",
-    "- registrar todos os treinos concluídos;",
-    "- sinalizar dúvidas ao professor pelo sistema;",
-    "- seguir evoluindo com constância, sem pular etapas.",
+    "Próximo foco combinado:",
+    "[Professor: escreva aqui um foco claro e possível para o próximo ciclo.]",
     "",
-    "Seguimos acompanhando sua jornada. Conte com a Funcional para apoiar sua evolução.",
+    "Continue registrando os treinos e use o chat para me avisar sobre dúvidas, dificuldades, dor ou mudanças na rotina. Assim, consigo acompanhar sua evolução com mais contexto.",
+    "",
+    professorName,
+    "Funcional VIP Digital",
   ].join("\n");
 }
 
@@ -173,57 +175,41 @@ async function sendStudentBioRequestEmail({
   const to = getStudentEmail(student);
   if (!to) return false;
 
-  const title = "Hora de atualizar sua avaliação";
+  const professorName = student.user?.name || "seu professor";
+  const title = "Vamos atualizar sua avaliação para olhar sua evolução";
   const bioFormUrl = getBioFormUrl(student.id);
   const safeName = escapeHtml(student.name || "Aluno");
+  const safeProfessorName = escapeHtml(professorName);
 
   const text = [
-    `Olá, ${student.name}!`,
+    `Oi, ${student.name}! Aqui é ${professorName}.`,
     "",
-    `Você chegou ao marco de ${milestone} treinos concluídos.`,
+    `Você chegou ao marco de ${milestone} treinos concluídos. Antes de preparar sua devolutiva de evolução, preciso que você atualize sua avaliação/bioimpedância.`,
+    "Essa atualização permite comparar os dados com mais cuidado e evita conclusões baseadas em informações antigas.",
+    "Reserve alguns minutos para preencher com calma. Se tiver dúvida sobre o formulário, fale comigo pelo chat da plataforma.",
     "",
-    "Para prepararmos um feedback de evolução mais preciso, precisamos que você preencha uma nova avaliação/bioimpedância.",
-    "Sem essa atualização, não conseguimos comparar seus dados com segurança.",
+    `Preencher avaliação: ${bioFormUrl}`,
     "",
-    `Preencha aqui: ${bioFormUrl}`,
+    professorName,
+    "Funcional VIP Digital",
+    "Mensagem automática de acompanhamento enviada em nome do seu professor.",
   ].join("\n");
 
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:600px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
         <h2 style="color:#D4A373; margin:0 0 16px;">${title}</h2>
-
-        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Olá, <strong>${safeName}</strong>!
-        </p>
-
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          Você chegou ao marco de <strong>${milestone} treinos concluídos</strong>.
-          Para prepararmos um feedback de evolução mais preciso, precisamos que você preencha uma nova avaliação/bioimpedância.
-        </p>
-
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          Sem essa atualização, não conseguimos comparar seus dados com segurança.
-        </p>
-
-        <a href="${bioFormUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
-          Preencher avaliação
-        </a>
-
-        <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-          Este é um aviso automático do Funcional Vip Digital.
-        </p>
+        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeName}</strong>! Aqui é <strong>${safeProfessorName}</strong>.</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Você chegou ao marco de <strong>${milestone} treinos concluídos</strong>. Antes de preparar sua devolutiva, preciso que você atualize sua avaliação/bioimpedância.</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Essa atualização permite comparar os dados com mais cuidado e evita conclusões baseadas em informações antigas. Preencha com calma e, se tiver dúvida, fale comigo pelo chat da plataforma.</p>
+        <a href="${bioFormUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Atualizar minha avaliação</a>
+        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional VIP Digital</p>
+        <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de acompanhamento enviada em nome do seu professor.</p>
       </div>
     </div>
   `;
 
-  await sendEmail({
-    to,
-    subject: title,
-    text,
-    html,
-  });
-
+  await sendEmail({ to, subject: title, text, html });
   return true;
 }
 
@@ -239,53 +225,35 @@ async function sendProfessorReadyEmail({
 
   const professorName = student.user?.name || "Professor";
   const reviewUrl = getFeedbackReviewUrl();
-  const title = "Feedback de evolução pronto para revisão";
+  const title = `Devolutiva de ${student.name} pronta para sua revisão`;
 
   const text = [
-    `Olá, ${professorName}.`,
+    `Oi, ${professorName}.`,
     "",
-    `O aluno ${student.name} chegou ao marco de ${milestone} treinos concluídos e já possui nova avaliação/bioimpedância preenchida.`,
+    `${student.name} chegou ao marco de ${milestone} treinos concluídos e já atualizou a avaliação/bioimpedância.`,
+    "O sistema preparou um rascunho para apoiar sua análise, mas a mensagem precisa da sua leitura e personalização antes de chegar ao aluno.",
+    "Revise o histórico, ajuste a interpretação e deixe um próximo foco claro e humano.",
     "",
-    "O rascunho do feedback de evolução está pronto para revisão.",
+    `Revisar devolutiva: ${reviewUrl}`,
     "",
-    `Revisar feedback: ${reviewUrl}`,
+    "Gestão Funcional VIP Digital",
+    "Mensagem automática de acompanhamento.",
   ].join("\n");
 
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:620px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <h2 style="color:#D4A373; margin:0 0 16px;">${title}</h2>
-
-        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Olá, <strong>${escapeHtml(professorName)}</strong>.
-        </p>
-
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          O aluno <strong>${escapeHtml(student.name)}</strong> chegou ao marco de <strong>${milestone} treinos concluídos</strong> e já possui nova avaliação/bioimpedância preenchida.
-        </p>
-
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          O rascunho do feedback de evolução está pronto para revisão.
-        </p>
-
-        <a href="${reviewUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
-          Revisar feedback
-        </a>
-
-        <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-          Este é um aviso automático do Funcional Vip Digital.
-        </p>
+        <h2 style="color:#D4A373; margin:0 0 16px;">${escapeHtml(title)}</h2>
+        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${escapeHtml(professorName)}</strong>.</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;"><strong>${escapeHtml(student.name)}</strong> chegou ao marco de <strong>${milestone} treinos concluídos</strong> e já atualizou a avaliação/bioimpedância.</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">O sistema preparou um rascunho para apoiar sua análise, mas a mensagem precisa da sua leitura e personalização antes de chegar ao aluno.</p>
+        <a href="${reviewUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Revisar devolutiva</a>
+        <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">Mensagem automática de acompanhamento.</p>
       </div>
     </div>
   `;
 
-  await sendEmail({
-    to: professorEmail,
-    subject: title,
-    text,
-    html,
-  });
-
+  await sendEmail({ to: professorEmail, subject: title, text, html });
   return true;
 }
 
@@ -448,17 +416,20 @@ async function processStudent({
     }
 
     const bioFormUrl = getBioFormUrl(student.id);
-    const title = "Hora de atualizar sua avaliação";
+    const professorName = student.user?.name || "seu professor";
+    const title = "Vamos atualizar sua avaliação para olhar sua evolução";
     const content = [
-      "Chegou a hora de atualizar sua avaliação!",
+      `Oi, ${student.name}! Aqui é ${professorName}.`,
       "",
-      `Você concluiu uma etapa importante do seu acompanhamento: ${milestone} treinos concluídos.`,
+      `Você chegou ao marco de ${milestone} treinos concluídos. Antes de preparar sua devolutiva de evolução, preciso que atualize sua avaliação/bioimpedância.`,
+      "Essa atualização permite comparar seus dados com mais cuidado e evita conclusões baseadas em informações antigas.",
+      "Reserve alguns minutos para preencher com calma. Se tiver dúvida, fale comigo pelo chat da plataforma.",
       "",
-      "Para que possamos comparar sua evolução e preparar um feedback mais preciso, preencha sua nova bioimpedância/formulário.",
+      `Atualizar avaliação: ${bioFormUrl}`,
       "",
-      "Sem essa atualização, não conseguimos comparar seus dados com segurança.",
-      "",
-      `Clique aqui para preencher: ${bioFormUrl}`,
+      professorName,
+      "Funcional VIP Digital",
+      "Mensagem automática de acompanhamento enviada em nome do seu professor.",
     ].join("\n");
 
     const notice = await prisma.notice.create({
@@ -566,13 +537,14 @@ async function processStudent({
     };
   }
 
-  const title = "Feedback de evolução pronto para revisão";
+  const title = `Devolutiva de ${student.name} pronta para revisão`;
   const content = [
-    `O aluno ${student.name} chegou ao marco de ${milestone} treinos concluídos.`,
+    `Oi, ${student.user?.name || "professor(a)"}.`,
     "",
-    "A nova avaliação/bioimpedância já está preenchida e o rascunho do feedback está pronto.",
+    `${student.name} chegou ao marco de ${milestone} treinos concluídos e já atualizou a avaliação/bioimpedância.`,
+    "O sistema preparou um rascunho para apoiar sua análise. Antes de enviar, revise o histórico, personalize a leitura e deixe um próximo foco claro para o aluno.",
     "",
-    `Acesse para revisar e enviar: ${getFeedbackReviewUrl()}`,
+    `Revisar e enviar: ${getFeedbackReviewUrl()}`,
   ].join("\n");
 
   const notice = await prisma.notice.create({
