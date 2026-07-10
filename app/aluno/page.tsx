@@ -65,6 +65,28 @@ export default function AlunoPage() {
   const [loadingCareEvents, setLoadingCareEvents] = useState(false);
   const [sendingCareReturn, setSendingCareReturn] = useState(false);
 
+  /*
+   * Canal secundário e temporário da gestão.
+   * Quando o número comercial estiver disponível, basta configurar na Vercel:
+   * NEXT_PUBLIC_MANAGEMENT_WHATSAPP=55DDDNÚMERO
+   *
+   * Enquanto a variável não existir, o sistema usa o número temporário abaixo.
+   */
+  const managementWhatsappNumber =
+    process.env.NEXT_PUBLIC_MANAGEMENT_WHATSAPP || "5561984320108";
+
+  function getManagementWhatsappUrl(): string {
+    const message = [
+      "Olá! Sou aluno(a) do Funcional VIP Digital.",
+      "",
+      `Meu nome é: ${studentName || "Aluno(a)"}`,
+      "",
+      "Preciso de ajuda com:",
+    ].join("\n");
+
+    return `https://wa.me/${managementWhatsappNumber}?text=${encodeURIComponent(message)}`;
+  }
+
   // Estados para o modal de dúvidas (thread)
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
   const [followUpText, setFollowUpText] = useState("");
@@ -1147,8 +1169,33 @@ export default function AlunoPage() {
               </div>
               <button onClick={() => handleSendQuestion()} disabled={sendingQuestion || (!newQuestion.trim() && !questionFile)}
                 className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
-                {sendingQuestion ? "..." : "Enviar"}
+                {sendingQuestion ? "..." : "Enviar pelo chat"}
               </button>
+
+              <div className="mt-2 rounded-lg border border-green-500/20 bg-green-500/10 p-2.5">
+                <p className="text-[10px] font-semibold text-green-300">
+                  Precisa falar com a gestão pelo WhatsApp?
+                </p>
+                <p className="mt-1 text-[8px] leading-relaxed text-[#a1a1a1]">
+                  Use este canal para pagamento, dificuldade de acesso, problema técnico
+                  ou quando o chat estiver indisponível. Dúvidas sobre treino e evolução
+                  devem continuar pelo chat para que o acompanhamento fique registrado.
+                </p>
+
+                <a
+                  href={getManagementWhatsappUrl()}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-green-500 px-2 py-1.5 text-[10px] font-semibold text-[#0a0a0a] transition hover:bg-green-400"
+                >
+                  Falar com a gestão no WhatsApp
+                </a>
+
+                <p className="mt-1.5 text-[7px] leading-relaxed text-[#6b6b6b]">
+                  Este WhatsApp não substitui atendimento de emergência. Em uma situação
+                  de saúde que exija ajuda imediata, procure um serviço de emergência.
+                </p>
+              </div>
 
               {/* Lista de threads */}
               {questions.length > 0 && (
