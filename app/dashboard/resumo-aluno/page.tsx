@@ -285,29 +285,38 @@ function normalizeCareText(value?: string | null): string {
 function hasOpenCarePause(summaryData?: SummaryResponse | null): boolean {
   if (!summaryData) return false;
 
+  /*
+   * Regra correta:
+   * bloquear somente quando a API informar que existe evento de cuidado
+   * realmente aberto para o aluno.
+   *
+   * Não usamos mais busca de palavras dentro do resumo, motivo ou alertas,
+   * porque esses textos podem citar "pausa por cuidado" apenas como orientação
+   * geral e gerar falso bloqueio mesmo quando a Central de Cuidado está zerada.
+   */
+  const openCareEvents = Number(summaryData.metrics?.openCareEvents || 0);
+
+  if (Number.isFinite(openCareEvents) && openCareEvents > 0) {
+    return true;
+  }
+
+  /*
+   * Compatibilidade para respostas futuras da API que tragam um status
+   * estruturado e explícito de bloqueio, mesmo sem o contador.
+   */
   const evolution = summaryData.evolutionContext || null;
   const status = normalizeCareText(evolution?.status);
-  const summaryText = normalizeCareText(summaryData.summaryText);
-  const reason = normalizeCareText(evolution?.reason);
-  const alerts = normalizeCareText((evolution?.reviewAlerts || []).join(" | "));
-  const combinedText = [summaryText, reason, alerts].join(" ");
+  const explicitBlockingStatuses = [
+    "PAUSA_POR_CUIDADO",
+    "CARE_PAUSE",
+    "BLOQUEADO_POR_CUIDADO",
+    "BLOQUEIO_POR_CUIDADO",
+  ];
 
-  const mentionsCarePause =
-    combinedText.includes("PAUSA_POR_CUIDADO") ||
-    combinedText.includes("PAUSA POR CUIDADO") ||
-    combinedText.includes("SEM CONDICAO DE TREINAR") ||
-    combinedText.includes("SEM CONDIÇÃO DE TREINAR");
-
-  const isOpenOrBlocking =
-    combinedText.includes("STATUS: REQUER_REVISAO") ||
-    combinedText.includes("STATUS: REQUER REVISAO") ||
-    combinedText.includes("EM ABERTO") ||
-    combinedText.includes("EVENTO DE PAUSA POR CUIDADO EM ABERTO") ||
-    combinedText.includes("ALUNO EM PAUSA POR CUIDADO") ||
-    combinedText.includes("NAO MONTAR/LIBERAR TREINO NORMAL") ||
-    combinedText.includes("NÃO MONTAR/LIBERAR TREINO NORMAL");
-
-  return mentionsCarePause && (isOpenOrBlocking || status === "REVISAO_HUMANA_OBRIGATORIA");
+  return (
+    evolution?.requiresReviewBeforeRelease === true &&
+    explicitBlockingStatuses.includes(status)
+  );
 }
 
 function getCarePauseBlockedText(summaryData: SummaryResponse): string {
