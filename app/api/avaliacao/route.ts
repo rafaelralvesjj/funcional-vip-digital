@@ -105,31 +105,30 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
 
   const emailTasks: Promise<unknown>[] = [];
 
-  const welcomeTitle = "Bem-vindo ao Funcional Vip Digital";
+  const welcomeTitle = `${studentName}, recebemos sua avaliação inicial`;
 
   const welcomeContent = [
-    "Seu cadastro e formulário de bioimpedância foram concluídos com sucesso.",
+    `Oi, ${studentName}!`,
     "",
-    "No seu painel do aluno, você poderá acompanhar seus treinos, avisos, dúvidas, orientações e atualizações do seu professor.",
+    "Seu cadastro e sua avaliação inicial foram concluídos. Essas informações serão usadas para que o acompanhamento comece com mais contexto e cuidado.",
     "",
-    "Enquanto seu professor é vinculado e seu treino é preparado, fique atento ao mural do aluno e ao seu e-mail.",
+    "Agora a gestão vai organizar o vínculo com o professor responsável e a preparação dos seus primeiros treinos. Acompanhe o mural e o e-mail para não perder as próximas orientações.",
+    "",
+    "Quando o professor estiver vinculado, use o chat da plataforma para dúvidas sobre treino e evolução. Assim, as conversas ficam registradas. O WhatsApp fica reservado para contatos específicos da gestão.",
   ].join("\n");
 
-  const gestorNoticeTitle = "Novo aluno aguardando vínculo";
+  const gestorNoticeTitle = `Novo aluno pronto para vínculo: ${studentName}`;
 
   const gestorNoticeContent = [
-    `O aluno ${studentName} concluiu o cadastro e o formulário de bioimpedância.`,
+    `Olá, gestão! ${studentName} concluiu o cadastro e a avaliação inicial.`,
     "",
-    "Ação pendente: acessar a gestão para vincular o professor responsável e preencher a quantidade contratada de treinos/dias no mês.",
+    "Próxima ação: revisar os dados, vincular o professor responsável e confirmar a quantidade contratada de treinos/dias no mês.",
     "",
-    `Acessar vínculo de alunos: ${vincularAlunosUrl}`,
+    "Depois do vínculo, o professor deverá receber o contexto necessário para iniciar o acompanhamento.",
+    "",
+    `Abrir vínculo de alunos: ${vincularAlunosUrl}`,
   ].join("\n");
 
-  // Cria registros automáticos na tabela de avisos:
-  // 1. aviso específico no mural do aluno;
-  // 2. registro de pendência operacional para a gestão.
-  // A gestão não marca este item como lido; a pendência some do dashboard
-  // quando o aluno tiver professor vinculado e dias contratados preenchidos.
   try {
     const noticeAuthorId = await getNoticeAuthorId();
 
@@ -170,48 +169,36 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
   }
 
   if (studentEmail) {
-    const subject = welcomeTitle;
+    const subject = `${studentName}, sua avaliação inicial foi recebida`;
 
     const text = [
-      `Olá, ${studentName}!`,
+      `Oi, ${studentName}!`,
       "",
-      "Seu cadastro e formulário de bioimpedância foram concluídos com sucesso.",
+      "Recebemos seu cadastro e sua avaliação inicial. Obrigado por compartilhar essas informações com a gente.",
       "",
-      "No seu painel do aluno, você poderá acompanhar seus treinos, avisos, dúvidas e orientações do seu professor.",
+      "Elas serão usadas para que seu acompanhamento comece com mais contexto, cuidado e segurança.",
       "",
-      "Enquanto seu professor é vinculado e seu treino é preparado, fique atento ao mural do aluno e ao seu e-mail.",
+      "Agora a gestão vai organizar o vínculo com o professor responsável e a preparação dos seus primeiros treinos. Acompanhe o mural e seus e-mails para não perder as próximas orientações.",
       "",
-      `Entrar no sistema: ${loginUrl}`,
+      "Quando o professor estiver vinculado, use o chat da plataforma para dúvidas sobre treino e evolução. Assim, as conversas ficam registradas. O WhatsApp fica reservado para contatos específicos da gestão.",
+      "",
+      `Acessar meu painel: ${loginUrl}`,
+      "",
+      "Equipe Funcional VIP Digital",
+      "Mensagem automática de boas-vindas e acompanhamento.",
     ].join("\n");
 
     const html = `
-      <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-        <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-          <h2 style="color:#D4A373; margin:0 0 16px;">Bem-vindo ao Funcional Vip Digital</h2>
-
-          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-            Olá, <strong>${safeStudentName}</strong>!
-          </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Seu cadastro e formulário de bioimpedância foram concluídos com sucesso.
-          </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            No seu painel do aluno, você poderá acompanhar seus treinos, avisos, dúvidas, orientações e atualizações do seu professor.
-          </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Enquanto seu professor é vinculado e seu treino é preparado, fique atento ao mural do aluno e ao seu e-mail.
-          </p>
-
-          <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
-            Acessar meu painel
-          </a>
-
-          <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-            Este é um aviso automático do Funcional Vip Digital.
-          </p>
+      <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+        <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+          <h2 style="color:#D4A373;margin:0 0 16px;">Recebemos sua avaliação inicial</h2>
+          <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${safeStudentName}</strong>!</p>
+          <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Recebemos seu cadastro e sua avaliação inicial. Obrigado por compartilhar essas informações com a gente.</p>
+          <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Elas serão usadas para que seu acompanhamento comece com mais contexto, cuidado e segurança.</p>
+          <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Agora a gestão vai organizar o vínculo com o professor responsável e a preparação dos seus primeiros treinos. Acompanhe o mural e seus e-mails para não perder as próximas orientações.</p>
+          <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Quando o professor estiver vinculado, use o chat da plataforma para dúvidas sobre treino e evolução. Assim, as conversas ficam registradas. O WhatsApp fica reservado para contatos específicos da gestão.</p>
+          <a href="${loginUrl}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Acessar meu painel</a>
+          <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Mensagem automática de boas-vindas e acompanhamento enviada pela equipe Funcional VIP Digital.</p>
         </div>
       </div>
     `;
@@ -230,42 +217,33 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
     .filter((gestor) => Boolean(gestor.email))
     .forEach((gestor) => {
       const gestorName = gestor.name || "Gestão";
-      const subject = "Novo aluno cadastrado no Funcional Vip Digital";
+      const subject = `Novo aluno pronto para vínculo: ${studentName}`;
 
       const text = [
-        `Olá, ${gestorName}!`,
+        `Oi, ${gestorName}!`,
         "",
-        `O aluno ${studentName} concluiu o cadastro e o formulário de bioimpedância.`,
+        `${studentName} concluiu o cadastro e a avaliação inicial.`,
         "",
-        "Acesse a gestão para vincular o professor responsável e preencher a quantidade contratada de treinos/dias no mês.",
+        "Próxima ação: revisar os dados, vincular o professor responsável e confirmar a quantidade contratada de treinos/dias no mês.",
         "",
-        `Acessar vínculo de alunos: ${vincularAlunosUrl}`,
+        "Depois do vínculo, confira se o professor recebeu o contexto necessário para iniciar o acompanhamento.",
+        "",
+        `Abrir vínculo de alunos: ${vincularAlunosUrl}`,
+        "",
+        "Funcional VIP Digital",
+        "Aviso automático de pendência operacional para a gestão.",
       ].join("\n");
 
       const html = `
-        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-            <h2 style="color:#D4A373; margin:0 0 16px;">Novo aluno cadastrado</h2>
-
-            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-              Olá, ${escapeHtml(gestorName)}!
-            </p>
-
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              O aluno <strong style="color:#f5f5f5;">${safeStudentName}</strong> concluiu o cadastro e o formulário de bioimpedância.
-            </p>
-
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-              Acesse a gestão para vincular o professor responsável e preencher a quantidade contratada de treinos/dias no mês.
-            </p>
-
-            <a href="${vincularAlunosUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
-              Acessar gestão
-            </a>
-
-            <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-              Este é um aviso automático do Funcional Vip Digital.
-            </p>
+        <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+          <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+            <h2 style="color:#D4A373;margin:0 0 16px;">Novo aluno pronto para vínculo</h2>
+            <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(gestorName)}</strong>!</p>
+            <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">${safeStudentName}</strong> concluiu o cadastro e a avaliação inicial.</p>
+            <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Próxima ação: revisar os dados, vincular o professor responsável e confirmar a quantidade contratada de treinos/dias no mês.</p>
+            <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Depois do vínculo, confira se o professor recebeu o contexto necessário para iniciar o acompanhamento.</p>
+            <a href="${vincularAlunosUrl}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Organizar vínculo</a>
+            <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Aviso automático de pendência operacional para a gestão.</p>
           </div>
         </div>
       `;
