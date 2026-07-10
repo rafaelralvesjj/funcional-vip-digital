@@ -203,10 +203,12 @@ function shouldTreatWorkoutCareAsPause(eventType: string | null, description?: s
 function getWorkoutCareCopy({
   eventType,
   studentName,
+  professorName,
   description,
 }: {
   eventType: string;
   studentName: string;
+  professorName: string;
   description?: string | null;
 }) {
   const detail = String(description || "").trim();
@@ -224,74 +226,130 @@ function getWorkoutCareCopy({
     PAUSA_POR_CUIDADO: {
       severity: "CUIDADO",
       status: "REQUER_REVISAO",
-      title: "Pausa por cuidado: aluno sem condição de treinar",
-      studentMessage:
-        "Recebemos seu relato. Sua segurança vem primeiro. O treino foi encerrado como interrompido por cuidado, e o professor foi sinalizado para revisar antes de qualquer retomada.",
+      title: "Treino interrompido para cuidar de você",
+      studentMessage: [
+        `Oi, ${studentName}. Recebi seu relato e quero que você saiba que sua segurança vem primeiro.`,
+        "O treino foi encerrado como interrompido por cuidado e não haverá liberação de um treino normal enquanto essa situação estiver aberta.",
+        "Use o chat da plataforma para me contar como você está e quando se sentir apto para retomar. Vou revisar seu caso antes de qualquer nova orientação.",
+        "Se houver dor forte, piora, limitação de movimento ou outro sinal importante, procure avaliação de um profissional de saúde.",
+        "",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de cuidado enviada em nome do seu professor.",
+      ].join("\n"),
       professorMessage:
-        `${studentName} sinalizou que não conseguiu concluir o treino ou está sem condição de treinar. Não liberar treino normal enquanto este evento estiver aberto. Oriente avaliação profissional quando necessário e revise a retomada segura quando o aluno informar aptidão.`,
+        `${studentName} informou que não conseguiu concluir o treino ou está sem condição de treinar. Faça contato pelo chat, registre a orientação e mantenha a liberação de treino normal bloqueada enquanto o evento estiver aberto. Quando o aluno sinalizar aptidão, revise uma retomada segura e oriente avaliação profissional quando necessário.`,
     },
     DOR_DESCONFORTO: {
       severity: "ALERTA",
       status: "ABERTO",
-      title: "Relato de dor/desconforto no encerramento do treino",
-      studentMessage:
-        "Recebemos seu relato de dor ou desconforto. O professor foi sinalizado para revisar a próxima prescrição. Se a dor persistir, piorar ou limitar seus movimentos, procure avaliação de um profissional de saúde.",
+      title: "Seu relato de dor ou desconforto foi recebido",
+      studentMessage: [
+        `Oi, ${studentName}. Obrigado por registrar como você se sentiu.`,
+        "Vou revisar esse relato antes de evoluir seu treino. Até lá, não force o movimento que gerou desconforto.",
+        "Se a dor persistir, piorar ou limitar seus movimentos, procure avaliação de um profissional de saúde.",
+        "Se precisar detalhar o que aconteceu, fale comigo pelo chat da plataforma.",
+        "",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de cuidado enviada em nome do seu professor.",
+      ].join("\n"),
       professorMessage:
-        `${studentName} concluiu o treino, mas relatou dor ou desconforto. Revise antes de evoluir carga, impacto, volume, complexidade ou intensidade.`,
+        `${studentName} concluiu o treino, mas relatou dor ou desconforto. Revise o relato pelo chat antes de evoluir carga, impacto, volume, complexidade ou intensidade.`,
     },
     EXERCICIO_DIFICIL: {
       severity: "REVISAO",
       status: "REQUER_REVISAO",
-      title: "Treino encerrado com exercício difícil",
-      studentMessage:
-        "Recebemos seu relato. O professor foi sinalizado para revisar carga, exercício, volume ou uma variação mais adequada.",
+      title: "Vamos ajustar o exercício que ficou difícil",
+      studentMessage: [
+        `Oi, ${studentName}. Obrigado por avisar que um exercício ficou difícil.`,
+        "Essa informação me ajuda a ajustar carga, volume, explicação ou escolher uma variação mais adequada para você.",
+        "Se puder, conte pelo chat qual exercício gerou dificuldade e em que momento isso aconteceu.",
+        "",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+      ].join("\n"),
       professorMessage:
-        `${studentName} informou dificuldade no treino. Revise complexidade, carga, volume, instruções e possível regressão antes da próxima montagem.`,
+        `${studentName} informou dificuldade no treino. Revise pelo chat o exercício envolvido, a técnica, a carga, o volume e a necessidade de regressão antes da próxima montagem.`,
     },
     NAO_ENTENDI: {
       severity: "REVISAO",
       status: "REQUER_REVISAO",
-      title: "Treino encerrado por falta de entendimento",
-      studentMessage:
-        "Recebemos seu relato. O professor foi sinalizado para revisar a explicação e te ajudar a executar com mais segurança.",
+      title: "Vamos esclarecer seu treino",
+      studentMessage: [
+        `Oi, ${studentName}. Obrigado por contar que alguma parte do treino não ficou clara.`,
+        "Não execute com dúvida. Fale comigo pelo chat da plataforma e me diga qual exercício ou orientação precisa de explicação.",
+        "Vou revisar o conteúdo para deixar a execução mais simples e segura.",
+        "",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+      ].join("\n"),
       professorMessage:
-        `${studentName} informou que não entendeu o treino ou parte da execução. Revise descrição, observações e clareza das instruções antes da próxima montagem.`,
+        `${studentName} informou que não entendeu o treino ou parte da execução. Responda pelo chat e revise descrição, imagens, observações e clareza das instruções antes da próxima montagem.`,
     },
     FALTA_TEMPO: {
       severity: "ATENCAO",
       status: "ABERTO",
-      title: "Treino não concluído por falta de tempo",
-      studentMessage:
-        "Recebemos seu relato. Rotina corrida acontece. O professor vai considerar isso para ajustar sua próxima semana com mais aderência e realidade.",
+      title: "Vamos adaptar o treino à sua rotina",
+      studentMessage: [
+        `Oi, ${studentName}. Entendi que o tempo ficou apertado. Isso acontece e não precisa virar motivo para abandonar o processo.`,
+        "Conte pelo chat como está sua rotina. Posso considerar duração, dias e formato dos próximos treinos para construir algo mais possível de cumprir.",
+        "",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+      ].join("\n"),
       professorMessage:
-        `${studentName} não concluiu o treino por falta de tempo. Avalie uma estratégia mais simples, objetiva e possível de cumprir.`,
+        `${studentName} não concluiu o treino por falta de tempo. Faça uma abordagem pelo chat e avalie uma estratégia mais curta, objetiva e compatível com a rotina atual.`,
     },
     DESMOTIVACAO: {
       severity: "ATENCAO",
       status: "ABERTO",
-      title: "Treino não concluído por desmotivação",
-      studentMessage:
-        "Recebemos seu relato. A motivação oscila, mas você não precisa recomeçar do zero. O professor vai considerar uma retomada mais leve e possível.",
+      title: "Vamos retomar sem pressão",
+      studentMessage: [
+        `Oi, ${studentName}. Obrigado por ser sincero sobre a falta de motivação.`,
+        "Você não precisa recomeçar do zero nem compensar tudo de uma vez. Vamos pensar em um próximo passo menor e possível.",
+        "Fale comigo pelo chat para eu entender seu momento e ajustar a retomada.",
+        "",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+      ].join("\n"),
       professorMessage:
-        `${studentName} sinalizou desmotivação e não concluiu o treino. Considere uma semana de retomada com metas curtas, exercícios simples e reforço positivo.`,
+        `${studentName} sinalizou desmotivação e não concluiu o treino. Faça contato pelo chat com escuta, combine um próximo passo curto e considere uma semana de retomada com exercícios simples e reforço positivo.`,
     },
     BAIXA_ADERENCIA: {
       severity: "ATENCAO",
       status: "ABERTO",
-      title: "Baixa aderência registrada no treino",
-      studentMessage:
-        "Recebemos seu relato. Vamos usar essa informação para ajustar melhor sua próxima programação.",
+      title: "Vamos reorganizar sua rotina de treino",
+      studentMessage: [
+        `Oi, ${studentName}. Obrigado por registrar que não conseguiu manter o treino como planejado.`,
+        "Essa informação vai ser usada para ajustar sua programação de forma mais realista, sem julgamento.",
+        "Use o chat para me contar o que mais dificultou sua adesão.",
+        "",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+      ].join("\n"),
       professorMessage:
-        `${studentName} teve baixa aderência no treino. Antes de progredir, avalie retomada, volume, complexidade e possíveis barreiras.`,
+        `${studentName} teve baixa aderência no treino. Antes de progredir, faça uma abordagem pelo chat e revise retomada, volume, complexidade e possíveis barreiras.`,
     },
     OUTRO: {
       severity: "ATENCAO",
       status: "ABERTO",
-      title: "Treino encerrado com relato do aluno",
-      studentMessage:
-        "Recebemos seu relato. Sua resposta ajuda o professor a cuidar melhor da sua rotina e ajustar o treino de forma mais humana e realista.",
+      title: "Obrigado por contar como foi seu treino",
+      studentMessage: [
+        `Oi, ${studentName}. Recebi sua observação e vou considerar esse contexto no seu acompanhamento.`,
+        "Se quiser complementar o relato ou tirar alguma dúvida, fale comigo pelo chat da plataforma.",
+        "",
+        professorName,
+        "Funcional VIP Digital",
+        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+      ].join("\n"),
       professorMessage:
-        `${studentName} registrou uma observação ao encerrar o treino. Revise o contexto antes da próxima montagem.`,
+        `${studentName} registrou uma observação ao encerrar o treino. Revise o relato e, se necessário, faça contato pelo chat antes da próxima montagem.`,
     },
   };
 
@@ -327,6 +385,7 @@ async function createWorkoutCareEvent({
   const copy = getWorkoutCareCopy({
     eventType: finalEventType,
     studentName: student.name || "Aluno",
+    professorName: student.user?.name || "seu professor",
     description,
   });
 
@@ -374,8 +433,8 @@ async function createWorkoutCareEvent({
       data: {
         title:
           finalEventType === "PAUSA_POR_CUIDADO"
-            ? `Pausa por cuidado: ${student.name}`
-            : `Revisar treino: ${student.name}`,
+            ? `Ação de cuidado necessária com ${student.name}`
+            : `Revisar relato de ${student.name}`,
         content: copy.professorMessage,
         type: "CUIDADO_ALUNO",
         authorId,
@@ -391,21 +450,28 @@ async function createWorkoutCareEvent({
     try {
       await sendEmail({
         to: student.user.email,
-        subject: `Pausa por cuidado: ${student.name}`,
+        subject: `Ação de cuidado necessária: ${student.name}`,
         text: [
-          `Olá, ${student.user?.name || "professor(a)"}.`,
+          `Oi, ${student.user?.name || "professor(a)"}.`,
           "",
           copy.professorMessage,
           "",
-          "Antes de montar ou liberar novo treino, revise a Central de Cuidado do Aluno.",
+          "Abra a Central de Cuidado, revise o relato e registre o encaminhamento antes de montar ou liberar novo treino.",
           getAppCareUrl(),
+          "",
+          "Gestão Funcional VIP Digital",
+          "Mensagem automática de segurança e acompanhamento.",
         ].join("\n"),
         html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
-            <p>Olá, ${escapeHtml(student.user?.name || "professor(a)")}.</p>
-            <p>${escapeHtml(copy.professorMessage).replaceAll("\n", "<br />")}</p>
-            <p>Antes de montar ou liberar novo treino, revise a Central de Cuidado do Aluno.</p>
-            <p><a href="${getAppCareUrl()}">Abrir Central de Cuidado</a></p>
+          <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+            <div style="max-width:620px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+              <h2 style="color:#D4A373;margin:0 0 16px;">Ação de cuidado necessária</h2>
+              <p style="color:#f5f5f5;">Oi, <strong>${escapeHtml(student.user?.name || "professor(a)")}</strong>.</p>
+              <p style="color:#d4d4d4;line-height:1.6;">${escapeHtml(copy.professorMessage).replaceAll("\n", "<br />")}</p>
+              <p style="color:#d4d4d4;line-height:1.6;">Abra a Central de Cuidado, revise o relato e registre o encaminhamento antes de montar ou liberar novo treino.</p>
+              <p><a href="${getAppCareUrl()}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Abrir Central de Cuidado</a></p>
+              <p style="color:#6b6b6b;font-size:11px;margin-top:20px;">Mensagem automática de segurança e acompanhamento.</p>
+            </div>
           </div>
         `,
       });
@@ -534,12 +600,14 @@ async function createStudentNotice({
 async function sendStudentEmail({
   to,
   studentName,
+  professorName,
   subject,
   title,
   content,
 }: {
   to: string | null;
   studentName: string;
+  professorName?: string | null;
   subject: string;
   title: string;
   content: string;
@@ -548,13 +616,21 @@ async function sendStudentEmail({
 
   const alunoUrl = getAppAlunoUrl();
   const safeStudentName = escapeHtml(studentName);
+  const safeProfessorName = escapeHtml(professorName || "seu professor");
   const safeTitle = escapeHtml(title);
   const safeContent = escapeHtml(content).replaceAll("\n", "<br />");
 
   const text = [
-    `Olá, ${studentName}!`,
+    `Oi, ${studentName}!`,
     "",
     content,
+    "",
+    `Se quiser contar como foi ou precisar de orientação, use o chat da plataforma para falar com ${professorName || "seu professor"}.`,
+    "Para assuntos de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.",
+    "",
+    professorName || "Seu professor",
+    "Funcional VIP Digital",
+    "Mensagem automática de acompanhamento enviada em nome do seu professor.",
     "",
     `Acesse sua área do aluno: ${alunoUrl}`,
   ].join("\n");
@@ -563,33 +639,18 @@ async function sendStudentEmail({
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
         <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
-
-        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Olá, <strong>${safeStudentName}</strong>!
-        </p>
-
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          ${safeContent}
-        </p>
-
-        <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
-          Acessar minha área
-        </a>
-
-        <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-          Este é um aviso automático do Funcional Vip Digital.
-        </p>
+        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">${safeContent}</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se quiser contar como foi ou precisar de orientação, use o chat da plataforma para falar com <strong>${safeProfessorName}</strong>.</p>
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Para assuntos de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.</p>
+        <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
+        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional VIP Digital</p>
+        <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de acompanhamento enviada em nome do seu professor.</p>
       </div>
     </div>
   `;
 
-  await sendEmail({
-    to,
-    subject,
-    text,
-    html,
-  });
-
+  await sendEmail({ to, subject, text, html });
   return true;
 }
 
@@ -606,6 +667,7 @@ async function notifyWorkoutCompleted({
     userId: string | null;
     contractedTrainingDaysPerMonth: number | null;
     userAuth?: { email?: string | null } | null;
+    user?: { name?: string | null } | null;
   };
   workout: {
     id: string;
@@ -634,22 +696,25 @@ async function notifyWorkoutCompleted({
     };
   }
 
+  const professorName = student.user?.name || "seu professor";
   const title = isFirstCompletedWorkout
-    ? "Primeiro treino concluído! 👏"
-    : "Treino concluído! 👏";
+    ? "Seu primeiro treino foi concluído 👏"
+    : "Mais um treino concluído 👏";
 
   const content = isFirstCompletedWorkout
     ? [
-        "Parabéns por concluir seu primeiro treino no Funcional Vip Digital!",
+        `Parabéns, ${studentName}! Você concluiu seu primeiro treino no Funcional VIP Digital.`,
         "",
-        "Esse é um marco importante da sua jornada. A constância é o que transforma treino em evolução.",
+        "Esse primeiro passo é importante porque começa a construir seu histórico real de acompanhamento.",
+        "Continue registrando cada treino e use o chat para me contar como se sentiu, principalmente se tiver dúvida, dificuldade ou desconforto.",
         "",
-        "Continue registrando seus treinos para que seu professor consiga acompanhar seu progresso com mais precisão.",
+        "Vamos evoluir com constância e segurança, sem precisar acelerar além do seu momento.",
       ].join("\n")
     : [
-        "Parabéns, treino concluído!",
+        `Parabéns, ${studentName}! Mais um treino concluído e registrado.`,
         "",
-        "Você deu mais um passo importante no seu objetivo. Cada treino registrado ajuda seu acompanhamento e fortalece sua evolução.",
+        "Cada registro me ajuda a acompanhar sua rotina e decidir os próximos ajustes com mais contexto.",
+        "Se quiser contar como foi a execução, fale comigo pelo chat da plataforma.",
       ].join("\n");
 
   const notice = await createStudentNotice({
@@ -667,6 +732,7 @@ async function notifyWorkoutCompleted({
       emailSent = await sendStudentEmail({
         to: studentEmail,
         studentName,
+        professorName,
         subject: title,
         title,
         content,
@@ -705,6 +771,7 @@ async function notifyWeekCompletedIfNeeded({
     userId: string | null;
     contractedTrainingDaysPerMonth: number | null;
     userAuth?: { email?: string | null } | null;
+    user?: { name?: string | null } | null;
   };
   workoutDate: Date;
   workoutId: string;
@@ -788,13 +855,14 @@ async function notifyWeekCompletedIfNeeded({
   const weekEndDisplay = new Date(endOfWeek.getTime() - 1);
   const weekLabel = `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`;
 
-  const title = "Semana concluída com sucesso! 🔥";
+  const professorName = student.user?.name || "seu professor";
+  const title = "Você concluiu sua semana de treinos 🔥";
   const content = [
-    "Parabéns! Você concluiu todos os treinos previstos para esta semana.",
+    `Parabéns, ${student.name || "Aluno"}! Você concluiu todos os treinos previstos para a semana de ${weekLabel}.`,
     "",
-    `Semana de referência: ${weekLabel}.`,
-    "",
-    "Esse nível de constância faz diferença no seu resultado. Continue registrando seus treinos e mantendo sua rotina ativa.",
+    "Mais do que cumprir uma lista, esse registro mostra uma rotina construída com constância.",
+    "Vou usar essas informações para acompanhar sua evolução e revisar os próximos passos com segurança.",
+    "Se quiser compartilhar como se sentiu durante a semana, fale comigo pelo chat da plataforma.",
   ].join("\n");
 
   const notice = await createStudentNotice({
@@ -811,6 +879,7 @@ async function notifyWeekCompletedIfNeeded({
     emailSent = await sendStudentEmail({
       to: await getStudentEmail(student),
       studentName: student.name || "Aluno",
+      professorName,
       subject: title,
       title,
       content,
@@ -858,29 +927,34 @@ function getEvolutionMilestone(completedCount: number): number | null {
 
 function buildEvolutionFeedbackDraft({
   studentName,
+  professorName,
   milestone,
   completedCount,
 }: {
   studentName: string;
+  professorName: string;
   milestone: number;
   completedCount: number;
 }): string {
   return [
-    `Olá, ${studentName}!`,
+    `Oi, ${studentName}!`,
     "",
-    `Você completou ${milestone} treinos executados no Funcional VIP Digital. Esse é um marco importante, porque evolução de verdade nasce da constância e do cuidado com o processo.`,
+    `Você chegou ao marco de ${milestone} treinos concluídos. Isso não é apenas um número: é um registro importante da sua constância e do caminho que estamos construindo juntos.`,
     "",
-    "O que observamos neste ciclo:",
-    `- Você registrou ${completedCount} treino(s) concluído(s).`,
-    "- Cada treino registrado ajuda o professor a entender melhor sua rotina, sua adesão e os ajustes necessários.",
-    "- A continuidade é um sinal positivo para seguirmos evoluindo com segurança.",
+    "O que esse ciclo mostra:",
+    `- ${completedCount} treino(s) concluído(s) e registrados;`,
+    "- mais informações para eu entender sua rotina e sua resposta aos treinos;",
+    "- uma base melhor para decidir manutenção, ajustes ou evolução com segurança.",
     "",
-    "Pontos para o próximo ciclo:",
-    "- Continue registrando seus treinos com sinceridade.",
-    "- Avise sempre que sentir dor, desconforto, dificuldade ou falta de clareza na execução.",
-    "- O professor vai usar essas informações para ajustar volume, intensidade, exercícios e progressão.",
+    "Para o próximo ciclo:",
+    "- continue registrando cada treino com sinceridade;",
+    "- use o chat para avisar sobre dor, desconforto, dificuldade ou dúvida;",
+    "- respeite seu ritmo e não pule etapas para tentar compensar dias perdidos.",
     "",
-    "Próximo passo: seguir com consistência, técnica e atenção ao corpo. Estamos acompanhando sua evolução de perto.",
+    "Vou revisar seu histórico e preparar uma devolutiva mais individual sobre sua evolução.",
+    "",
+    professorName,
+    "Funcional VIP Digital",
   ].join("\n");
 }
 
@@ -954,6 +1028,7 @@ async function notifyEvolutionFeedbackMilestone({
 
   const draft = buildEvolutionFeedbackDraft({
     studentName: student.name || "Aluno",
+    professorName: student.user?.name || "seu professor",
     milestone,
     completedCount: completedCountAfter,
   });
@@ -994,11 +1069,13 @@ async function notifyEvolutionFeedbackMilestone({
   if (student.userId) {
     const notice = await prisma.notice.create({
       data: {
-        title: `Feedback de evolução pendente: ${milestone} treinos`,
+        title: `Prepare a devolutiva de evolução de ${student.name}`,
         content: [
-          `${student.name} completou ${milestone} treinos concluídos.`,
+          `Oi, ${student.user?.name || "professor(a)"}.`,
           "",
-          "Revise o histórico, ajustes, dúvidas, sinais de cuidado e envie uma devolutiva humanizada ao aluno.",
+          `${student.name} chegou ao marco de ${milestone} treinos concluídos.`,
+          "Revise o histórico, a adesão, as dúvidas e os sinais de cuidado antes de enviar uma mensagem realmente individual ao aluno.",
+          "O rascunho é apenas um ponto de partida: ajuste o texto para refletir o que você observou nesse ciclo e combine um próximo foco claro.",
           "",
           `Acesse a central de evolução: ${getAppEvolutionUrl()}`,
         ].join("\n"),
@@ -1038,21 +1115,28 @@ async function notifyEvolutionFeedbackMilestone({
     try {
       await sendEmail({
         to: student.user.email,
-        subject: `Feedback de evolução pendente: ${student.name}`,
+        subject: `Evolução de ${student.name}: devolutiva para revisar`,
         text: [
-          `Olá, ${student.user?.name || "professor(a)"}.`,
+          `Oi, ${student.user?.name || "professor(a)"}.`,
           "",
-          `${student.name} completou ${milestone} treinos concluídos.`,
-          "Revise e envie uma devolutiva de evolução para o aluno.",
+          `${student.name} chegou ao marco de ${milestone} treinos concluídos.`,
+          "Revise o histórico e personalize a devolutiva antes de enviar. O aluno deve perceber que a mensagem considera sua jornada real, não apenas o número de treinos.",
           "",
-          getAppEvolutionUrl(),
+          `Abrir central de evolução: ${getAppEvolutionUrl()}`,
+          "",
+          "Gestão Funcional VIP Digital",
+          "Mensagem automática de acompanhamento.",
         ].join("\n"),
         html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937">
-            <p>Olá, ${escapeHtml(student.user?.name || "professor(a)")}.</p>
-            <p><strong>${escapeHtml(student.name)}</strong> completou <strong>${milestone} treinos concluídos</strong>.</p>
-            <p>Revise e envie uma devolutiva de evolução para o aluno.</p>
-            <p><a href="${getAppEvolutionUrl()}">Abrir central de evolução</a></p>
+          <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+            <div style="max-width:620px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+              <h2 style="color:#D4A373;margin:0 0 16px;">Devolutiva de evolução para revisar</h2>
+              <p style="color:#f5f5f5;">Oi, <strong>${escapeHtml(student.user?.name || "professor(a)")}</strong>.</p>
+              <p style="color:#d4d4d4;line-height:1.6;"><strong>${escapeHtml(student.name)}</strong> chegou ao marco de <strong>${milestone} treinos concluídos</strong>.</p>
+              <p style="color:#d4d4d4;line-height:1.6;">Revise o histórico e personalize a devolutiva antes de enviar. O aluno deve perceber que a mensagem considera sua jornada real, não apenas o número de treinos.</p>
+              <p><a href="${getAppEvolutionUrl()}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Abrir central de evolução</a></p>
+              <p style="color:#6b6b6b;font-size:11px;margin-top:20px;">Mensagem automática de acompanhamento.</p>
+            </div>
           </div>
         `,
       });
@@ -1445,12 +1529,12 @@ export async function POST(req: NextRequest) {
     }
 
     const responseMessage = finalCareEventType === "PAUSA_POR_CUIDADO"
-      ? "Recebemos seu relato. O treino foi encerrado como interrompido por cuidado, e o professor foi sinalizado antes de qualquer retomada."
+      ? "Seu relato foi recebido com atenção. O treino foi interrompido por cuidado e seu professor vai revisar a situação antes de qualquer retomada."
       : finalCareEventType
         ? workoutStatus === "CONCLUIDO"
-          ? "Treino concluído com relato enviado ao professor."
-          : "Treino encerrado com relato enviado ao professor."
-        : "Treino concluído!";
+          ? "Treino concluído e relato enviado ao seu professor para acompanhamento."
+          : "Treino encerrado e relato enviado ao seu professor para acompanhamento."
+        : "Treino concluído e registrado. Parabéns por mais esse passo!";
 
     return NextResponse.json({
       ok: true,
