@@ -109,15 +109,16 @@ function buildProfessorNoticeContent({
     .join("\n");
 
   return [
-    `Olá, ${professorName}.`,
+    `Oi, ${professorName}! Tudo bem?`,
     "",
-    "Hoje é o prazo de sábado para deixar os treinos da próxima semana preparados.",
-    `Semana alvo: ${weekLabel}.`,
+    "Hoje é o prazo para concluir os treinos da próxima semana. Esse cuidado ajuda os alunos a começarem o novo ciclo com organização, segurança e tempo para conhecer a programação.",
+    `Semana de referência: ${weekLabel}.`,
     "",
-    "Os alunos abaixo ainda estão sem a quantidade completa de treinos:",
+    "Alunos que ainda precisam da programação completa:",
     studentLines,
     "",
-    "Acesse o dashboard e finalize a montagem dos treinos pendentes.",
+    "Abra o dashboard, revise cada caso e finalize os treinos pendentes.",
+    "Se houver algum impedimento ou situação que precise de apoio, sinalize a gestão ainda hoje.",
   ].join("\n");
 }
 
@@ -142,15 +143,15 @@ function buildGestaoNoticeContent({
     .join("\n\n");
 
   return [
-    "Resumo para gestão.",
+    "Acompanhamento da preparação da próxima semana.",
     "",
-    "Hoje é sábado e ainda existem alunos sem a quantidade completa de treinos para a próxima semana.",
-    `Semana alvo: ${weekLabel}.`,
+    "Ainda existem alunos sem a quantidade completa de treinos. O objetivo deste aviso é facilitar a priorização, o apoio aos professores e a continuidade do atendimento.",
+    `Semana de referência: ${weekLabel}.`,
     "",
     "Pendências por professor:",
     lines,
     "",
-    "Acompanhe o dashboard e cobre os responsáveis pela montagem dos treinos.",
+    "Acompanhe o dashboard e combine com cada professor a conclusão, a prioridade ou uma eventual cobertura necessária.",
   ].join("\n");
 }
 
@@ -169,7 +170,7 @@ async function notifyProfessorDeadline({
   const professorName = group.professor.name || "Professor";
   const professorEmail = group.professor.email;
 
-  const title = "Prazo vence hoje: treinos pendentes da próxima semana";
+  const title = "Hoje é o prazo para concluir os treinos da próxima semana";
   const content = buildProfessorNoticeContent({
     professorName,
     students: group.students,
@@ -231,38 +232,44 @@ async function notifyProfessorDeadline({
       .join("");
 
     const text = [
-      `Olá, ${professorName}.`,
+      `Oi, ${professorName}! Tudo bem?`,
       "",
-      "Hoje é o prazo de sábado para deixar os treinos da próxima semana preparados.",
-      `Semana alvo: ${weekLabel}.`,
+      "Hoje é o prazo para concluir os treinos da próxima semana. Esse cuidado ajuda os alunos a começarem o novo ciclo com organização e segurança.",
+      `Semana de referência: ${weekLabel}.`,
       "",
-      "Alunos pendentes:",
+      "Alunos que ainda precisam da programação completa:",
       ...group.students.map((student) => {
         return `- ${student.name}: ${student.createdCount}/${student.weeklyLimit}. Falta(m) ${student.missingCount}.`;
       }),
       "",
-      `Acesse o dashboard: ${dashboardUrl}`,
+      "Abra o dashboard, revise cada caso e finalize os treinos pendentes.",
+      "Se houver algum impedimento ou situação que precise de apoio, sinalize a gestão ainda hoje.",
+      "",
+      `Abrir dashboard e concluir treinos: ${dashboardUrl}`,
+      "",
+      "Equipe de Gestão — Funcional VIP Digital",
+      "Mensagem automática de acompanhamento operacional.",
     ].join("\n");
 
     const html = `
       <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
         <div style="max-width:640px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-          <h2 style="color:#D4A373; margin:0 0 16px;">Prazo vence hoje</h2>
+          <h2 style="color:#D4A373; margin:0 0 16px;">Vamos concluir a próxima semana hoje?</h2>
 
           <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-            Olá, <strong>${safeProfessorName}</strong>.
+            Oi, <strong>${safeProfessorName}</strong>! Tudo bem?
           </p>
 
           <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Hoje é o prazo de sábado para deixar os treinos da próxima semana preparados.
+            Hoje é o prazo para concluir os treinos da próxima semana. Esse cuidado ajuda os alunos a começarem o novo ciclo com organização e segurança.
           </p>
 
           <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Semana alvo: <strong style="color:#f5f5f5;">${safeWeekLabel}</strong>.
+            Semana de referência: <strong style="color:#f5f5f5;">${safeWeekLabel}</strong>.
           </p>
 
           <p style="color:#f5f5f5; font-size:14px; line-height:1.5; margin-top:18px;">
-            Alunos ainda pendentes:
+            Alunos que ainda precisam da programação completa:
           </p>
 
           <ul style="padding-left:20px; margin-top:8px;">
@@ -273,8 +280,11 @@ async function notifyProfessorDeadline({
             Acessar dashboard
           </a>
 
-          <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-            Este é um aviso automático do Funcional Vip Digital.
+          <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:20px;">
+            Se houver algum impedimento ou situação que precise de apoio, sinalize a gestão ainda hoje.
+          </p>
+          <p style="color:#6b6b6b; font-size:11px; margin-top:10px;">
+            Mensagem automática de acompanhamento operacional enviada pela gestão do Funcional VIP Digital.
           </p>
         </div>
       </div>
@@ -319,7 +329,7 @@ async function notifyGestaoDeadline({
   }
 
   const dashboardUrl = getAppDashboardUrl();
-  const title = "Prazo vence hoje: alunos sem treino da próxima semana";
+  const title = "Acompanhamento de hoje: treinos da próxima semana pendentes";
   const content = buildGestaoNoticeContent({
     groups,
     weekLabel,
@@ -400,48 +410,66 @@ async function notifyGestaoDeadline({
     })
     .join("");
 
-  const text = [
-    "Resumo para gestão.",
-    "",
-    "Hoje é sábado e ainda existem alunos sem a quantidade completa de treinos para a próxima semana.",
-    `Semana alvo: ${weekLabel}.`,
-    `Total de alunos pendentes: ${totalPendingStudents}.`,
-    "",
-    content,
-    "",
-    `Acesse o dashboard: ${dashboardUrl}`,
-  ].join("\n");
-
-  const html = `
-    <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-      <div style="max-width:720px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <h2 style="color:#D4A373; margin:0 0 16px;">Prazo vence hoje</h2>
-
-        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Ainda existem <strong>${totalPendingStudents}</strong> aluno(s) sem a quantidade completa de treinos para a próxima semana.
-        </p>
-
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-          Semana alvo: <strong style="color:#f5f5f5;">${escapeHtml(weekLabel)}</strong>.
-        </p>
-
-        ${professorSectionsHtml}
-
-        <a href="${dashboardUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:20px;">
-          Acessar dashboard
-        </a>
-
-        <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-          Este é um aviso automático do Funcional Vip Digital.
-        </p>
-      </div>
-    </div>
-  `;
-
   let emailSentTo = 0;
 
   for (const gestor of gestores) {
     if (!gestor.email) continue;
+
+    const gestorName = gestor.name || "Gestão";
+    const safeGestorName = escapeHtml(gestorName);
+
+    const text = [
+      `Oi, ${gestorName}! Tudo bem?`,
+      "",
+      "Ainda existem alunos sem a quantidade completa de treinos para a próxima semana.",
+      `Semana de referência: ${weekLabel}.`,
+      `Total de alunos com pendência: ${totalPendingStudents}.`,
+      "",
+      content,
+      "",
+      "Use este resumo para apoiar a priorização, alinhar eventuais impedimentos e combinar cobertura quando necessário.",
+      "",
+      `Acessar dashboard: ${dashboardUrl}`,
+      "",
+      "Funcional VIP Digital",
+      "Mensagem automática de acompanhamento operacional.",
+    ].join("\n");
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+        <div style="max-width:720px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+          <h2 style="color:#D4A373; margin:0 0 16px;">Acompanhamento da preparação da próxima semana</h2>
+
+          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
+            Oi, <strong>${safeGestorName}</strong>! Tudo bem?
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Ainda existem <strong style="color:#f5f5f5;">${totalPendingStudents}</strong> aluno(s) sem a quantidade completa de treinos para a próxima semana.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
+            Semana de referência: <strong style="color:#f5f5f5;">${escapeHtml(weekLabel)}</strong>.
+          </p>
+
+          ${professorSectionsHtml}
+
+          <div style="background:#D4A37314; border:1px solid #D4A37333; border-radius:12px; padding:14px; margin-top:18px;">
+            <p style="color:#D4A373; font-size:13px; line-height:1.6; margin:0;">
+              Use este resumo para apoiar a priorização, alinhar eventuais impedimentos e combinar cobertura quando necessário.
+            </p>
+          </div>
+
+          <a href="${dashboardUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:20px;">
+            Abrir dashboard
+          </a>
+
+          <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
+            Mensagem automática de acompanhamento operacional do Funcional VIP Digital.
+          </p>
+        </div>
+      </div>
+    `;
 
     await sendEmail({
       to: gestor.email,
