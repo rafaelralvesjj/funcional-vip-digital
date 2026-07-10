@@ -364,13 +364,14 @@ async function createLowScoreNotice(params: {
 
   if (!lowNps && !lowOverall) return;
 
-  const title = "Atenção: pesquisa com baixa satisfação";
+  const title = "Acompanhamento necessário: aluno sinalizou baixa satisfação";
   const content = [
-    `${params.studentName} respondeu ${getSurveyLabel(params.surveyType)} com sinal de atenção.`,
-    params.nps !== null ? `NPS: ${params.nps}/10.` : null,
-    params.overallRating !== null ? `Nota geral: ${params.overallRating}/10.` : null,
-    params.openFeedback ? `Comentário: ${params.openFeedback}` : null,
-    "Recomendação: olhar a ficha do aluno, histórico de treinos, dúvidas e cuidado antes do próximo contato.",
+    `${params.studentName} respondeu ${getSurveyLabel(params.surveyType)} e trouxe um sinal que merece uma escuta mais próxima.`,
+    params.nps !== null ? `NPS informado: ${params.nps}/10.` : null,
+    params.overallRating !== null ? `Nota geral informada: ${params.overallRating}/10.` : null,
+    params.openFeedback ? `Comentário do aluno: ${params.openFeedback}` : null,
+    "Próximo passo: leia a resposta completa, revise a ficha, o histórico de treinos, as dúvidas e os eventos de cuidado antes do próximo contato.",
+    "Faça a abordagem pelo chat com postura de escuta, sem julgamento. Se necessário, alinhe o caso com a gestão antes de ajustar o próximo treino.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -609,7 +610,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      message: "Pesquisa enviada. Obrigado por compartilhar sua percepção.",
+      message: "Obrigado por compartilhar sua experiência. Sua resposta foi registrada e será considerada no seu acompanhamento.",
     });
   } catch (error: any) {
     console.error("POST /api/student-surveys error:", error);
