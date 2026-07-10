@@ -202,12 +202,14 @@ async function createNotice({
 async function sendStudentEmail({
   to,
   studentName,
+  professorName,
   subject,
   title,
   content,
 }: {
   to: string | null;
   studentName: string;
+  professorName?: string | null;
   subject: string;
   title: string;
   content: string;
@@ -216,13 +218,21 @@ async function sendStudentEmail({
 
   const alunoUrl = getAppAlunoUrl();
   const safeStudentName = escapeHtml(studentName);
+  const safeProfessorName = escapeHtml(professorName || "seu professor");
   const safeTitle = escapeHtml(title);
   const safeContent = escapeHtml(content).replaceAll("\n", "<br />");
 
   const text = [
-    `Olá, ${studentName}!`,
+    `Oi, ${studentName}!`,
     "",
     content,
+    "",
+    `Se precisar falar sobre treino, use o chat da plataforma. Assim, ${professorName || "seu professor"} consegue acompanhar seu histórico e responder com mais contexto.`,
+    "Para dúvidas de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.",
+    "",
+    professorName || "Seu professor",
+    "Funcional VIP Digital",
+    "Mensagem automática de acompanhamento enviada em nome do seu professor.",
     "",
     `Acesse sua área do aluno: ${alunoUrl}`,
   ].join("\n");
@@ -233,19 +243,31 @@ async function sendStudentEmail({
         <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
 
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Olá, <strong>${safeStudentName}</strong>!
+          Oi, <strong>${safeStudentName}</strong>!
         </p>
 
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
           ${safeContent}
         </p>
 
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+          Se precisar falar sobre treino, use o chat da plataforma. Assim, <strong>${safeProfessorName}</strong> consegue acompanhar seu histórico e responder com mais contexto.
+        </p>
+
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+          Para dúvidas de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.
+        </p>
+
         <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
           Acessar minha área
         </a>
 
-        <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-          Este é um aviso automático do Funcional Vip Digital.
+        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">
+          ${safeProfessorName}<br />Funcional VIP Digital
+        </p>
+
+        <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">
+          Mensagem automática de acompanhamento enviada em nome do seu professor.
         </p>
       </div>
     </div>
@@ -282,11 +304,15 @@ async function sendProfessorEmail({
   const safeContent = escapeHtml(content).replaceAll("\n", "<br />");
 
   const text = [
-    `Olá, ${professorName}.`,
+    `Oi, ${professorName}.`,
     "",
     content,
     "",
-    `Acesse o dashboard: ${dashboardUrl}`,
+    "Acesse o dashboard para revisar o histórico do aluno e registrar a ação realizada.",
+    `Dashboard: ${dashboardUrl}`,
+    "",
+    "Gestão Funcional VIP Digital",
+    "Mensagem automática de acompanhamento.",
   ].join("\n");
 
   const html = `
@@ -295,19 +321,27 @@ async function sendProfessorEmail({
         <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
 
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Olá, <strong>${safeProfessorName}</strong>.
+          Oi, <strong>${safeProfessorName}</strong>.
         </p>
 
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
           ${safeContent}
         </p>
 
+        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+          Acesse o dashboard para revisar o histórico do aluno e registrar a ação realizada.
+        </p>
+
         <a href="${dashboardUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
           Acessar dashboard
         </a>
 
-        <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-          Este é um aviso automático do Funcional Vip Digital.
+        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">
+          Gestão Funcional VIP Digital
+        </p>
+
+        <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">
+          Mensagem automática de acompanhamento.
         </p>
       </div>
     </div>
@@ -338,12 +372,20 @@ async function notifyTodayWorkout({
   }
 
   const workoutName = workout.workoutPlan?.name || "seu treino";
-  const title = "Hoje é dia de treino 💪";
+  const studentName = workout.student?.name || "Aluno";
+  const professorName = workout.student?.user?.name || "seu professor";
+  const title = "Seu treino de hoje está te esperando 💪";
   const content = [
-    `Seu treino de hoje já está disponível: ${workoutName}.`,
+    `Oi, ${studentName}! Aqui é ${professorName}.`,
     "",
-    "Separe um momento do dia para cuidar de você e seguir firme no seu objetivo.",
-    "Cada treino concluído conta para a sua evolução.",
+    `O treino de hoje já está disponível: ${workoutName}.`,
+    "Quando puder, reserve esse momento para você e faça tudo com atenção às orientações.",
+    "Se alguma coisa não estiver clara ou se precisar adaptar, fale comigo pelo chat da plataforma antes de executar.",
+    "",
+    "Bom treino! Estou acompanhando sua evolução.",
+    professorName,
+    "Funcional VIP Digital",
+    "Mensagem automática de acompanhamento enviada em nome do seu professor.",
   ].join("\n");
 
   const notice = await createNotice({
@@ -396,36 +438,41 @@ async function notifyMissedWorkoutLevel({
   const studentName = student.name || "Aluno";
   const missedCount = missedWorkouts.length;
 
+  const professorName = student.user?.name || "seu professor";
+
   const title =
     level === 1
-      ? "Vamos retomar o ritmo?"
+      ? "Vamos retomar com calma?"
       : level === 2
-        ? "Como podemos ajudar você a treinar?"
-        : "Estamos aqui para ajudar você a voltar para o foco";
+        ? "Quero entender como apoiar sua rotina"
+        : "Vamos reorganizar seus treinos juntos";
 
   const content =
     level === 1
       ? [
-          "Percebemos que você não conseguiu concluir seu último treino.",
+          `Oi, ${studentName}! Aqui é ${professorName}.`,
           "",
-          "Tudo bem, rotina nem sempre é perfeita. O importante é retomar.",
-          "Seu próximo treino continua disponível e estamos aqui para te ajudar a manter constância.",
+          "Vi que o último treino não foi concluído. Isso pode acontecer e não apaga o caminho que você já começou.",
+          "Quando estiver pronto, retome pelo próximo treino disponível. Se algo dificultou a execução, me conte pelo chat para eu considerar no seu acompanhamento.",
+          "",
+          "Vamos seguir um passo de cada vez.",
         ].join("\n")
       : level === 2
         ? [
-            "Percebemos que você deixou de concluir alguns treinos.",
+            `Oi, ${studentName}! Aqui é ${professorName}.`,
             "",
-            "Queremos te ajudar a não perder o ritmo. Se ficou alguma dúvida sobre o treino, carga, exercício ou organização da rotina, fale com seu professor pelo sistema.",
+            `Notei que alguns treinos ficaram sem conclusão (${missedCount} até agora). Antes de pensar apenas em constância, quero entender o que está acontecendo na sua rotina.`,
+            "Pode ser tempo, dúvida, dificuldade com algum exercício ou necessidade de ajuste. Fale comigo pelo chat da plataforma para organizarmos uma proposta mais possível para você.",
             "",
-            "Estamos aqui para te apoiar no seu objetivo.",
+            "Você não precisa resolver isso sozinho.",
           ].join("\n")
         : [
-            "Estamos acompanhando sua evolução e percebemos que você ainda não conseguiu manter a sequência dos treinos.",
+            `Oi, ${studentName}! Aqui é ${professorName}.`,
             "",
-            "Seu resultado depende da constância, mas você não precisa fazer isso sozinho.",
-            "Fale com seu professor pelo sistema para ajustar o treino, tirar dúvidas ou reorganizar sua rotina.",
+            `Percebi que ${missedCount} treinos ficaram sem conclusão. Quero evitar que essa sequência vire um afastamento do seu objetivo.`,
+            "Vamos conversar pelo chat da plataforma para entender suas barreiras e decidir juntos se precisamos reduzir duração, ajustar exercícios, reorganizar dias ou fazer uma retomada mais leve.",
             "",
-            "Nosso foco é te ajudar a conquistar seu objetivo.",
+            "Estou aqui para acompanhar de verdade, sem julgamento e respeitando seu momento.",
           ].join("\n");
 
   const studentNotice = await createNotice({
@@ -443,6 +490,7 @@ async function notifyMissedWorkoutLevel({
     studentEmailSent = await sendStudentEmail({
       to: getStudentEmail(student),
       studentName,
+      professorName,
       subject: title,
       title,
       content,
@@ -458,20 +506,24 @@ async function notifyMissedWorkoutLevel({
   if (level >= 2 && student.user?.id) {
     const professorTitle =
       level === 2
-        ? "Aluno com baixa adesão ao treino"
-        : "Aluno em risco de abandono de treino";
+        ? `Acompanhar adesão de ${studentName}`
+        : `Ação de cuidado necessária com ${studentName}`;
 
     const professorContent =
       level === 2
         ? [
-            `O aluno ${studentName} deixou de concluir ${missedCount} treino(s).`,
+            `Oi, ${student.user?.name || "professor(a)"}.`,
             "",
-            "Sugestão: avaliar se existe dúvida, dificuldade de execução, rotina incompatível ou necessidade de ajuste do treino.",
+            `${studentName} está com ${missedCount} treino(s) sem conclusão.`,
+            "Antes de ajustar a programação, faça uma abordagem pelo chat para entender se existe dificuldade de execução, dúvida, falta de tempo ou incompatibilidade com a rotina.",
+            "Depois, registre o encaminhamento e adapte o treino se necessário.",
           ].join("\n")
         : [
-            `O aluno ${studentName} já acumula ${missedCount} treino(s) não realizado(s).`,
+            `Oi, ${student.user?.name || "professor(a)"}.`,
             "",
-            "Este é um sinal importante de risco de abandono. Recomendamos contato ativo, escuta das dificuldades e possível ajuste da programação.",
+            `${studentName} acumula ${missedCount} treino(s) sem conclusão e precisa de uma abordagem ativa de cuidado.`,
+            "Converse pelo chat com escuta e sem cobrança. Entenda as barreiras, combine um próximo passo possível e avalie uma retomada mais simples ou ajuste da programação.",
+            "A gestão também receberá visibilidade para apoiar o acompanhamento, se necessário.",
           ].join("\n");
 
     await createNotice({
@@ -501,15 +553,16 @@ async function notifyMissedWorkoutLevel({
   }
 
   if (level >= 3) {
-    const gestaoTitle = "Aluno com risco de abandono de treino";
+    const gestaoTitle = `Acompanhamento de retenção: ${studentName}`;
     const gestaoContent = [
-      `O aluno ${studentName} acumula ${missedCount} treino(s) não realizado(s).`,
+      `${studentName} está com ${missedCount} treino(s) sem conclusão.`,
       "",
       student.user?.name
         ? `Professor responsável: ${student.user.name}.`
         : "Professor responsável não identificado.",
       "",
-      "Sugestão: acompanhar a atuação do professor e avaliar se o aluno precisa de contato adicional.",
+      "Ação sugerida para a gestão: acompanhar se o professor realizou uma abordagem pelo chat e se houve combinação de um próximo passo com o aluno.",
+      "Se não houver retorno ou se surgirem questões comerciais, a gestão pode fazer contato adicional pelos canais sob sua responsabilidade.",
     ].join("\n");
 
     await createNotice({
