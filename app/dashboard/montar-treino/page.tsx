@@ -1143,10 +1143,22 @@ export default function MontarTreinoPage() {
           aiDraftBatch &&
           aiDraftIndex + 1 < aiDraftBatch.workouts.length;
 
+        /*
+         * Ao salvar o último treino necessário da semana, a montagem foi
+         * concluída. Nesse caso, voltamos ao dashboard automaticamente.
+         *
+         * Se ainda existir outro treino do lote da IA, a tela permanece aberta
+         * para o professor revisar e salvar o próximo.
+         */
+        const shouldReturnToDashboardAfterSave =
+          !hasNextAiWorkout && willCompleteWeekOnSave;
+
         setSuccess(
           hasNextAiWorkout
             ? `${weeklyMessage} Próximo treino sugerido pela IA carregado para revisão.`
-            : weeklyMessage
+            : shouldReturnToDashboardAfterSave
+              ? `${weeklyMessage} Montagem concluída. Voltando ao dashboard...`
+              : weeklyMessage
         );
 
         if (hasNextAiWorkout && aiDraftBatch) {
@@ -1206,6 +1218,13 @@ export default function MontarTreinoPage() {
           nextMissingDateAfterSave !== date
         ) {
           setDate(nextMissingDateAfterSave);
+        }
+
+        if (shouldReturnToDashboardAfterSave) {
+          window.setTimeout(() => {
+            window.location.replace("/dashboard");
+          }, 900);
+          return;
         }
 
         setTimeout(() => setSuccess(null), 7000);
