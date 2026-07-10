@@ -110,26 +110,155 @@ function safeSentence(value?: string | null, fallback = "Não informado."): stri
   return /[.!?]$/.test(text) ? text : `${text}.`;
 }
 
-function exerciseExecutionHint(name: string, muscleGroup: string): string {
-  const text = `${name} ${muscleGroup}`.toLowerCase();
+function detectExercisePromptProfile(form: ExerciseForm) {
+  const text = `${form.name} ${form.muscleGroup} ${form.equipmentTags} ${form.instructions} ${form.description}`.toLowerCase();
 
-  if (text.includes("abdominal curto")) {
-    return "O exercício deve mostrar pessoa deitada de barriga para cima sobre colchonete, joelhos flexionados, pés apoiados no chão, mãos levemente apoiadas nas laterais da cabeça ou cruzadas sobre o peito, realizando pequena flexão de tronco, elevando levemente as escápulas, sem sentar completamente.";
+  const base = {
+    categoryLabel: "Exercício geral",
+    environmentHint: "Ambiente neutro claro, sem poluição visual, com enquadramento que mostre o corpo inteiro e a mecânica do exercício com clareza.",
+    sceneElements: "Somente os elementos realmente necessários para entender o exercício. Não incluir acessórios irrelevantes.",
+    mainFraming: "Preferir vista lateral ou 3/4 que facilite a leitura da postura e do alinhamento corporal.",
+    sequenceStructure: "Mostrar posição inicial, início do movimento, fase intermediária, ponto principal do gesto, retorno controlado e finalização.",
+    executionHint: "O exercício deve mostrar uma execução tecnicamente segura, coerente com o nome do exercício, com postura estável, alinhamento corporal e amplitude controlada.",
+  };
+
+  if (
+    text.includes("abdominal") ||
+    text.includes("prancha") ||
+    text.includes("ponte") ||
+    text.includes("bird dog") ||
+    text.includes("dead bug") ||
+    text.includes("solo") ||
+    text.includes("chao") ||
+    text.includes("chão")
+  ) {
+    return {
+      ...base,
+      categoryLabel: "Exercício de chão / core",
+      environmentHint: "Usar colchonete visível sobre fundo neutro claro, com composição limpa e foco na postura.",
+      sceneElements: "Colchonete sempre visível. Se houver apoio específico, ele deve aparecer de forma discreta e clara.",
+      mainFraming: "Preferir vista lateral ou 3/4 que permita entender posição da coluna, apoio dos pés, joelhos e mãos.",
+      sequenceStructure: "Mostrar de forma clara a posição inicial no colchonete, a ativação do movimento, o ponto de maior esforço sem exagero e o retorno controlado.",
+      executionHint: text.includes("abdominal curto")
+        ? "O exercício deve mostrar pessoa deitada de barriga para cima sobre colchonete, joelhos flexionados, pés apoiados no chão, mãos levemente apoiadas nas laterais da cabeça ou cruzadas sobre o peito, realizando pequena flexão de tronco, elevando levemente as escápulas, sem sentar completamente."
+        : text.includes("prancha")
+          ? "O exercício deve mostrar alinhamento corporal neutro, apoio estável e postura firme, sem queda de quadril e sem elevação exagerada."
+          : "O exercício deve mostrar controle do centro do corpo, boa organização postural e transições seguras no solo, sem compensações exageradas."
+    };
   }
 
-  if (text.includes("prancha")) {
-    return "O exercício deve mostrar alinhamento corporal neutro, apoio estável e postura firme, sem queda de quadril e sem elevação exagerada.";
+  if (
+    text.includes("mobilidade") ||
+    text.includes("alongamento") ||
+    text.includes("alongar") ||
+    text.includes("torac") ||
+    text.includes("torác") ||
+    text.includes("rotação") ||
+    text.includes("rotacao") ||
+    text.includes("flexibilidade")
+  ) {
+    return {
+      ...base,
+      categoryLabel: "Exercício de mobilidade / alongamento",
+      environmentHint: "Ambiente limpo, postura relaxada e visual didático. A imagem deve transmitir amplitude segura e controle, não esforço máximo.",
+      sceneElements: "Usar colchonete ou apoio somente se necessário para a leitura do exercício.",
+      mainFraming: "Preferir enquadramento que destaque a articulação ou cadeia corporal que está sendo mobilizada.",
+      sequenceStructure: "Mostrar entrada na posição, progressão suave de amplitude, ponto de mobilidade segura e retorno, sem parecer gesto brusco.",
+      executionHint: "O exercício deve mostrar mobilidade progressiva, sem amplitude forçada, sem dor aparente e com alinhamento confortável."
+    };
   }
 
-  if (text.includes("agach")) {
-    return "O exercício deve mostrar base estável, tronco controlado, joelhos alinhados e amplitude segura, sem colapso de joelhos e sem arredondar excessivamente a coluna.";
+  if (
+    text.includes("corrida") ||
+    text.includes("skip") ||
+    text.includes("polichinelo") ||
+    text.includes("burpee") ||
+    text.includes("salt") ||
+    text.includes("salto") ||
+    text.includes("desloc") ||
+    text.includes("cardio")
+  ) {
+    return {
+      ...base,
+      categoryLabel: "Exercício dinâmico / cardio / corrida",
+      environmentHint: "Fundo neutro claro com sensação de espaço livre. O movimento deve parecer dinâmico, mas ainda didático e fácil de entender.",
+      sceneElements: "Não adicionar elementos de cenário desnecessários. O foco deve estar no gesto motor.",
+      mainFraming: "Preferir enquadramento que mostre o corpo inteiro e a direção do movimento com clareza.",
+      sequenceStructure: "Mostrar preparação, início do gesto, fase aérea ou fase principal do movimento quando existir, aterrissagem/apoio e retorno organizado.",
+      executionHint: "O exercício deve mostrar movimento dinâmico com postura segura, aterrissagem ou apoio controlado e sequência clara do gesto motor."
+    };
   }
 
-  if (text.includes("corrida") || text.includes("skip") || text.includes("polichinelo") || text.includes("burpee")) {
-    return "O exercício deve mostrar movimento dinâmico com postura segura, aterrissagem/control de impacto e sequência clara do gesto motor.";
+  if (
+    text.includes("cadeira") ||
+    text.includes("banco") ||
+    text.includes("step") ||
+    text.includes("apoio") ||
+    text.includes("sentado") ||
+    text.includes("sentar")
+  ) {
+    return {
+      ...base,
+      categoryLabel: "Exercício com apoio / cadeira / banco",
+      environmentHint: "Ambiente neutro com o apoio claramente visível e proporcional, sem elementos que distraiam a leitura do exercício.",
+      sceneElements: "O banco, cadeira, step ou apoio deve aparecer de forma nítida e segura, bem posicionado no cenário.",
+      mainFraming: "Preferir enquadramento lateral ou 3/4 para que a relação do corpo com o apoio fique fácil de entender.",
+      sequenceStructure: "Mostrar aproximação do apoio, fase de uso do apoio, controle do corpo e retorno, sempre deixando clara a função do objeto no exercício.",
+      executionHint: text.includes("agach")
+        ? "O exercício deve mostrar base estável, tronco controlado, joelhos alinhados e amplitude segura, sem colapso de joelhos e sem arredondar excessivamente a coluna."
+        : "O exercício deve mostrar uso seguro do apoio, com estabilidade, boa postura e trajetória clara do movimento."
+    };
   }
 
-  return "O exercício deve mostrar uma execução tecnicamente segura, coerente com o nome do exercício, com postura estável, alinhamento corporal e amplitude controlada.";
+  if (
+    text.includes("halter") ||
+    text.includes("peso") ||
+    text.includes("anilha") ||
+    text.includes("kettlebell") ||
+    text.includes("elastico") ||
+    text.includes("elástico") ||
+    text.includes("barra") ||
+    text.includes("medicine ball")
+  ) {
+    return {
+      ...base,
+      categoryLabel: "Exercício com implemento / carga",
+      environmentHint: "Ambiente neutro claro com o implemento bem visível, proporcional e fácil de reconhecer.",
+      sceneElements: "Mostrar apenas o equipamento necessário para o exercício, sem poluição visual.",
+      mainFraming: "Preferir vista lateral ou 3/4 que mostre a trajetória do implemento e o alinhamento corporal.",
+      sequenceStructure: "Mostrar pegada inicial, preparação, fase de subida ou tração, ponto principal do movimento e retorno controlado, sempre com o implemento visível.",
+      executionHint: "O exercício deve mostrar manipulação segura do implemento, coluna organizada, trajetória clara da carga e postura estável."
+    };
+  }
+
+  if (
+    text.includes("agach") ||
+    text.includes("afundo") ||
+    text.includes("passada") ||
+    text.includes("remada") ||
+    text.includes("desenvolvimento") ||
+    text.includes("rosca") ||
+    text.includes("triceps") ||
+    text.includes("tríceps") ||
+    text.includes("elevacao") ||
+    text.includes("elevação") ||
+    text.includes("stiff") ||
+    text.includes("terra")
+  ) {
+    return {
+      ...base,
+      categoryLabel: "Exercício em pé / força funcional",
+      environmentHint: "Ambiente neutro claro, com o praticante de pé e espaço suficiente para ver toda a postura e base de apoio.",
+      sceneElements: "Somente os elementos necessários para entender o exercício. Se houver equipamento, ele deve aparecer claramente.",
+      mainFraming: "Preferir enquadramento lateral ou 3/4 para evidenciar alinhamento de coluna, quadril, joelhos e pés.",
+      sequenceStructure: "Mostrar posição inicial, preparação, fase de descida ou carga, fase principal do movimento e retorno controlado à posição inicial.",
+      executionHint: text.includes("agach")
+        ? "O exercício deve mostrar base estável, tronco controlado, joelhos alinhados e amplitude segura, sem colapso de joelhos e sem arredondar excessivamente a coluna."
+        : "O exercício deve mostrar postura organizada, base estável, movimento funcional claro e amplitude segura."
+    };
+  }
+
+  return base;
 }
 
 function buildPackagePrompt(form: ExerciseForm): string {
@@ -150,7 +279,7 @@ function buildPackagePrompt(form: ExerciseForm): string {
     form.sequenceImageNotes,
     "A sequência deve mostrar início, meio e final do movimento, com progressão clara e visual didático."
   );
-  const extraHint = exerciseExecutionHint(form.name, form.muscleGroup);
+  const profile = detectExercisePromptProfile(form);
 
   return [
     "PACOTE DE IMAGENS PARA BIBLIOTECA DE EXERCÍCIOS — FUNCIONAL VIP DIGITAL",
@@ -162,18 +291,30 @@ function buildPackagePrompt(form: ExerciseForm): string {
     "",
     `EXERCÍCIO: ${form.name || "Não informado"}`,
     `GRUPO MUSCULAR: ${form.muscleGroup || "Não informado"}`,
+    `TIPO DE EXERCÍCIO VISUAL: ${profile.categoryLabel}`,
     `QUADROS DA SEQUÊNCIA: ${frames}`,
     "",
     "ARQUIVOS ESPERADOS PARA IMPORTAÇÃO EM LOTE:",
     `1. ${mainFile}`,
     `2. ${sequenceFile}`,
     "",
+    "PADRÃO VISUAL OBRIGATÓRIO PARA AS DUAS IMAGENS:",
+    "- ilustração 3D realista, limpa e profissional;",
+    "- fundo neutro claro;",
+    "- boa iluminação;",
+    "- corpo inteiro visível;",
+    "- roupa esportiva neutra;",
+    "- sem logos, sem marcas d’água e sem texto dentro da imagem;",
+    "- mesma pessoa e mesma identidade visual nas duas imagens;",
+    `- ambiente recomendado: ${profile.environmentHint}`,
+    `- enquadramento preferencial: ${profile.mainFraming}`,
+    `- elementos de cena: ${profile.sceneElements}`,
+    "",
     "IMAGEM 1 — PRINCIPAL / CAPA DO EXERCÍCIO",
     `Nome do arquivo: ${mainFile}`,
-    `Crie uma imagem principal didática e padronizada para o exercício \"${form.name}\".`,
+    `Crie uma imagem principal didática e padronizada para o exercício "${form.name}".`,
     "Objetivo da imagem: servir como capa visual do exercício na biblioteca e no treino do aluno.",
-    "Estilo visual obrigatório: ilustração 3D realista, limpa, profissional, fundo neutro claro, boa iluminação, corpo inteiro visível, roupa esportiva neutra, sem logos, sem marcas d’água e sem texto dentro da imagem.",
-    `${extraHint}`,
+    `${profile.executionHint}`,
     `Finalidade do exercício: ${purpose}`,
     `Grupo muscular principal: ${safeSentence(form.muscleGroup, "Não informado.")}`,
     `Como executar: ${instructions}`,
@@ -185,11 +326,11 @@ function buildPackagePrompt(form: ExerciseForm): string {
     "",
     "IMAGEM 2 — SEQUÊNCIA DE EXECUÇÃO",
     `Nome do arquivo: ${sequenceFile}`,
-    `Crie uma imagem sequencial didática com ${frames} quadros para demonstrar o exercício \"${form.name}\" do início ao fim.`,
+    `Crie uma imagem sequencial didática com ${frames} quadros para demonstrar o exercício "${form.name}" do início ao fim.`,
     "Objetivo da imagem: ensinar visualmente a execução do exercício para o aluno, em etapas claras.",
-    "Estilo visual obrigatório: usar a mesma pessoa e a mesma identidade visual da imagem principal; ilustração 3D realista, limpa, profissional, fundo neutro claro, boa iluminação, corpo inteiro visível, roupa esportiva neutra, sem logos, sem marcas d’água e sem texto dentro da imagem.",
-    `${extraHint}`,
+    `${profile.executionHint}`,
     `Título da sequência: ${sequenceLabel}.`,
+    `Estrutura sugerida da sequência: ${profile.sequenceStructure}`,
     `Finalidade do exercício: ${purpose}`,
     `Grupo muscular principal: ${safeSentence(form.muscleGroup, "Não informado.")}`,
     `Como executar: ${instructions}`,
