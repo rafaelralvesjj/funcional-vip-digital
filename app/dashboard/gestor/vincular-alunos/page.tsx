@@ -143,23 +143,14 @@ function commercialStatusLabel(student: Student): string {
   return labels[status] || status;
 }
 
-function hasCurrentContractOrTrial(student: Student): boolean {
-  const status = getCommercialStatus(student);
-
-  return status === "CONTRATO_ATIVO" || status === "EXPERIENCIA_ATIVA";
-}
-
 function isPendingLink(student: Student, teachers: Teacher[]): boolean {
-  const validProfessorId = getValidProfessorId(student, teachers);
-
   /*
-   * Depois da Fase 1, "vinculado" significa:
-   * professor válido + contrato/experiência ativo.
+   * Esta página cuida somente do vínculo professor-aluno.
    *
-   * A quantidade de treinos não é mais digitada aqui.
-   * Ela vem do Financeiro/Contrato.
+   * O status comercial aparece no cartão apenas como informação e não deve
+   * fazer um aluno já vinculado voltar para a lista de pendentes.
    */
-  return !validProfessorId || !hasCurrentContractOrTrial(student);
+  return !getValidProfessorId(student, teachers);
 }
 
 export default function VincularAlunosPage() {
@@ -345,8 +336,8 @@ export default function VincularAlunosPage() {
           Vincular Alunos a Professores
         </h1>
         <p className="text-sm text-[#a1a1a1] mt-2">
-          Distribua os alunos entre os professores e registre os dias de treino contratados por mês.
-          O aluno só aparece em <strong>Alunos com contrato ativo</strong> depois de ter professor ativo e dias contratados preenchidos.
+          Distribua os alunos entre os professores. A lista de pendentes mostra somente quem ainda está sem professor.
+          Contrato, experiência e pagamento continuam visíveis no status comercial, mas não alteram o vínculo.
         </p>
       </div>
 
@@ -378,7 +369,7 @@ export default function VincularAlunosPage() {
                   : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
               }
             >
-              Pendentes de vínculo/contrato ({pendingStudents.length})
+              Sem professor ({pendingStudents.length})
             </button>
 
             <button
@@ -391,7 +382,7 @@ export default function VincularAlunosPage() {
                   : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
               }
             >
-              Alunos com contrato ativo ({linkedStudents.length})
+              Com professor vinculado ({linkedStudents.length})
             </button>
           </div>
 
@@ -419,7 +410,7 @@ export default function VincularAlunosPage() {
           </div>
 
           <div className="bg-[#1a1a1a] rounded-xl p-4">
-            <p className="text-[10px] uppercase text-[#6b6b6b]">Pendentes</p>
+            <p className="text-[10px] uppercase text-[#6b6b6b]">Sem professor</p>
             <p className="text-2xl font-bold text-yellow-400">{pendingStudents.length}</p>
           </div>
 
@@ -443,8 +434,8 @@ export default function VincularAlunosPage() {
         ) : filteredStudents.length === 0 ? (
           <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-8 text-sm text-[#a1a1a1] text-center">
             {viewMode === "pending"
-              ? "Nenhum aluno pendente de vínculo."
-              : "Nenhum aluno vinculado encontrado."}
+              ? "Nenhum aluno está sem professor."
+              : "Nenhum aluno com professor vinculado foi encontrado."}
           </div>
         ) : (
           filteredStudents.map((student) => {
@@ -565,7 +556,7 @@ export default function VincularAlunosPage() {
       )}
 
       <p className="text-xs text-[#6b6b6b] text-center">
-        {students.length} aluno(s) · {pendingStudents.length} pendente(s) · {linkedStudents.length} com contrato ativo · {teachers.length} professor(es) ativo(s)
+        {students.length} aluno(s) · {pendingStudents.length} sem professor · {linkedStudents.length} vinculado(s) · {teachers.length} professor(es) ativo(s)
       </p>
     </div>
   );
