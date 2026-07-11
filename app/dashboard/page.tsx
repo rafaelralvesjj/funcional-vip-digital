@@ -8,7 +8,6 @@ import DashboardAutoRefresh from '@/components/DashboardAutoRefresh';
 import DashboardSectionSwitcher from '@/components/DashboardSectionSwitcher';
 import TrialContinuationDashboardShortcut from '@/components/gestor/TrialContinuationDashboardShortcut';
 import ProfilePhotoEditor from '@/components/ProfilePhotoEditor';
-import TeacherConversationComposer from '@/components/TeacherConversationComposer';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -909,73 +908,6 @@ export default async function DashboardPage() {
     },
   });
 
-  const teacherStudentMessages =
-    isTeacher && myStudentIds.length > 0
-      ? await prisma.question.findMany({
-          where: {
-            parentId: null,
-            teacherId: userId,
-            studentId: {
-              in: myStudentIds,
-            },
-            senderRole: {
-              in: ['STUDENT', 'TEACHER'],
-            },
-          },
-          include: {
-            student: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            teacher: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            answeredBy: {
-              select: {
-                id: true,
-                name: true,
-                role: true,
-              },
-            },
-            children: {
-              orderBy: {
-                createdAt: 'asc',
-              },
-              include: {
-                answeredBy: {
-                  select: {
-                    id: true,
-                    name: true,
-                    role: true,
-                  },
-                },
-                student: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-                teacher: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 50,
-        })
-      : [];
-
   const questionsWithoutAnswer = unansweredQuestions.filter((question) => {
     if (question.resolvedAt) return false;
 
@@ -1133,48 +1065,6 @@ export default async function DashboardPage() {
         'Usuário',
     })),
   }));
-
-  const teacherStudentConversationItems = teacherStudentMessages.map((message) => {
-    const senderRole = normalizeRole(message.senderRole);
-
-    return {
-      id: message.id,
-      studentId: message.studentId || null,
-      teacherId: message.teacherId || userId,
-      content: message.content,
-      imageUrl: message.imageUrl || null,
-      videoUrl: message.videoUrl || null,
-      senderRole: message.senderRole || 'TEACHER',
-      createdAt: message.createdAt.toISOString(),
-      resolvedAt: message.resolvedAt ? message.resolvedAt.toISOString() : null,
-      answeredById: message.answeredById || null,
-      openedById: message.answeredById || null,
-      authorName:
-        senderRole === 'STUDENT'
-          ? message.student?.name || 'Aluno'
-          : message.teacher?.name || message.answeredBy?.name || userName,
-      targetLabel:
-        senderRole === 'STUDENT'
-          ? `Professor: ${message.teacher?.name || userName}`
-          : `Aluno: ${message.student?.name || 'Aluno'}`,
-      children: (message.children || []).map((reply) => ({
-        id: reply.id,
-        studentId: reply.studentId || message.studentId || null,
-        teacherId: reply.teacherId || message.teacherId || userId,
-        content: reply.content,
-        imageUrl: reply.imageUrl || null,
-        videoUrl: reply.videoUrl || null,
-        senderRole: reply.senderRole || 'TEACHER',
-        createdAt: reply.createdAt.toISOString(),
-        resolvedAt: reply.resolvedAt ? reply.resolvedAt.toISOString() : null,
-        authorName:
-          reply.answeredBy?.name ||
-          reply.teacher?.name ||
-          reply.student?.name ||
-          'Usuário',
-      })),
-    };
-  });
 
   const activeManagementMessagesCount = managementMessages.filter(
     (message) => !message.resolvedAt
@@ -1426,50 +1316,6 @@ export default async function DashboardPage() {
               >
                 Abrir evolução
               </a>
-            </div>
-          </div>
-        )}
-
-        {isTeacher && (
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8 space-y-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.25em] text-[#D4A373]">
-                Comunicação
-              </p>
-              <h2 className="mt-1 text-xl font-semibold text-[#f5f5f5]">
-                Iniciar uma conversa
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-[#a1a1a1]">
-                Agora você pode procurar um aluno para orientar, acompanhar ou tirar uma dúvida sem esperar que ele escreva primeiro. Também pode iniciar uma conversa com a gestão sempre que precisar de apoio.
-              </p>
-            </div>
-
-            <TeacherConversationComposer
-              teacherId={userId}
-              students={students
-                .filter((student) => student.active)
-                .map((student) => ({
-                  id: student.id,
-                  name: student.name,
-                  email: student.email,
-                }))}
-            />
-
-            <div className="border-t border-[#ffffff10] pt-6">
-              <h3 className="text-lg font-semibold text-[#f5f5f5]">
-                Conversas com meus alunos
-              </h3>
-              <p className="mt-1 mb-4 text-sm text-[#a1a1a1]">
-                Aqui ficam tanto as conversas iniciadas por você quanto as iniciadas pelos seus alunos. Você pode abrir o histórico, responder e encerrar as conversas que começou.
-              </p>
-
-              <DashboardConversationList
-                conversations={teacherStudentConversationItems}
-                currentUserId={userId}
-                currentRole="TEACHER"
-                emptyMessage="Nenhuma conversa com aluno encontrada."
-                allowReply={true}
-              />
             </div>
           </div>
         )}
