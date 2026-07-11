@@ -30,6 +30,7 @@ export default function DashboardLayout({
   const professorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
+    { href: "/dashboard/conversas", label: "Conversas", icon: "message" },
     { href: "/dashboard/cuidado-aluno", label: "Acompanhamento do Aluno", icon: "heart" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
   ];
