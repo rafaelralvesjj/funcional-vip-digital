@@ -443,6 +443,7 @@ async function notifyWorkoutAvailable({
         "",
         "Como este é o seu primeiro treino, separe cerca de 10 minutos antes de começar para olhar tudo com calma: exercícios, imagens, orientações, séries, repetições e cuidados de execução.",
         "Se surgir qualquer dúvida, fale comigo pelo chat da plataforma antes de executar. Esse será nosso principal canal de comunicação sobre treino, porque mantém o acompanhamento registrado e organizado.",
+        "Durante ou ao finalizar o treino, nunca deixe de registrar qualquer incômodo, dor ou desconforto, mesmo que pareça leve. Use o registro do próprio treino ao concluir a sessão. Se precisar falar antes, tiver dúvida sobre continuar ou não conseguir finalizar, use o chat da plataforma. Essas informações chegam ao professor e impactam diretamente a montagem dos próximos treinos.",
         "Acompanhe também seus e-mails e os avisos da plataforma. Para dúvidas de treino, não responda pelo WhatsApp; esse canal fica reservado para contatos específicos da gestão.",
         "",
         "Conte comigo nesse processo. Vamos evoluir com segurança, consistência e respeitando o seu momento.",
@@ -457,6 +458,7 @@ async function notifyWorkoutAvailable({
         `Sou ${professorName}. Seus ${weeklyLimit} treino(s) da semana de ${weekLabel} já estão disponíveis.`,
         "Antes de começar, confira as orientações, imagens, séries, repetições e cuidados de cada exercício.",
         "Se tiver dúvida ou precisar contar como foi a execução, use o chat da plataforma. Assim, consigo acompanhar seu histórico e ajustar os próximos treinos com mais segurança.",
+        "Lembre-se de registrar no próprio treino qualquer incômodo, dor ou desconforto. Se precisar falar antes de concluir ou tiver dúvida sobre continuar, use o chat da plataforma. Seu relato faz parte do acompanhamento e influencia diretamente os próximos treinos.",
         "Para assuntos de treino, não responda pelo WhatsApp. A gestão pode usar esse canal em situações específicas.",
         "",
         "Bom treino!",
@@ -534,6 +536,10 @@ async function notifyWorkoutAvailable({
           <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
           ${introHtml}
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se surgir qualquer dúvida, use o chat da plataforma antes de executar. Esse é o canal principal entre você e o professor, porque mantém o acompanhamento registrado e organizado.</p>
+          <div style="background:#1a1510; border:1px solid #7c5228; border-radius:12px; padding:14px; margin:14px 0;">
+            <p style="color:#D4A373; font-size:14px; font-weight:bold; margin:0 0 8px;">Seu relato ajuda a montar o próximo treino</p>
+            <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin:0;">Durante ou ao finalizar o treino, nunca deixe de registrar qualquer incômodo, dor ou desconforto, mesmo que pareça leve. Use o registro do próprio treino ao concluir a sessão. Se precisar falar antes, tiver dúvida sobre continuar ou não conseguir finalizar, use o chat da plataforma. Essas informações chegam ao professor e impactam diretamente a montagem dos próximos treinos.</p>
+          </div>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Para dúvidas de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.</p>
           <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meus treinos</a>
           <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional VIP Digital</p>
