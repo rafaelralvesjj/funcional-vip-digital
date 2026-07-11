@@ -13,6 +13,10 @@ type Student = AnyItem & {
   name: string;
   email?: string | null;
   phone?: string | null;
+  birthDate?: string | null;
+  ageYears?: number | null;
+  isMinor?: boolean;
+  hasBirthDate?: boolean;
   active?: boolean;
   commercialStatus?: string | null;
   image?: string | null;
@@ -54,7 +58,9 @@ const GOAL_LABELS: Record<string, string> = {
 function formatDate(value?: string | null): string {
   if (!value) return "-";
 
-  const date = new Date(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T12:00:00`)
+    : new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
 
   return date.toLocaleDateString("pt-BR", {
@@ -544,6 +550,14 @@ function buildTeacherReading(profile: ReturnType<typeof getStudentProfile>, stud
 
   parts.push(`Aluno com status ${status.toLowerCase()}.`);
 
+  if (student?.ageYears !== null && student?.ageYears !== undefined) {
+    parts.push(
+      `Idade atual: ${student.ageYears} ano(s)${student.isMinor ? ", aluno menor de idade" : ""}.`
+    );
+  } else {
+    parts.push("Data de nascimento não informada; não montar ou liberar treino até a gestão completar esse dado.");
+  }
+
   if (profile.objective !== "Não informado") {
     parts.push(`Objetivo principal informado: ${profile.objective}.`);
   }
@@ -1010,6 +1024,11 @@ export default function StudentDetailPage() {
               <p className="text-xs text-[#6b6b6b] mt-1">
                 Entrou na Funcional em {formatDate(student?.createdAt)} · Professor atual: {professorName}
               </p>
+              <p className={"text-xs mt-1 font-semibold " + (student?.ageYears === null || student?.ageYears === undefined ? "text-red-400" : "text-[#D4A373]")}>
+                {student?.ageYears === null || student?.ageYears === undefined
+                  ? "Data de nascimento não informada"
+                  : `Nascimento: ${formatDate(student.birthDate)} · Idade: ${student.ageYears} ano(s)${student.isMinor ? " · menor de idade" : ""}`}
+              </p>
             </div>
           </div>
 
@@ -1025,6 +1044,15 @@ export default function StudentDetailPage() {
         {message && (
           <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
             {message}
+          </div>
+        )}
+
+        {!loading && student && (student.ageYears === null || student.ageYears === undefined) && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <p className="font-semibold">Cadastro incompleto: data de nascimento obrigatória.</p>
+            <p className="mt-1 text-xs leading-relaxed text-red-200/80">
+              O professor precisa conhecer a idade para avaliar intensidade, volume, recuperação e progressão. Solicite à gestão que complete o cadastro antes de gerar resumo IA ou montar o treino.
+            </p>
           </div>
         )}
 
@@ -1048,15 +1076,32 @@ export default function StudentDetailPage() {
                   </p>
                 </div>
 
-                <Link
-                  href={`/dashboard/resumo-aluno?studentId=${encodeURIComponent(studentId)}`}
-                  className="inline-flex items-center justify-center rounded-xl bg-[#D4A373] text-[#0a0a0a] px-4 py-3 text-xs font-semibold hover:bg-[#c49563] transition"
-                >
-                  Gerar resumo IA
-                </Link>
+                {student?.ageYears === null || student?.ageYears === undefined ? (
+                  <span
+                    className="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-[#D4A373]/30 text-[#6b6b6b] px-4 py-3 text-xs font-semibold"
+                    title="Informe a data de nascimento antes de gerar o resumo IA"
+                  >
+                    Data de nascimento pendente
+                  </span>
+                ) : (
+                  <Link
+                    href={`/dashboard/resumo-aluno?studentId=${encodeURIComponent(studentId)}`}
+                    className="inline-flex items-center justify-center rounded-xl bg-[#D4A373] text-[#0a0a0a] px-4 py-3 text-xs font-semibold hover:bg-[#c49563] transition"
+                  >
+                    Gerar resumo IA
+                  </Link>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <SummaryField
+                  label="Idade / nascimento"
+                  value={
+                    student?.ageYears === null || student?.ageYears === undefined
+                      ? "Não informado — cadastro precisa ser completado"
+                      : `${student.ageYears} ano(s) · ${formatDate(student.birthDate)}${student.isMinor ? " · menor de idade" : ""}`
+                  }
+                />
                 <SummaryField label="Objetivo" value={profile.objective} />
                 <SummaryField label="Nível atual" value={profile.activityLevel} />
                 <SummaryField label="Ambiente/equipamentos" value={`${profile.trainingEnvironment} · ${profile.availableEquipment}`} />
