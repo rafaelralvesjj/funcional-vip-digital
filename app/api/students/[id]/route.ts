@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { calculateAgeYears, formatBirthDateInput, validateBirthDateInput } from "@/lib/student-age";
 
 type AnyStudent = Record<string, any>;
 
@@ -189,12 +190,17 @@ function isProfessorUser(user?: { role?: string | null } | null): boolean {
 function buildStudentResponse(student: AnyStudent) {
   const profile = buildInitialProfile(student);
   const professorLinked = isProfessorUser(student.user);
+  const ageYears = calculateAgeYears(student.userAuth?.birthDate);
 
   return {
     id: student.id,
     name: student.name,
     email: student.email,
     phone: student.phone || student.userAuth?.phone || null,
+    birthDate: formatBirthDateInput(student.userAuth?.birthDate),
+    ageYears,
+    isMinor: ageYears !== null && ageYears < 18,
+    hasBirthDate: Boolean(student.userAuth?.birthDate),
     notes: student.notes,
     image: student.image || student.userAuth?.image || null,
     active: student.active,
@@ -281,6 +287,7 @@ export async function GET(
             email: true,
             phone: true,
             image: true,
+            birthDate: true,
             role: true,
           },
         },
@@ -424,6 +431,10 @@ export async function PUT(
       body.active !== undefined ? Boolean(body.active) : undefined;
     const password =
       body.password !== undefined ? String(body.password || "") : undefined;
+    const birthDateValidation =
+      body.birthDate !== undefined
+        ? validateBirthDateInput(body.birthDate)
+        : null;
 
     const professorIdRaw =
       body.professorId !== undefined || body.userId !== undefined
@@ -446,6 +457,20 @@ export async function PUT(
       return NextResponse.json(
         { error: "A senha deve ter no mínimo 6 caracteres." },
         { status: 400 }
+      );
+    }
+
+    if (birthDateValidation?.error || (birthDateValidation && !birthDateValidation.birthDate)) {
+      return NextResponse.json(
+        { error: birthDateValidation?.error || "Informe a data de nascimento do aluno." },
+        { status: 400 }
+      );
+    }
+
+    if (birthDateValidation && !existingStudent.userAuthId) {
+      return NextResponse.json(
+        { error: "Este aluno não possui usuário de acesso para registrar a data de nascimento." },
+        { status: 409 }
       );
     }
 
@@ -545,6 +570,7 @@ export async function PUT(
               name: true,
               email: true,
               phone: true,
+              birthDate: true,
               role: true,
             },
           },
@@ -557,6 +583,9 @@ export async function PUT(
           ...(email !== undefined && { email }),
           ...(phone !== undefined && { phone }),
           ...(image !== undefined && { image }),
+          ...(birthDateValidation?.birthDate && {
+            birthDate: birthDateValidation.birthDate,
+          }),
         };
 
         if (password) {
@@ -574,7 +603,46 @@ export async function PUT(
       return student;
     });
 
-    return NextResponse.json(buildStudentResponse(updated));
+    const refreshed = await prisma.student.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userId: true,
+        userAuthId: true,
+        name: true,
+        email: true,
+        phone: true,
+        notes: true,
+        image: true,
+        active: true,
+        onboardingCompleto: true,
+        contractedTrainingDaysPerMonth: true,
+        commercialStatus: true,
+        createdAt: true,
+        updatedAt: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+        userAuth: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            image: true,
+            birthDate: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(buildStudentResponse(refreshed || updated));
   } catch (error) {
     console.error("Erro ao atualizar aluno:", error);
     return NextResponse.json({ error: "Erro ao atualizar aluno" }, { status: 500 });
