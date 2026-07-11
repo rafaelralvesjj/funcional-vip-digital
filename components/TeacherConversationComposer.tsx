@@ -12,6 +12,7 @@ type TeacherStudentOption = {
 type Props = {
   teacherId: string;
   students: TeacherStudentOption[];
+  fixedTarget?: ConversationTarget;
 };
 
 type ConversationTarget = "STUDENT" | "MANAGEMENT";
@@ -39,10 +40,14 @@ function getErrorMessage(data: unknown, fallback: string): string {
 export default function TeacherConversationComposer({
   teacherId,
   students,
+  fixedTarget,
 }: Props) {
   const router = useRouter();
 
-  const [target, setTarget] = useState<ConversationTarget>("STUDENT");
+  const [target, setTarget] = useState<ConversationTarget>(
+    fixedTarget || "STUDENT"
+  );
+  const effectiveTarget = fixedTarget || target;
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [content, setContent] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -84,7 +89,7 @@ export default function TeacherConversationComposer({
     setError("");
     setSuccess("");
 
-    if (target === "STUDENT" && !selectedStudentId) {
+    if (effectiveTarget === "STUDENT" && !selectedStudentId) {
       setError("Selecione o aluno com quem deseja iniciar a conversa.");
       return;
     }
@@ -102,7 +107,7 @@ export default function TeacherConversationComposer({
       form.append("senderRole", "TEACHER");
       form.append("teacherId", teacherId);
 
-      if (target === "STUDENT") {
+      if (effectiveTarget === "STUDENT") {
         form.append("studentId", selectedStudentId);
       }
 
@@ -126,7 +131,7 @@ export default function TeacherConversationComposer({
       setSelectedFile(null);
       setFileInputKey((current) => current + 1);
 
-      if (target === "STUDENT") {
+      if (effectiveTarget === "STUDENT") {
         setSuccess(
           `Conversa iniciada com ${selectedStudent?.name || "o aluno"}. A mensagem já está disponível no painel dele.`
         );
@@ -147,24 +152,26 @@ export default function TeacherConversationComposer({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <label className="space-y-2">
-          <span className="text-xs font-medium text-[#a1a1a1]">
-            Com quem você quer falar?
-          </span>
+      <div className="grid grid-cols-1 gap-4">
+        {!fixedTarget && (
+          <label className="space-y-2">
+            <span className="text-xs font-medium text-[#a1a1a1]">
+              Com quem você quer falar?
+            </span>
 
-          <select
-            value={target}
-            onChange={handleTargetChange}
-            disabled={sending}
-            className="w-full rounded-xl border border-[#ffffff10] bg-[#0a0a0a] px-3 py-3 text-sm text-[#f5f5f5] focus:border-[#D4A373] focus:outline-none disabled:opacity-60"
-          >
-            <option value="STUDENT">Um dos meus alunos</option>
-            <option value="MANAGEMENT">Gestão</option>
-          </select>
-        </label>
+            <select
+              value={target}
+              onChange={handleTargetChange}
+              disabled={sending}
+              className="w-full rounded-xl border border-[#ffffff10] bg-[#0a0a0a] px-3 py-3 text-sm text-[#f5f5f5] focus:border-[#D4A373] focus:outline-none disabled:opacity-60"
+            >
+              <option value="STUDENT">Um dos meus alunos</option>
+              <option value="MANAGEMENT">Gestão</option>
+            </select>
+          </label>
+        )}
 
-        {target === "STUDENT" ? (
+        {effectiveTarget === "STUDENT" ? (
           <label className="space-y-2">
             <span className="text-xs font-medium text-[#a1a1a1]">
               Selecione o aluno
@@ -219,7 +226,7 @@ export default function TeacherConversationComposer({
           disabled={sending}
           rows={4}
           placeholder={
-            target === "STUDENT"
+            effectiveTarget === "STUDENT"
               ? "Escreva a mensagem que o aluno receberá..."
               : "Explique para a gestão como ela pode apoiar..."
           }
@@ -286,7 +293,7 @@ export default function TeacherConversationComposer({
           type="submit"
           disabled={
             sending ||
-            (target === "STUDENT" && (!selectedStudentId || students.length === 0))
+            (effectiveTarget === "STUDENT" && (!selectedStudentId || students.length === 0))
           }
           className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[#D4A373] px-5 py-3 text-sm font-semibold text-[#0a0a0a] transition hover:bg-[#c49563] disabled:cursor-not-allowed disabled:opacity-50"
         >
