@@ -625,7 +625,7 @@ async function sendStudentEmail({
     "",
     content,
     "",
-    `Se quiser contar como foi ou precisar de orientação, use o chat da plataforma para falar com ${professorName || "seu professor"}.`,
+    `Ao concluir cada treino, registre no próprio treino qualquer incômodo, dor ou desconforto, mesmo que pareça leve. Se precisar falar antes, tiver dúvida sobre continuar ou não conseguir finalizar, use o chat da plataforma para falar com ${professorName || "seu professor"}. Esse relato influencia diretamente a montagem dos próximos treinos.`,
     "Para assuntos de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.",
     "",
     professorName || "Seu professor",
@@ -641,7 +641,10 @@ async function sendStudentEmail({
         <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">${safeContent}</p>
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se quiser contar como foi ou precisar de orientação, use o chat da plataforma para falar com <strong>${safeProfessorName}</strong>.</p>
+        <div style="background:#1a1510; border:1px solid #7c5228; border-radius:12px; padding:14px; margin:14px 0;">
+          <p style="color:#D4A373; font-size:14px; font-weight:bold; margin:0 0 8px;">Seu relato orienta o próximo treino</p>
+          <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin:0;">Ao concluir cada treino, registre no próprio treino qualquer incômodo, dor ou desconforto, mesmo que pareça leve. Se precisar falar antes, tiver dúvida sobre continuar ou não conseguir finalizar, use o chat da plataforma para falar com <strong>${safeProfessorName}</strong>. Esse relato influencia diretamente a montagem dos próximos treinos.</p>
+        </div>
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Para assuntos de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.</p>
         <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
         <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional VIP Digital</p>
@@ -706,7 +709,7 @@ async function notifyWorkoutCompleted({
         `Parabéns, ${studentName}! Você concluiu seu primeiro treino no Funcional VIP Digital.`,
         "",
         "Esse primeiro passo é importante porque começa a construir seu histórico real de acompanhamento.",
-        "Continue registrando cada treino e use o chat para me contar como se sentiu, principalmente se tiver dúvida, dificuldade ou desconforto.",
+        "Continue registrando cada treino. Ao finalizar, informe no próprio treino qualquer incômodo, dor ou desconforto, mesmo que pareça leve. Se precisar falar antes ou tiver dúvida sobre continuar, use o chat da plataforma. Esses relatos impactam diretamente a montagem dos próximos treinos.",
         "",
         "Vamos evoluir com constância e segurança, sem precisar acelerar além do seu momento.",
       ].join("\n")
@@ -714,7 +717,7 @@ async function notifyWorkoutCompleted({
         `Parabéns, ${studentName}! Mais um treino concluído e registrado.`,
         "",
         "Cada registro me ajuda a acompanhar sua rotina e decidir os próximos ajustes com mais contexto.",
-        "Se quiser contar como foi a execução, fale comigo pelo chat da plataforma.",
+        "Ao finalizar, registre no próprio treino qualquer incômodo, dor ou desconforto. Se precisar falar antes ou tiver dúvida sobre continuar, fale comigo pelo chat da plataforma. Seu relato será considerado nos próximos ajustes.",
       ].join("\n");
 
   const notice = await createStudentNotice({
