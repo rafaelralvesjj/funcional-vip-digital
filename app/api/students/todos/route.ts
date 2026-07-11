@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
+import { calculateAgeYears, formatBirthDateInput } from "@/lib/student-age";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -31,11 +32,28 @@ export async function GET() {
             role: true,
           },
         },
+        userAuth: {
+          select: {
+            birthDate: true,
+          },
+        },
       },
       orderBy: { name: "asc" },
     });
 
-    return NextResponse.json(students);
+    return NextResponse.json(
+      students.map((student) => {
+        const ageYears = calculateAgeYears(student.userAuth?.birthDate);
+
+        return {
+          ...student,
+          birthDate: formatBirthDateInput(student.userAuth?.birthDate),
+          ageYears,
+          isMinor: ageYears !== null && ageYears < 18,
+          hasBirthDate: Boolean(student.userAuth?.birthDate),
+        };
+      })
+    );
   } catch (error) {
     console.error("Erro ao buscar alunos:", error);
     return NextResponse.json(
