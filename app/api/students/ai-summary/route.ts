@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { calculateAgeYears, formatBirthDateInput } from "@/lib/student-age";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -52,6 +53,12 @@ export async function GET() {
             email: true,
           },
         },
+        userAuth: {
+          select: {
+            id: true,
+            birthDate: true,
+          },
+        },
       },
       orderBy: {
         name: "asc",
@@ -59,18 +66,26 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      students: students.map((student) => ({
-        id: student.id,
-        name: student.name,
-        email: student.email,
-        active: student.active,
-        createdAt: student.createdAt,
-        onboardingCompleto: student.onboardingCompleto,
-        contractedTrainingDaysPerMonth: student.contractedTrainingDaysPerMonth,
-        professorId: student.user?.id || null,
-        professorName: student.user?.name || "Não vinculado",
-        professorEmail: student.user?.email || null,
-      })),
+      students: students.map((student) => {
+        const ageYears = calculateAgeYears(student.userAuth?.birthDate);
+
+        return {
+          id: student.id,
+          name: student.name,
+          email: student.email,
+          active: student.active,
+          createdAt: student.createdAt,
+          onboardingCompleto: student.onboardingCompleto,
+          contractedTrainingDaysPerMonth: student.contractedTrainingDaysPerMonth,
+          birthDate: formatBirthDateInput(student.userAuth?.birthDate),
+          ageYears,
+          isMinor: ageYears !== null && ageYears < 18,
+          hasBirthDate: Boolean(student.userAuth?.birthDate),
+          professorId: student.user?.id || null,
+          professorName: student.user?.name || "Não vinculado",
+          professorEmail: student.user?.email || null,
+        };
+      }),
     });
   } catch (error: any) {
     console.error("GET /api/students/ai-summary error:", error);
