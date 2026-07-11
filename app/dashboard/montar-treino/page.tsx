@@ -6,6 +6,10 @@ interface Student {
   name: string;
   email?: string;
   image?: string;
+  birthDate?: string | null;
+  ageYears?: number | null;
+  isMinor?: boolean;
+  hasBirthDate?: boolean;
   contractedTrainingDaysPerMonth?: number | null;
 }
 
@@ -654,6 +658,9 @@ export default function MontarTreinoPage() {
   }, [searchTerm, library]);
 
   const selectedStudentInfo = students.find((student) => student.id === selectedStudent);
+  const selectedStudentMissingBirthDate =
+    Boolean(selectedStudentInfo) &&
+    (selectedStudentInfo?.ageYears === null || selectedStudentInfo?.ageYears === undefined);
   const weeklyWorkoutLimit = activeWorkoutContract?.workoutsPerWeek || null;
   const referenceWeekDate = date ? new Date(date + "T12:00:00") : new Date();
   const { startOfWeek, endOfWeek } = getWeekRange(referenceWeekDate);
@@ -792,6 +799,13 @@ export default function MontarTreinoPage() {
             name: student.name,
             email: student.email,
             image: student.image,
+            birthDate: student.birthDate || null,
+            ageYears:
+              student.ageYears === null || student.ageYears === undefined
+                ? null
+                : Number(student.ageYears),
+            isMinor: Boolean(student.isMinor),
+            hasBirthDate: Boolean(student.hasBirthDate || student.birthDate),
             contractedTrainingDaysPerMonth:
               student.contractedTrainingDaysPerMonth ??
               student.contracted_training_days_per_month ??
@@ -865,6 +879,11 @@ export default function MontarTreinoPage() {
   }
 
   function openWorkoutPrintPreview() {
+    if (selectedStudentMissingBirthDate) {
+      alert("Data de nascimento não informada. A gestão precisa completar o cadastro antes de montar ou gerar a prévia do treino.");
+      return;
+    }
+
     if (!selectedStudent || !planName.trim() || !date || exercises.length === 0) {
       alert("Preencha aluno, nome do treino, data e pelo menos um exercício antes de gerar a prévia.");
       return;
@@ -935,6 +954,7 @@ export default function MontarTreinoPage() {
             <div class="brand">Funcional VIP Digital</div>
             <h1>${escapeHtmlForPrint(planName)}</h1>
             <p><strong>Aluno:</strong> ${escapeHtmlForPrint(studentName)}</p>
+            <p><strong>Idade:</strong> ${escapeHtmlForPrint(selectedStudentInfo?.ageYears ?? "Não informada")} ano(s)${selectedStudentInfo?.isMinor ? " · menor de idade" : ""}</p>
             <p><strong>Data:</strong> ${escapeHtmlForPrint(formatDatePtBr(new Date(date + "T12:00:00")))} · <strong>Semana:</strong> ${escapeHtmlForPrint(weekLabel)}</p>
           </div>
 
@@ -993,6 +1013,14 @@ export default function MontarTreinoPage() {
       setReleaseMessage({
         type: "error",
         text: "Selecione aluno e data/semana antes de liberar.",
+      });
+      return;
+    }
+
+    if (selectedStudentMissingBirthDate) {
+      setReleaseMessage({
+        type: "error",
+        text: "Data de nascimento não informada. A gestão precisa completar o cadastro antes de liberar a semana.",
       });
       return;
     }
@@ -1059,6 +1087,11 @@ export default function MontarTreinoPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedStudent || !planName.trim() || exercises.length === 0) return;
+
+    if (selectedStudentMissingBirthDate) {
+      alert("Data de nascimento não informada. A gestão precisa completar o cadastro antes de montar o treino.");
+      return;
+    }
 
     if (!activeWorkoutContract || !weeklyWorkoutLimit) {
       alert(
@@ -1386,7 +1419,9 @@ export default function MontarTreinoPage() {
                   <option value={selectedStudent}>Aluno selecionado pelo dashboard</option>
                 )}
                 {students.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name} · {s.ageYears === null || s.ageYears === undefined ? "nascimento pendente" : `${s.ageYears} ano(s)`}
+                  </option>
                 ))}
               </select>
 
@@ -1413,6 +1448,28 @@ export default function MontarTreinoPage() {
                 </div>
               )}
             </div>
+
+            {selectedStudent && selectedStudentInfo && (
+              <div
+                className={
+                  "md:col-span-2 rounded-lg border p-4 " +
+                  (selectedStudentMissingBirthDate
+                    ? "border-red-500/30 bg-red-500/10"
+                    : "border-[#D4A373]/20 bg-[#D4A373]/10")
+                }
+              >
+                <p className={"text-sm font-semibold " + (selectedStudentMissingBirthDate ? "text-red-300" : "text-[#D4A373]")}>
+                  {selectedStudentMissingBirthDate
+                    ? "Data de nascimento obrigatória"
+                    : `Aluno: ${selectedStudentInfo.name} · ${selectedStudentInfo.ageYears} ano(s)${selectedStudentInfo.isMinor ? " · menor de idade" : ""}`}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-[#a1a1a1]">
+                  {selectedStudentMissingBirthDate
+                    ? "A montagem manual, o resumo IA e a liberação da semana estão bloqueados até a gestão completar a data de nascimento."
+                    : "A idade deve ser considerada junto com objetivo, histórico, adesão, dores, restrições e resposta aos treinos anteriores."}
+                </p>
+              </div>
+            )}
 
             {selectedStudent && (
               <div className="md:col-span-2 bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-4">
@@ -1651,9 +1708,21 @@ export default function MontarTreinoPage() {
                               <div className="flex flex-col md:flex-row gap-2">
                                 <a
                                   href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}&expectedWorkoutDates=${encodeURIComponent(expectedWorkoutDates.join(","))}`}
-                                  className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition"
+                                  onClick={(event) => {
+                                    if (selectedStudentMissingBirthDate) {
+                                      event.preventDefault();
+                                      alert("Informe a data de nascimento antes de gerar o resumo IA.");
+                                    }
+                                  }}
+                                  aria-disabled={selectedStudentMissingBirthDate}
+                                  className={
+                                    "inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs font-semibold transition " +
+                                    (selectedStudentMissingBirthDate
+                                      ? "cursor-not-allowed bg-[#D4A373]/30 text-[#6b6b6b]"
+                                      : "bg-[#D4A373] text-[#0a0a0a] hover:bg-[#c49563]")
+                                  }
                                 >
-                                  Gerar novo resumo IA com alerta atualizado
+                                  {selectedStudentMissingBirthDate ? "Data de nascimento pendente" : "Gerar novo resumo IA com alerta atualizado"}
                                 </a>
 
                                 <button
@@ -1737,9 +1806,21 @@ export default function MontarTreinoPage() {
 
                   <a
                     href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}&expectedWorkoutDates=${encodeURIComponent(expectedWorkoutDates.join(","))}`}
-                    className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition"
+                    onClick={(event) => {
+                      if (selectedStudentMissingBirthDate) {
+                        event.preventDefault();
+                        alert("Informe a data de nascimento antes de gerar o resumo IA.");
+                      }
+                    }}
+                    aria-disabled={selectedStudentMissingBirthDate}
+                    className={
+                      "inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs font-semibold transition " +
+                      (selectedStudentMissingBirthDate
+                        ? "cursor-not-allowed bg-[#D4A373]/30 text-[#6b6b6b]"
+                        : "bg-[#D4A373] text-[#0a0a0a] hover:bg-[#c49563]")
+                    }
                   >
-                    Gerar por IA
+                    {selectedStudentMissingBirthDate ? "Data de nascimento pendente" : "Gerar por IA"}
                   </a>
                 </div>
               </div>
@@ -2048,7 +2129,7 @@ export default function MontarTreinoPage() {
           <button
             type="button"
             onClick={openWorkoutPrintPreview}
-            disabled={!selectedStudent || !planName.trim() || !date || exercises.length === 0}
+            disabled={!selectedStudent || !planName.trim() || !date || exercises.length === 0 || selectedStudentMissingBirthDate}
             className="w-full bg-[#1a1a1a] border border-[#D4A373]/30 text-[#D4A373] font-bold rounded-xl py-4 text-base transition hover:bg-[#D4A373]/10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             👁️ Pré-visualizar treino em PDF
@@ -2059,6 +2140,7 @@ export default function MontarTreinoPage() {
           disabled={
             saving ||
             !selectedStudent ||
+            selectedStudentMissingBirthDate ||
             !planName.trim() ||
             !date ||
             exercises.length === 0 ||
@@ -2071,7 +2153,9 @@ export default function MontarTreinoPage() {
         >
           {saving
             ? "💾 Salvando treino..."
-            : library.length === 0
+            : selectedStudentMissingBirthDate
+              ? "⚠️ Data de nascimento pendente"
+              : library.length === 0
               ? "⚠️ Biblioteca vazia"
               : !weeklyWorkoutLimit && selectedStudent
               ? "⚠️ Sem contrato ativo para a data"
@@ -2093,6 +2177,7 @@ export default function MontarTreinoPage() {
         <p className="text-xs text-[#525252] text-center">
           {exercises.length} exercício{exercises.length !== 1 ? "s" : ""}
           {selectedStudent && ` • Aluno: ${students.find((s) => s.id === selectedStudent)?.name || ""}`}
+          {selectedStudentInfo?.ageYears !== null && selectedStudentInfo?.ageYears !== undefined && ` • Idade: ${selectedStudentInfo.ageYears} ano(s)`}
           {date && ` • Data: ${new Date(date).toLocaleDateString("pt-BR")}`}
           {weeklyWorkoutLimit && ` • Semana: ${weeklyPlansCount}/${weeklyWorkoutLimit}`}
           {studentSummary && " • Resumo inteligente preenchido"}
