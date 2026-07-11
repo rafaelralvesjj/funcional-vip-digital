@@ -65,28 +65,6 @@ export default function AlunoPage() {
   const [loadingCareEvents, setLoadingCareEvents] = useState(false);
   const [sendingCareReturn, setSendingCareReturn] = useState(false);
 
-  /*
-   * Canal secundário e temporário da gestão.
-   * Quando o número comercial estiver disponível, basta configurar na Vercel:
-   * NEXT_PUBLIC_MANAGEMENT_WHATSAPP=55DDDNÚMERO
-   *
-   * Enquanto a variável não existir, o sistema usa o número temporário abaixo.
-   */
-  const managementWhatsappNumber =
-    process.env.NEXT_PUBLIC_MANAGEMENT_WHATSAPP || "5561984320108";
-
-  function getManagementWhatsappUrl(): string {
-    const message = [
-      "Olá! Sou aluno(a) do Funcional VIP Digital.",
-      "",
-      `Meu nome é: ${studentName || "Aluno(a)"}`,
-      "",
-      "Preciso de ajuda com:",
-    ].join("\n");
-
-    return `https://wa.me/${managementWhatsappNumber}?text=${encodeURIComponent(message)}`;
-  }
-
   // Estados para o modal de dúvidas (thread)
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
   const [followUpText, setFollowUpText] = useState("");
@@ -1138,7 +1116,7 @@ export default function AlunoPage() {
             {/* SEÇÃO DE DÚVIDAS - LADO DIREITO */}
             <div className="sm:w-[45%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="font-semibold text-[#f5f5f5] text-xs">Duvidas</h2>
+                <h2 className="font-semibold text-[#f5f5f5] text-xs">Conversas</h2>
                 {pendingCount > 0 && (
                   <span className="bg-green-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
                     {pendingCount}
@@ -1169,38 +1147,13 @@ export default function AlunoPage() {
               </div>
               <button onClick={() => handleSendQuestion()} disabled={sendingQuestion || (!newQuestion.trim() && !questionFile)}
                 className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
-                {sendingQuestion ? "..." : "Enviar pelo chat"}
+                {sendingQuestion ? "..." : "Enviar"}
               </button>
-
-              <div className="mt-2 rounded-lg border border-green-500/20 bg-green-500/10 p-2.5">
-                <p className="text-[10px] font-semibold text-green-300">
-                  Precisa falar com a gestão pelo WhatsApp?
-                </p>
-                <p className="mt-1 text-[8px] leading-relaxed text-[#a1a1a1]">
-                  Use este canal para pagamento, dificuldade de acesso, problema técnico
-                  ou quando o chat estiver indisponível. Dúvidas sobre treino e evolução
-                  devem continuar pelo chat para que o acompanhamento fique registrado.
-                </p>
-
-                <a
-                  href={getManagementWhatsappUrl()}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-green-500 px-2 py-1.5 text-[10px] font-semibold text-[#0a0a0a] transition hover:bg-green-400"
-                >
-                  Falar com a gestão no WhatsApp
-                </a>
-
-                <p className="mt-1.5 text-[7px] leading-relaxed text-[#6b6b6b]">
-                  Este WhatsApp não substitui atendimento de emergência. Em uma situação
-                  de saúde que exija ajuda imediata, procure um serviço de emergência.
-                </p>
-              </div>
 
               {/* Lista de threads */}
               {questions.length > 0 && (
                 <div className="mt-2 space-y-1 max-h-60 overflow-y-auto">
-                  <p className="text-[9px] text-[#525252] mb-1">Suas duvidas:</p>
+                  <p className="text-[9px] text-[#525252] mb-1">Suas conversas:</p>
                   {questions.map((q: any) => {
                     const status = getThreadStatus(q);
                     return (
@@ -1216,7 +1169,7 @@ export default function AlunoPage() {
                             {q.content.substring(0, 50)}{q.content.length > 50 ? "..." : ""}
                           </p>
                           <p className="text-[8px] text-[#D4A373] mt-0.5 truncate">
-                            Para: {getQuestionTargetLabel(q)}
+                            Conversa com: {getQuestionTargetLabel(q)}
                           </p>
                           <div className="flex items-center gap-1 mt-0.5">
                             <p className="text-[8px] text-[#6b6b6b]">{getThreadTime(q)}</p>
@@ -1224,7 +1177,7 @@ export default function AlunoPage() {
                               status === "resolved" ? "bg-[#525252]/20 text-[#6b6b6b]" :
                               status === "new_reply" ? "bg-green-500/10 text-green-400" : "bg-blue-500/10 text-blue-400"
                             )}>
-                              {status === "resolved" ? "Resolvida" : status === "new_reply" ? "Nova resposta" : "Aguardando"}
+                              {status === "resolved" ? "Encerrada" : status === "new_reply" ? "Nova mensagem" : "Aguardando"}
                             </span>
                             {(q.children?.length || 0) > 0 && (
                               <span className="text-[7px] text-[#525252]">
@@ -1250,9 +1203,9 @@ export default function AlunoPage() {
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[#ffffff10] shrink-0">
               <div>
-                <h2 className="text-sm font-bold text-[#f5f5f5]">Duvida</h2>
+                <h2 className="text-sm font-bold text-[#f5f5f5]">Conversa</h2>
                 <p className="text-[9px] text-[#D4A373] mt-0.5">
-                  Para: {getQuestionTargetLabel(selectedQuestion)}
+                  Conversa com: {getQuestionTargetLabel(selectedQuestion)}
                 </p>
               </div>
               <button onClick={() => setSelectedQuestion(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
