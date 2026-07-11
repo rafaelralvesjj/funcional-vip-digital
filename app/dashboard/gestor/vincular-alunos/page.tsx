@@ -7,6 +7,9 @@ type Student = {
   name: string;
   email?: string | null;
   phone?: string | null;
+  birthDate?: string | null;
+  ageYears?: number | null;
+  isMinor?: boolean;
   active?: boolean;
   userId?: string | null;
   professorId?: string | null;
@@ -474,6 +477,11 @@ export default function VincularAlunosPage() {
 
                       <p className="text-xs text-[#6b6b6b] truncate">
                         {student.email || "Sem e-mail"}
+                      </p>
+                      <p className={"mt-1 text-[11px] " + (student.ageYears === null || student.ageYears === undefined ? "text-red-400" : "text-[#D4A373]")}>
+                        {student.ageYears === null || student.ageYears === undefined
+                          ? "Nascimento pendente"
+                          : `${student.ageYears} ano(s)${student.isMinor ? " · menor" : ""}`}
                       </p>
                     </div>
                   </div>
