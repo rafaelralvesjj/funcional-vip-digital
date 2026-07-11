@@ -9,6 +9,10 @@ type StudentOption = {
   email?: string | null;
   professorName?: string | null;
   contractedTrainingDaysPerMonth?: number | null;
+  birthDate?: string | null;
+  ageYears?: number | null;
+  isMinor?: boolean;
+  hasBirthDate?: boolean;
 };
 
 type SummaryResponse = {
@@ -17,6 +21,9 @@ type SummaryResponse = {
   student: {
     id: string;
     name: string;
+    birthDate?: string | null;
+    ageYears?: number | null;
+    isMinor?: boolean;
     professorName?: string | null;
     weeklyLimit?: number | null;
   };
@@ -501,6 +508,9 @@ export default function ResumoAlunoPage() {
   const selectedStudent = useMemo(() => {
     return students.find((student) => student.id === selectedStudentId) || null;
   }, [students, selectedStudentId]);
+  const selectedStudentMissingBirthDate =
+    Boolean(selectedStudent) &&
+    (selectedStudent?.ageYears === null || selectedStudent?.ageYears === undefined);
 
   function compactText(value?: unknown): string {
     return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -940,6 +950,14 @@ export default function ResumoAlunoPage() {
       return;
     }
 
+    if (selectedStudentMissingBirthDate) {
+      setMessage({
+        type: "error",
+        text: "Data de nascimento não informada. A gestão precisa completar o cadastro antes de gerar o resumo IA.",
+      });
+      return;
+    }
+
     if (!loadingExerciseLibrary && exerciseLibrary.length === 0) {
       setMessage({
         type: "error",
@@ -1087,7 +1105,7 @@ export default function ResumoAlunoPage() {
               ) : (
                 students.map((student) => (
                   <option key={student.id} value={student.id}>
-                    {student.name} · Professor: {student.professorName || "Não vinculado"}
+                    {student.name} · {student.ageYears === null || student.ageYears === undefined ? "Nascimento pendente" : `${student.ageYears} ano(s)`} · Professor: {student.professorName || "Não vinculado"}
                   </option>
                 ))
               )}
@@ -1097,6 +1115,11 @@ export default function ResumoAlunoPage() {
               <div className="text-xs text-[#6b6b6b] mt-2 space-y-1">
                 <p>
                   {selectedStudent.email || "Sem e-mail"} · {selectedStudent.contractedTrainingDaysPerMonth || "-"} treino(s)/mês
+                </p>
+                <p className={selectedStudentMissingBirthDate ? "text-red-400" : "text-[#D4A373]"}>
+                  {selectedStudentMissingBirthDate
+                    ? "Data de nascimento não informada — geração bloqueada"
+                    : `Idade: ${selectedStudent.ageYears} ano(s)${selectedStudent.isMinor ? " · menor de idade" : ""}`}
                 </p>
                 <p className="text-[#D4A373]">
                   Semana alvo da IA: {displayWeekStart} a {displayWeekEnd}
@@ -1117,10 +1140,18 @@ export default function ResumoAlunoPage() {
 
           <button
             onClick={generateSummary}
-            disabled={loadingStudents || loadingSummary || loadingExerciseLibrary || !selectedStudentId || exerciseLibrary.length === 0}
+            disabled={loadingStudents || loadingSummary || loadingExerciseLibrary || !selectedStudentId || exerciseLibrary.length === 0 || selectedStudentMissingBirthDate}
             className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
           >
-            {loadingSummary ? "Gerando..." : loadingExerciseLibrary ? "Carregando biblioteca..." : exerciseLibrary.length === 0 ? "Biblioteca vazia" : "Gerar resumo"}
+            {loadingSummary
+              ? "Gerando..."
+              : loadingExerciseLibrary
+                ? "Carregando biblioteca..."
+                : exerciseLibrary.length === 0
+                  ? "Biblioteca vazia"
+                  : selectedStudentMissingBirthDate
+                    ? "Data de nascimento pendente"
+                    : "Gerar resumo"}
           </button>
         </div>
 
@@ -1143,6 +1174,10 @@ export default function ResumoAlunoPage() {
               <h2 className="text-lg font-bold text-[#f5f5f5]">
                 {summary.student.name}
               </h2>
+              <p className="mt-1 text-xs font-semibold text-[#D4A373]">
+                Idade considerada pela IA: {summary.student.ageYears ?? "-"} ano(s)
+                {summary.student.isMinor ? " · menor de idade" : ""}
+              </p>
               <p className="text-xs text-[#a1a1a1]">
                 Professor: {summary.student.professorName || "Não vinculado"} · Meta semanal: {summary.student.weeklyLimit || "-"}
               </p>
