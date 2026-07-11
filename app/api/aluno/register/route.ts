@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { formatBirthDatePtBr, validateBirthDateInput } from "@/lib/student-age";
 import * as bcrypt from "bcryptjs";
 import { sendEmail } from "@/lib/sendEmail";
 
@@ -138,6 +139,8 @@ function formatOnboardingValue(value: string): string | null {
 }
 
 function buildOnboardingLines({
+  birthDateText,
+  ageYears,
   objective,
   activityLevel,
   trainingEnvironment,
@@ -151,6 +154,8 @@ function buildOnboardingLines({
   heightCm,
   notesFromBody,
 }: {
+  birthDateText: string;
+  ageYears: number;
   objective: string;
   activityLevel: string;
   trainingEnvironment: string;
@@ -165,6 +170,8 @@ function buildOnboardingLines({
   notesFromBody: string;
 }): string[] {
   return [
+    birthDateText ? `Data de nascimento: ${birthDateText}.` : null,
+    Number.isFinite(ageYears) ? `Idade no cadastro: ${ageYears} ano(s).` : null,
     objective ? `Objetivo principal: ${objective}.` : null,
     activityLevel ? `Nível atual informado: ${activityLevel}.` : null,
     trainingEnvironment ? `Ambiente de treino: ${trainingEnvironment}.` : null,
@@ -518,6 +525,8 @@ export async function POST(req: NextRequest) {
     const email = normalizeEmail(getString(body, ["email", "mail"]));
     const phone = getString(body, ["phone", "telefone", "whatsapp", "celular"]);
     const phoneDigits = normalizePhone(phone);
+    const birthDateRaw = getString(body, ["birthDate", "dataNascimento", "dateOfBirth"]);
+    const birthDateValidation = validateBirthDateInput(birthDateRaw);
     const password = getString(body, ["password", "senha"]);
     const confirmPassword = getString(body, ["confirmPassword", "confirmarSenha", "passwordConfirmation"]);
     const objective = getString(body, ["objective", "objetivo"]);
@@ -556,6 +565,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Informe o WhatsApp do aluno." }, { status: 400 });
     }
 
+    if (birthDateValidation.error || !birthDateValidation.birthDate || birthDateValidation.ageYears === null) {
+      return NextResponse.json(
+        { error: birthDateValidation.error || "Informe a data de nascimento do aluno." },
+        { status: 400 }
+      );
+    }
+
     if (!password || password.length < 6) {
       return NextResponse.json({ error: "A senha precisa ter pelo menos 6 caracteres." }, { status: 400 });
     }
@@ -592,6 +608,9 @@ export async function POST(req: NextRequest) {
     const startDateText = formatDatePtBr(startDate);
     const endDateText = formatDatePtBr(endDate);
     const passwordHash = await bcrypt.hash(password, 10);
+    const birthDate = birthDateValidation.birthDate;
+    const ageYears = birthDateValidation.ageYears;
+    const birthDateText = formatBirthDatePtBr(birthDate);
     const ip = getClientIp(req);
     const userAgent = req.headers.get("user-agent");
 
@@ -607,6 +626,8 @@ export async function POST(req: NextRequest) {
     });
 
     const onboardingLines = buildOnboardingLines({
+      birthDateText,
+      ageYears,
       objective,
       activityLevel,
       trainingEnvironment,
@@ -627,6 +648,7 @@ export async function POST(req: NextRequest) {
           name,
           email,
           phone: phone || null,
+          birthDate,
           image,
           password: passwordHash,
           role: "ALUNO",
@@ -816,6 +838,9 @@ export async function POST(req: NextRequest) {
         studentName: student.name,
         email,
         phone: student.phone,
+        birthDate: birthDate.toISOString(),
+        ageYears,
+        isMinor: birthDateValidation.isMinor,
         contractId: contract.id,
         contractType: contract.type,
         commercialStatus: student.commercialStatus,
