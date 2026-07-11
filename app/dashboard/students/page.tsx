@@ -8,6 +8,10 @@ interface Student {
   name: string;
   email?: string | null;
   phone?: string | null;
+  birthDate?: string | null;
+  ageYears?: number | null;
+  isMinor?: boolean;
+  hasBirthDate?: boolean;
   active: boolean;
   createdAt?: string | null;
   commercialStatus?: string | null;
@@ -87,7 +91,7 @@ export default function StudentsPage() {
     if (!term) return students;
 
     return students.filter((student) => {
-      return [student.name, student.email, student.phone, student.commercialStatus, student.professorName, student.user?.name]
+      return [student.name, student.email, student.phone, student.ageYears, student.commercialStatus, student.professorName, student.user?.name]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -171,6 +175,12 @@ export default function StudentsPage() {
                       <p className="text-xs text-[#6b6b6b] mt-2 truncate">
                         {student.email || "Sem e-mail"}
                         {student.phone ? ` · ${student.phone}` : ""}
+                      </p>
+
+                      <p className={"text-xs mt-2 " + (student.ageYears === null || student.ageYears === undefined ? "text-red-400" : "text-[#D4A373]")}>
+                        {student.ageYears === null || student.ageYears === undefined
+                          ? "Data de nascimento não informada"
+                          : `Idade: ${student.ageYears} ano(s)${student.isMinor ? " · menor de idade" : ""}`}
                       </p>
 
                       <p className="text-xs text-[#a1a1a1] mt-2">
