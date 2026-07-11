@@ -1,14 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
 import { NextResponse } from "next/server";
+import { validateBirthDateInput } from "@/lib/student-age";
 
 export async function POST(req: Request) {
   try {
-    const { name, email, phone, password } = await req.json();
+    const { name, email, phone, password, birthDate } = await req.json();
+    const birthDateValidation = validateBirthDateInput(birthDate);
 
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Nome, email e senha são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    if (birthDateValidation.error || !birthDateValidation.birthDate) {
+      return NextResponse.json(
+        { error: birthDateValidation.error || "Informe a data de nascimento do aluno." },
         { status: 400 }
       );
     }
@@ -29,6 +38,7 @@ export async function POST(req: Request) {
         name,
         email,
         phone,
+        birthDate: birthDateValidation.birthDate,
         password: hashedPassword,
         role: "ALUNO",
       },
