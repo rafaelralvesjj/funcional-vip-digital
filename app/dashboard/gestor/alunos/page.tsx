@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { calculateAgeYears, getTodayDateInput, validateBirthDateInput } from "@/lib/student-age";
 
 interface Student {
   id: string;
   name: string;
   email?: string | null;
   phone?: string | null;
+  birthDate?: string | null;
+  ageYears?: number | null;
+  isMinor?: boolean;
   notes?: string | null;
   image?: string | null;
   active?: boolean;
@@ -32,6 +36,7 @@ interface StudentFormState {
   name: string;
   email: string;
   phone: string;
+  birthDate: string;
   password: string;
   notes: string;
   image: string;
@@ -44,6 +49,7 @@ const emptyForm: StudentFormState = {
   name: "",
   email: "",
   phone: "",
+  birthDate: "",
   password: "",
   notes: "",
   image: "",
@@ -82,6 +88,8 @@ export default function GerenciarAlunosPage() {
   const [addStudent, setAddStudent] = useState(false);
   const [newForm, setNewForm] = useState<StudentFormState>(emptyForm);
   const [savingAdd, setSavingAdd] = useState(false);
+
+  const todayDateInput = getTodayDateInput();
 
   useEffect(() => {
     loadData();
@@ -153,6 +161,7 @@ export default function GerenciarAlunosPage() {
       name: student.name || "",
       email: student.email || "",
       phone: student.phone || "",
+      birthDate: student.birthDate || "",
       password: "",
       notes: student.notes || "",
       image: student.image || "",
@@ -171,6 +180,7 @@ export default function GerenciarAlunosPage() {
       name: form.name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim() || null,
+      birthDate: form.birthDate,
       ...(includePassword && { password: form.password }),
       ...(includePassword === false && form.password.trim() ? { password: form.password } : {}),
       notes: form.notes.trim() || null,
@@ -185,8 +195,15 @@ export default function GerenciarAlunosPage() {
   }
 
   async function handleAddAluno() {
-    if (!newForm.name.trim() || !newForm.email.trim() || !newForm.password.trim()) {
-      setMessage({ type: "error", text: "Preencha nome, e-mail e senha inicial." });
+    if (!newForm.name.trim() || !newForm.email.trim() || !newForm.birthDate || !newForm.password.trim()) {
+      setMessage({ type: "error", text: "Preencha nome, e-mail, data de nascimento e senha inicial." });
+      return;
+    }
+
+    const birthDateValidation = validateBirthDateInput(newForm.birthDate);
+
+    if (birthDateValidation.error) {
+      setMessage({ type: "error", text: birthDateValidation.error });
       return;
     }
 
@@ -219,8 +236,15 @@ export default function GerenciarAlunosPage() {
   async function salvarEdicao() {
     if (!editStudent) return;
 
-    if (!editForm.name.trim() || !editForm.email.trim()) {
-      setMessage({ type: "error", text: "Preencha nome e e-mail." });
+    if (!editForm.name.trim() || !editForm.email.trim() || !editForm.birthDate) {
+      setMessage({ type: "error", text: "Preencha nome, e-mail e data de nascimento." });
+      return;
+    }
+
+    const birthDateValidation = validateBirthDateInput(editForm.birthDate);
+
+    if (birthDateValidation.error) {
+      setMessage({ type: "error", text: birthDateValidation.error });
       return;
     }
 
@@ -305,6 +329,25 @@ export default function GerenciarAlunosPage() {
           placeholder="Telefone"
           className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
         />
+
+        <div>
+          <label className="mb-1 block text-xs text-[#a1a1a1]">
+            Data de nascimento *
+          </label>
+          <input
+            value={form.birthDate}
+            onChange={(e) => onChange("birthDate", e.target.value)}
+            type="date"
+            max={todayDateInput}
+            className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
+          />
+          {form.birthDate && calculateAgeYears(form.birthDate) !== null && (
+            <p className="mt-1 text-[11px] text-[#D4A373]">
+              Idade calculada: {calculateAgeYears(form.birthDate)} ano(s)
+              {Number(calculateAgeYears(form.birthDate)) < 18 ? " · menor de idade" : ""}
+            </p>
+          )}
+        </div>
 
         <input
           value={form.password}
@@ -420,7 +463,7 @@ export default function GerenciarAlunosPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 flex-1 min-w-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 flex-1 min-w-0">
                   <div className="min-w-0">
                     <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
                       E-mail
@@ -436,6 +479,17 @@ export default function GerenciarAlunosPage() {
                     </p>
                     <p className="text-xs text-[#a1a1a1] truncate">
                       {student.phone || "-"}
+                    </p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
+                      Idade
+                    </p>
+                    <p className={"text-xs " + (student.ageYears === null || student.ageYears === undefined ? "text-red-400" : "text-[#a1a1a1]")}>
+                      {student.ageYears === null || student.ageYears === undefined
+                        ? "Não informada"
+                        : `${student.ageYears} ano(s)${student.isMinor ? " · menor" : ""}`}
                     </p>
                   </div>
 
