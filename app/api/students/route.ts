@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { hash } from "bcryptjs";
+import { calculateAgeYears, formatBirthDateInput, validateBirthDateInput } from "@/lib/student-age";
 
 type AnyStudent = Record<string, any>;
 
@@ -186,6 +188,7 @@ export async function GET() {
             email: true,
             phone: true,
             image: true,
+            birthDate: true,
             role: true,
           },
         },
@@ -199,12 +202,17 @@ export async function GET() {
       students: students.map((student) => {
         const profile = buildInitialProfile(student);
         const professorLinked = isProfessorUser(student.user);
+        const ageYears = calculateAgeYears(student.userAuth?.birthDate);
 
         return {
           id: student.id,
           name: student.name,
           email: student.email,
           phone: student.phone || student.userAuth?.phone || null,
+          birthDate: formatBirthDateInput(student.userAuth?.birthDate),
+          ageYears,
+          isMinor: ageYears !== null && ageYears < 18,
+          hasBirthDate: Boolean(student.userAuth?.birthDate),
           notes: student.notes,
           image: student.image || student.userAuth?.image || null,
           active: student.active,
@@ -246,3 +254,207 @@ export async function GET() {
     );
   }
 }
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    const user = session?.user as any;
+    const currentUserId = user?.id ? String(user.id) : null;
+    const role = normalizeRole(user?.role);
+
+    if (!currentUserId) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    if (role !== "GESTOR" && role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Apenas gestores podem cadastrar alunos." },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+    const name = String(body?.name || "").trim();
+    const email = String(body?.email || "").trim().toLowerCase();
+    const phone = String(body?.phone || "").trim() || null;
+    const password = String(body?.password || "");
+    const notes = String(body?.notes || "").trim() || null;
+    const image = String(body?.image ?? body?.imageUrl ?? "").trim() || null;
+    const active = body?.active !== false;
+    const professorId = String(body?.professorId || "").trim() || null;
+    const contractedTrainingDaysPerMonth =
+      body?.contractedTrainingDaysPerMonth === null ||
+      body?.contractedTrainingDaysPerMonth === undefined ||
+      body?.contractedTrainingDaysPerMonth === ""
+        ? null
+        : Number(body.contractedTrainingDaysPerMonth);
+    const birthDateValidation = validateBirthDateInput(body?.birthDate);
+
+    if (!name || !email || !password) {
+      return NextResponse.json(
+        { error: "Preencha nome, e-mail e senha inicial." },
+        { status: 400 }
+      );
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: "A senha deve ter no mínimo 6 caracteres." },
+        { status: 400 }
+      );
+    }
+
+    if (birthDateValidation.error || !birthDateValidation.birthDate) {
+      return NextResponse.json(
+        { error: birthDateValidation.error || "Informe a data de nascimento do aluno." },
+        { status: 400 }
+      );
+    }
+
+    if (
+      contractedTrainingDaysPerMonth !== null &&
+      (!Number.isInteger(contractedTrainingDaysPerMonth) || contractedTrainingDaysPerMonth < 0)
+    ) {
+      return NextResponse.json(
+        { error: "Informe uma quantidade válida de dias contratados por mês." },
+        { status: 400 }
+      );
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "Este e-mail já está cadastrado." },
+        { status: 409 }
+      );
+    }
+
+    let responsibleUserId = currentUserId;
+
+    if (professorId) {
+      const professor = await prisma.user.findFirst({
+        where: {
+          id: professorId,
+          role: { in: ["PROFESSOR", "TEACHER"] },
+          active: true,
+        },
+        select: { id: true },
+      });
+
+      if (!professor) {
+        return NextResponse.json(
+          { error: "Professor responsável não encontrado." },
+          { status: 404 }
+        );
+      }
+
+      responsibleUserId = professor.id;
+    }
+
+    const passwordHash = await hash(password, 12);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const authUser = await tx.user.create({
+        data: {
+          name,
+          email,
+          phone,
+          birthDate: birthDateValidation.birthDate,
+          image,
+          password: passwordHash,
+          role: "ALUNO",
+          active,
+        },
+      });
+
+      return tx.student.create({
+        data: {
+          userId: responsibleUserId,
+          userAuthId: authUser.id,
+          name,
+          email,
+          phone,
+          notes,
+          image,
+          active,
+          onboardingCompleto: false,
+          contractedTrainingDaysPerMonth,
+          commercialStatus: "SEM_CONTRATO_ATIVO",
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          notes: true,
+          image: true,
+          active: true,
+          userId: true,
+          userAuthId: true,
+          onboardingCompleto: true,
+          contractedTrainingDaysPerMonth: true,
+          commercialStatus: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+          userAuth: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              image: true,
+              birthDate: true,
+              role: true,
+            },
+          },
+        },
+      });
+    });
+
+    const ageYears = calculateAgeYears(created.userAuth?.birthDate);
+
+    return NextResponse.json(
+      {
+        student: {
+          ...created,
+          birthDate: formatBirthDateInput(created.userAuth?.birthDate),
+          ageYears,
+          isMinor: ageYears !== null && ageYears < 18,
+          hasBirthDate: Boolean(created.userAuth?.birthDate),
+          professorId: isProfessorUser(created.user) ? created.user?.id || null : null,
+          professorName: isProfessorUser(created.user)
+            ? created.user?.name || "Não vinculado"
+            : "Não vinculado",
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    console.error("POST /api/students error:", error);
+
+    if (error?.code === "P2002") {
+      return NextResponse.json(
+        { error: "Já existe um cadastro com estes dados." },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Erro interno ao cadastrar aluno.", message: error?.message },
+      { status: 500 }
+    );
+  }
+}
+
