@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
+import { calculateAgeYears } from "@/lib/student-age";
 
 const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
 const WORKOUT_STATUS_PENDING = "PENDENTE";
@@ -919,6 +920,11 @@ async function releaseWorkoutWeek({
       email: true,
       userId: true,
       userAuthId: true,
+      userAuth: {
+        select: {
+          birthDate: true,
+        },
+      },
     },
   });
 
@@ -926,6 +932,18 @@ async function releaseWorkoutWeek({
     return NextResponse.json(
       { error: "Aluno não encontrado." },
       { status: 404 }
+    );
+  }
+
+  const studentAgeYears = calculateAgeYears(student.userAuth?.birthDate);
+
+  if (!student.userAuth?.birthDate || studentAgeYears === null) {
+    return NextResponse.json(
+      {
+        error: "Data de nascimento não informada. Complete o cadastro do aluno antes de liberar a semana.",
+        code: "BIRTH_DATE_REQUIRED",
+      },
+      { status: 409 }
     );
   }
 
@@ -1153,6 +1171,11 @@ export async function POST(req: NextRequest) {
         userId: true,
         userAuthId: true,
         contractedTrainingDaysPerMonth: true,
+        userAuth: {
+          select: {
+            birthDate: true,
+          },
+        },
       },
     });
 
@@ -1160,6 +1183,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Student not found" },
         { status: 404 }
+      );
+    }
+
+    const studentAgeYears = calculateAgeYears(studentExists.userAuth?.birthDate);
+
+    if (!studentExists.userAuth?.birthDate || studentAgeYears === null) {
+      return NextResponse.json(
+        {
+          error: "Data de nascimento não informada. Complete o cadastro do aluno antes de montar o treino.",
+          code: "BIRTH_DATE_REQUIRED",
+        },
+        { status: 409 }
       );
     }
 
@@ -1621,6 +1656,28 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json(
         { error: "Workout plan not found" },
         { status: 404 }
+      );
+    }
+
+    const studentAgeContext = await prisma.student.findUnique({
+      where: { id: planExists.studentId },
+      select: {
+        userAuth: {
+          select: {
+            birthDate: true,
+          },
+        },
+      },
+    });
+    const studentAgeYears = calculateAgeYears(studentAgeContext?.userAuth?.birthDate);
+
+    if (!studentAgeContext?.userAuth?.birthDate || studentAgeYears === null) {
+      return NextResponse.json(
+        {
+          error: "Data de nascimento não informada. Complete o cadastro do aluno antes de editar o treino.",
+          code: "BIRTH_DATE_REQUIRED",
+        },
+        { status: 409 }
       );
     }
 
