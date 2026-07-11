@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { calculateAgeYears, formatBirthDateInput, formatBirthDatePtBr } from "@/lib/student-age";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -627,6 +628,9 @@ function buildAiPrompt(summaryText: string): string {
     "- Gere uma sugestão estruturada para o professor revisar.",
     "- O professor é responsável por validar, ajustar e cadastrar no sistema.",
     "- Se houver baixa adesão, priorize retomada, segurança e consistência antes de progressão agressiva.",
+    "- A idade do aluno é um dado obrigatório e deve ser considerada na escolha de intensidade, volume, recuperação, complexidade e progressão.",
+    "- Não use a idade isoladamente para presumir doença, incapacidade ou restrição não informada.",
+    "- Se o aluno for menor de 18 anos, sinalize revisão humana obrigatória e mantenha progressão conservadora.",
     "- Se faltarem dados, indique quais informações precisam ser confirmadas.",
     "- Se a semana atual ainda não tem execução registrada, trate a próxima semana como pré-planejamento conservador, não como evolução.",
     "- Só recomende progressão de carga, impacto, volume ou complexidade quando houver dados de execução/adesão suficientes.",
@@ -719,6 +723,7 @@ export async function GET(
             id: true,
             name: true,
             email: true,
+            birthDate: true,
           },
         },
       },
@@ -736,6 +741,22 @@ export async function GET(
 
     if (!hasAccess) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+
+    const birthDate = student.userAuth?.birthDate || null;
+    const birthDateInput = formatBirthDateInput(birthDate);
+    const ageYears = calculateAgeYears(birthDate);
+    const isMinor = ageYears !== null && ageYears < 18;
+
+    if (!birthDate || !birthDateInput || ageYears === null) {
+      return NextResponse.json(
+        {
+          error: "Data de nascimento não informada. Complete o cadastro do aluno antes de gerar o resumo IA.",
+          code: "BIRTH_DATE_REQUIRED",
+          studentId: student.id,
+        },
+        { status: 409 }
+      );
     }
 
     const onboardingProfile = getOnboardingProfile(student.notes);
@@ -1067,7 +1088,7 @@ export async function GET(
     const hasOpenPainQuestion = openQuestionTexts.some(hasPainOrInjurySignal);
     const hasOpenDifficultQuestion = openQuestionTexts.some(hasDifficultExerciseSignal);
     const hasOpenLowMotivationQuestion = openQuestionTexts.some(hasLowMotivationSignal);
-    const evolutionDecision = getEvolutionDecisionStatus({
+    const baseEvolutionDecision = getEvolutionDecisionStatus({
       hasInjuryCare,
       hasTrainingPauseCare,
       hasDifficultExercise,
@@ -1082,6 +1103,18 @@ export async function GET(
       currentWeekCompleted,
       overdueWorkoutsCount: overdueWorkouts.length,
     });
+    const evolutionDecision = isMinor
+      ? {
+          ...baseEvolutionDecision,
+          requiresReviewBeforeRelease: true,
+          reviewAlerts: Array.from(
+            new Set([
+              ...baseEvolutionDecision.reviewAlerts,
+              "Aluno menor de 18 anos: revisar a proposta com atenção à idade, maturidade, histórico, supervisão e contexto informado antes de liberar.",
+            ])
+          ),
+        }
+      : baseEvolutionDecision;
     const onboardingOperationalLines = getOnboardingOperationalLines(onboardingProfile);
 
     const summaryText = [
@@ -1091,6 +1124,9 @@ export async function GET(
       `Aluno: ${student.name}`,
       `E-mail: ${student.email || student.userAuth?.email || "não informado"}`,
       `Telefone: ${student.phone || "não informado"}`,
+      `Data de nascimento: ${formatBirthDatePtBr(birthDate)}`,
+      `Idade atual: ${ageYears} ano(s)`,
+      `Faixa etária: ${isMinor ? "menor de 18 anos — revisão humana obrigatória" : "18 anos ou mais"}`,
       `Status: ${student.active ? "ativo" : "inativo"}`,
       `Cadastro em: ${formatDate(student.createdAt)}`,
       `Onboarding/bioimpedância inicial completa: ${student.onboardingCompleto ? "sim" : "não"}`,
@@ -1182,6 +1218,10 @@ export async function GET(
       careLines.length ? careLines.join("\n") : "Nenhum sinal de cuidado registrado.",
       "",
       "10) Leitura operacional para montagem de treino",
+      `Considerar a idade atual de ${ageYears} ano(s) na definição de intensidade, volume, descanso, recuperação, complexidade e progressão, sempre em conjunto com histórico, objetivo, adesão, dores e restrições informadas.`,
+      isMinor
+        ? "Aluno menor de 18 anos: manter revisão humana obrigatória, progressão conservadora e atenção à supervisão/contexto informado."
+        : "Aluno com 18 anos ou mais: ainda assim, idade não substitui avaliação individual nem autoriza presumir restrições não registradas.",
       onboardingOperationalLines.length
         ? onboardingOperationalLines.join("\n")
         : "Ficha inicial ainda não trouxe dados suficientes. Confirmar objetivo, nível, ambiente, equipamentos e restrições antes de montar treino.",
@@ -1226,6 +1266,9 @@ export async function GET(
       student: {
         id: student.id,
         name: student.name,
+        birthDate: birthDateInput,
+        ageYears,
+        isMinor,
         professorName: student.user?.name || null,
         weeklyLimit,
       },
