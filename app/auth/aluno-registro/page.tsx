@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { calculateAgeYears, getTodayDateInput, validateBirthDateInput } from "@/lib/student-age";
 
 const OTHER_OBJECTIVE = "Outro";
 
@@ -38,6 +39,7 @@ export default function AlunoRegisterPage() {
     name: "",
     email: "",
     phone: "",
+    birthDate: "",
     password: "",
     confirmPassword: "",
     objective: "",
@@ -60,6 +62,9 @@ export default function AlunoRegisterPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const todayDateInput = getTodayDateInput();
+  const calculatedAge = form.birthDate ? calculateAgeYears(form.birthDate) : null;
 
   function handleChange(
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -154,8 +159,15 @@ export default function AlunoRegisterPage() {
     event.preventDefault();
     setError("");
 
-    if (!form.name || !form.email || !form.phone || !form.password) {
-      setError("Preencha nome, e-mail, telefone e senha.");
+    if (!form.name || !form.email || !form.phone || !form.birthDate || !form.password) {
+      setError("Preencha nome, e-mail, telefone, data de nascimento e senha.");
+      return;
+    }
+
+    const birthDateValidation = validateBirthDateInput(form.birthDate);
+
+    if (birthDateValidation.error) {
+      setError(birthDateValidation.error);
       return;
     }
 
@@ -200,6 +212,7 @@ export default function AlunoRegisterPage() {
           name: form.name,
           email: form.email,
           phone: form.phone,
+          birthDate: form.birthDate,
           password: form.password,
           confirmPassword: form.confirmPassword,
           imageUrl: imageUrl || null,
@@ -355,6 +368,30 @@ export default function AlunoRegisterPage() {
                   autoComplete="tel"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Data de nascimento *
+              </label>
+              <input
+                name="birthDate"
+                type="date"
+                value={form.birthDate}
+                onChange={handleChange}
+                max={todayDateInput}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                autoComplete="bday"
+              />
+              <p className="text-[11px] text-[#6b6b6b] mt-1">
+                A idade é calculada automaticamente e ajuda o professor e a IA a ajustar intensidade, volume, recuperação e progressão com mais segurança.
+              </p>
+              {calculatedAge !== null && calculatedAge >= 0 && (
+                <p className="text-xs text-[#D4A373] mt-1 font-semibold">
+                  Idade calculada: {calculatedAge} ano{calculatedAge === 1 ? "" : "s"}
+                  {calculatedAge < 18 ? " · aluno menor de idade" : ""}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
