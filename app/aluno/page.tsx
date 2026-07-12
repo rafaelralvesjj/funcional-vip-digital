@@ -4,6 +4,7 @@ import { signOut } from "next-auth/react";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
 import ProfilePhotoEditor from "@/components/ProfilePhotoEditor";
 import StudentSurveyPanel from "@/components/aluno/StudentSurveyPanel";
+import EmailNotificationReminder from "@/components/aluno/EmailNotificationReminder";
 interface LibraryExercise {
   id: string;
   name: string;
@@ -976,6 +977,8 @@ export default function AlunoPage() {
           {message.text}
         </div>
       )}
+
+      <EmailNotificationReminder />
 
       <AlunoCommercialStatusPanel />
 
