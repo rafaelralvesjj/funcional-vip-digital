@@ -422,6 +422,9 @@ function getOnboardingOperationalLines(profile: ReturnType<typeof getOnboardingP
     lines.push(
       `Ambiente/equipamentos do onboarding: ${profile.trainingEnvironment}; equipamentos: ${profile.availableEquipment}.`
     );
+    lines.push(
+      "Regra operacional: a sugestão deve usar somente ambientes e equipamentos confirmados na ficha. Quando a estrutura estiver descrita como não confirmada, o professor deve validar antes de prescrever aparelhos específicos."
+    );
   }
 
   if (profile.timeAvailableMinutes !== "não informado") {
@@ -635,6 +638,11 @@ function buildAiPrompt(summaryText: string): string {
     "- Se a semana atual ainda não tem execução registrada, trate a próxima semana como pré-planejamento conservador, não como evolução.",
     "- Só recomende progressão de carga, impacto, volume ou complexidade quando houver dados de execução/adesão suficientes.",
     "- Se houver dor, dúvida aberta, baixa adesão ou evento de cuidado, sinalize revisão humana obrigatória antes da liberação.",
+    "- Respeite estritamente os locais e equipamentos informados pelo aluno. Não prescreva aparelho, acessório ou estrutura que não esteja confirmado no resumo.",
+    "- Quando constar 'nenhum equipamento', use apenas peso corporal e recursos seguros do ambiente descrito.",
+    "- Quando a academia estiver com estrutura não confirmada, evite aparelhos específicos e peça validação do professor antes da liberação.",
+    "- Quando houver mais de um local de treino, indique em cada treino ou exercício onde ele poderá ser executado.",
+    "- Na justificativa técnica, explique como a escolha dos exercícios respeita o ambiente e os equipamentos disponíveis.",
     "",
     "Formato esperado:",
     "1. Leitura rápida do aluno",
