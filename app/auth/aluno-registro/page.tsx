@@ -300,7 +300,7 @@ export default function AlunoRegisterPage() {
                 1. Dados de acesso
               </h2>
               <p className="text-xs text-[#a1a1a1] mt-1">
-                Use um e-mail e WhatsApp válidos para receber os avisos sobre seus treinos.
+                Use um e-mail que você acessa no celular e um WhatsApp válido para manter seu acompanhamento atualizado.
               </p>
             </div>
 
@@ -367,6 +367,37 @@ export default function AlunoRegisterPage() {
                   placeholder="(61) 99999-9999"
                   autoComplete="tel"
                 />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#D4A373]/30 bg-[#D4A373]/10 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#D4A373]/15 text-[#D4A373]">
+                  <svg
+                    aria-hidden="true"
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.8}
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8V6a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[#f5f5f5]">
+                    Ative as notificações do seu e-mail
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#d4d4d4]">
+                    Liberações de treino, avisos da gestão e outras atualizações importantes
+                    serão enviadas para este endereço. Mantenha as notificações do aplicativo
+                    de e-mail ativas no celular e confira também Spam, Lixo eletrônico e Promoções.
+                  </p>
+                </div>
               </div>
             </div>
 
