@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { formatBirthDatePtBr, validateBirthDateInput } from "@/lib/student-age";
+import { buildTrainingResourceSummary } from "@/lib/student-training-resources";
 import * as bcrypt from "bcryptjs";
 import { sendEmail } from "@/lib/sendEmail";
 
@@ -535,8 +536,19 @@ export async function POST(req: NextRequest) {
     const objective = getString(body, ["objective", "objetivo"]);
     const restrictions = getString(body, ["restrictions", "restricoes", "lesoes", "dores"]);
     const activityLevel = getString(body, ["activityLevel", "nivelAtividade"]);
-    const trainingEnvironment = getString(body, ["trainingEnvironment", "ambienteTreino", "ambiente", "localTreino"]);
-    const availableEquipment = getString(body, ["availableEquipment", "equipamentos", "materiais", "equipment"]);
+    const legacyTrainingEnvironment = getString(body, ["trainingEnvironment", "ambienteTreino", "ambiente", "localTreino"]);
+    const legacyAvailableEquipment = getString(body, ["availableEquipment", "equipamentos", "materiais", "equipment"]);
+    const trainingResources = buildTrainingResourceSummary({
+      trainingLocations: getValue(body, ["trainingLocations", "locaisTreino", "trainingLocation"]),
+      gymType: getValue(body, ["gymType", "tipoAcademia", "academyType"]),
+      selectedEquipment: getValue(body, ["selectedEquipment", "equipamentosSelecionados", "equipmentSelection"]),
+      equipmentOther: getValue(body, ["equipmentOther", "outroEquipamento"]),
+      gymUnavailableEquipment: getValue(body, ["gymUnavailableEquipment", "equipamentosAusentesAcademia", "gymLimitations"]),
+      legacyTrainingEnvironment,
+      legacyAvailableEquipment,
+    });
+    const trainingEnvironment = trainingResources.trainingEnvironment;
+    const availableEquipment = trainingResources.availableEquipment;
     const timeAvailableMinutes = normalizeOptionalNumberText(getString(body, ["timeAvailableMinutes", "tempoDisponivelMinutos", "tempoTreino", "tempoDisponivel"]));
     const preferredDays = getString(body, ["preferredDays", "diasPreferidos", "dias"]);
     const currentPain = getString(body, ["currentPain", "dorAtual", "desconfortoAtual", "pain"]);
@@ -585,6 +597,17 @@ export async function POST(req: NextRequest) {
 
     if (!acceptedTerms) {
       return NextResponse.json({ error: "Você precisa aceitar os termos da experiência gratuita." }, { status: 400 });
+    }
+
+    if (trainingResources.errors.length > 0) {
+      return NextResponse.json(
+        {
+          error: trainingResources.errors[0],
+          code: "TRAINING_RESOURCES_REQUIRED",
+          details: trainingResources.errors,
+        },
+        { status: 400 }
+      );
     }
 
     const existing = await findExistingStudentOrUser({ email, phoneDigits });
