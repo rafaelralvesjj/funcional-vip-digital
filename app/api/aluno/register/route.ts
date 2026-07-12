@@ -283,6 +283,9 @@ function buildTrialWelcomeContent({
     "Depois do vínculo, use o chat da plataforma para falar com o professor sobre dúvidas de treino. Assim, todo o acompanhamento fica registrado e organizado.",
     "O WhatsApp fica reservado para contatos específicos da gestão, quando necessário.",
     "",
+    "Importante: liberações de treino, avisos da gestão e outras atualizações importantes também serão enviadas ao e-mail cadastrado.",
+    "Mantenha as notificações do aplicativo de e-mail ativas no celular e confira também as pastas Spam, Lixo eletrônico e Promoções.",
+    "",
     "Você já pode acessar sua área com o e-mail e a senha cadastrados para acompanhar avisos, treinos e próximos passos.",
     "",
     "Este é um ciclo gratuito de experiência. Perto do encerramento, a gestão vai orientar você sobre as opções para continuar.",
@@ -887,6 +890,9 @@ export async function POST(req: NextRequest) {
         "Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.",
         "Depois do vínculo, use o chat da plataforma para falar com o professor sobre dúvidas de treino. O WhatsApp fica reservado para contatos específicos da gestão.",
         "",
+        "Para não perder nenhuma atualização, mantenha as notificações do aplicativo de e-mail ativas no celular.",
+        "Confira também as pastas Spam, Lixo eletrônico e Promoções e marque nossas mensagens como confiáveis.",
+        "",
         `Acesse sua área com o e-mail e a senha cadastrados: ${loginUrl}`,
         "",
         "Gestão do Funcional VIP Digital",
@@ -919,6 +925,10 @@ export async function POST(req: NextRequest) {
               </div>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.</p>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Depois do vínculo, use o chat da plataforma para dúvidas de treino. Assim, o acompanhamento fica registrado e organizado. O WhatsApp fica reservado para contatos específicos da gestão.</p>
+              <div style="background:#1a1510; border:1px solid #7c5228; border-radius:12px; padding:14px; margin:16px 0;">
+                <p style="color:#D4A373; font-size:14px; font-weight:bold; margin:0 0 8px;">Não perca os próximos avisos</p>
+                <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin:0;">Mantenha as notificações do aplicativo de e-mail ativas no celular. Confira também as pastas Spam, Lixo eletrônico e Promoções e marque nossas mensagens como confiáveis. Liberações de treino, avisos da gestão e outras atualizações importantes serão enviadas para este endereço.</p>
+              </div>
               <a href="${safeLoginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
               <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">Gestão do Funcional VIP Digital</p>
               <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">Mensagem automática de boas-vindas enviada pela plataforma.</p>
