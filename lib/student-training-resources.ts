@@ -246,10 +246,14 @@ export function buildTrainingResourceSummary(
         "Casa/ao ar livre: nenhum equipamento disponível; priorizar exercícios com peso corporal e recursos seguros do ambiente"
       );
     } else {
-      const labels = selectedEquipment
-        .filter((value) => value !== "OTHER")
-        .map((value) => equipmentLabelByValue.get(value))
-        .filter((value): value is string => Boolean(value));
+      const labels = selectedEquipment.reduce<string[]>((items, value) => {
+        if (value === "OTHER") return items;
+
+        const label = equipmentLabelByValue.get(value);
+        if (label) items.push(label);
+
+        return items;
+      }, []);
 
       if (equipmentOther) labels.push(equipmentOther);
 
