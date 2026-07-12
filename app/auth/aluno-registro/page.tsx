@@ -1,714 +1,982 @@
-"use client";
+import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+import { formatBirthDatePtBr, validateBirthDateInput } from "@/lib/student-age";
+import { buildTrainingResourceSummary } from "@/lib/student-training-resources";
+import * as bcrypt from "bcryptjs";
+import { sendEmail } from "@/lib/sendEmail";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { calculateAgeYears, getTodayDateInput, validateBirthDateInput } from "@/lib/student-age";
+type BodySource = FormData | Record<string, any>;
 
-const OTHER_OBJECTIVE = "Outro";
+function getValue(source: BodySource, keys: string[]): any {
+  if (source instanceof FormData) {
+    for (const key of keys) {
+      const value = source.get(key);
+      if (value !== null && value !== undefined) return value;
+    }
 
-const OBJECTIVE_OPTIONS = [
-  "Emagrecimento",
-  "Ganho de massa muscular / hipertrofia",
-  "Condicionamento físico geral",
-  "Saúde e qualidade de vida",
-  "Melhora da mobilidade e flexibilidade",
-  "Fortalecimento muscular",
-  "Definição corporal",
-  "Preparação para corrida",
-  "Começar a correr",
-  "Melhorar desempenho na corrida",
-  "Fortalecimento para corrida",
-  "Prevenção de lesões na corrida",
-  "Retorno aos treinos após lesão",
-  "Treinamento por prescrição médica",
-  "Reabilitação / retomada com cuidado",
-  "Melhora de performance esportiva",
-  "Atleta de alta performance",
-  "Preparação física para luta ou arte marcial",
-  "Preparação física para esporte específico",
-  "Redução de dores e melhora funcional",
-  OTHER_OBJECTIVE,
-];
+    return null;
+  }
 
-export default function AlunoRegisterPage() {
-  const router = useRouter();
+  for (const key of keys) {
+    const value = source?.[key];
+    if (value !== null && value !== undefined) return value;
+  }
 
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    birthDate: "",
-    password: "",
-    confirmPassword: "",
-    objective: "",
-    objectiveOther: "",
-    activityLevel: "",
-    trainingEnvironment: "",
-    availableEquipment: "",
-    timeAvailableMinutes: "",
-    preferredDays: "",
-    currentPain: "",
-    medicalRestriction: "",
-    trainingHistory: "",
-    weightKg: "",
-    heightCm: "",
-    notes: "",
-    acceptedTerms: false,
+  return null;
+}
+
+function getString(source: BodySource, keys: string[]): string {
+  const value = getValue(source, keys);
+
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+
+  return String(value).trim();
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+function startOfDay(date: Date): Date {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function withMidday(date: Date): Date {
+  const normalized = new Date(date);
+  normalized.setHours(12, 0, 0, 0);
+  return normalized;
+}
+
+function addMonthsMinusOneDay(startDate: Date, months: number): Date {
+  const endDate = new Date(startDate);
+  endDate.setMonth(endDate.getMonth() + Math.max(months, 1));
+  endDate.setDate(endDate.getDate() - 1);
+  endDate.setHours(23, 59, 59, 999);
+
+  return endDate;
+}
+
+function getFirstSafeTrialStartDate(referenceDate = new Date()): {
+  startDate: Date;
+  shiftedToNextWeek: boolean;
+  reason: string | null;
+} {
+  const reference = startOfDay(referenceDate);
+  const day = reference.getDay();
+
+  const isFridaySaturdayOrSunday = day === 5 || day === 6 || day === 0;
+
+  if (!isFridaySaturdayOrSunday) {
+    return {
+      startDate: withMidday(reference),
+      shiftedToNextWeek: false,
+      reason: null,
+    };
+  }
+
+  const nextMonday = new Date(reference);
+  const daysUntilMonday = day === 0 ? 1 : 8 - day;
+  nextMonday.setDate(reference.getDate() + daysUntilMonday);
+
+  return {
+    startDate: withMidday(nextMonday),
+    shiftedToNextWeek: true,
+    reason:
+      "Cadastro realizado no fim da semana. Experiência direcionada para a próxima segunda-feira para garantir primeira janela segura de acompanhamento.",
+  };
+}
+
+function getAppLoginUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/auth/signin`;
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDatePtBr(date: Date | string): string {
+  return new Date(date).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function normalizeOptionalNumberText(value: string): string {
+  const normalized = String(value || "")
+    .replace(",", ".")
+    .replace(/[^\d.]/g, "");
+
+  if (!normalized) return "";
+
+  const parsed = Number(normalized);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) return "";
+
+  return String(parsed);
+}
+
+function formatOnboardingValue(value: string): string | null {
+  const trimmed = String(value || "").trim();
+
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildOnboardingLines({
+  birthDateText,
+  ageYears,
+  objective,
+  activityLevel,
+  trainingEnvironment,
+  availableEquipment,
+  timeAvailableMinutes,
+  preferredDays,
+  currentPain,
+  medicalRestriction,
+  trainingHistory,
+  weightKg,
+  heightCm,
+  notesFromBody,
+}: {
+  birthDateText: string;
+  ageYears: number;
+  objective: string;
+  activityLevel: string;
+  trainingEnvironment: string;
+  availableEquipment: string;
+  timeAvailableMinutes: string;
+  preferredDays: string;
+  currentPain: string;
+  medicalRestriction: string;
+  trainingHistory: string;
+  weightKg: string;
+  heightCm: string;
+  notesFromBody: string;
+}): string[] {
+  return [
+    birthDateText ? `Data de nascimento: ${birthDateText}.` : null,
+    Number.isFinite(ageYears) ? `Idade no cadastro: ${ageYears} ano(s).` : null,
+    objective ? `Objetivo principal: ${objective}.` : null,
+    activityLevel ? `Nível atual informado: ${activityLevel}.` : null,
+    trainingEnvironment ? `Ambiente de treino: ${trainingEnvironment}.` : null,
+    availableEquipment ? `Equipamentos/materiais disponíveis: ${availableEquipment}.` : null,
+    timeAvailableMinutes ? `Tempo disponível por treino: ${timeAvailableMinutes} minuto(s).` : null,
+    preferredDays ? `Dias/horários preferidos: ${preferredDays}.` : null,
+    currentPain ? `Dor/desconforto atual informado: ${currentPain}.` : null,
+    medicalRestriction ? `Restrição médica/física declarada: ${medicalRestriction}.` : null,
+    trainingHistory ? `Histórico de treino: ${trainingHistory}.` : null,
+    weightKg ? `Peso informado: ${weightKg} kg.` : null,
+    heightCm ? `Altura informada: ${heightCm} cm.` : null,
+    notesFromBody ? `Observações livres do aluno: ${notesFromBody}.` : null,
+  ].filter((item): item is string => Boolean(item));
+}
+
+function getOnboardingStatus({
+  objective,
+  activityLevel,
+  trainingEnvironment,
+  availableEquipment,
+  timeAvailableMinutes,
+  currentPain,
+  medicalRestriction,
+  restrictions,
+}: {
+  objective: string;
+  activityLevel: string;
+  trainingEnvironment: string;
+  availableEquipment: string;
+  timeAvailableMinutes: string;
+  currentPain: string;
+  medicalRestriction: string;
+  restrictions: string;
+}): {
+  onboardingComplete: boolean;
+  missingLabels: string[];
+} {
+  const requiredFields = [
+    { label: "objetivo principal", value: objective },
+    { label: "nível atual", value: activityLevel },
+    { label: "ambiente de treino", value: trainingEnvironment },
+    { label: "equipamentos disponíveis", value: availableEquipment },
+    { label: "tempo disponível por treino", value: timeAvailableMinutes },
+    { label: "dores, desconfortos ou restrições", value: currentPain || medicalRestriction || restrictions },
+  ];
+
+  const missingLabels = requiredFields
+    .filter((field) => !formatOnboardingValue(field.value))
+    .map((field) => field.label);
+
+  return {
+    onboardingComplete: missingLabels.length === 0,
+    missingLabels,
+  };
+}
+
+function buildOnboardingStatusText({
+  onboardingComplete,
+  missingLabels,
+}: {
+  onboardingComplete: boolean;
+  missingLabels: string[];
+}): string {
+  if (onboardingComplete) {
+    return "Ficha inicial do aluno: completa.";
+  }
+
+  return `Ficha inicial do aluno: incompleta. Confirmar antes de personalizar treino: ${missingLabels.join(", ")}.`;
+}
+
+function buildTrialWelcomeContent({
+  studentName,
+  startDateText,
+  endDateText,
+  workoutsPerWeek,
+  workoutsPerMonth,
+  onboardingComplete,
+  missingOnboardingLabels,
+  shiftedToNextWeek,
+}: {
+  studentName: string;
+  startDateText: string;
+  endDateText: string;
+  workoutsPerWeek: number;
+  workoutsPerMonth: number;
+  onboardingComplete: boolean;
+  missingOnboardingLabels: string[];
+  shiftedToNextWeek: boolean;
+}): string {
+  return [
+    `Oi, ${studentName}! Que bom ter você com a gente.`,
+    "",
+    shiftedToNextWeek
+      ? `Seu cadastro está concluído e sua experiência foi organizada para começar em ${startDateText}, na primeira janela segura de acompanhamento.`
+      : "Seu cadastro está concluído e sua experiência gratuita já começou.",
+    shiftedToNextWeek
+      ? "Isso não significa atraso: escolhemos essa data para que você comece com uma semana inteira, sem treinos corridos ou acumulados."
+      : null,
+    `Sua experiência fica válida até ${endDateText}.`,
+    `Nesse período, estão previstos ${workoutsPerWeek} treino(s) por semana, totalizando ${workoutsPerMonth} treino(s) no ciclo.`,
+    "",
+    onboardingComplete
+      ? "Recebemos sua ficha inicial. Ela será usada pelo professor para conhecer seu momento e preparar uma proposta mais segura e direcionada."
+      : `Ainda precisamos confirmar algumas informações para personalizar melhor seus treinos: ${missingOnboardingLabels.join(", ")}.`,
+    "",
+    "Agora a gestão vai vincular um professor responsável. Quando isso acontecer, ele será apresentado a você e acompanhará seus treinos e sua evolução.",
+    "Assim que a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.",
+    "",
+    "Depois do vínculo, use o chat da plataforma para falar com o professor sobre dúvidas de treino. Assim, todo o acompanhamento fica registrado e organizado.",
+    "O WhatsApp fica reservado para contatos específicos da gestão, quando necessário.",
+    "",
+    "Importante: liberações de treino, avisos da gestão e outras atualizações importantes também serão enviadas ao e-mail cadastrado.",
+    "Mantenha as notificações do aplicativo de e-mail ativas no celular e confira também as pastas Spam, Lixo eletrônico e Promoções.",
+    "",
+    "Você já pode acessar sua área com o e-mail e a senha cadastrados para acompanhar avisos, treinos e próximos passos.",
+    "",
+    "Este é um ciclo gratuito de experiência. Perto do encerramento, a gestão vai orientar você sobre as opções para continuar.",
+    "",
+    "Gestão do Funcional VIP Digital",
+    "Mensagem automática de boas-vindas enviada pela plataforma.",
+  ]
+    .filter((item): item is string => item !== null)
+    .join("\n");
+}
+
+function buildManagementNewTrialStudentContent({
+  studentName,
+  studentEmail,
+  studentPhone,
+  startDateText,
+  endDateText,
+  workoutsPerWeek,
+  workoutsPerMonth,
+  source,
+  onboardingComplete,
+  missingOnboardingLabels,
+  onboardingLines,
+  shiftedToNextWeek,
+}: {
+  studentName: string;
+  studentEmail: string;
+  studentPhone?: string | null;
+  startDateText: string;
+  endDateText: string;
+  workoutsPerWeek: number;
+  workoutsPerMonth: number;
+  source: string;
+  onboardingComplete: boolean;
+  missingOnboardingLabels: string[];
+  onboardingLines: string[];
+  shiftedToNextWeek: boolean;
+}): string {
+  return [
+    "Olá, equipe de gestão.",
+    "",
+    `${studentName} concluiu o cadastro para a experiência gratuita.`,
+    `E-mail: ${studentEmail}`,
+    studentPhone ? `Telefone/WhatsApp cadastrado: ${studentPhone}` : null,
+    `Origem do cadastro: ${source}.`,
+    `Início da experiência: ${startDateText}.`,
+    `Término previsto: ${endDateText}.`,
+    `Programação contratada: ${workoutsPerWeek} treino(s) por semana e ${workoutsPerMonth} treino(s) no ciclo.`,
+    shiftedToNextWeek
+      ? "Como o cadastro aconteceu no fim da semana, o início foi direcionado para a próxima janela segura. Não é necessário recuperar treinos da semana do cadastro."
+      : null,
+    "",
+    buildOnboardingStatusText({
+      onboardingComplete,
+      missingLabels: missingOnboardingLabels,
+    }),
+    onboardingLines.length > 0 ? "" : null,
+    onboardingLines.length > 0 ? "Informações iniciais recebidas:" : null,
+    ...onboardingLines.map((line) => `- ${line}`),
+    "",
+    shiftedToNextWeek
+      ? "Próximo passo: vincular um professor responsável e garantir que a primeira semana esteja preparada para a data de início."
+      : onboardingComplete
+        ? "Próximo passo: vincular um professor responsável e orientar a preparação dos primeiros treinos com base na ficha inicial."
+        : "Próximo passo: vincular um professor, confirmar os dados que faltam e manter a primeira prescrição conservadora até a ficha estar completa.",
+    "",
+    "Mensagem automática de apoio operacional para a gestão.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function getOptionalImage(source: BodySource): Promise<string | null> {
+  if (!(source instanceof FormData)) return null;
+
+  const fileValue =
+    source.get("image") ||
+    source.get("foto") ||
+    source.get("photo") ||
+    source.get("avatar");
+
+  if (!fileValue || typeof fileValue === "string") return null;
+
+  const file = fileValue as File;
+
+  if (!file.size || !file.type?.startsWith("image/")) return null;
+
+  const maxBytes = 1.5 * 1024 * 1024;
+
+  if (file.size > maxBytes) {
+    return null;
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  return `data:${file.type};base64,${buffer.toString("base64")}`;
+}
+
+async function getTrialPlan() {
+  let plan = await prisma.servicePlan.findFirst({
+    where: {
+      allowTrial: true,
+      active: true,
+    },
+    orderBy: [
+      { sortOrder: "asc" },
+      { createdAt: "asc" },
+    ],
   });
 
-  const [imageUrl, setImageUrl] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  if (plan) return plan;
 
-  const todayDateInput = getTodayDateInput();
-  const calculatedAge = form.birthDate ? calculateAgeYears(form.birthDate) : null;
+  plan = await prisma.servicePlan.create({
+    data: {
+      name: "Experiência grátis - 1 mês",
+      description:
+        "Ciclo de experiência para o aluno conhecer a plataforma e testar o acompanhamento.",
+      workoutsPerWeek: 2,
+      workoutsPerMonth: 8,
+      durationMonths: 1,
+      priceCents: 0,
+      active: true,
+      trialDays: 30,
+      allowTrial: true,
+      sortOrder: 1,
+    },
+  });
 
-  function handleChange(
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) {
-    const target = event.target;
-    const { name, value } = target;
-    const fieldValue =
-      target instanceof HTMLInputElement && target.type === "checkbox"
-        ? target.checked
-        : value;
+  return plan;
+}
 
-    setForm((current) => {
-      if (name === "objective" && value !== OTHER_OBJECTIVE) {
-        return {
-          ...current,
-          objective: value,
-          objectiveOther: "",
-        };
+function getClientIp(req: NextRequest): string | null {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    null
+  );
+}
+
+async function findExistingStudentOrUser({
+  email,
+  phoneDigits,
+}: {
+  email: string;
+  phoneDigits: string;
+}) {
+  const existingUserByEmail = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      email: true,
+      phone: true,
+      role: true,
+      active: true,
+      studentAuths: {
+        select: {
+          id: true,
+          name: true,
+          active: true,
+        },
+      },
+    },
+  });
+
+  if (existingUserByEmail) {
+    return {
+      reason: "EMAIL_EXISTS",
+      studentIds: existingUserByEmail.studentAuths.map((student) => student.id),
+    };
+  }
+
+  if (phoneDigits) {
+    const students = await prisma.student.findMany({
+      where: {
+        phone: {
+          contains: phoneDigits,
+        },
+      },
+      select: {
+        id: true,
+      },
+      take: 5,
+    });
+
+    if (students.length > 0) {
+      return {
+        reason: "PHONE_EXISTS",
+        studentIds: students.map((student) => student.id),
+      };
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        phone: {
+          contains: phoneDigits,
+        },
+        OR: [
+          {
+            role: {
+              in: ["ALUNO", "STUDENT"],
+            },
+          },
+          {
+            studentAuths: {
+              some: {},
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        studentAuths: {
+          select: {
+            id: true,
+          },
+        },
+      },
+      take: 5,
+    });
+
+    if (users.length > 0) {
+      return {
+        reason: "PHONE_EXISTS",
+        studentIds: users.flatMap((item) => item.studentAuths.map((student) => student.id)),
+      };
+    }
+  }
+
+  return null;
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const contentType = req.headers.get("content-type") || "";
+
+    const body: BodySource = contentType.includes("multipart/form-data")
+      ? await req.formData()
+      : await req.json();
+
+    const name = getString(body, ["name", "nome", "fullName", "aluno"]);
+    const email = normalizeEmail(getString(body, ["email", "mail"]));
+    const phone = getString(body, ["phone", "telefone", "whatsapp", "celular"]);
+    const phoneDigits = normalizePhone(phone);
+    const birthDateRaw = getString(body, ["birthDate", "dataNascimento", "dateOfBirth"]);
+    const birthDateValidation = validateBirthDateInput(birthDateRaw);
+    const password = getString(body, ["password", "senha"]);
+    const confirmPassword = getString(body, ["confirmPassword", "confirmarSenha", "passwordConfirmation"]);
+    const objective = getString(body, ["objective", "objetivo"]);
+    const restrictions = getString(body, ["restrictions", "restricoes", "lesoes", "dores"]);
+    const activityLevel = getString(body, ["activityLevel", "nivelAtividade"]);
+    const legacyTrainingEnvironment = getString(body, ["trainingEnvironment", "ambienteTreino", "ambiente", "localTreino"]);
+    const legacyAvailableEquipment = getString(body, ["availableEquipment", "equipamentos", "materiais", "equipment"]);
+    const trainingResources = buildTrainingResourceSummary({
+      trainingLocations: getValue(body, ["trainingLocations", "locaisTreino", "trainingLocation"]),
+      gymType: getValue(body, ["gymType", "tipoAcademia", "academyType"]),
+      selectedEquipment: getValue(body, ["selectedEquipment", "equipamentosSelecionados", "equipmentSelection"]),
+      equipmentOther: getValue(body, ["equipmentOther", "outroEquipamento"]),
+      gymUnavailableEquipment: getValue(body, ["gymUnavailableEquipment", "equipamentosAusentesAcademia", "gymLimitations"]),
+      legacyTrainingEnvironment,
+      legacyAvailableEquipment,
+    });
+    const trainingEnvironment = trainingResources.trainingEnvironment;
+    const availableEquipment = trainingResources.availableEquipment;
+    const timeAvailableMinutes = normalizeOptionalNumberText(getString(body, ["timeAvailableMinutes", "tempoDisponivelMinutos", "tempoTreino", "tempoDisponivel"]));
+    const preferredDays = getString(body, ["preferredDays", "diasPreferidos", "dias"]);
+    const currentPain = getString(body, ["currentPain", "dorAtual", "desconfortoAtual", "pain"]);
+    const medicalRestriction = getString(body, ["medicalRestriction", "restricaoMedica", "restricao", "restricoesMedicas"]);
+    const trainingHistory = getString(body, ["trainingHistory", "historicoTreino", "historico", "experienciaTreino"]);
+    const weightKg = normalizeOptionalNumberText(getString(body, ["weightKg", "peso", "pesoKg"]));
+    const heightCm = normalizeOptionalNumberText(getString(body, ["heightCm", "altura", "alturaCm"]));
+    const source = getString(body, ["source", "origem"]) || "LANDING_PAGE";
+    const acceptedTermsRaw = getValue(body, ["acceptedTerms", "aceiteTermos", "termsAccepted"]);
+    const acceptedTerms =
+      acceptedTermsRaw === true ||
+      acceptedTermsRaw === "true" ||
+      acceptedTermsRaw === "on" ||
+      acceptedTermsRaw === "1";
+    const termsVersion = getString(body, ["termsVersion", "versaoTermo"]) || "EXPERIENCIA_GRATUITA_V1";
+    const notesFromBody = getString(body, ["notes", "observacoes", "observations"]);
+    const uploadedImageUrl = getString(body, ["imageUrl", "fotoUrl", "photoUrl"]);
+    const image = uploadedImageUrl || (await getOptionalImage(body));
+
+    if (!name) {
+      return NextResponse.json({ error: "Informe o nome do aluno." }, { status: 400 });
+    }
+
+    if (!email) {
+      return NextResponse.json({ error: "Informe o e-mail do aluno." }, { status: 400 });
+    }
+
+    if (!phoneDigits) {
+      return NextResponse.json({ error: "Informe o WhatsApp do aluno." }, { status: 400 });
+    }
+
+    if (birthDateValidation.error || !birthDateValidation.birthDate || birthDateValidation.ageYears === null) {
+      return NextResponse.json(
+        { error: birthDateValidation.error || "Informe a data de nascimento do aluno." },
+        { status: 400 }
+      );
+    }
+
+    if (!password || password.length < 6) {
+      return NextResponse.json({ error: "A senha precisa ter pelo menos 6 caracteres." }, { status: 400 });
+    }
+
+    if (confirmPassword && password !== confirmPassword) {
+      return NextResponse.json({ error: "As senhas não conferem." }, { status: 400 });
+    }
+
+    if (!acceptedTerms) {
+      return NextResponse.json({ error: "Você precisa aceitar os termos da experiência gratuita." }, { status: 400 });
+    }
+
+    if (trainingResources.errors.length > 0) {
+      return NextResponse.json(
+        {
+          error: trainingResources.errors[0],
+          code: "TRAINING_RESOURCES_REQUIRED",
+          details: trainingResources.errors,
+        },
+        { status: 400 }
+      );
+    }
+
+    const existing = await findExistingStudentOrUser({ email, phoneDigits });
+
+    if (existing) {
+      return NextResponse.json(
+        {
+          error:
+            existing.reason === "EMAIL_EXISTS"
+              ? "Já existe um cadastro com este e-mail. Faça login ou fale com a equipe."
+              : "Já existe um cadastro com este WhatsApp. Faça login ou fale com a equipe.",
+          code: existing.reason,
+          studentIds: existing.studentIds,
+        },
+        { status: 409 }
+      );
+    }
+
+    const trialPlan = await getTrialPlan();
+    const durationMonths = Math.max(Number(trialPlan.durationMonths || 1), 1);
+    const safeWindow = getFirstSafeTrialStartDate(new Date());
+    const startDate = safeWindow.startDate;
+    const endDate = addMonthsMinusOneDay(startDate, durationMonths);
+    const startDateText = formatDatePtBr(startDate);
+    const endDateText = formatDatePtBr(endDate);
+    const passwordHash = await bcrypt.hash(password, 10);
+    const birthDate = birthDateValidation.birthDate;
+    const ageYears = birthDateValidation.ageYears;
+    const birthDateText = formatBirthDatePtBr(birthDate);
+    const ip = getClientIp(req);
+    const userAgent = req.headers.get("user-agent");
+
+    const onboardingStatus = getOnboardingStatus({
+      objective,
+      activityLevel,
+      trainingEnvironment,
+      availableEquipment,
+      timeAvailableMinutes,
+      currentPain,
+      medicalRestriction,
+      restrictions,
+    });
+
+    const onboardingLines = buildOnboardingLines({
+      birthDateText,
+      ageYears,
+      objective,
+      activityLevel,
+      trainingEnvironment,
+      availableEquipment,
+      timeAvailableMinutes,
+      preferredDays,
+      currentPain,
+      medicalRestriction,
+      trainingHistory,
+      weightKg,
+      heightCm,
+      notesFromBody,
+    });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const authUser = await tx.user.create({
+        data: {
+          name,
+          email,
+          phone: phone || null,
+          birthDate,
+          image,
+          password: passwordHash,
+          role: "ALUNO",
+          active: true,
+        },
+      });
+
+      const notes = [
+        "Cadastro criado pelo fluxo de experiência gratuita.",
+        `Origem: ${source}.`,
+        safeWindow.shiftedToNextWeek ? "Entrada tardia/fim de semana: experiência iniciará na primeira janela segura de treino." : null,
+        safeWindow.reason ? safeWindow.reason : null,
+        `Início da experiência: ${startDateText}.`,
+        `Fim da experiência: ${endDateText}.`,
+        buildOnboardingStatusText({
+          onboardingComplete: onboardingStatus.onboardingComplete,
+          missingLabels: onboardingStatus.missingLabels,
+        }),
+        ...onboardingLines,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const studentCommercialStatus = safeWindow.shiftedToNextWeek
+        ? "EXPERIENCIA_AGENDADA"
+        : "EXPERIENCIA_ATIVA";
+
+      const student = await tx.student.create({
+        data: {
+          name,
+          email,
+          phone: phone || null,
+          image,
+          notes,
+          active: true,
+          onboardingCompleto: onboardingStatus.onboardingComplete,
+          commercialStatus: studentCommercialStatus,
+          contractedTrainingDaysPerMonth: trialPlan.workoutsPerMonth,
+          userAuthId: authUser.id,
+          userId: authUser.id,
+        },
+      });
+
+      const contract = await tx.studentContract.create({
+        data: {
+          studentId: student.id,
+          planId: trialPlan.id,
+          professorId: null,
+          contractNumber: `EXP-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+          type: "TRIAL",
+          status: "ACTIVE",
+          commercialStatus: studentCommercialStatus,
+          startDate,
+          endDate,
+          durationMonths,
+          workoutsPerWeek: trialPlan.workoutsPerWeek,
+          workoutsPerMonth: trialPlan.workoutsPerMonth,
+          totalContractedWorkouts: trialPlan.workoutsPerMonth * durationMonths,
+          priceCents: 0,
+          paymentMode: "GRATUITO",
+          source,
+          acceptedAt: new Date(),
+          activatedAt: safeWindow.shiftedToNextWeek ? null : new Date(),
+          notes: [
+            "Termo de experiência gratuita aceito digitalmente.",
+            `Versão do termo: ${termsVersion}.`,
+            safeWindow.shiftedToNextWeek
+              ? "Início comercial ajustado para a primeira janela segura de acompanhamento."
+              : null,
+            ip ? `IP: ${ip}.` : null,
+            userAgent ? `User-Agent: ${userAgent}.` : null,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        },
+      });
+
+      const managementRecipients = await tx.user.findMany({
+        where: {
+          role: {
+            in: ["GESTOR", "ADMIN"],
+          },
+          active: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      });
+
+      const notificationAuthor = managementRecipients[0] || null;
+      const managementAuthorId = notificationAuthor?.id || authUser.id;
+
+      const notice = await tx.notice.create({
+        data: {
+          title: safeWindow.shiftedToNextWeek
+            ? "Sua experiência está agendada para começar bem"
+            : "Sua experiência gratuita começou",
+          content: buildTrialWelcomeContent({
+            studentName: student.name,
+            startDateText,
+            endDateText,
+            workoutsPerWeek: contract.workoutsPerWeek,
+            workoutsPerMonth: contract.workoutsPerMonth,
+            onboardingComplete: onboardingStatus.onboardingComplete,
+            missingOnboardingLabels: onboardingStatus.missingLabels,
+            shiftedToNextWeek: safeWindow.shiftedToNextWeek,
+          }),
+          type: "COMERCIAL",
+          targetRole: "STUDENT",
+          studentId: student.id,
+          authorId: managementAuthorId,
+          expiresAt: contract.endDate,
+        },
+      });
+
+      const managementNotice = await tx.notice.create({
+        data: {
+          title: safeWindow.shiftedToNextWeek
+            ? "Novo aluno em experiência: organizar início seguro"
+            : "Novo aluno em experiência: vincular professor",
+          content: buildManagementNewTrialStudentContent({
+            studentName: student.name,
+            studentEmail: email,
+            studentPhone: student.phone,
+            startDateText,
+            endDateText,
+            workoutsPerWeek: contract.workoutsPerWeek,
+            workoutsPerMonth: contract.workoutsPerMonth,
+            source,
+            onboardingComplete: onboardingStatus.onboardingComplete,
+            missingOnboardingLabels: onboardingStatus.missingLabels,
+            onboardingLines,
+            shiftedToNextWeek: safeWindow.shiftedToNextWeek,
+          }),
+          type: "COMERCIAL",
+          targetRole: "GESTOR",
+          studentId: student.id,
+          authorId: managementAuthorId,
+          expiresAt: contract.endDate,
+        },
+      });
+
+      const onboardingCareEvent = onboardingStatus.onboardingComplete
+        ? null
+        : await tx.studentCareEvent.create({
+            data: {
+              studentId: student.id,
+              contractId: contract.id,
+              eventType: "ONBOARDING_INCOMPLETE",
+              severity: "ATENCAO",
+              status: "ABERTO",
+              source: "LANDING_PAGE",
+              title: "Ficha inicial incompleta",
+              description: [
+                "Aluno iniciou experiência gratuita, mas ainda faltam informações mínimas para personalização segura.",
+                `Campos a confirmar: ${onboardingStatus.missingLabels.join(", ")}.`,
+                "Enquanto a ficha estiver incompleta, orientar treino inicial conservador e confirmar dados antes de progredir carga/intensidade.",
+              ].join("\n"),
+              studentMessage:
+                "Precisamos confirmar algumas informações para personalizar melhor seus treinos.",
+              professorMessage:
+                "Antes de montar treinos personalizados, confirme os campos faltantes da ficha inicial do aluno.",
+            },
+          });
+
+      if (safeWindow.shiftedToNextWeek) {
+        await tx.contractLifecycleEvent.create({
+          data: {
+            contractId: contract.id,
+            studentId: student.id,
+            eventType: "TRIAL_START_DELAYED_SAFE_WINDOW",
+            eventKey: startDate.toISOString().slice(0, 10),
+            channel: "SISTEMA",
+            noticeId: notice.id,
+          },
+        });
       }
 
       return {
-        ...current,
-        [name]: fieldValue,
+        userId: authUser.id,
+        studentId: student.id,
+        studentName: student.name,
+        email,
+        phone: student.phone,
+        birthDate: birthDate.toISOString(),
+        ageYears,
+        isMinor: birthDateValidation.isMinor,
+        contractId: contract.id,
+        contractType: contract.type,
+        commercialStatus: student.commercialStatus,
+        startDate: contract.startDate,
+        endDate: contract.endDate,
+        workoutsPerWeek: contract.workoutsPerWeek,
+        workoutsPerMonth: contract.workoutsPerMonth,
+        totalContractedWorkouts: contract.totalContractedWorkouts,
+        welcomeNoticeId: notice.id,
+        managementNoticeId: managementNotice.id,
+        onboardingCareEventId: onboardingCareEvent?.id || null,
+        onboardingComplete: onboardingStatus.onboardingComplete,
+        missingOnboardingLabels: onboardingStatus.missingLabels,
+        shiftedToNextWeek: safeWindow.shiftedToNextWeek,
+        managementRecipients: managementRecipients.map((item) => ({
+          id: item.id,
+          name: item.name,
+          email: item.email,
+        })),
       };
     });
-  }
-
-  function getFinalObjective() {
-    if (form.objective === OTHER_OBJECTIVE) {
-      const otherObjective = form.objectiveOther.trim();
-
-      if (!otherObjective) {
-        return "";
-      }
-
-      return `${OTHER_OBJECTIVE}: ${otherObjective}`;
-    }
-
-    return form.objective.trim();
-  }
-
-  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) return;
-
-    setUploading(true);
-
-    const formData = new FormData();
-    formData.append("file", file);
 
     try {
-      const res = await fetch("/api/upload-image", {
-        method: "POST",
-        body: formData,
-      });
+      const loginUrl = getAppLoginUrl();
+      const safeName = escapeHtml(name);
+      const safeStartDateText = escapeHtml(formatDatePtBr(result.startDate));
+      const safeEndDateText = escapeHtml(formatDatePtBr(result.endDate));
+      const safeLoginUrl = escapeHtml(loginUrl);
+      const title = result.shiftedToNextWeek
+        ? "Sua experiência está agendada para começar bem"
+        : "Sua experiência gratuita começou";
+      const text = [
+        `Oi, ${name}! Que bom ter você com a gente.`,
+        "",
+        result.shiftedToNextWeek
+          ? `Seu cadastro está concluído e sua experiência foi organizada para começar em ${formatDatePtBr(result.startDate)}, na primeira janela segura de acompanhamento.`
+          : "Seu cadastro está concluído e sua experiência gratuita já começou.",
+        result.shiftedToNextWeek
+          ? "Isso não significa atraso. A data foi escolhida para que você comece com uma semana inteira, sem treinos corridos ou acumulados."
+          : null,
+        `Sua experiência fica válida até ${formatDatePtBr(result.endDate)}.`,
+        `Nesse período, estão previstos ${result.workoutsPerWeek} treino(s) por semana, totalizando ${result.workoutsPerMonth} treino(s) no ciclo.`,
+        "",
+        "Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.",
+        "Depois do vínculo, use o chat da plataforma para falar com o professor sobre dúvidas de treino. O WhatsApp fica reservado para contatos específicos da gestão.",
+        "",
+        "Para não perder nenhuma atualização, mantenha as notificações do aplicativo de e-mail ativas no celular.",
+        "Confira também as pastas Spam, Lixo eletrônico e Promoções e marque nossas mensagens como confiáveis.",
+        "",
+        `Acesse sua área com o e-mail e a senha cadastrados: ${loginUrl}`,
+        "",
+        "Gestão do Funcional VIP Digital",
+        "Mensagem automática de boas-vindas enviada pela plataforma.",
+      ]
+        .filter(Boolean)
+        .join("\n");
 
-      if (res.ok) {
-        const data = await res.json();
-        setImageUrl(data.url);
-      } else {
-        const err = await res.json().catch(() => null);
-        alert(`Erro ao enviar imagem: ${err?.error || "tente novamente."}`);
-      }
-    } catch {
-      alert("Erro ao conectar com o servidor");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  function validateInitialProfile(): string | null {
-    const missing: string[] = [];
-
-    if (!form.objective.trim()) missing.push("objetivo principal");
-    if (form.objective === OTHER_OBJECTIVE && !form.objectiveOther.trim()) {
-      missing.push("descrição do objetivo");
-    }
-    if (!form.activityLevel.trim()) missing.push("nível atual");
-    if (!form.trainingEnvironment.trim()) missing.push("local de treino");
-    if (!form.availableEquipment.trim()) missing.push("equipamentos disponíveis");
-    if (!form.timeAvailableMinutes.trim()) missing.push("tempo disponível por treino");
-    if (!form.currentPain.trim()) missing.push("dor/desconforto atual");
-    if (!form.medicalRestriction.trim()) missing.push("restrição médica ou física");
-
-    if (missing.length === 0) return null;
-
-    return `Preencha a ficha inicial para treino seguro: ${missing.join(", ")}.`;
-  }
-
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    setError("");
-
-    if (!form.name || !form.email || !form.phone || !form.birthDate || !form.password) {
-      setError("Preencha nome, e-mail, telefone, data de nascimento e senha.");
-      return;
-    }
-
-    const birthDateValidation = validateBirthDateInput(form.birthDate);
-
-    if (birthDateValidation.error) {
-      setError(birthDateValidation.error);
-      return;
-    }
-
-    if (form.password.length < 6) {
-      setError("A senha deve ter no mínimo 6 caracteres.");
-      return;
-    }
-
-    if (form.password !== form.confirmPassword) {
-      setError("As senhas não conferem.");
-      return;
-    }
-
-    const profileError = validateInitialProfile();
-
-    if (profileError) {
-      setError(profileError);
-      return;
-    }
-
-    const finalObjective = getFinalObjective();
-
-    if (!finalObjective) {
-      setError("Informe seu objetivo principal para continuar.");
-      return;
-    }
-
-    if (!form.acceptedTerms) {
-      setError("Para iniciar a experiência gratuita, aceite o termo de experiência.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/aluno/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          birthDate: form.birthDate,
-          password: form.password,
-          confirmPassword: form.confirmPassword,
-          imageUrl: imageUrl || null,
-          acceptedTerms: form.acceptedTerms,
-          source: "LANDING_PAGE",
-          objective: finalObjective,
-          primaryGoal: form.objective,
-          primaryGoalOtherDescription:
-            form.objective === OTHER_OBJECTIVE ? form.objectiveOther.trim() : null,
-          activityLevel: form.activityLevel,
-          trainingEnvironment: form.trainingEnvironment,
-          availableEquipment: form.availableEquipment,
-          timeAvailableMinutes: form.timeAvailableMinutes,
-          preferredDays: form.preferredDays,
-          currentPain: form.currentPain,
-          medicalRestriction: form.medicalRestriction,
-          trainingHistory: form.trainingHistory,
-          weightKg: form.weightKg,
-          heightCm: form.heightCm,
-          notes: form.notes,
-        }),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        setError(data?.error || "Erro ao criar conta.");
-        setLoading(false);
-        return;
-      }
-
-      const result = await signIn("credentials", {
-        email: form.email,
-        password: form.password,
-        redirect: false,
-      });
-
-      if (result?.ok) {
-        router.push("/aluno");
-      } else {
-        setError("Conta criada, mas houve erro ao fazer login. Faça login manualmente.");
-        router.push("/auth/signin");
-      }
-    } catch {
-      setError("Erro interno do servidor. Tente novamente.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <main className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-2xl">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-[#D4A373]">
-            Funcional Vip Digital
-          </h1>
-          <p className="text-sm text-[#a1a1a1] mt-2">
-            Crie sua conta para iniciar sua experiência gratuita
-          </p>
-        </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="bg-[#111] border border-[#ffffff10] rounded-2xl p-6 space-y-5"
-        >
-          {error && (
-            <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
-              {error}
+      await sendEmail({
+        to: email,
+        subject: title,
+        text,
+        html: `
+          <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+            <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+              <h2 style="color:#D4A373; margin:0 0 16px;">${escapeHtml(title)}</h2>
+              <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeName}</strong>! Que bom ter você com a gente.</p>
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+                ${result.shiftedToNextWeek
+                  ? `Seu cadastro está concluído e sua experiência foi organizada para começar em <strong style="color:#f5f5f5;">${safeStartDateText}</strong>, na primeira janela segura de acompanhamento.`
+                  : "Seu cadastro está concluído e sua experiência gratuita já começou."}
+              </p>
+              ${result.shiftedToNextWeek
+                ? `<p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Isso não significa atraso. Escolhemos essa data para que você comece com uma semana inteira, sem treinos corridos ou acumulados.</p>`
+                : ""}
+              <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
+                <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Início: <strong style="color:#f5f5f5;">${safeStartDateText}</strong></p>
+                <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Validade: <strong style="color:#f5f5f5;">${safeEndDateText}</strong></p>
+                <p style="color:#d4d4d4; font-size:13px; margin:0;">Programação: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
+              </div>
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.</p>
+              <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Depois do vínculo, use o chat da plataforma para dúvidas de treino. Assim, o acompanhamento fica registrado e organizado. O WhatsApp fica reservado para contatos específicos da gestão.</p>
+              <div style="background:#1a1510; border:1px solid #7c5228; border-radius:12px; padding:14px; margin:16px 0;">
+                <p style="color:#D4A373; font-size:14px; font-weight:bold; margin:0 0 8px;">Não perca os próximos avisos</p>
+                <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin:0;">Mantenha as notificações do aplicativo de e-mail ativas no celular. Confira também as pastas Spam, Lixo eletrônico e Promoções e marque nossas mensagens como confiáveis. Liberações de treino, avisos da gestão e outras atualizações importantes serão enviadas para este endereço.</p>
+              </div>
+              <a href="${safeLoginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
+              <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">Gestão do Funcional VIP Digital</p>
+              <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">Mensagem automática de boas-vindas enviada pela plataforma.</p>
             </div>
-          )}
-
-          <div className="rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 px-4 py-3">
-            <p className="text-sm text-[#D4A373] font-semibold">
-              Experiência gratuita de 1 mês
-            </p>
-            <p className="text-xs text-[#a1a1a1] mt-1">
-              Seu cadastro ativa uma experiência grátis. Depois disso, a equipe irá vincular um professor para liberar seus primeiros treinos.
-            </p>
           </div>
+        `,
+      });
+    } catch (error) {
+      console.error("Erro ao enviar e-mail de experiência gratuita:", error);
+    }
 
-          <section className="space-y-4">
-            <div>
-              <h2 className="text-base font-semibold text-[#D4A373]">
-                1. Dados de acesso
-              </h2>
-              <p className="text-xs text-[#a1a1a1] mt-1">
-                Use um e-mail que você acessa no celular e um WhatsApp válido para manter seu acompanhamento atualizado.
-              </p>
-            </div>
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error: any) {
+    console.error("POST /api/aluno/register error:", error);
 
-            <div>
-              <label className="block text-sm text-[#d6d6d6] mb-1">
-                Sua foto <span className="text-[#6b6b6b]">(opcional)</span>
-              </label>
+    if (error?.code === "P2002") {
+      return NextResponse.json(
+        { error: "Já existe um cadastro com esses dados." },
+        { status: 409 }
+      );
+    }
 
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="block w-full text-sm text-[#a1a1a1] file:mr-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#0a0a0a]"
-              />
-
-              {uploading && (
-                <p className="text-xs text-[#D4A373] mt-1">Enviando foto...</p>
-              )}
-
-              {imageUrl && !uploading && (
-                <p className="text-xs text-green-400 mt-1">✅ Foto enviada!</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#d6d6d6] mb-1">
-                Nome completo *
-              </label>
-              <input
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                placeholder="Seu nome"
-                autoComplete="name"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  E-mail *
-                </label>
-                <input
-                  name="email"
-                  type="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                  placeholder="voce@email.com"
-                  autoComplete="email"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  WhatsApp *
-                </label>
-                <input
-                  name="phone"
-                  value={form.phone}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                  placeholder="(61) 99999-9999"
-                  autoComplete="tel"
-                />
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-[#D4A373]/30 bg-[#D4A373]/10 p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#D4A373]/15 text-[#D4A373]">
-                  <svg
-                    aria-hidden="true"
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.8}
-                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8V6a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-[#f5f5f5]">
-                    Ative as notificações do seu e-mail
-                  </p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-[#d4d4d4]">
-                    Liberações de treino, avisos da gestão e outras atualizações importantes
-                    serão enviadas para este endereço. Mantenha as notificações do aplicativo
-                    de e-mail ativas no celular e confira também Spam, Lixo eletrônico e Promoções.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#d6d6d6] mb-1">
-                Data de nascimento *
-              </label>
-              <input
-                name="birthDate"
-                type="date"
-                value={form.birthDate}
-                onChange={handleChange}
-                max={todayDateInput}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                autoComplete="bday"
-              />
-              <p className="text-[11px] text-[#6b6b6b] mt-1">
-                A idade é calculada automaticamente e ajuda o professor e a IA a ajustar intensidade, volume, recuperação e progressão com mais segurança.
-              </p>
-              {calculatedAge !== null && calculatedAge >= 0 && (
-                <p className="text-xs text-[#D4A373] mt-1 font-semibold">
-                  Idade calculada: {calculatedAge} ano{calculatedAge === 1 ? "" : "s"}
-                  {calculatedAge < 18 ? " · aluno menor de idade" : ""}
-                </p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  Senha *
-                </label>
-                <input
-                  name="password"
-                  type="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                  placeholder="Mínimo 6 caracteres"
-                  autoComplete="new-password"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  Confirmar senha *
-                </label>
-                <input
-                  name="confirmPassword"
-                  type="password"
-                  value={form.confirmPassword}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                  placeholder="Repita sua senha"
-                  autoComplete="new-password"
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="space-y-4 border-t border-[#ffffff10] pt-5">
-            <div>
-              <h2 className="text-base font-semibold text-[#D4A373]">
-                2. Ficha inicial para treino seguro
-              </h2>
-              <p className="text-xs text-[#a1a1a1] mt-1">
-                Essas informações ajudam o professor a montar um treino inicial mais seguro e adequado para sua rotina.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#d6d6d6] mb-1">
-                Qual é seu objetivo principal? *
-              </label>
-              <select
-                name="objective"
-                value={form.objective}
-                onChange={handleChange}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-              >
-                <option value="">Selecione...</option>
-                {OBJECTIVE_OPTIONS.map((objective) => (
-                  <option key={objective} value={objective}>
-                    {objective}
-                  </option>
-                ))}
-              </select>
-
-              {form.objective === OTHER_OBJECTIVE && (
-                <div className="mt-3">
-                  <label className="block text-sm text-[#d6d6d6] mb-1">
-                    Descreva seu objetivo *
-                  </label>
-                  <textarea
-                    name="objectiveOther"
-                    value={form.objectiveOther}
-                    onChange={handleChange}
-                    rows={3}
-                    className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                    placeholder="Ex: melhorar condicionamento para uma trilha, preparar para uma prova específica, voltar após uma pausa longa"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  Nível atual *
-                </label>
-                <select
-                  name="activityLevel"
-                  value={form.activityLevel}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                >
-                  <option value="">Selecione...</option>
-                  <option value="Sedentário">Sedentário</option>
-                  <option value="Iniciante">Iniciante</option>
-                  <option value="Intermediário">Intermediário</option>
-                  <option value="Avançado">Avançado</option>
-                  <option value="Retomando após pausa">Retomando após pausa</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  Onde você pretende treinar? *
-                </label>
-                <select
-                  name="trainingEnvironment"
-                  value={form.trainingEnvironment}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                >
-                  <option value="">Selecione...</option>
-                  <option value="Academia">Academia</option>
-                  <option value="Casa">Casa</option>
-                  <option value="Condomínio">Condomínio</option>
-                  <option value="Parque / ao ar livre">Parque / ao ar livre</option>
-                  <option value="Misto">Misto</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#d6d6d6] mb-1">
-                Equipamentos ou materiais disponíveis *
-              </label>
-              <textarea
-                name="availableEquipment"
-                value={form.availableEquipment}
-                onChange={handleChange}
-                rows={3}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                placeholder="Ex: halteres, elástico, colchonete, academia completa, nenhum equipamento"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  Tempo disponível por treino *
-                </label>
-                <input
-                  name="timeAvailableMinutes"
-                  type="number"
-                  min="10"
-                  max="180"
-                  value={form.timeAvailableMinutes}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                  placeholder="Ex: 40"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  Dias ou horários preferidos <span className="text-[#6b6b6b]">(opcional)</span>
-                </label>
-                <input
-                  name="preferredDays"
-                  value={form.preferredDays}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                  placeholder="Ex: segunda e quarta à noite"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#d6d6d6] mb-1">
-                Sente alguma dor ou desconforto hoje? *
-              </label>
-              <textarea
-                name="currentPain"
-                value={form.currentPain}
-                onChange={handleChange}
-                rows={2}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                placeholder="Ex: não sinto dores; dor leve no joelho; desconforto na lombar"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#d6d6d6] mb-1">
-                Possui restrição médica ou física? *
-              </label>
-              <textarea
-                name="medicalRestriction"
-                value={form.medicalRestriction}
-                onChange={handleChange}
-                rows={2}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                placeholder="Ex: nenhuma; liberação médica com restrição; evitar impacto; problema no ombro"
-              />
-              <p className="text-[11px] text-[#6b6b6b] mt-1">
-                Em caso de condição médica, o professor poderá solicitar liberação/orientação profissional antes de evoluir intensidade.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#d6d6d6] mb-1">
-                Histórico de treino <span className="text-[#6b6b6b]">(opcional)</span>
-              </label>
-              <textarea
-                name="trainingHistory"
-                value={form.trainingHistory}
-                onChange={handleChange}
-                rows={3}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                placeholder="Ex: já treinei musculação por 1 ano; estou parado há 6 meses; nunca treinei"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  Peso em kg <span className="text-[#6b6b6b]">(opcional)</span>
-                </label>
-                <input
-                  name="weightKg"
-                  value={form.weightKg}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                  placeholder="Ex: 72"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#d6d6d6] mb-1">
-                  Altura em cm <span className="text-[#6b6b6b]">(opcional)</span>
-                </label>
-                <input
-                  name="heightCm"
-                  value={form.heightCm}
-                  onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                  placeholder="Ex: 168"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#d6d6d6] mb-1">
-                Algo mais que o professor precisa saber? <span className="text-[#6b6b6b]">(opcional)</span>
-              </label>
-              <textarea
-                name="notes"
-                value={form.notes}
-                onChange={handleChange}
-                rows={3}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
-                placeholder="Ex: prefiro treinos curtos; tenho pouco tempo; quero começar devagar"
-              />
-            </div>
-          </section>
-
-          <label className="flex gap-3 rounded-xl bg-[#1a1a1a] border border-[#ffffff10] px-4 py-3 cursor-pointer">
-            <input
-              name="acceptedTerms"
-              type="checkbox"
-              checked={form.acceptedTerms}
-              onChange={handleChange}
-              className="mt-1 h-4 w-4 accent-[#D4A373]"
-            />
-            <span className="text-xs text-[#d6d6d6] leading-relaxed">
-              Li e aceito o{" "}
-              <strong className="text-[#D4A373]">
-                Termo de Experiência Gratuita
-              </strong>
-              . Entendo que o período experimental tem duração limitada, não gera cobrança automática e que, para continuar após o período gratuito, será necessário contratar um plano.
-            </span>
-          </label>
-
-          <button
-            type="submit"
-            disabled={loading || !form.acceptedTerms}
-            className="w-full rounded-xl bg-[#D4A373] px-4 py-3 font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? "Criando experiência..." : "Começar experiência gratuita"}
-          </button>
-
-          <p className="text-center text-sm text-[#a1a1a1]">
-            Já tem conta?{" "}
-            <Link href="/auth/signin" className="text-[#D4A373] hover:underline">
-              Fazer login
-            </Link>
-          </p>
-        </form>
-      </div>
-    </main>
-  );
+    return NextResponse.json(
+      { error: "Erro interno ao criar cadastro.", message: error?.message },
+      { status: 500 }
+    );
+  }
 }
