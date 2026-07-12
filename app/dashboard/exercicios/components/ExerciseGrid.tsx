@@ -81,8 +81,45 @@ const emptyForm: ExerciseForm = {
   active: true,
 };
 
+const MUSCLE_GROUP_OPTIONS = [
+  { value: "Pernas", label: "Pernas" },
+  { value: "Glúteos", label: "Glúteos" },
+  { value: "Core / Abdômen", label: "Core / Abdômen" },
+  { value: "Peito", label: "Peito" },
+  { value: "Costas", label: "Costas" },
+  { value: "Ombros", label: "Ombros" },
+  { value: "Braços", label: "Braços" },
+  { value: "Corpo Inteiro", label: "Corpo Inteiro" },
+  { value: "Cardio / Condicionamento", label: "Cardio / Condicionamento" },
+  { value: "Mobilidade", label: "Mobilidade" },
+  { value: "Recuperação", label: "Recuperação" },
+] as const;
+
 function compactText(value?: string | null): string {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeMuscleGroupValue(value?: string | null): string {
+  const current = compactText(value);
+  if (!current) return "";
+
+  const normalized = current
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  const aliases: Record<string, string> = {
+    core: "Core / Abdômen",
+    abdomen: "Core / Abdômen",
+    "core / abdomen": "Core / Abdômen",
+    "core/abdomen": "Core / Abdômen",
+    cardio: "Cardio / Condicionamento",
+    condicionamento: "Cardio / Condicionamento",
+    "cardio / condicionamento": "Cardio / Condicionamento",
+    "cardio/condicionamento": "Cardio / Condicionamento",
+  };
+
+  return aliases[normalized] || current;
 }
 
 function shortText(value?: string | null, maxLength = 130): string {
@@ -643,7 +680,7 @@ export default function ExerciseGrid({
     setForm({
       name: exercise.name || "",
       description: exercise.description || "",
-      muscleGroup: exercise.muscleGroup || "",
+      muscleGroup: normalizeMuscleGroupValue(exercise.muscleGroup),
       imageUrl: exercise.imageUrl || "",
       videoUrl: exercise.videoUrl || "",
       objectiveTags: exercise.objectiveTags || "",
@@ -720,7 +757,7 @@ export default function ExerciseGrid({
       const payload = {
         name: form.name.trim(),
         description: form.description.trim(),
-        muscleGroup: form.muscleGroup.trim(),
+        muscleGroup: normalizeMuscleGroupValue(form.muscleGroup),
         imageUrl: form.imageUrl.trim() || null,
         videoUrl: form.videoUrl.trim() || null,
         objectiveTags: form.objectiveTags.trim() || null,
@@ -988,17 +1025,15 @@ export default function ExerciseGrid({
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
               >
                 <option value="">Selecione...</option>
-                <option value="Pernas">Pernas</option>
-                <option value="Glúteos">Glúteos</option>
-                <option value="Core">Core / Abdômen</option>
-                <option value="Peito">Peito</option>
-                <option value="Costas">Costas</option>
-                <option value="Ombros">Ombros</option>
-                <option value="Braços">Braços</option>
-                <option value="Corpo Inteiro">Corpo Inteiro</option>
-                <option value="Cardio">Cardio / Condicionamento</option>
-                <option value="Mobilidade">Mobilidade</option>
-                <option value="Recuperação">Recuperação</option>
+                {form.muscleGroup &&
+                  !MUSCLE_GROUP_OPTIONS.some((option) => option.value === form.muscleGroup) && (
+                    <option value={form.muscleGroup}>{form.muscleGroup}</option>
+                  )}
+                {MUSCLE_GROUP_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
