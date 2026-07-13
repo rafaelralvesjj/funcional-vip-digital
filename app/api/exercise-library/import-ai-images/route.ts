@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { del, put } from "@vercel/blob";
 import { getServerSession } from "next-auth";
+import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
+
+export const runtime = "nodejs";
 
 type ImportKind = "MAIN" | "SEQUENCE";
 
@@ -13,7 +16,7 @@ type ParsedAiImageFile = {
 };
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_FILE_SIZE = 4 * 1024 * 1024;
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -25,25 +28,32 @@ function normalizeRole(role?: string | null): string {
 }
 
 function canManageExerciseLibrary(role?: string | null): boolean {
-  const normalized = normalizeRole(role);
-
-  return ["GESTOR", "ADMIN", "TEACHER"].includes(normalized);
+  return ["GESTOR", "ADMIN", "TEACHER"].includes(normalizeRole(role));
 }
 
 function slugify(value?: string | null): string {
-  const slug = String(value || "")
+  return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
 
-  return slug;
+function collapseDuplicateImageExtensions(fileName: string): string {
+  let current = fileName;
+  const duplicateExtension = /\.(png|jpe?g|webp)\.(png|jpe?g|webp)$/i;
+
+  while (duplicateExtension.test(current)) {
+    current = current.replace(duplicateExtension, ".$2");
+  }
+
+  return current;
 }
 
 function getSafeFileName(fileName: string): string {
-  return String(fileName || "imagem.png")
+  const safe = String(fileName || "imagem.png")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -52,6 +62,11 @@ function getSafeFileName(fileName: string): string {
     .replace(/-+/g, "-")
     .replace(/_+/g, "_")
     .replace(/^-|-$/g, "") || "imagem.png";
+
+  return collapseDuplicateImageExtensions(safe).replace(
+    /[-_]+(\.[a-z0-9]+)$/i,
+    "$1"
+  );
 }
 
 function parseAiImageFile(fileName: string): ParsedAiImageFile {
@@ -59,100 +74,60 @@ function parseAiImageFile(fileName: string): ParsedAiImageFile {
   const extensionMatch = safeFileName.match(/\.([a-z0-9]+)$/i);
   const extension = extensionMatch?.[1] || "png";
   const baseName = safeFileName.replace(/\.[a-z0-9]+$/i, "");
-
   const normalizedBase = baseName
     .replace(/_+/g, "_")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-  const mainPattern = /(^|[-_])(principal|capa|main)(-\d+)?$/i;
-  const sequencePattern = /(^|[-_])(sequencia|sequencial|sequence|execucao)(-\d+)?$/i;
+  const markerMatch = normalizedBase.match(
+    /(?:__|[-_])(principal|capa|main|sequencia|sequencial|sequence|execucao)(?:[-_]?\d+)?$/i
+  );
 
-  const hasMainMarker = mainPattern.test(normalizedBase) || normalizedBase.includes("__principal") || normalizedBase.includes("__capa");
-  const hasSequenceMarker = sequencePattern.test(normalizedBase) || normalizedBase.includes("__sequencia") || normalizedBase.includes("__sequencial");
-
-  let kind: ImportKind | null = null;
-  let exercisePart = normalizedBase;
-
-  if (hasMainMarker) {
-    kind = "MAIN";
-    exercisePart = exercisePart
-      .replace(/__(principal|capa|main)(-\d+)?$/i, "")
-      .replace(/([-_])(principal|capa|main)(-\d+)?$/i, "");
-  } else if (hasSequenceMarker) {
-    kind = "SEQUENCE";
-    exercisePart = exercisePart
-      .replace(/__(sequencia|sequencial|sequence|execucao)(-\d+)?$/i, "")
-      .replace(/([-_])(sequencia|sequencial|sequence|execucao)(-\d+)?$/i, "");
+  if (!markerMatch || markerMatch.index === undefined) {
+    return {
+      safeFileName,
+      exerciseSlug: slugify(normalizedBase.replace(/_/g, "-")),
+      kind: null,
+      extension,
+    };
   }
 
-  const exerciseSlug = slugify(exercisePart.replace(/_/g, "-"));
+  const marker = markerMatch[1].toLowerCase();
+  const kind: ImportKind = ["principal", "capa", "main"].includes(marker)
+    ? "MAIN"
+    : "SEQUENCE";
+  const exercisePart = normalizedBase.slice(0, markerMatch.index);
 
   return {
     safeFileName,
-    exerciseSlug,
+    exerciseSlug: slugify(exercisePart.replace(/_/g, "-")),
     kind,
     extension,
   };
 }
 
-async function uploadFileToGithub(params: {
-  file: File;
-  path: string;
-  message: string;
-}) {
-  const token = process.env.GITHUB_TOKEN;
-  const owner = process.env.GITHUB_OWNER;
-  const repo = process.env.GITHUB_REPO;
-
-  if (!token || !owner || !repo) {
-    throw new Error("GitHub não configurado.");
-  }
-
-  const buffer = Buffer.from(await params.file.arrayBuffer());
-  const content = buffer.toString("base64");
-  const getUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${params.path}`;
-
-  const getRes = await fetch(getUrl, {
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: "application/vnd.github.v3+json",
-    },
-  });
-
-  let sha: string | undefined;
-  if (getRes.ok) {
-    const existing = await getRes.json();
-    sha = existing.sha;
-  }
-
-  const putRes = await fetch(getUrl, {
-    method: "PUT",
-    headers: {
-      Authorization: `token ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/vnd.github.v3+json",
-    },
-    body: JSON.stringify({
-      message: params.message,
-      content,
-      ...(sha && { sha }),
-    }),
-  });
-
-  if (!putRes.ok) {
-    const err = await putRes.json().catch(() => null);
-    throw new Error(err?.message || "Erro ao salvar imagem no GitHub.");
-  }
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "Erro desconhecido ao salvar imagem.";
 }
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    const sessionUser = session?.user as any;
+    const sessionUser = session?.user as { id?: string; role?: string } | undefined;
 
-    if (!sessionUser?.id || !canManageExerciseLibrary(sessionUser?.role)) {
+    if (!sessionUser?.id || !canManageExerciseLibrary(sessionUser.role)) {
       return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+
+    if (!process.env.BLOB_STORE_ID && !process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json(
+        {
+          error:
+            "Vercel Blob não está conectado ao projeto. Confira BLOB_STORE_ID nas variáveis de ambiente.",
+        },
+        { status: 500 }
+      );
     }
 
     const formData = await req.formData();
@@ -168,10 +143,9 @@ export async function POST(req: NextRequest) {
       orderBy: { name: "asc" },
     });
 
-    const exercisesBySlug = new Map<string, any>(
+    const exercisesBySlug = new Map(
       exercises.map((exercise) => [slugify(exercise.name), exercise])
     );
-
     const importedSlots = new Set<string>();
 
     const imported: Array<{
@@ -179,14 +153,10 @@ export async function POST(req: NextRequest) {
       exerciseName: string;
       kind: ImportKind;
       url: string;
+      pathname: string;
     }> = [];
-
-    const skipped: Array<{
-      fileName: string;
-      reason: string;
-    }> = [];
-
-    const updatedExercises: any[] = [];
+    const skipped: Array<{ fileName: string; reason: string }> = [];
+    const updatedExercises: typeof exercises = [];
 
     for (const file of files) {
       const parsed = parseAiImageFile(file.name);
@@ -202,7 +172,9 @@ export async function POST(req: NextRequest) {
       if (file.size > MAX_FILE_SIZE) {
         skipped.push({
           fileName: file.name,
-          reason: `Arquivo acima de ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(0)}MB.`,
+          reason: `Arquivo acima de ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(
+            0
+          )} MB.`,
         });
         continue;
       }
@@ -210,7 +182,8 @@ export async function POST(req: NextRequest) {
       if (!parsed.kind) {
         skipped.push({
           fileName: file.name,
-          reason: "Nome sem marcador __principal ou __sequencia.",
+          reason:
+            "Nome sem marcador __principal ou __sequencia. Também aceitamos sufixos como __sequencia2.",
         });
         continue;
       }
@@ -228,7 +201,7 @@ export async function POST(req: NextRequest) {
       if (!exercise) {
         skipped.push({
           fileName: file.name,
-          reason: `Exercício não encontrado para o slug ${parsed.exerciseSlug}.`,
+          reason: `Exercício não encontrado para o nome ${parsed.exerciseSlug}.`,
         });
         continue;
       }
@@ -240,13 +213,14 @@ export async function POST(req: NextRequest) {
           fileName: file.name,
           reason:
             parsed.kind === "MAIN"
-              ? `Já foi importada uma imagem principal para ${exercise.name} neste lote.`
-              : `Já foi importada uma imagem sequencial para ${exercise.name} neste lote.`,
+              ? `Já foi importada uma imagem principal para ${exercise.name} neste envio.`
+              : `Já foi importada uma imagem sequencial para ${exercise.name} neste envio.`,
         });
         continue;
       }
 
-      const existingImageUrl = parsed.kind === "MAIN" ? exercise.imageUrl : exercise.sequenceImageUrl;
+      const existingImageUrl =
+        parsed.kind === "MAIN" ? exercise.imageUrl : exercise.sequenceImageUrl;
 
       if (existingImageUrl) {
         skipped.push({
@@ -262,27 +236,28 @@ export async function POST(req: NextRequest) {
       importedSlots.add(slotKey);
 
       const folder = parsed.kind === "MAIN" ? "principal" : "sequencias";
-      const relativePath = `ia/${parsed.exerciseSlug}/${folder}/${parsed.safeFileName}`;
-      const githubPath = `public/images/exercices/${relativePath}`;
-      const publicUrl = `/images/exercices/${relativePath}`;
+      const pathname = `exercise-library/ia/${parsed.exerciseSlug}/${folder}/${parsed.safeFileName}`;
+      let uploadedBlobUrl: string | null = null;
 
       try {
-        await uploadFileToGithub({
-          file,
-          path: githubPath,
-          message: `Add or update AI exercise image ${parsed.safeFileName}`,
+        const blob = await put(pathname, file, {
+          access: "public",
+          addRandomSuffix: true,
+          contentType: file.type,
+          cacheControlMaxAge: 365 * 24 * 60 * 60,
+          maximumSizeInBytes: MAX_FILE_SIZE,
         });
+        uploadedBlobUrl = blob.url;
 
         const data =
           parsed.kind === "MAIN"
-            ? {
-                imageUrl: publicUrl,
-              }
+            ? { imageUrl: blob.url }
             : {
-                sequenceImageUrl: publicUrl,
+                sequenceImageUrl: blob.url,
                 sequenceGeneratedByAi: true,
                 sequenceImageLabel:
-                  exercise.sequenceImageLabel || `Execução de ${exercise.name} em etapas`,
+                  exercise.sequenceImageLabel ||
+                  `Execução de ${exercise.name} em etapas`,
                 sequenceImageNotes:
                   exercise.sequenceImageNotes ||
                   "Observe a postura, o alinhamento corporal e o controle do movimento em cada etapa.",
@@ -298,32 +273,42 @@ export async function POST(req: NextRequest) {
           fileName: file.name,
           exerciseName: exercise.name,
           kind: parsed.kind,
-          url: publicUrl,
+          url: blob.url,
+          pathname: blob.pathname,
         });
-
         updatedExercises.push(updatedExercise);
         exercisesBySlug.set(parsed.exerciseSlug, updatedExercise);
-      } catch (error: any) {
+      } catch (error: unknown) {
+        if (uploadedBlobUrl) {
+          await del(uploadedBlobUrl).catch((cleanupError) => {
+            console.error("Erro ao remover Blob órfão:", cleanupError);
+          });
+        }
+
         skipped.push({
           fileName: file.name,
-          reason: error?.message || "Erro ao salvar imagem.",
+          reason: getErrorMessage(error),
         });
       }
     }
 
     return NextResponse.json({
       ok: true,
+      storage: "vercel-blob",
+      importedCount: imported.length,
+      ignoredCount: skipped.length,
+      message: `Importação concluída no Vercel Blob. ${imported.length} arquivo(s) aproveitado(s) e ${skipped.length} ignorado(s).`,
       imported,
       skipped,
       updatedExercises,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("POST /api/exercise-library/import-ai-images error:", error);
 
     return NextResponse.json(
       {
-        error: "Erro ao importar imagens IA.",
-        message: error?.message,
+        error: "Erro ao importar imagens IA para o Vercel Blob.",
+        message: getErrorMessage(error),
       },
       { status: 500 }
     );
