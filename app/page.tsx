@@ -7,7 +7,7 @@ import {
   ChevronRight,
   Dumbbell,
   Heart,
-  Home,
+  Home as HomeIcon,
   MapPin,
   MessageCircle,
   Shield,
@@ -72,7 +72,7 @@ const benefits = [
       "Seu objetivo, nível, idade, rotina, histórico e disponibilidade entram na construção do treino.",
   },
   {
-    icon: Home,
+    icon: HomeIcon,
     title: "Para o local onde você treina",
     description:
       "Academia, casa, studio ou ao ar livre, usando apenas os equipamentos que você informou.",
