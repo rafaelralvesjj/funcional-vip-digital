@@ -628,6 +628,28 @@ function buildPackagePrompt(form: ExerciseForm): string {
     "- imagem principal em 1:1;",
     "- imagem sequencial em 16:9;",
     "- mesma identidade visual nas duas imagens.",
+    "",
+    "ENTREGA FINAL OBRIGATÓRIA — NÃO ENCERRAR ANTES DE CONCLUIR ESTA ETAPA",
+    "Depois de gerar as duas imagens, faça também todo o preparo dos arquivos para download. Não peça para o usuário renomear nada manualmente.",
+    "",
+    "1. Exporte a imagem principal em PNG exatamente com este nome:",
+    mainFile,
+    "",
+    "2. Exporte a imagem sequencial em PNG exatamente com este nome:",
+    sequenceFile,
+    "",
+    "3. Crie um único arquivo ZIP exatamente com este nome:",
+    `${slug}__pacote-imagens.zip`,
+    "",
+    "4. O ZIP deve conter somente estes dois arquivos, sem pastas internas e sem arquivos extras:",
+    `- ${mainFile}`,
+    `- ${sequenceFile}`,
+    "",
+    "5. Não acrescente datas, números, espaços, parênteses, versões, sufixos automáticos ou qualquer outro texto aos nomes.",
+    "6. Não entregue as imagens apenas separadamente. A entrega final esperada é o arquivo ZIP pronto para download.",
+    "7. Se a ferramenta de geração criar nomes temporários, use a ferramenta de arquivos disponível no ambiente para renomear, converter para PNG quando necessário e compactar.",
+    "8. Só considere a tarefa concluída depois que o ZIP estiver criado e disponibilizado para download.",
+    "9. Não faça perguntas adicionais. Execute todo o fluxo automaticamente com base neste prompt.",
   ].join("\n");
 }
 
@@ -1425,7 +1447,7 @@ export default function ExerciseGrid({
               <div>
                 <p className="text-sm font-semibold text-[#f5f5f5]">Pacote IA das imagens</p>
                 <p className="text-[11px] text-[#c9c9c9] mt-1">
-                  Gere um prompt mais completo e padronizado para criar a imagem principal e a imagem sequencial no ChatGPT. O sistema agora ajusta o texto conforme o tipo do exercício, a natureza do movimento e uma direção visual premium alinhada ao preto, grafite e laranja do Funcional VIP Digital. Nesta segunda versão, o prompt também reforça clareza didática, consistência visual entre os quadros e uma estética menos genérica e menos “ensaio fitness”. Depois salve as imagens com os nomes sugeridos para importar em lote.
+                  Gere um prompt completo para criar a imagem principal e a imagem sequencial no ChatGPT. Além do padrão visual premium, o prompt agora determina que, ao final, o próprio chat renomeie as duas imagens e entregue um único ZIP pronto para download, já com os nomes esperados pela importação em lote.
                 </p>
               </div>
 
