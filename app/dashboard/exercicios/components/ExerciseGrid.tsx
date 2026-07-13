@@ -81,6 +81,9 @@ const emptyForm: ExerciseForm = {
   active: true,
 };
 
+const ALLOWED_EXERCISE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_EXERCISE_IMAGE_SIZE = 4 * 1024 * 1024;
+
 const MUSCLE_GROUP_OPTIONS = [
   { value: "Pernas", label: "Pernas" },
   { value: "Glúteos", label: "Glúteos" },
@@ -715,14 +718,32 @@ export default function ExerciseGrid({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (!ALLOWED_EXERCISE_IMAGE_TYPES.includes(file.type)) {
+      alert("Tipo não permitido. Use PNG, JPG ou WebP.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_EXERCISE_IMAGE_SIZE) {
+      alert(
+        `A imagem possui ${(file.size / 1024 / 1024).toFixed(
+          1
+        )} MB. O limite seguro para este envio é 4 MB.`
+      );
+      event.target.value = "";
+      return;
+    }
+
     if (target === "imageUrl") setUploadingMain(true);
     if (target === "sequenceImageUrl") setUploadingSequence(true);
 
     const body = new FormData();
     body.append("file", file);
+    body.append("kind", target === "sequenceImageUrl" ? "SEQUENCE" : "MAIN");
+    body.append("exerciseName", form.name.trim());
 
     try {
-      const response = await fetch("/api/upload-image", {
+      const response = await fetch("/api/exercise-library/upload-image", {
         method: "POST",
         body,
       });
@@ -730,13 +751,17 @@ export default function ExerciseGrid({
       const data = await response.json().catch(() => null);
 
       if (!response.ok || !data?.url) {
-        alert(`Erro ao enviar imagem: ${data?.error || "tente novamente"}`);
+        alert(
+          `Erro ao enviar imagem: ${
+            data?.error || data?.message || "tente novamente"
+          }`
+        );
         return;
       }
 
       updateForm(target, data.url as any);
     } catch {
-      alert("Erro ao conectar com o servidor.");
+      alert("Erro ao conectar com o Vercel Blob.");
     } finally {
       if (target === "imageUrl") {
         setUploadingMain(false);
@@ -860,53 +885,108 @@ export default function ExerciseGrid({
   }
 
   async function handleBatchImport(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = event.target.files;
-    if (!files?.length) return;
+    const selectedFiles = Array.from(event.target.files || []);
+    if (!selectedFiles.length) return;
 
     setBatchImporting(true);
-    setBatchImportResult(null);
+    setBatchImportResult(
+      `Preparando ${selectedFiles.length} arquivo(s) para o Vercel Blob...`
+    );
+
+    const importedItems: any[] = [];
+    const skippedItems: any[] = [];
+    const updatedExercisesMap = new Map<string, Exercise>();
 
     try {
-      const formData = new FormData();
-      Array.from(files).forEach((file) => formData.append("files", file));
+      for (let index = 0; index < selectedFiles.length; index += 1) {
+        const file = selectedFiles[index];
 
-      const response = await fetch("/api/exercise-library/import-ai-images", {
-        method: "POST",
-        body: formData,
-      });
+        setBatchImportResult(
+          `Enviando ${index + 1} de ${selectedFiles.length}: ${file.name}`
+        );
 
-      const data = await response.json().catch(() => null);
+        if (!ALLOWED_EXERCISE_IMAGE_TYPES.includes(file.type)) {
+          skippedItems.push({
+            fileName: file.name,
+            reason: "Tipo não permitido. Use PNG, JPG ou WebP.",
+          });
+          continue;
+        }
 
-      if (!response.ok) {
-        alert(data?.error || "Não foi possível importar as imagens IA.");
-        return;
+        if (file.size > MAX_EXERCISE_IMAGE_SIZE) {
+          skippedItems.push({
+            fileName: file.name,
+            reason: `Arquivo com ${(file.size / 1024 / 1024).toFixed(
+              1
+            )} MB. O limite seguro é 4 MB.`,
+          });
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.append("files", file);
+
+        try {
+          const response = await fetch(
+            "/api/exercise-library/import-ai-images",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+          const data = await response.json().catch(() => null);
+
+          if (!response.ok) {
+            skippedItems.push({
+              fileName: file.name,
+              reason:
+                data?.error || data?.message || "Falha ao importar este arquivo.",
+            });
+            continue;
+          }
+
+          const importedFromRequest = Array.isArray(data?.imported)
+            ? data.imported
+            : [];
+          const skippedFromRequest = Array.isArray(data?.skipped)
+            ? data.skipped
+            : [];
+          const updatedFromRequest: Exercise[] = Array.isArray(
+            data?.updatedExercises
+          )
+            ? data.updatedExercises
+            : [];
+
+          importedItems.push(...importedFromRequest);
+          skippedItems.push(...skippedFromRequest);
+          updatedFromRequest.forEach((exercise) =>
+            updatedExercisesMap.set(exercise.id, exercise)
+          );
+        } catch {
+          skippedItems.push({
+            fileName: file.name,
+            reason: "Erro de conexão durante o envio ao Vercel Blob.",
+          });
+        }
       }
 
-      const updatedExercisesFromApi: Exercise[] = Array.isArray(data?.updatedExercises)
-        ? data.updatedExercises
-        : Array.isArray(data?.exercises)
-          ? data.exercises
-          : [];
+      const updatedExercisesFromApi = Array.from(updatedExercisesMap.values());
 
       if (updatedExercisesFromApi.length) {
         setExercises((current) => {
           const map = new Map(current.map((exercise) => [exercise.id, exercise]));
-          updatedExercisesFromApi.forEach((exercise) => map.set(exercise.id, exercise));
-          return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+          updatedExercisesFromApi.forEach((exercise) =>
+            map.set(exercise.id, exercise)
+          );
+          return Array.from(map.values()).sort((a, b) =>
+            a.name.localeCompare(b.name)
+          );
         });
       }
 
       router.refresh();
 
-      const importedItems = Array.isArray(data?.imported) ? data.imported : [];
-      const skippedItems = Array.isArray(data?.skipped) ? data.skipped : [];
-      const importedCount = Number(data?.importedCount ?? importedItems.length ?? 0);
-      const ignoredCount = Number(data?.ignoredCount ?? skippedItems.length ?? 0);
-
-      const message =
-        data?.message ||
-        `Importação concluída. ${importedCount} arquivo(s) aproveitado(s) e ${ignoredCount} ignorado(s).`;
-
+      const message = `Importação concluída no Vercel Blob. ${importedItems.length} arquivo(s) aproveitado(s) e ${skippedItems.length} ignorado(s).`;
       const importedDetails = importedItems.length
         ? importedItems
             .map((item: any) => {
@@ -915,9 +995,10 @@ export default function ExerciseGrid({
             })
             .join("\n")
         : "";
-
       const ignoredDetails = skippedItems.length
-        ? skippedItems.map((item: any) => `- ${item.fileName}: ${item.reason}`).join("\n")
+        ? skippedItems
+            .map((item: any) => `- ${item.fileName}: ${item.reason}`)
+            .join("\n")
         : "";
 
       setBatchImportResult(
@@ -926,14 +1007,12 @@ export default function ExerciseGrid({
           importedDetails ? `Importados:\n${importedDetails}` : null,
           ignoredDetails ? `Ignorados:\n${ignoredDetails}` : null,
           updatedExercisesFromApi.length
-            ? "As imagens já foram atualizadas na tela. Se alguma imagem não carregar na hora, atualize a página."
+            ? "As URLs do Vercel Blob já foram gravadas no Neon e as imagens estão disponíveis sem novo deploy."
             : null,
         ]
           .filter(Boolean)
           .join("\n\n")
       );
-    } catch {
-      alert("Erro ao importar imagens em lote.");
     } finally {
       setBatchImporting(false);
       if (importAiImagesRef.current) importAiImagesRef.current.value = "";
@@ -971,9 +1050,9 @@ export default function ExerciseGrid({
 
         <div className="rounded-xl border border-[#ffffff10] bg-[#111111] p-3 flex flex-col gap-2 md:min-w-[360px]">
           <div>
-            <p className="text-xs font-semibold text-[#f5f5f5]">Importar imagens IA em lote</p>
+            <p className="text-xs font-semibold text-[#f5f5f5]">Importar imagens IA para o Vercel Blob</p>
             <p className="text-[11px] text-[#a1a1a1] mt-1">
-              Selecione várias imagens geradas com os nomes esperados, como <span className="text-[#D4A373]">agachamento__principal.png</span> e <span className="text-[#D4A373]">agachamento__sequencia.png</span>.
+              Selecione várias imagens com os nomes esperados, como <span className="text-[#D4A373]">agachamento__principal.png</span> e <span className="text-[#D4A373]">agachamento__sequencia.png</span>. Cada arquivo é enviado separadamente, sem commit no GitHub e sem novo deploy.
             </p>
           </div>
           <input
@@ -984,7 +1063,7 @@ export default function ExerciseGrid({
             onChange={handleBatchImport}
             className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#b88a5e]"
           />
-          {batchImporting && <p className="text-xs text-[#D4A373]">Importando imagens...</p>}
+          {batchImporting && <p className="text-xs text-[#D4A373]">Enviando imagens ao Vercel Blob...</p>}
           {batchImportResult && (
             <pre className="whitespace-pre-wrap rounded-lg bg-[#0a0a0a] border border-[#ffffff08] p-3 text-[11px] text-[#a1a1a1] overflow-x-auto">
               {batchImportResult}
@@ -1192,7 +1271,7 @@ export default function ExerciseGrid({
                   Imagem principal <span className="text-[#525252]">(opcional)</span>
                 </label>
                 <p className="text-[10px] text-[#6b6b6b] mb-2">
-                  Capa visual do exercício na biblioteca e no treino do aluno.
+                  Capa visual do exercício. PNG, JPG ou WebP de até 4 MB, enviada ao Vercel Blob.
                 </p>
                 <input
                   type="file"
@@ -1267,7 +1346,7 @@ export default function ExerciseGrid({
               <div>
                 <label className="text-sm text-[#e5e5e5] block mb-1">Imagem sequencial</label>
                 <p className="text-[10px] text-[#6b6b6b] mb-2">
-                  Imagem em etapas para o aluno entender a execução completa.
+                  Imagem em etapas para o aluno entender a execução completa. Até 4 MB, enviada ao Vercel Blob.
                 </p>
                 <input
                   type="file"
