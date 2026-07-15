@@ -1509,6 +1509,103 @@ export async function GET(req: NextRequest) {
         };
       }
 
+      /*
+       * Resumo leve para Montar treino.
+       *
+       * Antes, mesmo com summary=1, a API buscava TODO o histórico de planos
+       * com TODOS os exercícios e seus campos de imagem. Só depois calculava
+       * o resumo. Com imagens adicionadas à biblioteca/planos, essa resposta
+       * podia ficar grande o suficiente para derrubar a aba ao executar
+       * response.json().
+       */
+      if (includeSummary) {
+        const { startOfWeek, endOfWeek } = getWeekRange(referenceDate);
+        const weekEndDisplay = new Date(endOfWeek.getTime() - 1);
+        let activeContract = await findActiveWorkoutContract(
+          studentId,
+          referenceDate
+        );
+
+        if (!activeContract) {
+          activeContract = await findActiveWorkoutContractForWeek(studentId, {
+            startOfWeek,
+            endOfWeek,
+          });
+        }
+
+        const effectiveWorkoutDate = activeContract
+          ? normalizeWorkoutDateInsideContract(referenceDate, activeContract)
+          : referenceDate;
+        const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
+
+        const plans = await prisma.workoutPlan.findMany({
+          where: {
+            ...where,
+            date: {
+              gte: startOfWeek,
+              lt: endOfWeek,
+            },
+            ...(activeContract
+              ? { contractId: activeContract.id }
+              : {}),
+          },
+          select: {
+            id: true,
+            date: true,
+            createdAt: true,
+          },
+          orderBy: {
+            date: "asc",
+          },
+        });
+
+        const weeklyPlansCount = plans.length;
+        const selectedDateBeforeContractStart = Boolean(
+          activeContract && referenceDate < activeContract.startDate
+        );
+
+        return NextResponse.json(
+          {
+            plans,
+            activeContract: serializeWorkoutContract(activeContract),
+            weeklyLimit,
+            weeklyPlansCount,
+            weeklyRemaining:
+              weeklyLimit == null
+                ? null
+                : Math.max(weeklyLimit - weeklyPlansCount, 0),
+            week: {
+              startOfWeek: startOfWeek.toISOString(),
+              endOfWeek: endOfWeek.toISOString(),
+              label: `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(
+                weekEndDisplay
+              )}`,
+              futureWeek: isFutureWeek(startOfWeek),
+            },
+            effectiveWorkoutDate: effectiveWorkoutDate
+              .toISOString()
+              .slice(0, 10),
+            canCreateWorkout: Boolean(
+              activeContract &&
+                weeklyLimit &&
+                weeklyPlansCount < weeklyLimit
+            ),
+            message: activeContract
+              ? selectedDateBeforeContractStart
+                ? `Contrato ativo encontrado para esta semana. Como o contrato começa em ${formatDatePtBr(
+                    activeContract.startDate
+                  )}, o treino será salvo a partir dessa data.`
+                : null
+              : "Este aluno não possui contrato ativo para a data selecionada.",
+          },
+          {
+            headers: {
+              "Cache-Control": "no-store",
+            },
+          }
+        );
+      }
+
       const plans = await prisma.workoutPlan.findMany({
         where,
         include: {
@@ -1528,64 +1625,8 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
       });
 
-      if (!includeSummary) {
-        return NextResponse.json(plans);
-      }
+      return NextResponse.json(plans);
 
-      const { startOfWeek, endOfWeek } = getWeekRange(referenceDate);
-      const weekEndDisplay = new Date(endOfWeek.getTime() - 1);
-      let activeContract = await findActiveWorkoutContract(studentId, referenceDate);
-
-      if (!activeContract) {
-        activeContract = await findActiveWorkoutContractForWeek(studentId, {
-          startOfWeek,
-          endOfWeek,
-        });
-      }
-
-      const effectiveWorkoutDate = activeContract
-        ? normalizeWorkoutDateInsideContract(referenceDate, activeContract)
-        : referenceDate;
-      const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
-
-      const weeklyPlansCount = activeContract
-        ? await prisma.workoutPlan.count({
-            where: {
-              studentId,
-              contractId: activeContract.id,
-              date: {
-                gte: startOfWeek,
-                lt: endOfWeek,
-              },
-            },
-          })
-        : 0;
-
-      const selectedDateBeforeContractStart = Boolean(
-        activeContract && referenceDate < activeContract.startDate
-      );
-
-      return NextResponse.json({
-        plans,
-        activeContract: serializeWorkoutContract(activeContract),
-        weeklyLimit,
-        weeklyPlansCount,
-        weeklyRemaining:
-          weeklyLimit == null ? null : Math.max(weeklyLimit - weeklyPlansCount, 0),
-        week: {
-          startOfWeek: startOfWeek.toISOString(),
-          endOfWeek: endOfWeek.toISOString(),
-          label: `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`,
-          futureWeek: isFutureWeek(startOfWeek),
-        },
-        effectiveWorkoutDate: effectiveWorkoutDate.toISOString().slice(0, 10),
-        canCreateWorkout: Boolean(activeContract && weeklyLimit && weeklyPlansCount < weeklyLimit),
-        message: activeContract
-          ? selectedDateBeforeContractStart
-            ? `Contrato ativo encontrado para esta semana. Como o contrato começa em ${formatDatePtBr(activeContract.startDate)}, o treino será salvo a partir dessa data.`
-            : null
-          : "Este aluno não possui contrato ativo para a data selecionada.",
-      });
     }
 
     return NextResponse.json(
