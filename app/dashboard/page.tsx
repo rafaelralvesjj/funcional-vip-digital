@@ -9,6 +9,7 @@ import DashboardAutoRefresh from '@/components/DashboardAutoRefresh';
 import DashboardSectionSwitcher from '@/components/DashboardSectionSwitcher';
 import TrialContinuationDashboardShortcut from '@/components/gestor/TrialContinuationDashboardShortcut';
 import ProfilePhotoEditor from '@/components/ProfilePhotoEditor';
+import PendingWorkoutLink from '@/components/PendingWorkoutLink';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -1599,17 +1600,14 @@ export default async function DashboardPage() {
                         </p>
 
                         {isTeacher && (
-                          <Link
-                            href={`/dashboard/montar-treino?studentId=${encodeURIComponent(
-                              item.student.id
-                            )}&date=${encodeURIComponent(
-                              item.weekStartDateInput
-                            )}&week=current`}
-                            prefetch={false}
+                          <PendingWorkoutLink
+                            studentId={item.student.id}
+                            date={item.weekStartDateInput}
+                            week="current"
                             className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
                           >
                             Montar treino deste aluno
-                          </Link>
+                          </PendingWorkoutLink>
                         )}
                       </div>
                     </div>
@@ -1739,17 +1737,14 @@ export default async function DashboardPage() {
                         </p>
 
                         {isTeacher && (
-                          <Link
-                            href={`/dashboard/montar-treino?studentId=${encodeURIComponent(
-                              item.student.id
-                            )}&date=${encodeURIComponent(
-                              item.weekStartDateInput
-                            )}&week=next`}
-                            prefetch={false}
+                          <PendingWorkoutLink
+                            studentId={item.student.id}
+                            date={item.weekStartDateInput}
+                            week="next"
                             className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
                           >
                             Montar treino deste aluno
-                          </Link>
+                          </PendingWorkoutLink>
                         )}
                       </div>
                     </div>
