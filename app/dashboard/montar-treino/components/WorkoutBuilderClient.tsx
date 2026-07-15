@@ -227,25 +227,67 @@ export default function WorkoutBuilderClient() {
   useEffect(() => {
     if (!selectedStudent) {
       setCareEvents([]);
+      setCareLoading(false);
       return;
     }
 
+    const controller = new AbortController();
     let cancelled = false;
-    async function loadCareEvents() {
+
+    async function loadCareEventsSummary() {
       setCareLoading(true);
+
       try {
-        const response = await fetch(`/api/student-care-events?studentId=${encodeURIComponent(selectedStudent)}`, { cache: "no-store" });
+        const response = await fetch(
+          `/api/student-care-events/workout-builder-summary?studentId=${encodeURIComponent(
+            selectedStudent
+          )}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          }
+        );
+
         const data = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(data?.error || "Não foi possível consultar os alertas de cuidado.");
-        if (!cancelled) setCareEvents(Array.isArray(data?.events) ? data.events : []);
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              "Não foi possível consultar os alertas de cuidado."
+          );
+        }
+
+        if (!cancelled) {
+          setCareEvents(
+            Array.isArray(data?.events) ? data.events : []
+          );
+        }
       } catch (cause) {
-        if (!cancelled) setMessage({ type: "error", text: cause instanceof Error ? cause.message : "Erro ao consultar cuidado." });
+        if (
+          !cancelled &&
+          !(cause instanceof DOMException && cause.name === "AbortError")
+        ) {
+          setMessage({
+            type: "error",
+            text:
+              cause instanceof Error
+                ? cause.message
+                : "Erro ao consultar cuidado.",
+          });
+        }
       } finally {
-        if (!cancelled) setCareLoading(false);
+        if (!cancelled) {
+          setCareLoading(false);
+        }
       }
     }
-    loadCareEvents();
-    return () => { cancelled = true; };
+
+    void loadCareEventsSummary();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [selectedStudent]);
 
   useEffect(() => {
