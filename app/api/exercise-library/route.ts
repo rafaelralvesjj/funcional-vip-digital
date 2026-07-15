@@ -134,16 +134,23 @@ function buildExerciseLibraryWhere(searchParams: URLSearchParams) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (id) {
+      const exercise = await prisma.exerciseLibrary.findUnique({ where: { id } });
+      if (!exercise) return NextResponse.json({ error: "Exercício não encontrado." }, { status: 404 });
+      return NextResponse.json({ exercise });
+    }
+
     const where = buildExerciseLibraryWhere(searchParams);
     const takeParam = Number(searchParams.get("limit") || searchParams.get("take") || 0);
     const take = Number.isFinite(takeParam) && takeParam > 0 ? Math.min(takeParam, 200) : undefined;
+    const pickerView = searchParams.get("view") === "picker";
 
     const exercises = await prisma.exerciseLibrary.findMany({
       where,
-      orderBy: {
-        name: "asc",
-      },
+      orderBy: { name: "asc" },
       ...(take ? { take } : {}),
+      ...(pickerView ? { select: { id: true, name: true, muscleGroup: true } } : {}),
     });
 
     return NextResponse.json({
