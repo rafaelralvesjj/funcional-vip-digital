@@ -119,18 +119,27 @@ export default function WorkoutBuilderClient() {
             : [];
 
         if (!cancelled) {
-          setStudents(
-            raw.map((student: any) => ({
-              id: String(student.id),
-              name: String(student.name || "Aluno sem nome"),
-              ageYears:
-                student.ageYears === null || student.ageYears === undefined
-                  ? null
-                  : Number(student.ageYears),
-              isMinor: Boolean(student.isMinor),
-              hasBirthDate: Boolean(student.hasBirthDate || student.birthDate),
-            }))
-          );
+          const normalizedStudents = raw.map((student: any) => ({
+            id: String(student.id),
+            name: String(student.name || "Aluno sem nome"),
+            ageYears:
+              student.ageYears === null || student.ageYears === undefined
+                ? null
+                : Number(student.ageYears),
+            isMinor: Boolean(student.isMinor),
+            hasBirthDate: Boolean(student.hasBirthDate || student.birthDate),
+          }));
+
+          setStudents(normalizedStudents);
+
+          /*
+           * Fallback seguro:
+           * quando o professor possui somente um aluno elegível e a URL chegou
+           * sem studentId, o sistema seleciona esse único aluno automaticamente.
+           */
+          if (!selectedStudent && normalizedStudents.length === 1) {
+            setSelectedStudent(normalizedStudents[0].id);
+          }
         }
       } catch (cause) {
         if (!cancelled) {
@@ -203,13 +212,25 @@ export default function WorkoutBuilderClient() {
   }, [selectedStudent, date]);
 
   useEffect(() => {
-    if (!params.studentId || aiBatch) return;
+    /*
+     * A data é preenchida automaticamente pela primeira pendência válida da
+     * semana assim que o aluno e o contrato forem conhecidos.
+     */
+    if (!selectedStudent || aiBatch) return;
     if (!weeklyLimit || loadingWeek) return;
     if (date) return;
+
     if (firstMissingExpectedDate) {
       setDate(firstMissingExpectedDate);
     }
-  }, [params.studentId, aiBatch, weeklyLimit, loadingWeek, date, firstMissingExpectedDate]);
+  }, [
+    selectedStudent,
+    aiBatch,
+    weeklyLimit,
+    loadingWeek,
+    date,
+    firstMissingExpectedDate,
+  ]);
 
   function normalizeExercise(
     exercise: any,
