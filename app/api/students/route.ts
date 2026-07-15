@@ -135,7 +135,7 @@ function isProfessorUser(user?: { role?: string | null } | null): boolean {
   return ["GESTOR", "ADMIN", "TEACHER"].includes(role);
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     const user = session?.user as any;
@@ -156,60 +156,6 @@ export async function GET(req: NextRequest) {
 
     if (role === "TEACHER") {
       where.userId = userId;
-    }
-
-    /*
-     * A tela Montar treino precisa apenas da identificação do aluno.
-     * O endpoint padrão inclui foto, observações, perfil inicial e relações.
-     * Fotos antigas podem estar em base64; devolver todas de uma vez pode
-     * consumir centenas de MB ao serializar e interpretar o JSON no navegador.
-     */
-    const view = req.nextUrl.searchParams.get("view");
-
-    if (view === "workout-builder") {
-      const students = await prisma.student.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          contractedTrainingDaysPerMonth: true,
-          userAuth: {
-            select: {
-              birthDate: true,
-            },
-          },
-        },
-        orderBy: {
-          name: "asc",
-        },
-      });
-
-      return NextResponse.json(
-        {
-          students: students.map((student) => {
-            const ageYears = calculateAgeYears(student.userAuth?.birthDate);
-
-            return {
-              id: student.id,
-              name: student.name,
-              email: student.email,
-              image: null,
-              birthDate: formatBirthDateInput(student.userAuth?.birthDate),
-              ageYears,
-              isMinor: ageYears !== null && ageYears < 18,
-              hasBirthDate: Boolean(student.userAuth?.birthDate),
-              contractedTrainingDaysPerMonth:
-                student.contractedTrainingDaysPerMonth,
-            };
-          }),
-        },
-        {
-          headers: {
-            "Cache-Control": "no-store",
-          },
-        }
-      );
     }
 
     const students = await prisma.student.findMany({
