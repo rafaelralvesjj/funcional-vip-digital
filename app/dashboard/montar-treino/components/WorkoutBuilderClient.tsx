@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import ExerciseLibraryPanel, {
   LibraryExercise,
 } from "./ExerciseLibraryPanel";
+import AiWorkoutDraftImporter, {
+  AiWorkoutDraftPayload,
+} from "./AiWorkoutDraftImporter";
 
 interface Student {
   id: string;
@@ -136,6 +139,7 @@ export default function WorkoutBuilderClient() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [aiDraftImported, setAiDraftImported] = useState(false);
 
   const selectedStudentInfo = students.find(
     (student) => student.id === selectedStudent
@@ -270,6 +274,72 @@ export default function WorkoutBuilderClient() {
       cancelled = true;
     };
   }, [selectedStudent, date]);
+
+  function applyAiDraft(payload: AiWorkoutDraftPayload) {
+    const workout = payload.workout;
+
+    if (payload.studentId) {
+      setSelectedStudent(payload.studentId);
+    }
+
+    if (workout.date) {
+      setDate(workout.date);
+    }
+
+    setPlanName(workout.name || "");
+    setDescription(workout.description || "");
+    setObjective(workout.objective || "");
+    setFocusAreas(workout.focusAreas || "");
+    setIntensity(workout.intensity || "");
+    setDuration(
+      workout.estimatedDurationMinutes === null ||
+      workout.estimatedDurationMinutes === undefined
+        ? ""
+        : String(workout.estimatedDurationMinutes)
+    );
+    setCaloriesMin(
+      workout.estimatedCaloriesMin === null ||
+      workout.estimatedCaloriesMin === undefined
+        ? ""
+        : String(workout.estimatedCaloriesMin)
+    );
+    setCaloriesMax(
+      workout.estimatedCaloriesMax === null ||
+      workout.estimatedCaloriesMax === undefined
+        ? ""
+        : String(workout.estimatedCaloriesMax)
+    );
+    setStudentSummary(workout.studentSummary || "");
+    setSafetyNote(workout.safetyNote || "");
+    setNotes(workout.notes || "");
+
+    setExercises(
+      workout.exercises.map((exercise, index) => ({
+        libraryExerciseId: exercise.libraryExerciseId,
+        name: exercise.name,
+        description: exercise.description || "",
+        series: Number(exercise.series || 3),
+        reps: String(exercise.reps || "10"),
+        weight: String(exercise.weight || ""),
+        restTime: String(exercise.restTime || "60s"),
+        notes: String(exercise.notes || ""),
+        order: index,
+        imageUrl: exercise.imageUrl || null,
+        videoUrl: exercise.videoUrl || null,
+        purpose: exercise.purpose || exercise.description || null,
+        instructions: exercise.instructions || exercise.description || null,
+        safetyGuidance: exercise.safetyGuidance || null,
+        commonMistakes: exercise.commonMistakes || null,
+        contraindications: exercise.contraindications || null,
+      }))
+    );
+
+    setAiDraftImported(true);
+    setMessage({
+      type: "success",
+      text: "Rascunho da IA importado. Revise todos os dados antes de salvar.",
+    });
+  }
 
   function addExercise(exercise: LibraryExercise) {
     setExercises((current) => [
@@ -421,6 +491,11 @@ export default function WorkoutBuilderClient() {
       setSafetyNote("");
       setNotes("");
       setExercises([]);
+      setAiDraftImported(false);
+
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("aiWorkoutDraftBatch");
+      }
 
       setWeeklyPlans((current) => [
         ...current,
@@ -540,6 +615,19 @@ export default function WorkoutBuilderClient() {
             </div>
           )}
         </section>
+
+        <AiWorkoutDraftImporter
+          onImport={applyAiDraft}
+          selectedStudentId={selectedStudent}
+          selectedDate={date}
+        />
+
+        {aiDraftImported && (
+          <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-4 text-sm text-blue-200">
+            Rascunho importado da IA. Revise aluno, data, exercícios, séries,
+            repetições, carga, descanso e observações antes de salvar.
+          </div>
+        )}
 
         <section className="rounded-xl border border-[#ffffff10] bg-[#111111] p-5">
           <h2 className="text-lg font-semibold text-[#D4A373]">
