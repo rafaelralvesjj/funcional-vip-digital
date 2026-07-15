@@ -1,3 +1,4 @@
+import { del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 
@@ -13,6 +14,35 @@ function normalizeRole(role?: string | null): string {
   if (value === "PROFESSOR") return "TEACHER";
 
   return value;
+}
+
+function isVercelBlobUrl(value?: string | null): boolean {
+  const url = String(value || "").trim();
+
+  return (
+    /^https:\/\//i.test(url) &&
+    url.includes(".blob.vercel-storage.com/")
+  );
+}
+
+async function removeReplacedBlobUrls(urls: Array<string | null | undefined>) {
+  const uniqueUrls = Array.from(
+    new Set(
+      urls
+        .map((value) => String(value || "").trim())
+        .filter((value) => isVercelBlobUrl(value))
+    )
+  );
+
+  if (uniqueUrls.length === 0) return;
+
+  await Promise.all(
+    uniqueUrls.map((url) =>
+      del(url).catch((error) => {
+        console.error("Não foi possível remover a foto antiga do Blob:", error);
+      })
+    )
+  );
 }
 
 function cleanImageUrl(value: unknown): string | null {
@@ -54,6 +84,15 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      const currentUser = await tx.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          image: true,
+        },
+      });
+
       const updatedUser = await tx.user.update({
         where: {
           id: userId,
@@ -71,6 +110,7 @@ export async function POST(request: NextRequest) {
       });
 
       let updatedStudent: { id: string; image: string | null } | null = null;
+      let previousStudentImage: string | null = null;
 
       if (role === "STUDENT") {
         const student = await tx.student.findFirst({
@@ -82,10 +122,12 @@ export async function POST(request: NextRequest) {
           },
           select: {
             id: true,
+            image: true,
           },
         });
 
         if (student?.id) {
+          previousStudentImage = student.image;
           updatedStudent = await tx.student.update({
             where: {
               id: student.id,
@@ -104,8 +146,17 @@ export async function POST(request: NextRequest) {
       return {
         user: updatedUser,
         student: updatedStudent,
+        previousUserImage: currentUser?.image || null,
+        previousStudentImage,
       };
     });
+
+    const replacedBlobUrls = [
+      result.previousUserImage,
+      result.previousStudentImage,
+    ].filter((url) => url && url !== imageUrl);
+
+    await removeReplacedBlobUrls(replacedBlobUrls);
 
     return NextResponse.json({
       ok: true,
