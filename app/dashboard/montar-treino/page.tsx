@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Student {
   id: string;
@@ -407,6 +407,8 @@ export default function MontarTreinoPage() {
   const [selectedStudent, setSelectedStudent] = useState("");
   const [planName, setPlanName] = useState("");
   const [date, setDate] = useState("");
+  const [weekAnchorDate, setWeekAnchorDate] = useState("");
+  const initialContextAppliedRef = useRef(false);
   const [description, setDescription] = useState("");
   const [objective, setObjective] = useState("");
   const [focusAreas, setFocusAreas] = useState("");
@@ -489,7 +491,9 @@ export default function MontarTreinoPage() {
     }
 
     setPlanName(String(workout.name || ""));
-    setDate(String(workout.date || ""));
+    const workoutDate = String(workout.date || "");
+    setDate(workoutDate);
+    if (workoutDate) setWeekAnchorDate(workoutDate);
     setDescription(String(workout.description || ""));
     setObjective(String(workout.objective || ""));
     setFocusAreas(String(workout.focusAreas || ""));
@@ -610,7 +614,9 @@ export default function MontarTreinoPage() {
 
     if (dateFromUrl) {
       const safeDate = getNextSafePlanningDateInput(dateFromUrl);
-      setDate(safeDate.dateInput || dateFromUrl);
+      const resolvedDate = safeDate.dateInput || dateFromUrl;
+      setDate(resolvedDate);
+      setWeekAnchorDate(resolvedDate);
 
       if (safeDate.redirected && safeDate.message) {
         setSafeWindowNotice(safeDate.message);
@@ -619,16 +625,16 @@ export default function MontarTreinoPage() {
     }
   }
   useEffect(() => {
+    if (initialContextAppliedRef.current) return;
+    initialContextAppliedRef.current = true;
+
     applyDashboardParams();
 
     /*
-     * O rascunho salvo pela IA só deve ser carregado quando esta tela
-     * tiver sido aberta explicitamente pelo resumo do aluno.
-     *
-     * Antes, qualquer entrada em "Montar treino" tentava ler e aplicar
-     * aiWorkoutDraftBatch do localStorage. Um rascunho antigo ou muito
-     * grande podia sobrecarregar a renderização e derrubar a aba do Chrome,
-     * mesmo quando o professor vinha apenas pelo dashboard.
+     * O contexto inicial é aplicado uma única vez. Reaplicar os parâmetros
+     * depois de cada atualização da tela podia devolver a data para a URL
+     * enquanto as validações tentavam avançá-la, criando um ciclo de
+     * renderização e consultas.
      */
     const params =
       typeof window !== "undefined"
@@ -640,19 +646,8 @@ export default function MontarTreinoPage() {
       loadAiWorkoutDraftFromStorage();
     }
 
-    fetchStudents();
+    void fetchStudents();
   }, []);
-
-  useEffect(() => {
-    /*
-     * Reaplica os parâmetros depois que a lista de alunos carrega.
-     * Isso garante que o combo fique selecionado mesmo quando a tela veio
-     * do dashboard antes de os alunos terminarem de carregar.
-     */
-    if (students.length > 0 && !openedFromAiDraft) {
-      applyDashboardParams();
-    }
-  }, [students.length, openedFromAiDraft]);
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -680,7 +675,11 @@ export default function MontarTreinoPage() {
     Boolean(selectedStudentInfo) &&
     (selectedStudentInfo?.ageYears === null || selectedStudentInfo?.ageYears === undefined);
   const weeklyWorkoutLimit = activeWorkoutContract?.workoutsPerWeek || null;
-  const referenceWeekDate = date ? new Date(date + "T12:00:00") : new Date();
+  const referenceWeekDate = weekAnchorDate
+    ? new Date(weekAnchorDate + "T12:00:00")
+    : date
+      ? new Date(date + "T12:00:00")
+      : new Date();
   const { startOfWeek, endOfWeek } = getWeekRange(referenceWeekDate);
   const weekScopeLabel = getWeekScopeLabel(startOfWeek);
   const expectedWorkoutDates = getExpectedWorkoutDatesForWeek(
@@ -721,9 +720,16 @@ export default function MontarTreinoPage() {
         setSafeWindowNotice(safeDate.message);
       }
     }
-  }, [activeWorkoutContract?.id, date, expectedWorkoutDates.join("|")]);
+  }, [activeWorkoutContract?.id, expectedWorkoutDates.join("|")]);
 
+  /*
+   * A consulta semanal depende de uma âncora estável da semana, e não da
+   * data do treino que é ajustada pelas validações. Isso elimina o ciclo:
+   * buscar semana -> ajustar data -> buscar semana novamente.
+   */
   useEffect(() => {
+    const controller = new AbortController();
+
     async function fetchWeeklyWorkoutInfo() {
       if (!selectedStudent) {
         setWeeklyPlansCount(0);
@@ -742,12 +748,14 @@ export default function MontarTreinoPage() {
           summary: "1",
         });
 
-        if (date) {
-          query.set("date", date);
+        const summaryDate = weekAnchorDate || date;
+        if (summaryDate) {
+          query.set("date", summaryDate);
         }
 
         const res = await fetch(`/api/workout-plan?${query.toString()}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -765,18 +773,27 @@ export default function MontarTreinoPage() {
         setActiveWorkoutContract(data.activeContract || null);
         setContractWarning(data.message || null);
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
         console.error("Erro ao buscar treinos da semana:", error);
         setWeeklyPlansCount(0);
         setWeeklyPlans([]);
         setActiveWorkoutContract(null);
         setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
       } finally {
-        setWeeklyInfoLoading(false);
+        if (!controller.signal.aborted) {
+          setWeeklyInfoLoading(false);
+        }
       }
     }
 
-    fetchWeeklyWorkoutInfo();
-  }, [selectedStudent, date]);
+    void fetchWeeklyWorkoutInfo();
+
+    return () => {
+      controller.abort();
+    };
+  }, [selectedStudent, weekAnchorDate]);
 
   useEffect(() => {
     setReleaseReviewContext(null);
@@ -1887,6 +1904,7 @@ export default function MontarTreinoPage() {
                   onChange={(e) => {
                     const nextDate = e.target.value;
                     setDate(nextDate);
+                    setWeekAnchorDate(nextDate);
                     setSafeWindowNotice(
                       isUnsafeCurrentWeekPlanningDate(nextDate)
                         ? "Esta semana já não possui janela segura de execução. Planeje a próxima semana para não iniciar o aluno atrasado."
