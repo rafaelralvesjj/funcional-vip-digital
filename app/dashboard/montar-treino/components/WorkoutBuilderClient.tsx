@@ -37,11 +37,26 @@ function readDashboardParams() {
   }
 
   const params = new URLSearchParams(window.location.search);
-  return {
+  const fromUrl = {
     studentId: params.get("studentId") || "",
     date: params.get("date") || "",
     week: params.get("week") || "",
   };
+
+  if (fromUrl.studentId) return fromUrl;
+
+  try {
+    const raw = window.sessionStorage.getItem("pendingWorkoutContext");
+    if (!raw) return fromUrl;
+    const saved = JSON.parse(raw);
+    return {
+      studentId: String(saved?.studentId || ""),
+      date: String(saved?.date || ""),
+      week: String(saved?.week || ""),
+    };
+  } catch {
+    return fromUrl;
+  }
 }
 
 export default function WorkoutBuilderClient() {
@@ -119,27 +134,18 @@ export default function WorkoutBuilderClient() {
             : [];
 
         if (!cancelled) {
-          const normalizedStudents = raw.map((student: any) => ({
-            id: String(student.id),
-            name: String(student.name || "Aluno sem nome"),
-            ageYears:
-              student.ageYears === null || student.ageYears === undefined
-                ? null
-                : Number(student.ageYears),
-            isMinor: Boolean(student.isMinor),
-            hasBirthDate: Boolean(student.hasBirthDate || student.birthDate),
-          }));
-
-          setStudents(normalizedStudents);
-
-          /*
-           * Fallback seguro:
-           * quando o professor possui somente um aluno elegível e a URL chegou
-           * sem studentId, o sistema seleciona esse único aluno automaticamente.
-           */
-          if (!selectedStudent && normalizedStudents.length === 1) {
-            setSelectedStudent(normalizedStudents[0].id);
-          }
+          setStudents(
+            raw.map((student: any) => ({
+              id: String(student.id),
+              name: String(student.name || "Aluno sem nome"),
+              ageYears:
+                student.ageYears === null || student.ageYears === undefined
+                  ? null
+                  : Number(student.ageYears),
+              isMinor: Boolean(student.isMinor),
+              hasBirthDate: Boolean(student.hasBirthDate || student.birthDate),
+            }))
+          );
         }
       } catch (cause) {
         if (!cancelled) {
@@ -212,25 +218,13 @@ export default function WorkoutBuilderClient() {
   }, [selectedStudent, date]);
 
   useEffect(() => {
-    /*
-     * A data é preenchida automaticamente pela primeira pendência válida da
-     * semana assim que o aluno e o contrato forem conhecidos.
-     */
-    if (!selectedStudent || aiBatch) return;
+    if (!params.studentId || aiBatch) return;
     if (!weeklyLimit || loadingWeek) return;
     if (date) return;
-
     if (firstMissingExpectedDate) {
       setDate(firstMissingExpectedDate);
     }
-  }, [
-    selectedStudent,
-    aiBatch,
-    weeklyLimit,
-    loadingWeek,
-    date,
-    firstMissingExpectedDate,
-  ]);
+  }, [params.studentId, aiBatch, weeklyLimit, loadingWeek, date, firstMissingExpectedDate]);
 
   function normalizeExercise(
     exercise: any,
