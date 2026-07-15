@@ -227,104 +227,25 @@ export default function WorkoutBuilderClient() {
   useEffect(() => {
     if (!selectedStudent) {
       setCareEvents([]);
-      setCareLoading(false);
       return;
     }
 
     let cancelled = false;
-    let timeoutId: number | null = null;
-    let idleId: number | null = null;
-
-    async function loadCareEventsSummary() {
-      if (cancelled) return;
-
+    async function loadCareEvents() {
       setCareLoading(true);
-
       try {
-        const response = await fetch(
-          `/api/student-care-events?studentId=${encodeURIComponent(
-            selectedStudent
-          )}&view=workout-builder-summary`,
-          { cache: "no-store" }
-        );
+        const response = await fetch(`/api/student-care-events?studentId=${encodeURIComponent(selectedStudent)}`, { cache: "no-store" });
         const data = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          throw new Error(
-            data?.error ||
-              "Não foi possível consultar os alertas de cuidado."
-          );
-        }
-
-        if (!cancelled) {
-          setCareEvents(
-            Array.isArray(data?.events) ? data.events : []
-          );
-        }
+        if (!response.ok) throw new Error(data?.error || "Não foi possível consultar os alertas de cuidado.");
+        if (!cancelled) setCareEvents(Array.isArray(data?.events) ? data.events : []);
       } catch (cause) {
-        if (!cancelled) {
-          setMessage({
-            type: "error",
-            text:
-              cause instanceof Error
-                ? cause.message
-                : "Erro ao consultar cuidado.",
-          });
-        }
+        if (!cancelled) setMessage({ type: "error", text: cause instanceof Error ? cause.message : "Erro ao consultar cuidado." });
       } finally {
-        if (!cancelled) {
-          setCareLoading(false);
-        }
+        if (!cancelled) setCareLoading(false);
       }
     }
-
-    /*
-     * Primeiro deixa aluno, contrato e semana renderizarem.
-     * Depois consulta apenas o resumo leve dos eventos de cuidado.
-     */
-    const scheduleLoad = () => {
-      const browserWindow = window as typeof window & {
-        requestIdleCallback?: (
-          callback: () => void,
-          options?: { timeout: number }
-        ) => number;
-        cancelIdleCallback?: (id: number) => void;
-      };
-
-      if (browserWindow.requestIdleCallback) {
-        idleId = browserWindow.requestIdleCallback(
-          () => {
-            void loadCareEventsSummary();
-          },
-          { timeout: 1500 }
-        );
-      } else {
-        timeoutId = window.setTimeout(() => {
-          void loadCareEventsSummary();
-        }, 500);
-      }
-    };
-
-    scheduleLoad();
-
-    return () => {
-      cancelled = true;
-
-      if (
-        idleId !== null &&
-        (window as typeof window & {
-          cancelIdleCallback?: (id: number) => void;
-        }).cancelIdleCallback
-      ) {
-        (window as typeof window & {
-          cancelIdleCallback: (id: number) => void;
-        }).cancelIdleCallback(idleId);
-      }
-
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
+    loadCareEvents();
+    return () => { cancelled = true; };
   }, [selectedStudent]);
 
   useEffect(() => {
