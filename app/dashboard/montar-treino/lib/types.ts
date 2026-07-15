@@ -99,6 +99,15 @@ export interface AiWorkoutDraft {
   }>;
 }
 
+export interface AiValidationContext {
+  studentId: string;
+  weekStart: string;
+  weekEnd: string;
+  expectedWorkoutDates: string[];
+  expectedWorkoutCount: number;
+  validationKey?: string;
+}
+
 export interface AiWorkoutDraftBatch {
   source?: string;
   createdAt?: string;
@@ -107,18 +116,51 @@ export interface AiWorkoutDraftBatch {
   currentIndex?: number;
   scheduleDescription?: string;
   scheduleWarning?: string;
+  aiValidation?: AiValidationContext;
+  evolutionDecision?: {
+    status?: string;
+    reason?: string;
+    requiresReviewBeforeRelease?: boolean;
+    reviewAlerts?: string[];
+  };
   workouts: AiWorkoutDraft[];
 }
 
+export interface StudentCareEventSummary {
+  id: string;
+  eventType: string;
+  severity: string;
+  status: string;
+  title?: string | null;
+  description?: string | null;
+  professorMessage?: string | null;
+  resolutionNotes?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface ReleaseReviewContext {
+  baselineDate?: string;
+  latestNewContextDate?: string | null;
   previousWeek?: { label?: string };
   previousWeekWorkouts?: number;
   completedPreviousWeek?: number;
   pendingPreviousWeek?: number;
-  stalePrescriptionBecauseOfNewContext?: boolean;
+  workoutUpdatesAfterPlanning?: number;
+  openCareEvents?: number;
   newCareEventsAfterPlanning?: number;
+  criticalCareEventsAfterPlanning?: number;
+  newStudentQuestions?: number;
   newStudentQuestionsAfterPlanning?: number;
   newPainQuestionsAfterPlanning?: number;
+  hasOpenPainQuestion?: boolean;
+  hasTrainingPauseCareEvent?: boolean;
+  hasCriticalOpenCareEvent?: boolean;
+  studentProfileUpdatedAfterPlanning?: boolean;
+  stalePrescriptionBecauseOfNewContext?: boolean;
+  recommendedAction?: string;
+  actionOptions?: string[];
+  blocksRelease?: boolean;
   requiresReviewBeforeRelease?: boolean;
   reviewAlerts?: string[];
 }
