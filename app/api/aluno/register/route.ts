@@ -102,6 +102,15 @@ function getAppLoginUrl(): string {
   return `${appUrl.replace(/\/$/, "")}/auth/signin`;
 }
 
+function getManagementLinkStudentsUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/dashboard/gestor/vincular-alunos`;
+}
+
 function escapeHtml(value: string): string {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -961,6 +970,91 @@ export async function POST(req: NextRequest) {
       });
     } catch (error) {
       console.error("Erro ao enviar e-mail de experiência gratuita:", error);
+    }
+
+    try {
+      const managementLinkUrl = getManagementLinkStudentsUrl();
+      const safeStudentName = escapeHtml(result.studentName);
+      const safeStudentEmail = escapeHtml(result.email);
+      const safeStartDateText = escapeHtml(formatDatePtBr(result.startDate));
+      const safeEndDateText = escapeHtml(formatDatePtBr(result.endDate));
+      const safeManagementLinkUrl = escapeHtml(managementLinkUrl);
+
+      const recipients = result.managementRecipients.filter(
+        (recipient) => Boolean(recipient.email)
+      );
+
+      await Promise.allSettled(
+        recipients.map((recipient) => {
+          const managementName = recipient.name || "Gestão";
+          const safeManagementName = escapeHtml(managementName);
+          const subject = `Novo aluno para vínculo: ${result.studentName}`;
+
+          const text = [
+            `Oi, ${managementName}!`,
+            "",
+            `${result.studentName} concluiu o cadastro para a experiência gratuita.`,
+            `E-mail do aluno: ${result.email}`,
+            result.phone ? `Telefone/WhatsApp: ${result.phone}` : null,
+            `Início da experiência: ${formatDatePtBr(result.startDate)}.`,
+            `Término previsto: ${formatDatePtBr(result.endDate)}.`,
+            `Programação: ${result.workoutsPerWeek} treino(s) por semana e ${result.workoutsPerMonth} treino(s) no ciclo.`,
+            "",
+            result.shiftedToNextWeek
+              ? "Como o cadastro aconteceu no fim da semana, o início foi direcionado para a próxima janela segura."
+              : "O aluno já está na janela de início da experiência.",
+            "",
+            "Próxima ação: revisar o cadastro e vincular um professor responsável.",
+            "",
+            `Abrir vínculo de alunos: ${managementLinkUrl}`,
+            "",
+            "Funcional VIP Digital",
+            "Aviso automático de pendência operacional para a gestão.",
+          ]
+            .filter(Boolean)
+            .join("\n");
+
+          const html = `
+            <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+              <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+                <h2 style="color:#D4A373;margin:0 0 16px;">Novo aluno para vínculo</h2>
+                <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${safeManagementName}</strong>!</p>
+                <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">${safeStudentName}</strong> concluiu o cadastro para a experiência gratuita.</p>
+                <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:14px;margin:16px 0;">
+                  <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">E-mail: <strong style="color:#f5f5f5;">${safeStudentEmail}</strong></p>
+                  ${
+                    result.phone
+                      ? `<p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">Telefone/WhatsApp: <strong style="color:#f5f5f5;">${escapeHtml(result.phone)}</strong></p>`
+                      : ""
+                  }
+                  <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">Início: <strong style="color:#f5f5f5;">${safeStartDateText}</strong></p>
+                  <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">Término previsto: <strong style="color:#f5f5f5;">${safeEndDateText}</strong></p>
+                  <p style="color:#d4d4d4;font-size:13px;margin:0;">Programação: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
+                </div>
+                <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
+                  ${
+                    result.shiftedToNextWeek
+                      ? "Como o cadastro aconteceu no fim da semana, o início foi direcionado para a próxima janela segura."
+                      : "O aluno já está na janela de início da experiência."
+                  }
+                </p>
+                <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">Próxima ação:</strong> revisar o cadastro e vincular um professor responsável.</p>
+                <a href="${safeManagementLinkUrl}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Organizar vínculo</a>
+                <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Aviso automático de pendência operacional para a gestão.</p>
+              </div>
+            </div>
+          `;
+
+          return sendEmail({
+            to: recipient.email as string,
+            subject,
+            text,
+            html,
+          });
+        })
+      );
+    } catch (error) {
+      console.error("Erro ao enviar e-mail de novo aluno para a gestão:", error);
     }
 
     return NextResponse.json({ ok: true, ...result });
