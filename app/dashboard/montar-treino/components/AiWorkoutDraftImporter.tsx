@@ -180,16 +180,38 @@ export default function AiWorkoutDraftImporter({
           </p>
         </div>
 
-        {selectedStudentId && selectedDate && (
-          <a
-            href={`/dashboard/resumo-aluno?studentId=${encodeURIComponent(
-              selectedStudentId
-            )}&date=${encodeURIComponent(selectedDate)}`}
-            className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49463]"
-          >
-            Gerar resumo para IA
-          </a>
-        )}
+        <div className="flex flex-col items-start gap-2">
+          {selectedStudentId && selectedDate ? (
+            <a
+              href={`/dashboard/resumo-aluno?studentId=${encodeURIComponent(
+                selectedStudentId
+              )}&date=${encodeURIComponent(selectedDate)}`}
+              className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49463]"
+            >
+              Gerar resumo para IA
+            </a>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="inline-flex cursor-not-allowed items-center justify-center rounded-lg bg-[#D4A373]/30 px-4 py-2 text-xs font-semibold text-[#737373]"
+            >
+              Gerar resumo para IA
+            </button>
+          )}
+
+          {!selectedStudentId && (
+            <p className="text-[11px] text-amber-300">
+              Selecione o aluno para liberar a geração por IA.
+            </p>
+          )}
+
+          {selectedStudentId && !selectedDate && (
+            <p className="text-[11px] text-amber-300">
+              Escolha a data do treino para liberar a geração por IA.
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
