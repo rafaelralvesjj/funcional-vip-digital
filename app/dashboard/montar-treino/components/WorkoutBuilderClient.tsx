@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import AiWorkoutDraftImporter from "./AiWorkoutDraftImporter";
 import ExerciseLibraryPanel from "./ExerciseLibraryPanel";
 import ReleaseWeekPanel from "./ReleaseWeekPanel";
+import SmartWorkoutSummary from "./SmartWorkoutSummary";
+import CareStatusPanel from "./CareStatusPanel";
 import WorkoutExercisesEditor from "./WorkoutExercisesEditor";
 import {
   ActiveWorkoutContract,
@@ -12,6 +14,7 @@ import {
   LibraryExercise,
   ReleaseReviewContext,
   Student,
+  StudentCareEventSummary,
   WorkoutPlanSummary,
   WorkoutWeekSummary,
 } from "../lib/types";
@@ -89,6 +92,8 @@ export default function WorkoutBuilderClient() {
   const [releaseLoading, setReleaseLoading] = useState(false);
   const [releaseContext, setReleaseContext] = useState<ReleaseReviewContext | null>(null);
   const [releaseMessage, setReleaseMessage] = useState<{ type: "success" | "error" | "warning"; text: string } | null>(null);
+  const [careEvents, setCareEvents] = useState<StudentCareEventSummary[]>([]);
+  const [careLoading, setCareLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(
     initialSafeDate.redirected && initialSafeDate.message
       ? { type: "success", text: initialSafeDate.message }
@@ -112,6 +117,8 @@ export default function WorkoutBuilderClient() {
   const weeklyLimitReached = weeklyLimit > 0 && weeklyCount >= weeklyLimit;
   const willCompleteWeekOnSave =
     weeklyLimit > 0 && weeklyCount < weeklyLimit && weeklyCount + 1 >= weeklyLimit;
+  const openCareEvents = careEvents.filter((event) => String(event.status).toUpperCase() !== "RESOLVIDO");
+  const blockingCarePause = openCareEvents.some((event) => String(event.eventType).toUpperCase() === "PAUSA_POR_CUIDADO");
 
   useEffect(() => {
     let cancelled = false;
@@ -218,7 +225,31 @@ export default function WorkoutBuilderClient() {
   }, [selectedStudent, date]);
 
   useEffect(() => {
-    if (!params.studentId || aiBatch) return;
+    if (!selectedStudent) {
+      setCareEvents([]);
+      return;
+    }
+
+    let cancelled = false;
+    async function loadCareEvents() {
+      setCareLoading(true);
+      try {
+        const response = await fetch(`/api/student-care-events?studentId=${encodeURIComponent(selectedStudent)}`, { cache: "no-store" });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(data?.error || "Não foi possível consultar os alertas de cuidado.");
+        if (!cancelled) setCareEvents(Array.isArray(data?.events) ? data.events : []);
+      } catch (cause) {
+        if (!cancelled) setMessage({ type: "error", text: cause instanceof Error ? cause.message : "Erro ao consultar cuidado." });
+      } finally {
+        if (!cancelled) setCareLoading(false);
+      }
+    }
+    loadCareEvents();
+    return () => { cancelled = true; };
+  }, [selectedStudent]);
+
+  useEffect(() => {
+    if (!selectedStudent || aiBatch) return;
     if (!weeklyLimit || loadingWeek) return;
     if (date) return;
     if (firstMissingExpectedDate) {
@@ -264,9 +295,26 @@ export default function WorkoutBuilderClient() {
     const workout = batch.workouts[index];
     if (!workout) return;
 
+    if (blockingCarePause) {
+      setMessage({ type: "error", text: "Importação bloqueada: o aluno está em pausa por cuidado." });
+      return;
+    }
+
+    if (selectedStudent && batch.studentId !== selectedStudent) {
+      setMessage({ type: "error", text: "Este JSON pertence a outro aluno. Gere o resumo novamente pelo card correto." });
+      return;
+    }
+
+    const batchDates = Array.isArray(batch.aiValidation?.expectedWorkoutDates)
+      ? batch.aiValidation!.expectedWorkoutDates.map(String)
+      : batch.workouts.map((item) => String(item.date || ""));
+    if (expectedWorkoutDates.length > 0 && batchDates.join("|") !== expectedWorkoutDates.join("|")) {
+      setMessage({ type: "error", text: "As datas do JSON não conferem com a semana selecionada." });
+      return;
+    }
+
     setAiBatch(batch);
     setAiIndex(index);
-    setSelectedStudent(batch.studentId);
     setPlanName(workout.name || "");
     setDate(workout.date || expectedWorkoutDates[index] || firstMissingExpectedDate || "");
     setDescription(workout.description || "");
@@ -336,6 +384,10 @@ export default function WorkoutBuilderClient() {
 
   async function releaseWeek(forceRelease: boolean) {
     if (!selectedStudent || !date) return;
+    if (blockingCarePause) {
+      setReleaseMessage({ type: "error", text: "Liberação bloqueada enquanto a pausa por cuidado estiver aberta. O pedido de retomada exige revisão e resolução pelo professor." });
+      return;
+    }
 
     setReleaseLoading(true);
     setReleaseMessage(null);
@@ -385,6 +437,26 @@ export default function WorkoutBuilderClient() {
         type: "error",
         text: "Preencha aluno, data, nome do treino e exercícios.",
       });
+      return;
+    }
+
+    if (selectedStudentInfo && (selectedStudentInfo.ageYears === null || selectedStudentInfo.ageYears === undefined)) {
+      setMessage({ type: "error", text: "Data de nascimento não informada. A gestão precisa completar o cadastro antes de montar o treino." });
+      return;
+    }
+
+    if (blockingCarePause) {
+      setMessage({ type: "error", text: "Treino normal bloqueado enquanto houver pausa por cuidado aberta. Revise a retomada do aluno." });
+      return;
+    }
+
+    if (exercises.some((exercise) => !exercise.libraryExerciseId)) {
+      setMessage({ type: "error", text: "Todos os exercícios precisam vir da Biblioteca de Exercícios." });
+      return;
+    }
+
+    if (expectedWorkoutDates.length > 0 && !expectedWorkoutDates.includes(date)) {
+      setMessage({ type: "error", text: "A data selecionada não está entre as datas válidas desta semana." });
       return;
     }
 
@@ -589,10 +661,13 @@ export default function WorkoutBuilderClient() {
           )}
         </section>
 
+        <CareStatusPanel loading={careLoading} events={careEvents} />
+
         <AiWorkoutDraftImporter
           selectedStudentId={selectedStudent}
           selectedDate={date}
           expectedWorkoutDates={expectedWorkoutDates}
+          hasBlockingCarePause={blockingCarePause}
           onImport={importAiDraft}
           onClear={() => {
             setAiBatch(null);
@@ -605,21 +680,27 @@ export default function WorkoutBuilderClient() {
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             <input value={planName} onChange={(event) => setPlanName(event.target.value)} placeholder="Nome do treino" className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
             <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Descrição técnica" className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
-            <input value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="Objetivo da sessão" className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
-            <input value={focusAreas} onChange={(event) => setFocusAreas(event.target.value)} placeholder="Foco do treino" className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
-            <select value={intensity} onChange={(event) => setIntensity(event.target.value)} className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]">
-              <option value="">Intensidade</option>
-              <option value="Leve">Leve</option>
-              <option value="Moderada">Moderada</option>
-              <option value="Alta">Alta</option>
-            </select>
-            <input type="number" value={duration} onChange={(event) => setDuration(event.target.value)} placeholder="Duração em minutos" className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
-            <input type="number" value={caloriesMin} onChange={(event) => setCaloriesMin(event.target.value)} placeholder="Calorias mínimas" className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
-            <input type="number" value={caloriesMax} onChange={(event) => setCaloriesMax(event.target.value)} placeholder="Calorias máximas" className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
           </div>
-          <textarea value={studentSummary} onChange={(event) => setStudentSummary(event.target.value)} placeholder="Resumo para o aluno" rows={3} className="mt-4 w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
-          <textarea value={safetyNote} onChange={(event) => setSafetyNote(event.target.value)} placeholder="Observação de segurança" rows={2} className="mt-4 w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
         </section>
+
+        <SmartWorkoutSummary
+          objective={objective}
+          focusAreas={focusAreas}
+          intensity={intensity}
+          duration={duration}
+          caloriesMin={caloriesMin}
+          caloriesMax={caloriesMax}
+          studentSummary={studentSummary}
+          safetyNote={safetyNote}
+          onObjectiveChange={setObjective}
+          onFocusAreasChange={setFocusAreas}
+          onIntensityChange={setIntensity}
+          onDurationChange={setDuration}
+          onCaloriesMinChange={setCaloriesMin}
+          onCaloriesMaxChange={setCaloriesMax}
+          onStudentSummaryChange={setStudentSummary}
+          onSafetyNoteChange={setSafetyNote}
+        />
 
         <section className="rounded-xl border border-[#ffffff10] bg-[#111111] p-5">
           <div className="flex items-center justify-between gap-3">
@@ -639,6 +720,9 @@ export default function WorkoutBuilderClient() {
           message={releaseMessage}
           reviewContext={releaseContext}
           onRelease={releaseWeek}
+          studentId={selectedStudent}
+          date={date}
+          expectedWorkoutDates={expectedWorkoutDates}
         />
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -687,6 +771,8 @@ export default function WorkoutBuilderClient() {
               !planName.trim() ||
               exercises.length === 0 ||
               !activeContract ||
+              blockingCarePause ||
+              (selectedStudentInfo?.ageYears === null || selectedStudentInfo?.ageYears === undefined) ||
               weeklyLimitReached
             }
             className="rounded-xl bg-[#D4A373] py-4 font-bold text-[#0a0a0a] disabled:opacity-50"
