@@ -40,8 +40,9 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
     setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("folder", "onboarding");
     try {
-      const res = await fetch("/api/upload-image", {
+      const res = await fetch("/api/upload-profile-photo", {
         method: "POST",
         body: formData,
       });
