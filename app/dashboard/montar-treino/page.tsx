@@ -404,6 +404,9 @@ export default function MontarTreinoPage() {
   const [library, setLibrary] = useState<LibraryExercise[]>([]);
   const [filteredLibrary, setFilteredLibrary] = useState<LibraryExercise[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryLoaded, setLibraryLoaded] = useState(false);
+  const [libraryLoadError, setLibraryLoadError] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState("");
   const [planName, setPlanName] = useState("");
   const [date, setDate] = useState("");
@@ -620,28 +623,32 @@ export default function MontarTreinoPage() {
   }
   useEffect(() => {
     applyDashboardParams();
+    fetchStudents();
 
-    /*
-     * O rascunho salvo pela IA só deve ser carregado quando esta tela
-     * tiver sido aberta explicitamente pelo resumo do aluno.
-     *
-     * Antes, qualquer entrada em "Montar treino" tentava ler e aplicar
-     * aiWorkoutDraftBatch do localStorage. Um rascunho antigo ou muito
-     * grande podia sobrecarregar a renderização e derrubar a aba do Chrome,
-     * mesmo quando o professor vinha apenas pelo dashboard.
-     */
     const params =
       typeof window !== "undefined"
         ? new URLSearchParams(window.location.search)
         : null;
     const openedFromAiJson = params?.get("source") === "ai-json";
 
+    /*
+     * A biblioteca completa não é mais carregada na abertura normal da tela.
+     * Ela cresceu bastante e possui textos e URLs de imagens para todos os
+     * exercícios. Carregar tudo antes de o professor pedir a biblioteca podia
+     * consumir muita memória e derrubar a aba do Chrome.
+     *
+     * No fluxo da IA, a biblioteca ainda é carregada antes de aplicar o
+     * rascunho, porque ela é usada para completar os dados dos exercícios.
+     */
     if (openedFromAiJson) {
-      loadAiWorkoutDraftFromStorage();
-    }
+      void (async () => {
+        const loaded = await fetchLibrary();
 
-    fetchStudents();
-    fetchLibrary();
+        if (loaded) {
+          loadAiWorkoutDraftFromStorage();
+        }
+      })();
+    }
   }, []);
 
   useEffect(() => {
@@ -837,17 +844,57 @@ export default function MontarTreinoPage() {
     }
   }
 
-  async function fetchLibrary() {
+  async function fetchLibrary(): Promise<boolean> {
+    if (libraryLoaded) return true;
+    if (libraryLoading) return false;
+
+    setLibraryLoading(true);
+    setLibraryLoadError(null);
+
     try {
       const res = await fetch("/api/exercise-library?active=1", {
         cache: "no-store",
       });
-      if (res.ok) {
-        const data = await res.json();
-        setLibrary(data.exercises || []);
-        setFilteredLibrary(data.exercises || []);
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setLibraryLoadError(
+          data?.error || "Não foi possível carregar a biblioteca de exercícios."
+        );
+        return false;
       }
-    } catch {}
+
+      const exercisesFromApi = Array.isArray(data?.exercises)
+        ? data.exercises
+        : [];
+
+      setLibrary(exercisesFromApi);
+      setFilteredLibrary(exercisesFromApi);
+      setLibraryLoaded(true);
+      return true;
+    } catch (error) {
+      console.error("Erro ao buscar biblioteca de exercícios:", error);
+      setLibraryLoadError(
+        "Não foi possível carregar a biblioteca. Verifique sua conexão e tente novamente."
+      );
+      return false;
+    } finally {
+      setLibraryLoading(false);
+    }
+  }
+
+  async function handleToggleLibrary() {
+    if (showLibrary) {
+      setShowLibrary(false);
+      return;
+    }
+
+    setShowLibrary(true);
+
+    if (!libraryLoaded) {
+      await fetchLibrary();
+    }
   }
 
   function addExercise(ex: LibraryExercise) {
@@ -1125,7 +1172,7 @@ export default function MontarTreinoPage() {
       return;
     }
 
-    if (library.length === 0) {
+    if (libraryLoaded && library.length === 0) {
       alert("A biblioteca de exercícios está vazia. Cadastre exercícios antes de montar treino manual ou por IA.");
       return;
     }
@@ -2007,7 +2054,7 @@ export default function MontarTreinoPage() {
             <h2 className="text-lg font-semibold text-[#D4A373]">🏋️ Exercícios</h2>
             <button
               type="button"
-              onClick={() => setShowLibrary(!showLibrary)}
+              onClick={handleToggleLibrary}
               className="bg-[#D4A373] text-[#0a0a0a] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#c49463] transition"
             >
               {showLibrary ? "Fechar biblioteca" : "+ Adicionar exercício"}
@@ -2016,44 +2063,82 @@ export default function MontarTreinoPage() {
 
           {showLibrary && (
             <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-4 mb-4">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="🔍 Buscar exercício por nome ou grupo muscular..."
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] mb-3"
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                {filteredLibrary.map((ex) => (
+              {libraryLoading ? (
+                <div className="rounded-lg border border-[#ffffff10] bg-[#111111] p-5 text-center">
+                  <p className="text-sm font-medium text-[#D4A373]">
+                    Carregando biblioteca de exercícios...
+                  </p>
+                  <p className="mt-1 text-xs text-[#737373]">
+                    Aguarde alguns segundos. A tela de montagem permanece aberta.
+                  </p>
+                </div>
+              ) : libraryLoadError ? (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+                  <p className="text-sm text-red-300">{libraryLoadError}</p>
                   <button
-                    key={ex.id}
                     type="button"
-                    onClick={() => addExercise(ex)}
-                    className="text-left bg-[#1a1a1a] border border-[#ffffff10] rounded-lg p-3 hover:border-[#D4A373]/50 transition text-sm"
+                    onClick={() => void fetchLibrary()}
+                    className="mt-3 rounded-lg bg-[#D4A373] px-4 py-2 text-sm font-semibold text-[#0a0a0a] hover:bg-[#c49463]"
                   >
-                    <p className="text-[#f5f5f5] font-medium">{ex.name}</p>
-                    <p className="text-[#a1a1a1] text-xs mt-0.5">{ex.muscleGroup}</p>
-                    {buildExercisePurpose(ex) && (
-                      <p className="text-[#6b6b6b] text-[10px] mt-1 line-clamp-2">
-                        {buildExercisePurpose(ex)}
-                      </p>
-                    )}
-                    {buildExerciseSafetyGuidance(ex) && (
-                      <p className="text-amber-300/80 text-[10px] mt-1 line-clamp-2">
-                        Cuidado: {buildExerciseSafetyGuidance(ex)}
-                      </p>
-                    )}
-                    {ex.sequenceImageUrl && (
-                      <p className="text-blue-300/80 text-[10px] mt-1 line-clamp-1">
-                        Sequência visual disponível
-                      </p>
-                    )}
+                    Tentar carregar novamente
                   </button>
-                ))}
-                {filteredLibrary.length === 0 && (
-                  <p className="text-[#525252] text-sm col-span-full text-center py-4">Nenhum exercício encontrado</p>
-                )}
-              </div>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="🔍 Buscar exercício por nome ou grupo muscular..."
+                    className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] mb-3"
+                  />
+
+                  <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-[#737373]">
+                    <span>
+                      {filteredLibrary.length} exercício(s) encontrado(s)
+                    </span>
+                    {filteredLibrary.length > 60 && (
+                      <span>
+                        Mostrando os primeiros 60. Use a busca para refinar.
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                    {filteredLibrary.slice(0, 60).map((ex) => (
+                      <button
+                        key={ex.id}
+                        type="button"
+                        onClick={() => addExercise(ex)}
+                        className="text-left bg-[#1a1a1a] border border-[#ffffff10] rounded-lg p-3 hover:border-[#D4A373]/50 transition text-sm"
+                      >
+                        <p className="text-[#f5f5f5] font-medium">{ex.name}</p>
+                        <p className="text-[#a1a1a1] text-xs mt-0.5">{ex.muscleGroup}</p>
+                        {buildExercisePurpose(ex) && (
+                          <p className="text-[#6b6b6b] text-[10px] mt-1 line-clamp-2">
+                            {buildExercisePurpose(ex)}
+                          </p>
+                        )}
+                        {buildExerciseSafetyGuidance(ex) && (
+                          <p className="text-amber-300/80 text-[10px] mt-1 line-clamp-2">
+                            Cuidado: {buildExerciseSafetyGuidance(ex)}
+                          </p>
+                        )}
+                        {ex.sequenceImageUrl && (
+                          <p className="text-blue-300/80 text-[10px] mt-1 line-clamp-1">
+                            Sequência visual disponível
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                    {filteredLibrary.length === 0 && (
+                      <p className="text-[#525252] text-sm col-span-full text-center py-4">
+                        Nenhum exercício encontrado
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -2163,7 +2248,6 @@ export default function MontarTreinoPage() {
             !planName.trim() ||
             !date ||
             exercises.length === 0 ||
-            library.length === 0 ||
             exercises.some((exercise) => !exercise.libraryExerciseId) ||
             !weeklyWorkoutLimit ||
             isWeeklyLimitReached
@@ -2174,8 +2258,6 @@ export default function MontarTreinoPage() {
             ? "💾 Salvando treino..."
             : selectedStudentMissingBirthDate
               ? "⚠️ Data de nascimento pendente"
-              : library.length === 0
-              ? "⚠️ Biblioteca vazia"
               : !weeklyWorkoutLimit && selectedStudent
               ? "⚠️ Sem contrato ativo para a data"
               : exercises.some((exercise) => !exercise.libraryExerciseId)
