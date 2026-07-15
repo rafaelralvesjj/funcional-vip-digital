@@ -1600,13 +1600,11 @@ export default async function DashboardPage() {
 
                         {isTeacher && (
                           <Link
-                            href={{
-                              pathname: "/dashboard/montar-treino",
-                              query: {
-                                studentId: item.student.id,
-                                date: item.weekStartDateInput,
-                              },
-                            }}
+                            href={`/dashboard/montar-treino?studentId=${encodeURIComponent(
+                              item.student.id
+                            )}&date=${encodeURIComponent(
+                              item.weekStartDateInput
+                            )}&week=current`}
                             prefetch={false}
                             className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
                           >
@@ -1742,13 +1740,11 @@ export default async function DashboardPage() {
 
                         {isTeacher && (
                           <Link
-                            href={{
-                              pathname: "/dashboard/montar-treino",
-                              query: {
-                                studentId: item.student.id,
-                                date: item.weekStartDateInput,
-                              },
-                            }}
+                            href={`/dashboard/montar-treino?studentId=${encodeURIComponent(
+                              item.student.id
+                            )}&date=${encodeURIComponent(
+                              item.weekStartDateInput
+                            )}&week=next`}
                             prefetch={false}
                             className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
                           >
