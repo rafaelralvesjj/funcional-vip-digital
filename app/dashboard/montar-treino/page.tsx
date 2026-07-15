@@ -620,7 +620,26 @@ export default function MontarTreinoPage() {
   }
   useEffect(() => {
     applyDashboardParams();
-    loadAiWorkoutDraftFromStorage();
+
+    /*
+     * O rascunho salvo pela IA só deve ser carregado quando esta tela
+     * tiver sido aberta explicitamente pelo resumo do aluno.
+     *
+     * Antes, qualquer entrada em "Montar treino" tentava ler e aplicar
+     * aiWorkoutDraftBatch do localStorage. Um rascunho antigo ou muito
+     * grande podia sobrecarregar a renderização e derrubar a aba do Chrome,
+     * mesmo quando o professor vinha apenas pelo dashboard.
+     */
+    const params =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search)
+        : null;
+    const openedFromAiJson = params?.get("source") === "ai-json";
+
+    if (openedFromAiJson) {
+      loadAiWorkoutDraftFromStorage();
+    }
+
     fetchStudents();
     fetchLibrary();
   }, []);
