@@ -190,9 +190,10 @@ export default function AlunoRegisterPage() {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("folder", "cadastro-aluno");
 
     try {
-      const res = await fetch("/api/upload-image", {
+      const res = await fetch("/api/upload-profile-photo", {
         method: "POST",
         body: formData,
       });
