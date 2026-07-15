@@ -55,7 +55,7 @@ export function isUnsafeCurrentWeekPlanningDate(dateInput?: string | null): bool
 
   return (
     selectedWeek.startOfWeek.getTime() === currentWeek.startOfWeek.getTime() &&
-    [5, 6, 0].includes(todayDay)
+    [4, 5, 6, 0].includes(todayDay)
   );
 }
 
