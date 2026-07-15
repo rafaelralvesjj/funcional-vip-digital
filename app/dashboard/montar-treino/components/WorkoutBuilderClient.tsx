@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
-
-const CareStatusPanel = dynamic(() => import("./CareStatusPanel"), { ssr: false });
-const AiWorkoutDraftImporter = dynamic(() => import("./AiWorkoutDraftImporter"), { ssr: false });
-const SmartWorkoutSummary = dynamic(() => import("./SmartWorkoutSummary"), { ssr: false });
-const ExerciseLibraryPanel = dynamic(() => import("./ExerciseLibraryPanel"), { ssr: false });
-const WorkoutExercisesEditor = dynamic(() => import("./WorkoutExercisesEditor"), { ssr: false });
-const ReleaseWeekPanel = dynamic(() => import("./ReleaseWeekPanel"), { ssr: false });
+import AiWorkoutDraftImporter from "./AiWorkoutDraftImporter";
+import ExerciseLibraryPanel from "./ExerciseLibraryPanel";
+import ReleaseWeekPanel from "./ReleaseWeekPanel";
+import SmartWorkoutSummary from "./SmartWorkoutSummary";
+import CareStatusPanel from "./CareStatusPanel";
+import WorkoutExercisesEditor from "./WorkoutExercisesEditor";
 import {
   ActiveWorkoutContract,
   AiWorkoutDraftBatch,
@@ -101,17 +99,6 @@ export default function WorkoutBuilderClient() {
       ? { type: "success", text: initialSafeDate.message }
       : null
   );
-  const [secondaryUiReady, setSecondaryUiReady] = useState(false);
-  const [careUiReady, setCareUiReady] = useState(false);
-
-  useEffect(() => {
-    const secondaryTimer = window.setTimeout(() => setSecondaryUiReady(true), 350);
-    const careTimer = window.setTimeout(() => setCareUiReady(true), 900);
-    return () => {
-      window.clearTimeout(secondaryTimer);
-      window.clearTimeout(careTimer);
-    };
-  }, []);
 
   const selectedStudentInfo = students.find((student) => student.id === selectedStudent);
   const referenceDate = parseDateInput(date) || new Date();
@@ -238,28 +225,107 @@ export default function WorkoutBuilderClient() {
   }, [selectedStudent, date]);
 
   useEffect(() => {
-    if (!careUiReady || !selectedStudent) {
+    if (!selectedStudent) {
       setCareEvents([]);
+      setCareLoading(false);
       return;
     }
 
     let cancelled = false;
-    async function loadCareEvents() {
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+
+    async function loadCareEventsSummary() {
+      if (cancelled) return;
+
       setCareLoading(true);
+
       try {
-        const response = await fetch(`/api/student-care-events?studentId=${encodeURIComponent(selectedStudent)}`, { cache: "no-store" });
+        const response = await fetch(
+          `/api/student-care-events?studentId=${encodeURIComponent(
+            selectedStudent
+          )}&view=workout-builder-summary`,
+          { cache: "no-store" }
+        );
         const data = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(data?.error || "Não foi possível consultar os alertas de cuidado.");
-        if (!cancelled) setCareEvents(Array.isArray(data?.events) ? data.events : []);
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              "Não foi possível consultar os alertas de cuidado."
+          );
+        }
+
+        if (!cancelled) {
+          setCareEvents(
+            Array.isArray(data?.events) ? data.events : []
+          );
+        }
       } catch (cause) {
-        if (!cancelled) setMessage({ type: "error", text: cause instanceof Error ? cause.message : "Erro ao consultar cuidado." });
+        if (!cancelled) {
+          setMessage({
+            type: "error",
+            text:
+              cause instanceof Error
+                ? cause.message
+                : "Erro ao consultar cuidado.",
+          });
+        }
       } finally {
-        if (!cancelled) setCareLoading(false);
+        if (!cancelled) {
+          setCareLoading(false);
+        }
       }
     }
-    loadCareEvents();
-    return () => { cancelled = true; };
-  }, [careUiReady, selectedStudent]);
+
+    /*
+     * Primeiro deixa aluno, contrato e semana renderizarem.
+     * Depois consulta apenas o resumo leve dos eventos de cuidado.
+     */
+    const scheduleLoad = () => {
+      const browserWindow = window as typeof window & {
+        requestIdleCallback?: (
+          callback: () => void,
+          options?: { timeout: number }
+        ) => number;
+        cancelIdleCallback?: (id: number) => void;
+      };
+
+      if (browserWindow.requestIdleCallback) {
+        idleId = browserWindow.requestIdleCallback(
+          () => {
+            void loadCareEventsSummary();
+          },
+          { timeout: 1500 }
+        );
+      } else {
+        timeoutId = window.setTimeout(() => {
+          void loadCareEventsSummary();
+        }, 500);
+      }
+    };
+
+    scheduleLoad();
+
+    return () => {
+      cancelled = true;
+
+      if (
+        idleId !== null &&
+        (window as typeof window & {
+          cancelIdleCallback?: (id: number) => void;
+        }).cancelIdleCallback
+      ) {
+        (window as typeof window & {
+          cancelIdleCallback: (id: number) => void;
+        }).cancelIdleCallback(idleId);
+      }
+
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [selectedStudent]);
 
   useEffect(() => {
     if (!selectedStudent || aiBatch) return;
@@ -674,13 +740,8 @@ export default function WorkoutBuilderClient() {
           )}
         </section>
 
-        {careUiReady ? (
-          <CareStatusPanel loading={careLoading} events={careEvents} />
-        ) : (
-          <section className="rounded-xl border border-[#ffffff10] bg-[#111111] p-4 text-xs text-[#737373]">Preparando validações de cuidado...</section>
-        )}
+        <CareStatusPanel loading={careLoading} events={careEvents} />
 
-        {secondaryUiReady ? (
         <AiWorkoutDraftImporter
           selectedStudentId={selectedStudent}
           selectedDate={date}
@@ -692,9 +753,6 @@ export default function WorkoutBuilderClient() {
             setAiIndex(0);
           }}
         />
-        ) : (
-          <section className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-5 text-xs text-[#737373]">Preparando recursos de IA...</section>
-        )}
 
         <section className="rounded-xl border border-[#ffffff10] bg-[#111111] p-5">
           <h2 className="text-lg font-semibold text-[#D4A373]">Identificação do treino</h2>
@@ -704,7 +762,6 @@ export default function WorkoutBuilderClient() {
           </div>
         </section>
 
-        {secondaryUiReady ? (
         <SmartWorkoutSummary
           objective={objective}
           focusAreas={focusAreas}
@@ -723,23 +780,19 @@ export default function WorkoutBuilderClient() {
           onStudentSummaryChange={setStudentSummary}
           onSafetyNoteChange={setSafetyNote}
         />
-        ) : (
-          <section className="rounded-xl border border-[#ffffff10] bg-[#111111] p-5 text-xs text-[#737373]">Preparando resumo inteligente...</section>
-        )}
 
         <section className="rounded-xl border border-[#ffffff10] bg-[#111111] p-5">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-[#D4A373]">Exercícios</h2>
-            {secondaryUiReady ? <ExerciseLibraryPanel onSelect={addExercise} /> : <span className="text-xs text-[#737373]">Preparando biblioteca...</span>}
+            <ExerciseLibraryPanel onSelect={addExercise} />
           </div>
-          {secondaryUiReady ? <WorkoutExercisesEditor exercises={exercises} onChange={setExercises} /> : null}
+          <WorkoutExercisesEditor exercises={exercises} onChange={setExercises} />
         </section>
 
         <section className="rounded-xl border border-[#ffffff10] bg-[#111111] p-5">
           <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Observações gerais do plano" rows={3} className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5]" />
         </section>
 
-        {secondaryUiReady ? (
         <ReleaseWeekPanel
           visible={weeklyLimitReached}
           loading={releaseLoading}
@@ -750,7 +803,6 @@ export default function WorkoutBuilderClient() {
           date={date}
           expectedWorkoutDates={expectedWorkoutDates}
         />
-        ) : null}
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <button
