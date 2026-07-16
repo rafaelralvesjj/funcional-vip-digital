@@ -463,7 +463,7 @@ export default function AlunoPage() {
     if (careEventType && !description) {
       setMessage({
         type: "error",
-        text: "Explique em poucas palavras o que aconteceu antes de encerrar o treino com relato de cuidado.",
+        text: "Explique em poucas palavras o ajuste, a preferência ou o cuidado antes de encerrar o treino.",
       });
       setTimeout(() => setMessage(null), 5000);
       return;
@@ -534,6 +534,10 @@ export default function AlunoPage() {
 
   // Envia nova dúvida (fora do modal) ou follow-up (dentro do modal)
   function getCareEventFriendlyMessage(eventType: string): string {
+    if (eventType === "PREFERENCIA_TREINO") {
+      return "Preferência registrada. O professor poderá considerar essa informação no treino pendente e nos próximos planejamentos.";
+    }
+
     if (eventType === "DOR_DESCONFORTO") {
       return "Obrigado por avisar. Sua segurança vem primeiro. O professor foi sinalizado para revisar seu treino antes de qualquer progressão.";
     }
@@ -1609,25 +1613,25 @@ export default function AlunoPage() {
                   <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-3 space-y-2">
                     <div>
                       <p className="text-[11px] text-[#D4A373] font-semibold">
-                        Precisa de algum ajuste ou cuidado?
+                        Precisa registrar algum ajuste, preferência ou cuidado?
                       </p>
                       <p className="text-[10px] text-[#a1a1a1] leading-relaxed mt-0.5">
-                        Conte o que aconteceu antes de encerrar o treino. O relato será salvo junto com o encerramento,
-                        para o professor ajustar sua próxima semana sem transformar dificuldade em cobrança.
+                        Conte o que aconteceu antes de encerrar o treino. O sistema separa preferência de treino de relato de cuidado
+                        e encaminha cada situação para o fluxo correto do professor.
                       </p>
                     </div>
 
                     <textarea
                       value={careEventDetail}
                       onChange={(event) => setCareEventDetail(event.target.value)}
-                      placeholder="Obrigatório se for encerrar com relato: explique em poucas palavras o que aconteceu."
+                      placeholder="Explique em poucas palavras: preferência de treino, dificuldade, dor, desconforto ou outro contexto."
                       className="w-full min-h-[60px] bg-[#111] border border-[#ffffff10] rounded-lg px-3 py-2 text-[11px] text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
                     />
 
                     {careEventSentForPlanId[selectedPlan?.id] ? (
                       <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2">
                         <p className="text-[10px] text-green-400">
-                          Recebemos seu relato. Obrigado por avisar — isso ajuda o professor a cuidar melhor do seu treino.
+                          Recebemos seu relato. O sistema identificou se é preferência de treino ou cuidado e encaminhou ao professor.
                         </p>
                       </div>
                     ) : (
@@ -1666,6 +1670,15 @@ export default function AlunoPage() {
                           className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Não concluí por desmotivação
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={sendingCareEvent || completing}
+                          onClick={() => reportCareEvent("PREFERENCIA_TREINO", "CONCLUIDO")}
+                          className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-[#D4A373]/10 text-[#D4A373] hover:bg-[#D4A373]/20 border border-[#D4A373]/30 disabled:opacity-50"
+                        >
+                          Concluí e quero registrar uma preferência de treino
                         </button>
 
                         <button
