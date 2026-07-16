@@ -20,6 +20,58 @@ type ConversationReply = {
   authorId?: string | null;
 };
 
+
+type PendingAdjustmentWorkout = {
+  workoutId: string;
+  workoutPlanId: string | null;
+  name: string;
+  date: string;
+  status: string;
+};
+
+type ConversationAdjustmentRequest = {
+  preferenceId: string;
+  category: string;
+  summary: string;
+  originalMessage: string;
+  pendingWorkouts: PendingAdjustmentWorkout[];
+};
+
+type AdjustmentProposalExercise = {
+  exerciseId: string;
+  exerciseName?: string;
+  series: number;
+  reps: string;
+  weight: string;
+  restTime: string;
+  notes: string;
+  order: number;
+};
+
+type AdjustmentProposal = {
+  name: string;
+  description: string;
+  objective: string;
+  focusAreas: string;
+  intensity: string;
+  estimatedDurationMinutes: number;
+  estimatedCaloriesMin: number;
+  estimatedCaloriesMax: number;
+  studentSummary: string;
+  safetyNote: string;
+  notes: string;
+  rationale: string;
+  studentMessage: string;
+  exercises: AdjustmentProposalExercise[];
+};
+
+type AdjustmentDraftState = {
+  workoutId: string;
+  proposal?: AdjustmentProposal;
+  manualPrompt?: string;
+  requiresManualAi?: boolean;
+};
+
 type ConversationItem = {
   id: string;
   studentId?: string | null;
@@ -39,6 +91,7 @@ type ConversationItem = {
   answeredById?: string | null;
   authorId?: string | null;
   openedById?: string | null;
+  adjustmentRequest?: ConversationAdjustmentRequest | null;
 };
 
 type Props = {
@@ -213,6 +266,10 @@ export default function DashboardConversationList({
   const [errorById, setErrorById] = useState<Record<string, string>>({});
   const [successById, setSuccessById] = useState<Record<string, string>>({});
   const [openAttachmentKey, setOpenAttachmentKey] = useState<string | null>(null);
+  const [adjustmentLoadingKey, setAdjustmentLoadingKey] = useState<string | null>(null);
+  const [adjustmentDraftByConversationId, setAdjustmentDraftByConversationId] = useState<
+    Record<string, AdjustmentDraftState | null>
+  >({});
 
   function renderChatAttachmentViewer(
     item: { id?: string | null; imageUrl?: string | null; videoUrl?: string | null },
@@ -402,6 +459,197 @@ export default function DashboardConversationList({
     }
   }
 
+
+  async function handleGenerateAdjustment(
+    conversation: ConversationItem,
+    workoutId: string
+  ) {
+    const request = conversation.adjustmentRequest;
+
+    if (!request) return;
+
+    const loadingKey = `${conversation.id}:${workoutId}:generate`;
+    setAdjustmentLoadingKey(loadingKey);
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+    setSuccessById((current) => ({ ...current, [conversation.id]: "" }));
+
+    try {
+      const response = await fetch("/api/workout-adjustments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "GENERATE",
+          preferenceId: request.preferenceId,
+          workoutId,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setErrorById((current) => ({
+          ...current,
+          [conversation.id]: getErrorMessage(data, "Não foi possível gerar a adaptação."),
+        }));
+        return;
+      }
+
+      setAdjustmentDraftByConversationId((current) => ({
+        ...current,
+        [conversation.id]: {
+          workoutId,
+          proposal: data?.proposal || undefined,
+          manualPrompt: data?.manualPrompt || undefined,
+          requiresManualAi: Boolean(data?.requiresManualAi),
+        },
+      }));
+
+      setSuccessById((current) => ({
+        ...current,
+        [conversation.id]: data?.requiresManualAi
+          ? "Prompt preparado. Configure a chave da IA para adaptação automática ou copie o prompt para o fluxo manual."
+          : "Sugestão da IA pronta para revisão. O treino ainda não foi alterado.",
+      }));
+    } catch (error) {
+      console.error("Generate workout adjustment error:", error);
+      setErrorById((current) => ({
+        ...current,
+        [conversation.id]: "Erro ao gerar a adaptação do treino.",
+      }));
+    } finally {
+      setAdjustmentLoadingKey(null);
+    }
+  }
+
+  async function handleApplyAdjustment(conversation: ConversationItem) {
+    const request = conversation.adjustmentRequest;
+    const draft = adjustmentDraftByConversationId[conversation.id];
+
+    if (!request || !draft?.proposal) return;
+
+    const confirmed = window.confirm(
+      "Confirmar a substituição do treino pendente por esta versão? O treino já concluído não será alterado."
+    );
+
+    if (!confirmed) return;
+
+    const loadingKey = `${conversation.id}:${draft.workoutId}:apply`;
+    setAdjustmentLoadingKey(loadingKey);
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+
+    try {
+      const response = await fetch("/api/workout-adjustments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "APPLY",
+          preferenceId: request.preferenceId,
+          workoutId: draft.workoutId,
+          proposal: draft.proposal,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setErrorById((current) => ({
+          ...current,
+          [conversation.id]: getErrorMessage(data, "Não foi possível aplicar a adaptação."),
+        }));
+        return;
+      }
+
+      setSuccessById((current) => ({
+        ...current,
+        [conversation.id]: data?.message || "Treino pendente ajustado.",
+      }));
+      setAdjustmentDraftByConversationId((current) => ({
+        ...current,
+        [conversation.id]: null,
+      }));
+      router.refresh();
+    } catch (error) {
+      console.error("Apply workout adjustment error:", error);
+      setErrorById((current) => ({
+        ...current,
+        [conversation.id]: "Erro ao aplicar a adaptação do treino.",
+      }));
+    } finally {
+      setAdjustmentLoadingKey(null);
+    }
+  }
+
+  async function handleFutureOnly(conversation: ConversationItem) {
+    const request = conversation.adjustmentRequest;
+
+    if (!request) return;
+
+    const confirmed = window.confirm(
+      "Manter o treino atual e aplicar esta preferência somente nos próximos treinos?"
+    );
+
+    if (!confirmed) return;
+
+    const loadingKey = `${conversation.id}:future-only`;
+    setAdjustmentLoadingKey(loadingKey);
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+
+    try {
+      const response = await fetch("/api/workout-adjustments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "FUTURE_ONLY",
+          preferenceId: request.preferenceId,
+          workoutId: request.pendingWorkouts[0]?.workoutId || null,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setErrorById((current) => ({
+          ...current,
+          [conversation.id]: getErrorMessage(data, "Não foi possível concluir a decisão."),
+        }));
+        return;
+      }
+
+      setSuccessById((current) => ({
+        ...current,
+        [conversation.id]: data?.message || "Preferência aplicada aos próximos treinos.",
+      }));
+      router.refresh();
+    } catch (error) {
+      console.error("Future-only workout adjustment error:", error);
+      setErrorById((current) => ({
+        ...current,
+        [conversation.id]: "Erro ao registrar a decisão.",
+      }));
+    } finally {
+      setAdjustmentLoadingKey(null);
+    }
+  }
+
+  async function handleCopyManualPrompt(conversationId: string) {
+    const prompt = adjustmentDraftByConversationId[conversationId]?.manualPrompt;
+
+    if (!prompt) return;
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setSuccessById((current) => ({
+        ...current,
+        [conversationId]: "Prompt copiado para usar no fluxo manual da IA.",
+      }));
+    } catch {
+      setErrorById((current) => ({
+        ...current,
+        [conversationId]: "Não foi possível copiar o prompt automaticamente.",
+      }));
+    }
+  }
+
   if (conversations.length === 0) {
     return <p className="text-[#a1a1a1]">{emptyMessage}</p>;
   }
@@ -419,6 +667,10 @@ export default function DashboardConversationList({
           currentUserId,
           currentRole
         );
+        const adjustmentRequest = conversation.adjustmentRequest || null;
+        const adjustmentDraft = adjustmentDraftByConversationId[conversation.id] || null;
+        const canManageAdjustment =
+          normalizeRole(currentRole) === "TEACHER" && Boolean(adjustmentRequest);
 
         return (
           <div
@@ -470,6 +722,157 @@ export default function DashboardConversationList({
 
             {isExpanded && (
               <div className="bg-[#0a0a0a] border-t border-[#ffffff10] p-4 space-y-4">
+                {canManageAdjustment && adjustmentRequest && (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-4">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">
+                          Preferência de treino
+                        </span>
+                        <span className="text-[10px] text-amber-200/70">
+                          Não é evento de cuidado
+                        </span>
+                      </div>
+
+                      <h3 className="mt-3 text-sm font-semibold text-[#f5f5f5]">
+                        Nova preferência identificada no chat
+                      </h3>
+
+                      <p className="mt-2 text-xs leading-relaxed text-[#d4d4d4]">
+                        {adjustmentRequest.summary}
+                      </p>
+
+                      <p className="mt-2 rounded-lg border border-[#ffffff10] bg-black/20 p-3 text-[11px] italic text-[#a1a1a1]">
+                        “{adjustmentRequest.originalMessage}”
+                      </p>
+                    </div>
+
+                    {adjustmentRequest.pendingWorkouts.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-semibold text-[#f5f5f5]">
+                          Treino(s) pendente(s) desta semana
+                        </p>
+
+                        {adjustmentRequest.pendingWorkouts.map((workout) => {
+                          const generateKey = `${conversation.id}:${workout.workoutId}:generate`;
+                          const isGenerating = adjustmentLoadingKey === generateKey;
+
+                          return (
+                            <div
+                              key={workout.workoutId}
+                              className="flex flex-col gap-3 rounded-lg border border-[#ffffff10] bg-[#111111] p-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div>
+                                <p className="text-xs font-semibold text-[#f5f5f5]">
+                                  {workout.name || "Treino pendente"}
+                                </p>
+                                <p className="mt-1 text-[10px] text-[#a1a1a1]">
+                                  {formatDateTime(workout.date)} · {workout.status}
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleGenerateAdjustment(conversation, workout.workoutId)}
+                                disabled={Boolean(adjustmentLoadingKey)}
+                                className="rounded-lg bg-[#D4A373] px-3 py-2 text-[11px] font-bold text-black transition hover:bg-[#b88b5d] disabled:opacity-50"
+                              >
+                                {isGenerating ? "Gerando sugestão..." : "Adaptar este treino com IA"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="rounded-lg border border-[#ffffff10] bg-black/20 p-3 text-xs text-[#a1a1a1]">
+                        Não há treino pendente desta semana para adaptar. A preferência continuará ativa para os próximos treinos.
+                      </p>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleFutureOnly(conversation)}
+                      disabled={Boolean(adjustmentLoadingKey)}
+                      className="w-full rounded-lg border border-[#ffffff20] px-3 py-2 text-[11px] font-semibold text-[#f5f5f5] transition hover:border-[#D4A373] hover:text-[#D4A373] disabled:opacity-50"
+                    >
+                      {adjustmentLoadingKey === `${conversation.id}:future-only`
+                        ? "Registrando decisão..."
+                        : "Manter treino atual e aplicar nos próximos"}
+                    </button>
+
+                    {adjustmentDraft?.proposal && (
+                      <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4 space-y-3">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-300">
+                            Sugestão pronta para revisão
+                          </p>
+                          <h4 className="mt-1 text-sm font-semibold text-[#f5f5f5]">
+                            {adjustmentDraft.proposal.name}
+                          </h4>
+                          <p className="mt-2 text-xs leading-relaxed text-[#d4d4d4]">
+                            {adjustmentDraft.proposal.rationale}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {adjustmentDraft.proposal.exercises.map((exercise, index) => (
+                            <div
+                              key={`${exercise.exerciseId}-${index}`}
+                              className="rounded-lg border border-[#ffffff10] bg-black/20 p-3"
+                            >
+                              <p className="text-xs font-semibold text-[#f5f5f5]">
+                                {index + 1}. {exercise.exerciseName || "Exercício da biblioteca"}
+                              </p>
+                              <p className="mt-1 break-all text-[10px] text-[#a1a1a1]">
+                                ID: {exercise.exerciseId}
+                              </p>
+                              <p className="mt-1 text-[11px] text-[#d4d4d4]">
+                                {exercise.series} série(s) · {exercise.reps}
+                                {exercise.restTime ? ` · descanso ${exercise.restTime}` : ""}
+                              </p>
+                              {exercise.notes && (
+                                <p className="mt-1 text-[10px] text-[#a1a1a1]">
+                                  {exercise.notes}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <p className="text-[10px] text-emerald-200/80">
+                          O treino só será substituído depois da sua confirmação. Treinos concluídos permanecem intactos.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() => handleApplyAdjustment(conversation)}
+                          disabled={Boolean(adjustmentLoadingKey)}
+                          className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black transition hover:bg-emerald-400 disabled:opacity-50"
+                        >
+                          {adjustmentLoadingKey === `${conversation.id}:${adjustmentDraft.workoutId}:apply`
+                            ? "Aplicando adaptação..."
+                            : "Confirmar e substituir treino pendente"}
+                        </button>
+                      </div>
+                    )}
+
+                    {adjustmentDraft?.requiresManualAi && adjustmentDraft.manualPrompt && (
+                      <div className="rounded-xl border border-blue-500/25 bg-blue-500/10 p-4 space-y-3">
+                        <p className="text-xs leading-relaxed text-blue-100">
+                          A chave da IA ainda não está configurada no servidor. O prompt completo foi preparado para o fluxo manual.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyManualPrompt(conversation.id)}
+                          className="rounded-lg border border-blue-400/30 px-3 py-2 text-[11px] font-semibold text-blue-200 hover:bg-blue-500/10"
+                        >
+                          Copiar prompt de adaptação
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {conversation.children.length > 0 ? (
                   <div className="space-y-4">
                     {conversation.children.map((reply) => (
