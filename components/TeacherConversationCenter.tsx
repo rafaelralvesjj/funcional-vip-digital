@@ -10,6 +10,22 @@ type TeacherStudentOption = {
   email?: string | null;
 };
 
+type PendingAdjustmentWorkout = {
+  workoutId: string;
+  workoutPlanId: string | null;
+  name: string;
+  date: string;
+  status: string;
+};
+
+type ConversationAdjustmentRequest = {
+  preferenceId: string;
+  category: string;
+  summary: string;
+  originalMessage: string;
+  pendingWorkouts: PendingAdjustmentWorkout[];
+};
+
 type ConversationReply = {
   id: string;
   studentId?: string | null;
@@ -41,6 +57,7 @@ type ConversationItem = {
   answeredById?: string | null;
   authorId?: string | null;
   openedById?: string | null;
+  adjustmentRequest?: ConversationAdjustmentRequest | null;
 };
 
 type Props = {
