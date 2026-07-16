@@ -5,6 +5,64 @@ import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialSt
 import ProfilePhotoEditor from "@/components/ProfilePhotoEditor";
 import StudentSurveyPanel from "@/components/aluno/StudentSurveyPanel";
 import EmailNotificationReminder from "@/components/aluno/EmailNotificationReminder";
+type PersonAvatarProps = {
+  image?: string | null;
+  name?: string | null;
+  sizeClass?: string;
+  textClass?: string;
+};
+
+function PersonAvatar({
+  image,
+  name,
+  sizeClass = "h-9 w-9",
+  textClass = "text-[10px]",
+}: PersonAvatarProps) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const initials =
+    parts.length === 0
+      ? "FV"
+      : parts.length === 1
+        ? parts[0].slice(0, 2).toUpperCase()
+        : `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+
+  return (
+    <div
+      className={`${sizeClass} relative shrink-0 overflow-hidden rounded-full border border-[#D4A373]/50 bg-[#D4A373]/15 flex items-center justify-center`}
+      aria-label={`Foto de ${name || "usuário"}`}
+    >
+      <span className={`${textClass} font-bold text-[#D4A373]`}>{initials}</span>
+
+      {image && !imageFailed && (
+        <img
+          src={image}
+          alt={`Foto de ${name || "usuário"}`}
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      )}
+    </div>
+  );
+}
+
+function getNoticeAuthorName(notice: any): string {
+  return String(notice?.author?.name || "Equipe Funcional VIP Digital");
+}
+
+function getNoticeAuthorRoleLabel(notice: any): string {
+  const role = String(notice?.author?.role || "").toUpperCase();
+
+  if (role === "GESTOR" || role === "ADMIN") return "Gestão";
+  if (role === "PROFESSOR" || role === "TEACHER") return "Professor";
+  if (role === "ALUNO" || role === "STUDENT") return "Aluno";
+
+  return "Funcional VIP Digital";
+}
+
 interface LibraryExercise {
   id: string;
   name: string;
@@ -1033,10 +1091,27 @@ export default function AlunoPage() {
               {notices.map((n: any) => (
                 <div key={n.id}
                   onClick={() => { setSelectedNotice(n); if (!n.readByStudent) markNoticeAsRead(n.id); }}
-                  className="bg-[#1a1a1a] rounded-lg p-2 cursor-pointer hover:bg-[#222] transition flex items-start gap-2">
-                  <div className={"w-2 h-2 rounded-full mt-1 shrink-0 " + (n.readByStudent ? "bg-[#525252]" : "bg-green-500")} />
+                  className="bg-[#1a1a1a] rounded-lg p-2 cursor-pointer hover:bg-[#222] transition flex items-start gap-2.5">
+                  <div className="relative shrink-0">
+                    <PersonAvatar
+                      image={n.author?.image}
+                      name={getNoticeAuthorName(n)}
+                      sizeClass="h-8 w-8"
+                      textClass="text-[9px]"
+                    />
+                    <div
+                      className={
+                        "absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#1a1a1a] " +
+                        (n.readByStudent ? "bg-[#525252]" : "bg-green-500")
+                      }
+                    />
+                  </div>
+
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-[#e5e5e5] font-medium truncate">{n.title || n.type || "Aviso"}</p>
+                    <p className="text-[9px] text-[#a1a1a1] truncate">
+                      {getNoticeAuthorName(n)} · {getNoticeAuthorRoleLabel(n)}
+                    </p>
                     <p className="text-[9px] text-[#6b6b6b] mt-0.5">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p>
                   </div>
                 </div>
@@ -1345,27 +1420,41 @@ export default function AlunoPage() {
       {selectedNotice && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedNotice(null)}>
           <div className="bg-[#111] border border-[#ffffff15] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-[#ffffff10]">
-              <div>
-                <h2 className="text-sm font-bold text-[#f5f5f5]">{selectedNotice.title || selectedNotice.type || "Aviso"}</h2>
-                <p className="text-[10px] text-[#a1a1a1] mt-0.5">{new Date(selectedNotice.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+            <div className="flex items-start justify-between gap-3 p-4 border-b border-[#ffffff10]">
+              <div className="flex min-w-0 items-center gap-3">
+                <PersonAvatar
+                  image={selectedNotice.author?.image}
+                  name={getNoticeAuthorName(selectedNotice)}
+                  sizeClass="h-11 w-11"
+                  textClass="text-xs"
+                />
+
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold text-[#D4A373] truncate">
+                    {getNoticeAuthorName(selectedNotice)} · {getNoticeAuthorRoleLabel(selectedNotice)}
+                  </p>
+                  <h2 className="text-sm font-bold text-[#f5f5f5] truncate">{selectedNotice.title || selectedNotice.type || "Aviso"}</h2>
+                  <p className="text-[10px] text-[#a1a1a1] mt-0.5">{new Date(selectedNotice.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                </div>
               </div>
               <button onClick={() => setSelectedNotice(null)} className="text-[#a1a1a1] hover:text-white text-base w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10 transition shrink-0">X</button>
             </div>
             <div className="p-4">
               <p className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-line">{selectedNotice.content}</p>
-              {selectedNotice.author && (
-                <div className="mt-4 pt-3 border-t border-[#ffffff10]">
-                  <p className="text-[10px] text-[#6b6b6b]">
-                    Enviado por: <span className="text-[#a1a1a1]">{selectedNotice.author.name}</span>
-                    {selectedNotice.author.role && (
-                      <span className={"ml-1 px-1.5 py-0.5 rounded text-[9px] " + (selectedNotice.author.role === "GESTOR" ? "bg-blue-500/10 text-blue-400" : "bg-green-500/10 text-green-400")}>
-                        {selectedNotice.author.role === "GESTOR" ? "Gestao" : "Professor"}
-                      </span>
-                    )}
-                  </p>
+
+              <div className="mt-5 flex items-center gap-3 border-t border-[#ffffff10] pt-3">
+                <PersonAvatar
+                  image={selectedNotice.author?.image}
+                  name={getNoticeAuthorName(selectedNotice)}
+                  sizeClass="h-9 w-9"
+                  textClass="text-[10px]"
+                />
+                <div>
+                  <p className="text-[9px] text-[#6b6b6b]">Enviado por</p>
+                  <p className="text-[11px] font-semibold text-[#e5e5e5]">{getNoticeAuthorName(selectedNotice)}</p>
+                  <p className="text-[9px] text-[#D4A373]">{getNoticeAuthorRoleLabel(selectedNotice)} · Funcional VIP Digital</p>
                 </div>
-              )}
+              </div>
             </div>
             <div className="p-3 border-t border-[#ffffff10]">
               <button onClick={() => setSelectedNotice(null)} className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">
