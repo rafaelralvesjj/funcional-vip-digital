@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 interface Student {
   id: string;
@@ -407,8 +407,6 @@ export default function MontarTreinoPage() {
   const [selectedStudent, setSelectedStudent] = useState("");
   const [planName, setPlanName] = useState("");
   const [date, setDate] = useState("");
-  const [weekAnchorDate, setWeekAnchorDate] = useState("");
-  const initialContextAppliedRef = useRef(false);
   const [description, setDescription] = useState("");
   const [objective, setObjective] = useState("");
   const [focusAreas, setFocusAreas] = useState("");
@@ -491,9 +489,7 @@ export default function MontarTreinoPage() {
     }
 
     setPlanName(String(workout.name || ""));
-    const workoutDate = String(workout.date || "");
-    setDate(workoutDate);
-    if (workoutDate) setWeekAnchorDate(workoutDate);
+    setDate(String(workout.date || ""));
     setDescription(String(workout.description || ""));
     setObjective(String(workout.objective || ""));
     setFocusAreas(String(workout.focusAreas || ""));
@@ -614,9 +610,7 @@ export default function MontarTreinoPage() {
 
     if (dateFromUrl) {
       const safeDate = getNextSafePlanningDateInput(dateFromUrl);
-      const resolvedDate = safeDate.dateInput || dateFromUrl;
-      setDate(resolvedDate);
-      setWeekAnchorDate(resolvedDate);
+      setDate(safeDate.dateInput || dateFromUrl);
 
       if (safeDate.redirected && safeDate.message) {
         setSafeWindowNotice(safeDate.message);
@@ -625,16 +619,16 @@ export default function MontarTreinoPage() {
     }
   }
   useEffect(() => {
-    if (initialContextAppliedRef.current) return;
-    initialContextAppliedRef.current = true;
-
     applyDashboardParams();
 
     /*
-     * O contexto inicial é aplicado uma única vez. Reaplicar os parâmetros
-     * depois de cada atualização da tela podia devolver a data para a URL
-     * enquanto as validações tentavam avançá-la, criando um ciclo de
-     * renderização e consultas.
+     * O rascunho salvo pela IA só deve ser carregado quando esta tela
+     * tiver sido aberta explicitamente pelo resumo do aluno.
+     *
+     * Antes, qualquer entrada em "Montar treino" tentava ler e aplicar
+     * aiWorkoutDraftBatch do localStorage. Um rascunho antigo ou muito
+     * grande podia sobrecarregar a renderização e derrubar a aba do Chrome,
+     * mesmo quando o professor vinha apenas pelo dashboard.
      */
     const params =
       typeof window !== "undefined"
@@ -646,8 +640,20 @@ export default function MontarTreinoPage() {
       loadAiWorkoutDraftFromStorage();
     }
 
-    void fetchStudents();
+    fetchStudents();
+    fetchLibrary();
   }, []);
+
+  useEffect(() => {
+    /*
+     * Reaplica os parâmetros depois que a lista de alunos carrega.
+     * Isso garante que o combo fique selecionado mesmo quando a tela veio
+     * do dashboard antes de os alunos terminarem de carregar.
+     */
+    if (students.length > 0 && !openedFromAiDraft) {
+      applyDashboardParams();
+    }
+  }, [students.length, openedFromAiDraft]);
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -656,7 +662,13 @@ export default function MontarTreinoPage() {
         library.filter(
           (ex) =>
             ex.name.toLowerCase().includes(term) ||
-            ex.muscleGroup.toLowerCase().includes(term)
+            ex.muscleGroup.toLowerCase().includes(term) ||
+            String(ex.objectiveTags || "").toLowerCase().includes(term) ||
+            String(ex.equipmentTags || "").toLowerCase().includes(term) ||
+            String(ex.restrictionTags || "").toLowerCase().includes(term) ||
+            String(ex.description || "").toLowerCase().includes(term) ||
+            String(ex.sequenceImageLabel || "").toLowerCase().includes(term) ||
+            String(ex.sequenceImageNotes || "").toLowerCase().includes(term)
         )
       );
     } else {
@@ -664,22 +676,12 @@ export default function MontarTreinoPage() {
     }
   }, [searchTerm, library]);
 
-  useEffect(() => {
-    if (!showLibrary || library.length > 0) return;
-
-    void fetchLibrary();
-  }, [showLibrary, library.length]);
-
   const selectedStudentInfo = students.find((student) => student.id === selectedStudent);
   const selectedStudentMissingBirthDate =
     Boolean(selectedStudentInfo) &&
     (selectedStudentInfo?.ageYears === null || selectedStudentInfo?.ageYears === undefined);
   const weeklyWorkoutLimit = activeWorkoutContract?.workoutsPerWeek || null;
-  const referenceWeekDate = weekAnchorDate
-    ? new Date(weekAnchorDate + "T12:00:00")
-    : date
-      ? new Date(date + "T12:00:00")
-      : new Date();
+  const referenceWeekDate = date ? new Date(date + "T12:00:00") : new Date();
   const { startOfWeek, endOfWeek } = getWeekRange(referenceWeekDate);
   const weekScopeLabel = getWeekScopeLabel(startOfWeek);
   const expectedWorkoutDates = getExpectedWorkoutDatesForWeek(
@@ -720,16 +722,9 @@ export default function MontarTreinoPage() {
         setSafeWindowNotice(safeDate.message);
       }
     }
-  }, [activeWorkoutContract?.id, expectedWorkoutDates.join("|")]);
+  }, [activeWorkoutContract?.id, date, expectedWorkoutDates.join("|")]);
 
-  /*
-   * A consulta semanal depende de uma âncora estável da semana, e não da
-   * data do treino que é ajustada pelas validações. Isso elimina o ciclo:
-   * buscar semana -> ajustar data -> buscar semana novamente.
-   */
   useEffect(() => {
-    const controller = new AbortController();
-
     async function fetchWeeklyWorkoutInfo() {
       if (!selectedStudent) {
         setWeeklyPlansCount(0);
@@ -748,14 +743,12 @@ export default function MontarTreinoPage() {
           summary: "1",
         });
 
-        const summaryDate = weekAnchorDate || date;
-        if (summaryDate) {
-          query.set("date", summaryDate);
+        if (date) {
+          query.set("date", date);
         }
 
         const res = await fetch(`/api/workout-plan?${query.toString()}`, {
           cache: "no-store",
-          signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -773,27 +766,18 @@ export default function MontarTreinoPage() {
         setActiveWorkoutContract(data.activeContract || null);
         setContractWarning(data.message || null);
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
         console.error("Erro ao buscar treinos da semana:", error);
         setWeeklyPlansCount(0);
         setWeeklyPlans([]);
         setActiveWorkoutContract(null);
         setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
       } finally {
-        if (!controller.signal.aborted) {
-          setWeeklyInfoLoading(false);
-        }
+        setWeeklyInfoLoading(false);
       }
     }
 
-    void fetchWeeklyWorkoutInfo();
-
-    return () => {
-      controller.abort();
-    };
-  }, [selectedStudent, weekAnchorDate]);
+    fetchWeeklyWorkoutInfo();
+  }, [selectedStudent, date]);
 
   useEffect(() => {
     setReleaseReviewContext(null);
@@ -855,7 +839,7 @@ export default function MontarTreinoPage() {
 
   async function fetchLibrary() {
     try {
-      const res = await fetch("/api/exercise-library?active=1&view=picker", {
+      const res = await fetch("/api/exercise-library?active=1", {
         cache: "no-store",
       });
       if (res.ok) {
@@ -866,55 +850,32 @@ export default function MontarTreinoPage() {
     } catch {}
   }
 
-  async function addExercise(ex: LibraryExercise) {
-    try {
-      const response = await fetch(
-        `/api/exercise-library?id=${encodeURIComponent(ex.id)}`,
-        { cache: "no-store" }
-      );
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok || !data?.exercise) {
-        throw new Error(data?.error || "Não foi possível carregar o exercício.");
-      }
-
-      const fullExercise = data.exercise as LibraryExercise;
-      const newExercise: ExerciseItem = {
-        libraryExerciseId: fullExercise.id,
-        name: fullExercise.name,
-        description: fullExercise.description,
-        series: 3,
-        reps: "10",
-        weight: "",
-        restTime: "60s",
-        notes: "",
-        order: exercises.length,
-        imageUrl: fullExercise.imageUrl || null,
-        videoUrl: fullExercise.videoUrl || null,
-        sequenceImageUrl: fullExercise.sequenceImageUrl || null,
-        sequenceImageLabel: fullExercise.sequenceImageLabel || null,
-        sequenceImageNotes: fullExercise.sequenceImageNotes || null,
-        sequenceFramesCount: fullExercise.sequenceFramesCount || null,
-        sequenceGeneratedByAi: Boolean(fullExercise.sequenceGeneratedByAi),
-        purpose: buildExercisePurpose(fullExercise),
-        instructions: buildExerciseInstructions(fullExercise),
-        safetyGuidance: buildExerciseSafetyGuidance(fullExercise),
-        commonMistakes: fullExercise.commonMistakes || null,
-        contraindications: fullExercise.contraindications || null,
-      };
-
-      setExercises((currentExercises) => [
-        ...currentExercises,
-        { ...newExercise, order: currentExercises.length },
-      ]);
-      setShowLibrary(false);
-    } catch (cause) {
-      alert(
-        cause instanceof Error
-          ? cause.message
-          : "Não foi possível carregar o exercício."
-      );
-    }
+  function addExercise(ex: LibraryExercise) {
+    const newExercise: ExerciseItem = {
+      libraryExerciseId: ex.id,
+      name: ex.name,
+      description: ex.description,
+      series: 3,
+      reps: "10",
+      weight: "",
+      restTime: "60s",
+      notes: "",
+      order: exercises.length,
+      imageUrl: ex.imageUrl || null,
+      videoUrl: ex.videoUrl || null,
+      sequenceImageUrl: ex.sequenceImageUrl || null,
+      sequenceImageLabel: ex.sequenceImageLabel || null,
+      sequenceImageNotes: ex.sequenceImageNotes || null,
+      sequenceFramesCount: ex.sequenceFramesCount || null,
+      sequenceGeneratedByAi: Boolean(ex.sequenceGeneratedByAi),
+      purpose: buildExercisePurpose(ex),
+      instructions: buildExerciseInstructions(ex),
+      safetyGuidance: buildExerciseSafetyGuidance(ex),
+      commonMistakes: ex.commonMistakes || null,
+      contraindications: ex.contraindications || null,
+    };
+    setExercises([...exercises, newExercise]);
+    setShowLibrary(false);
   }
 
   function removeExercise(index: number) {
@@ -1904,7 +1865,6 @@ export default function MontarTreinoPage() {
                   onChange={(e) => {
                     const nextDate = e.target.value;
                     setDate(nextDate);
-                    setWeekAnchorDate(nextDate);
                     setSafeWindowNotice(
                       isUnsafeCurrentWeekPlanningDate(nextDate)
                         ? "Esta semana já não possui janela segura de execução. Planeje a próxima semana para não iniciar o aluno atrasado."
@@ -2073,7 +2033,21 @@ export default function MontarTreinoPage() {
                   >
                     <p className="text-[#f5f5f5] font-medium">{ex.name}</p>
                     <p className="text-[#a1a1a1] text-xs mt-0.5">{ex.muscleGroup}</p>
-
+                    {buildExercisePurpose(ex) && (
+                      <p className="text-[#6b6b6b] text-[10px] mt-1 line-clamp-2">
+                        {buildExercisePurpose(ex)}
+                      </p>
+                    )}
+                    {buildExerciseSafetyGuidance(ex) && (
+                      <p className="text-amber-300/80 text-[10px] mt-1 line-clamp-2">
+                        Cuidado: {buildExerciseSafetyGuidance(ex)}
+                      </p>
+                    )}
+                    {ex.sequenceImageUrl && (
+                      <p className="text-blue-300/80 text-[10px] mt-1 line-clamp-1">
+                        Sequência visual disponível
+                      </p>
+                    )}
                   </button>
                 ))}
                 {filteredLibrary.length === 0 && (
