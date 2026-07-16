@@ -785,6 +785,7 @@ export async function GET(
       didYouKnowDeliveries,
       engagementNotifications,
       careEvents,
+      trainingPreferences,
     ] = await Promise.all([
       prisma.avaliacao.findMany({
         where: {
@@ -962,6 +963,17 @@ export async function GET(
         },
         take: 20,
       }),
+
+      prisma.studentTrainingPreference.findMany({
+        where: {
+          studentId,
+          status: "ACTIVE",
+        },
+        orderBy: {
+          updatedAt: "desc",
+        },
+        take: 20,
+      }),
     ]);
 
     const contentIds = Array.from(
@@ -1050,6 +1062,15 @@ export async function GET(
         `  Status: ${question.resolvedAt ? "resolvida" : "em aberto"}`,
         `  Mensagens na conversa: ${messages.length}`,
         `  Última mensagem: ${normalizeText(lastMessage?.content).slice(0, 300)}`,
+      ].join("\n");
+    });
+
+    const trainingPreferenceLines = trainingPreferences.map((preference) => {
+      return [
+        `- Categoria: ${preference.category}`,
+        `  Preferência ativa: ${preference.summary}`,
+        `  Mensagem original do aluno: ${preference.originalMessage}`,
+        `  Registrada em: ${formatDateTime(preference.updatedAt)}`,
       ].join("\n");
     });
 
@@ -1207,25 +1228,31 @@ export async function GET(
       "Últimos planos de treino com exercícios:",
       recentWorkoutLines.length ? recentWorkoutLines.join("\n\n") : "Nenhum plano de treino encontrado.",
       "",
-      "4) Dúvidas e interações com professor/gestão",
+      "4) Preferências ativas de treino registradas pelo aluno",
+      trainingPreferenceLines.length
+        ? trainingPreferenceLines.join("\n")
+        : "Nenhuma preferência estruturada registrada no chat.",
+      "Regra: tratar essas preferências como contexto obrigatório para os próximos treinos, salvo conflito com segurança, contrato, ambiente, equipamentos ou decisão técnica do professor.",
+      "",
+      "5) Dúvidas e interações com professor/gestão",
       questionLines.length ? questionLines.join("\n") : "Nenhuma dúvida encontrada.",
       "",
-      "5) Avisos relevantes recentes",
+      "6) Avisos relevantes recentes",
       noticeLines.length ? noticeLines.join("\n") : "Nenhum aviso recente encontrado.",
       "",
-      "6) Feedbacks de evolução",
+      "7) Feedbacks de evolução",
       feedbackLines.length ? feedbackLines.join("\n") : "Nenhum feedback de evolução encontrado.",
       "",
-      "7) Conteúdos educativos Você Sabia recebidos",
+      "8) Conteúdos educativos Você Sabia recebidos",
       educationLines.length ? educationLines.join("\n") : "Nenhum conteúdo Você Sabia encontrado.",
       "",
-      "8) Régua de engajamento/alertas automáticos recentes",
+      "9) Régua de engajamento/alertas automáticos recentes",
       engagementLines.length ? engagementLines.join("\n") : "Nenhum alerta automático recente encontrado.",
       "",
-      "9) Sinais recentes de cuidado do aluno",
+      "10) Sinais recentes de cuidado do aluno",
       careLines.length ? careLines.join("\n") : "Nenhum sinal de cuidado registrado.",
       "",
-      "10) Leitura operacional para montagem de treino",
+      "11) Leitura operacional para montagem de treino",
       `Considerar a idade atual de ${ageYears} ano(s) na definição de intensidade, volume, descanso, recuperação, complexidade e progressão, sempre em conjunto com histórico, objetivo, adesão, dores e restrições informadas.`,
       isMinor
         ? "Aluno menor de 18 anos: manter revisão humana obrigatória, progressão conservadora e atenção à supervisão/contexto informado."
@@ -1233,6 +1260,9 @@ export async function GET(
       onboardingOperationalLines.length
         ? onboardingOperationalLines.join("\n")
         : "Ficha inicial ainda não trouxe dados suficientes. Confirmar objetivo, nível, ambiente, equipamentos e restrições antes de montar treino.",
+      trainingPreferences.length > 0
+        ? `Existem ${trainingPreferences.length} preferência(s) ativa(s) registrada(s) no chat. A sugestão deve respeitá-las e explicar qualquer exceção técnica.`
+        : "Não há preferência estruturada adicional registrada no chat.",
       hasTrainingPauseCare
         ? "Aluno em PAUSA POR CUIDADO. Não montar/liberar treino normal enquanto o evento estiver aberto. Aguardar aptidão de retomada e revisão do professor."
         : "Sem pausa por cuidado registrada.",
