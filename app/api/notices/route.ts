@@ -66,18 +66,85 @@ type NoticeEmailRecipient = {
   email: string | null;
 };
 
+type NoticeEmailSender = {
+  id: string;
+  name: string | null;
+  role: string | null;
+  image: string | null;
+};
+
+function getSenderRoleLabel(role?: string | null): string {
+  const normalizedRole = normalizeRole(role);
+
+  if (normalizedRole === "TEACHER") return "Professor";
+  if (normalizedRole === "GESTOR" || normalizedRole === "ADMIN") return "Gestão";
+
+  return "Equipe Funcional VIP Digital";
+}
+
+function getInitials(name?: string | null): string {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return "FV";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function getSafeRemoteImageUrl(value?: string | null): string | null {
+  const imageUrl = String(value || "").trim();
+
+  if (!/^https?:\/\//i.test(imageUrl)) return null;
+
+  return imageUrl;
+}
+
+function buildSenderAvatarHtml(sender: NoticeEmailSender): string {
+  const senderName = sender.name?.trim() || "Equipe Funcional VIP Digital";
+  const safeSenderName = escapeHtml(senderName);
+  const safeImageUrl = getSafeRemoteImageUrl(sender.image);
+
+  if (safeImageUrl) {
+    return `
+      <img
+        src="${escapeHtml(safeImageUrl)}"
+        width="48"
+        height="48"
+        alt="Foto de ${safeSenderName}"
+        style="display:block; width:48px; height:48px; border-radius:999px; object-fit:cover; border:1px solid #D4A373;"
+      />
+    `;
+  }
+
+  return `
+    <div style="width:48px; height:48px; border-radius:999px; background:#D4A373; color:#0a0a0a; font-size:15px; font-weight:bold; line-height:48px; text-align:center;">
+      ${escapeHtml(getInitials(senderName))}
+    </div>
+  `;
+}
+
 async function sendNoticeEmailToRecipients({
   recipients,
   title,
   recipientKind,
+  sender,
 }: {
   recipients: NoticeEmailRecipient[];
   title: string;
   recipientKind: "STUDENT" | "TEACHER";
+  sender: NoticeEmailSender;
 }) {
   const loginUrl = getAppLoginUrl();
   const safeTitle = escapeHtml(title);
-  const subject = `A gestão deixou um aviso para você: ${title}`;
+  const senderName = sender.name?.trim() || "Equipe Funcional VIP Digital";
+  const senderRoleLabel = getSenderRoleLabel(sender.role);
+  const safeSenderName = escapeHtml(senderName);
+  const safeSenderRoleLabel = escapeHtml(senderRoleLabel);
+  const senderAvatarHtml = buildSenderAvatarHtml(sender);
+  const subject = `${senderName} deixou um aviso para você: ${title}`;
 
   const panelText =
     recipientKind === "STUDENT"
@@ -86,8 +153,8 @@ async function sendNoticeEmailToRecipients({
 
   const contextText =
     recipientKind === "STUDENT"
-      ? "A equipe de gestão deixou uma informação para apoiar a organização do seu acompanhamento."
-      : "A equipe de gestão deixou uma informação relacionada à sua atuação e ao acompanhamento dos alunos.";
+      ? `${senderName} deixou uma informação para apoiar a organização do seu acompanhamento.`
+      : `${senderName} deixou uma informação relacionada à sua atuação e ao acompanhamento dos alunos.`;
 
   const channelText =
     recipientKind === "STUDENT"
@@ -113,14 +180,14 @@ async function sendNoticeEmailToRecipients({
           "",
           `Entrar no sistema: ${loginUrl}`,
           "",
-          "Equipe de Gestão — Funcional VIP Digital",
-          "Mensagem automática sobre um aviso registrado pela gestão.",
+          `${senderName} — ${senderRoleLabel} | Funcional VIP Digital`,
+          "Mensagem automática sobre um aviso registrado na plataforma.",
         ].join("\n");
 
         const html = `
           <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
             <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-              <h2 style="color:#D4A373; margin:0 0 16px;">A gestão deixou um aviso para você</h2>
+              <h2 style="color:#D4A373; margin:0 0 16px;">${safeSenderName} deixou um aviso para você</h2>
 
               <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
                 Oi, <strong>${escapeHtml(recipientName)}</strong>! Tudo bem?
@@ -147,11 +214,23 @@ async function sendNoticeEmailToRecipients({
                 Abrir meu painel
               </a>
 
-              <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">
-                Equipe de Gestão — Funcional VIP Digital
-              </p>
-              <p style="color:#6b6b6b; font-size:11px; margin-top:8px;">
-                Mensagem automática sobre um aviso registrado pela gestão.
+              <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%; margin-top:24px; border-top:1px solid #2a2a2a; padding-top:18px;">
+                <tr>
+                  <td style="width:58px; vertical-align:middle;">
+                    ${senderAvatarHtml}
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="color:#f5f5f5; font-size:13px; font-weight:bold; line-height:1.4; margin:0;">
+                      ${safeSenderName}
+                    </p>
+                    <p style="color:#a1a1a1; font-size:11px; line-height:1.4; margin:3px 0 0;">
+                      ${safeSenderRoleLabel} | Funcional VIP Digital
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              <p style="color:#6b6b6b; font-size:11px; margin-top:12px;">
+                Mensagem automática sobre um aviso registrado na plataforma.
               </p>
             </div>
           </div>
@@ -176,9 +255,16 @@ async function notifyNoticeByEmail(notice: {
   professorId: string | null;
   student?: NoticeEmailRecipient | null;
   professor?: NoticeEmailRecipient | null;
+  author?: NoticeEmailSender | null;
 }) {
   const targetRole = normalizeRole(notice.targetRole);
   const title = notice.title || "Novo aviso da gestão";
+  const sender: NoticeEmailSender = notice.author || {
+    id: "system",
+    name: "Equipe Funcional VIP Digital",
+    role: "GESTOR",
+    image: null,
+  };
 
   if (targetRole === "TEACHER") {
     let recipients: NoticeEmailRecipient[] = [];
@@ -207,6 +293,7 @@ async function notifyNoticeByEmail(notice: {
       recipients,
       title,
       recipientKind: "TEACHER",
+      sender,
     });
 
     return;
@@ -237,6 +324,7 @@ async function notifyNoticeByEmail(notice: {
       recipients,
       title,
       recipientKind: "STUDENT",
+      sender,
     });
   }
 }
@@ -355,6 +443,7 @@ export async function GET(req: Request) {
             id: true,
             name: true,
             role: true,
+            image: true,
           },
         },
         student: {
@@ -427,6 +516,7 @@ export async function POST(req: Request) {
             id: true,
             name: true,
             role: true,
+            image: true,
           },
         },
         student: {
@@ -457,6 +547,7 @@ export async function POST(req: Request) {
         professorId: notice.professorId,
         student: notice.student,
         professor: notice.professor,
+        author: notice.author,
       });
     } catch (emailError) {
       console.error("Erro ao enviar e-mail do aviso:", emailError);
@@ -501,6 +592,7 @@ export async function PUT(req: Request) {
             id: true,
             name: true,
             role: true,
+            image: true,
           },
         },
         student: {
