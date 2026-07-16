@@ -104,6 +104,7 @@ model Student {
   avaliacoes       Avaliacao[]
   noticeReads      NoticeRead[]
   careEvents       StudentCareEvent[]
+  trainingPreferences StudentTrainingPreference[]
   contracts        StudentContract[]
   contractPayments        ContractPayment[]
   contractLifecycleEvents ContractLifecycleEvent[]
@@ -464,6 +465,35 @@ model Question {
   teacher    User?      @relation("QuestionTeacher", fields: [teacherId], references: [id])
 
   @@map("questions")
+}
+
+
+model StudentTrainingPreference {
+  id                   String    @id @default(uuid())
+  studentId            String    @map("student_id")
+  professorId          String?   @map("professor_id")
+  sourceConversationId String    @map("source_conversation_id")
+  sourceQuestionId     String    @unique @map("source_question_id")
+  category             String
+  summary              String    @db.Text
+  originalMessage      String    @map("original_message") @db.Text
+  status               String    @default("ACTIVE")
+  currentWeekAction    String    @default("NOT_APPLICABLE") @map("current_week_action")
+  relatedWorkoutId     String?   @map("related_workout_id")
+  relatedWorkoutPlanId String?   @map("related_workout_plan_id")
+  handledAt            DateTime? @map("handled_at")
+  handledById          String?   @map("handled_by_id")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([professorId])
+  @@index([sourceConversationId])
+  @@index([status])
+  @@index([currentWeekAction])
+  @@map("student_training_preferences")
 }
 
 model ExerciseLibrary {
