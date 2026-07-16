@@ -17,6 +17,23 @@ function normalizeRole(value?: string | null): string {
   return role;
 }
 
+function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
+  const date = new Date(referenceDate);
+  date.setHours(0, 0, 0, 0);
+
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const startOfWeek = new Date(date);
+  startOfWeek.setDate(date.getDate() + diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
+  endOfWeek.setHours(0, 0, 0, 0);
+
+  return { startOfWeek, endOfWeek };
+}
+
 export default async function TeacherConversationsPage() {
   const session = await getServerSession(authOptions);
   const sessionUser = session?.user as any;
@@ -32,7 +49,7 @@ export default async function TeacherConversationsPage() {
     redirect("/dashboard");
   }
 
-  const [students, rootConversations] = await Promise.all([
+  const [students, rootConversations, pendingPreferences] = await Promise.all([
     prisma.student.findMany({
       where: {
         userId,
@@ -105,11 +122,87 @@ export default async function TeacherConversationsPage() {
         createdAt: "desc",
       },
     }),
+    prisma.studentTrainingPreference.findMany({
+      where: {
+        professorId: userId,
+        status: "ACTIVE",
+        currentWeekAction: "PENDING",
+      },
+      select: {
+        id: true,
+        studentId: true,
+        sourceConversationId: true,
+        category: true,
+        summary: true,
+        originalMessage: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
   ]);
+
+  const { startOfWeek, endOfWeek } = getWeekRange(new Date());
+  const preferenceStudentIds = Array.from(
+    new Set(pendingPreferences.map((preference) => preference.studentId))
+  );
+
+  const pendingWorkouts = preferenceStudentIds.length
+    ? await prisma.workout.findMany({
+        where: {
+          studentId: { in: preferenceStudentIds },
+          status: { not: "CONCLUIDO" },
+          date: {
+            gte: startOfWeek,
+            lt: endOfWeek,
+          },
+        },
+        select: {
+          id: true,
+          studentId: true,
+          workoutPlanId: true,
+          date: true,
+          status: true,
+          workoutPlan: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          date: "asc",
+        },
+      })
+    : [];
+
+  const pendingWorkoutsByStudentId = new Map<string, typeof pendingWorkouts>();
+
+  for (const workout of pendingWorkouts) {
+    const current = pendingWorkoutsByStudentId.get(workout.studentId) || [];
+    current.push(workout);
+    pendingWorkoutsByStudentId.set(workout.studentId, current);
+  }
+
+  const preferenceByConversationId = new Map<
+    string,
+    (typeof pendingPreferences)[number]
+  >();
+
+  for (const preference of pendingPreferences) {
+    if (!preferenceByConversationId.has(preference.sourceConversationId)) {
+      preferenceByConversationId.set(preference.sourceConversationId, preference);
+    }
+  }
 
   const toConversationItem = (conversation: (typeof rootConversations)[number]) => {
     const senderRole = normalizeRole(conversation.senderRole);
     const isManagementConversation = !conversation.studentId;
+    const preference = preferenceByConversationId.get(conversation.id) || null;
+    const relatedPendingWorkouts = preference
+      ? pendingWorkoutsByStudentId.get(preference.studentId) || []
+      : [];
 
     return {
       id: conversation.id,
@@ -141,6 +234,21 @@ export default async function TeacherConversationsPage() {
         : senderRole === "STUDENT"
           ? `Professor: ${conversation.teacher?.name || sessionUser.name || "Professor"}`
           : `Aluno: ${conversation.student?.name || "Aluno"}`,
+      adjustmentRequest: preference
+        ? {
+            preferenceId: preference.id,
+            category: preference.category,
+            summary: preference.summary,
+            originalMessage: preference.originalMessage,
+            pendingWorkouts: relatedPendingWorkouts.map((workout) => ({
+              workoutId: workout.id,
+              workoutPlanId: workout.workoutPlanId || null,
+              name: workout.workoutPlan?.name || "Treino pendente",
+              date: workout.date.toISOString(),
+              status: workout.status,
+            })),
+          }
+        : null,
       children: (conversation.children || []).map((reply) => ({
         id: reply.id,
         studentId: reply.studentId || conversation.studentId || null,
