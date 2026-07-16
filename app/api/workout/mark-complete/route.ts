@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
+import {
+  classifyCareSignal,
+  classifyTrainingPreference,
+  registerTrainingPreferenceFromStudentMessage,
+} from "@/lib/student-training-preferences";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -142,6 +147,7 @@ function normalizeWorkoutCareEventType(value?: string | null): string | null {
     "BAIXA_ADERENCIA",
     "OUTRO",
     "PAUSA_POR_CUIDADO",
+    "PREFERENCIA_TREINO",
   ]);
 
   return allowed.has(eventType) ? eventType : "OUTRO";
@@ -481,6 +487,48 @@ async function createWorkoutCareEvent({
   }
 
   return careEvent;
+}
+
+async function createWorkoutPreferenceConversation({
+  studentId,
+  professorId,
+  authorId,
+  content,
+  referenceDate,
+}: {
+  studentId: string;
+  professorId: string | null;
+  authorId: string;
+  content: string;
+  referenceDate: Date;
+}) {
+  const conversation = await prisma.question.create({
+    data: {
+      content,
+      studentId,
+      teacherId: professorId,
+      parentId: null,
+      senderRole: "STUDENT",
+      answeredById: authorId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  const preference = await registerTrainingPreferenceFromStudentMessage({
+    sourceMessageId: conversation.id,
+    sourceConversationId: conversation.id,
+    studentId,
+    professorId,
+    content,
+    referenceDate,
+  });
+
+  return {
+    conversationId: conversation.id,
+    preference,
+  };
 }
 
 async function getNoticeAuthorId(studentProfessorId?: string | null): Promise<string | null> {
@@ -1386,8 +1434,61 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const shouldPauseForCare = shouldTreatWorkoutCareAsPause(requestedCareEventType, careEventDescription);
-    const finalCareEventType = shouldPauseForCare ? "PAUSA_POR_CUIDADO" : requestedCareEventType;
+    const textCareClassification = careEventDescription
+      ? classifyCareSignal(careEventDescription)
+      : null;
+    const textPreferenceClassification = careEventDescription
+      ? classifyTrainingPreference(careEventDescription)
+      : null;
+
+    if (
+      requestedCareEventType === "PREFERENCIA_TREINO" &&
+      !textCareClassification?.hasSignal &&
+      !textPreferenceClassification?.hasSignal
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Descreva uma preferência relacionada ao treino, por exemplo: exercícios que prefere, quer evitar, ambiente, rotina, musculação, cardio ou corrida.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const explicitSafetyReport =
+      requestedCareEventType === "DOR_DESCONFORTO" ||
+      requestedCareEventType === "PAUSA_POR_CUIDADO";
+
+    const shouldRegisterTrainingPreference = Boolean(
+      careEventDescription &&
+      textPreferenceClassification?.hasSignal &&
+      !textCareClassification?.hasSignal &&
+      !explicitSafetyReport
+    );
+
+    const preferenceOnlyReport = Boolean(
+      shouldRegisterTrainingPreference &&
+      (requestedCareEventType === "PREFERENCIA_TREINO" || requestedCareEventType === "OUTRO")
+    );
+
+    const careEventTypeFromText = textCareClassification?.hasSignal
+      ? textCareClassification.requiresTrainingPause
+        ? "PAUSA_POR_CUIDADO"
+        : "DOR_DESCONFORTO"
+      : requestedCareEventType;
+
+    const shouldPauseForCare = shouldTreatWorkoutCareAsPause(
+      careEventTypeFromText,
+      careEventDescription
+    );
+
+    const finalCareEventType = preferenceOnlyReport
+      ? null
+      : shouldPauseForCare
+        ? "PAUSA_POR_CUIDADO"
+        : careEventTypeFromText === "PREFERENCIA_TREINO"
+          ? null
+          : careEventTypeFromText;
 
     let workoutStatus = "CONCLUIDO";
 
@@ -1475,6 +1576,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    let trainingPreference: any = null;
+
+    if (shouldRegisterTrainingPreference && careEventDescription) {
+      trainingPreference = await createWorkoutPreferenceConversation({
+        studentId: student.id,
+        professorId: student.userId || null,
+        authorId: userId,
+        content: careEventDescription,
+        referenceDate: workoutDate,
+      });
+    }
+
     let completionNotification: any = {
       sent: false,
       reason: "Treino encerrado sem conclusão.",
@@ -1531,18 +1644,23 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const responseMessage = finalCareEventType === "PAUSA_POR_CUIDADO"
-      ? "Seu relato foi recebido com atenção. O treino foi interrompido por cuidado e seu professor vai revisar a situação antes de qualquer retomada."
-      : finalCareEventType
-        ? workoutStatus === "CONCLUIDO"
-          ? "Treino concluído e relato enviado ao seu professor para acompanhamento."
-          : "Treino encerrado e relato enviado ao seu professor para acompanhamento."
-        : "Treino concluído e registrado. Parabéns por mais esse passo!";
+    const responseMessage = trainingPreference?.preference
+      ? trainingPreference.preference.currentWeekAction === "PENDING"
+        ? "Treino registrado e preferência enviada ao professor. Existe outro treino pendente nesta semana que poderá ser revisado antes da execução."
+        : "Treino registrado e preferência salva para os próximos planejamentos."
+      : finalCareEventType === "PAUSA_POR_CUIDADO"
+        ? "Seu relato foi recebido com atenção. O treino foi interrompido por cuidado e seu professor vai revisar a situação antes de qualquer retomada."
+        : finalCareEventType
+          ? workoutStatus === "CONCLUIDO"
+            ? "Treino concluído e relato enviado ao seu professor para acompanhamento."
+            : "Treino encerrado e relato enviado ao seu professor para acompanhamento."
+          : "Treino concluído e registrado. Parabéns por mais esse passo!";
 
     return NextResponse.json({
       ok: true,
       workout,
       careEvent,
+      trainingPreference,
       message: responseMessage,
       notifications: {
         completion: completionNotification,
