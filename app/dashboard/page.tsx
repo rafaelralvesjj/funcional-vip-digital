@@ -663,6 +663,83 @@ export default async function DashboardPage() {
 
   const now = new Date();
 
+  const pendingTrainingPreferences = isTeacher
+    ? await prisma.studentTrainingPreference.findMany({
+        where: {
+          professorId: userId,
+          status: 'ACTIVE',
+          currentWeekAction: 'PENDING',
+        },
+        select: {
+          id: true,
+          studentId: true,
+          sourceConversationId: true,
+          category: true,
+          summary: true,
+          originalMessage: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      })
+    : [];
+
+  const adjustmentStudentIds = Array.from(
+    new Set(pendingTrainingPreferences.map((preference) => preference.studentId))
+  );
+  const adjustmentWeek = getWeekRange(now);
+  const pendingAdjustmentWorkouts = adjustmentStudentIds.length
+    ? await prisma.workout.findMany({
+        where: {
+          studentId: { in: adjustmentStudentIds },
+          status: { not: 'CONCLUIDO' },
+          date: {
+            gte: adjustmentWeek.startOfWeek,
+            lt: adjustmentWeek.endOfWeek,
+          },
+        },
+        select: {
+          id: true,
+          studentId: true,
+          workoutPlanId: true,
+          date: true,
+          status: true,
+          workoutPlan: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          date: 'asc',
+        },
+      })
+    : [];
+
+  const pendingAdjustmentWorkoutsByStudentId = new Map<
+    string,
+    typeof pendingAdjustmentWorkouts
+  >();
+
+  for (const workout of pendingAdjustmentWorkouts) {
+    const current = pendingAdjustmentWorkoutsByStudentId.get(workout.studentId) || [];
+    current.push(workout);
+    pendingAdjustmentWorkoutsByStudentId.set(workout.studentId, current);
+  }
+
+  const pendingPreferenceByConversationId = new Map<
+    string,
+    (typeof pendingTrainingPreferences)[number]
+  >();
+
+  for (const preference of pendingTrainingPreferences) {
+    if (!pendingPreferenceByConversationId.has(preference.sourceConversationId)) {
+      pendingPreferenceByConversationId.set(preference.sourceConversationId, preference);
+    }
+  }
+
   const notices = await prisma.notice.findMany({
     where: {
       OR: [
@@ -927,7 +1004,13 @@ export default async function DashboardPage() {
     return normalizeRole(lastMessage?.senderRole) === 'STUDENT';
   });
 
-  const unansweredQuestionConversationItems = questionsWithoutAnswer.map((question) => ({
+  const unansweredQuestionConversationItems = questionsWithoutAnswer.map((question) => {
+    const preference = pendingPreferenceByConversationId.get(question.id) || null;
+    const relatedPendingWorkouts = preference
+      ? pendingAdjustmentWorkoutsByStudentId.get(preference.studentId) || []
+      : [];
+
+    return {
     id: question.id,
     studentId: question.studentId || null,
     teacherId: question.teacherId || (isTeacher ? userId : null),
@@ -945,6 +1028,21 @@ export default async function DashboardPage() {
       : isTeacher
         ? `Professor: ${userName}`
         : 'Professor',
+    adjustmentRequest: preference
+      ? {
+          preferenceId: preference.id,
+          category: preference.category,
+          summary: preference.summary,
+          originalMessage: preference.originalMessage,
+          pendingWorkouts: relatedPendingWorkouts.map((workout) => ({
+            workoutId: workout.id,
+            workoutPlanId: workout.workoutPlanId || null,
+            name: workout.workoutPlan?.name || 'Treino pendente',
+            date: workout.date.toISOString(),
+            status: workout.status,
+          })),
+        }
+      : null,
     children: (question.children || []).map((reply) => ({
       id: reply.id,
       studentId: reply.studentId || question.studentId || null,
@@ -961,7 +1059,8 @@ export default async function DashboardPage() {
         reply.student?.name ||
         'Usuário',
     })),
-  }));
+    };
+  });
 
   function getNoticeTargetLabel(notice: (typeof notices)[number]): string {
     const targetRole = normalizeRole(notice.targetRole);
