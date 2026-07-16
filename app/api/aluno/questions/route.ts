@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
+import { classifyTrainingPreference } from "@/lib/student-training-preferences";
 
 function normalizeRole(value?: string | null): string {
   const roleValue = String(value || "").toUpperCase();
@@ -717,6 +718,113 @@ async function maybeCreateCareEventFromStudentQuestion({
   });
 }
 
+
+async function maybeRegisterTrainingPreferenceFromStudentQuestion({
+  messageId,
+  rootConversationId,
+  studentId,
+  professorId,
+  content,
+}: {
+  messageId: string;
+  rootConversationId: string;
+  studentId: string;
+  professorId: string | null;
+  content: string;
+}) {
+  const careClassification = classifyCareSignal(content);
+
+  if (careClassification.hasSignal) return null;
+
+  const preference = classifyTrainingPreference(content);
+
+  if (!preference.hasSignal) return null;
+
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: {
+      id: true,
+      userId: true,
+    },
+  });
+
+  if (!student) return null;
+
+  const { startOfWeek, endOfWeek } = getWeekRange(new Date());
+  const pendingWorkout = await prisma.workout.findFirst({
+    where: {
+      studentId,
+      status: {
+        not: "CONCLUIDO",
+      },
+      date: {
+        gte: startOfWeek,
+        lt: endOfWeek,
+      },
+    },
+    orderBy: {
+      date: "asc",
+    },
+    select: {
+      id: true,
+      workoutPlanId: true,
+    },
+  });
+
+  const effectiveProfessorId = professorId || student.userId || null;
+  const currentWeekAction = pendingWorkout ? "PENDING" : "NOT_APPLICABLE";
+
+  return prisma.$transaction(async (tx) => {
+    await tx.studentTrainingPreference.updateMany({
+      where: {
+        studentId,
+        category: preference.category,
+        status: "ACTIVE",
+        sourceQuestionId: {
+          not: messageId,
+        },
+      },
+      data: {
+        status: "SUPERSEDED",
+        currentWeekAction: "HANDLED",
+        handledAt: new Date(),
+      },
+    });
+
+    return tx.studentTrainingPreference.upsert({
+      where: {
+        sourceQuestionId: messageId,
+      },
+      update: {
+        professorId: effectiveProfessorId,
+        sourceConversationId: rootConversationId,
+        category: preference.category,
+        summary: preference.summary,
+        originalMessage: content,
+        status: "ACTIVE",
+        currentWeekAction,
+        relatedWorkoutId: pendingWorkout?.id || null,
+        relatedWorkoutPlanId: pendingWorkout?.workoutPlanId || null,
+        handledAt: null,
+        handledById: null,
+      },
+      create: {
+        studentId,
+        professorId: effectiveProfessorId,
+        sourceConversationId: rootConversationId,
+        sourceQuestionId: messageId,
+        category: preference.category,
+        summary: preference.summary,
+        originalMessage: content,
+        status: "ACTIVE",
+        currentWeekAction,
+        relatedWorkoutId: pendingWorkout?.id || null,
+        relatedWorkoutPlanId: pendingWorkout?.workoutPlanId || null,
+      },
+    });
+  });
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -908,6 +1016,19 @@ export async function POST(req: NextRequest) {
       });
     } catch (careEventError) {
       console.error("Erro ao criar evento de cuidado a partir da dúvida do aluno:", careEventError);
+    }
+
+
+    try {
+      await maybeRegisterTrainingPreferenceFromStudentQuestion({
+        messageId: question.id,
+        rootConversationId: rootQuestion?.id || question.id,
+        studentId: student.id,
+        professorId: teacherId,
+        content,
+      });
+    } catch (preferenceError) {
+      console.error("Erro ao registrar preferência de treino a partir do chat:", preferenceError);
     }
 
     if (!rootQuestion) {
