@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 
-const COMPLETED_STATUS = "CONCLUIDO";
 
 type AdjustmentAction =
   | "PREPARE_PROMPT"
@@ -144,15 +143,15 @@ async function getAdjustmentContext({
     };
   }
 
-  const effectiveWorkoutId = workoutId || preference.relatedWorkoutId;
-
-  if (!effectiveWorkoutId && !requireWorkout) {
+  if (!requireWorkout) {
     return {
       preference,
       workout: null,
       activePreferences: [],
     };
   }
+
+  const effectiveWorkoutId = workoutId || preference.relatedWorkoutId;
 
   if (!effectiveWorkoutId) {
     return {
@@ -184,9 +183,9 @@ async function getAdjustmentContext({
     return { error: "Treino pendente não localizado.", status: 404 as const };
   }
 
-  if (String(workout.status || "").toUpperCase() === COMPLETED_STATUS) {
+  if (String(workout.status || "").toUpperCase() !== "PENDENTE") {
     return {
-      error: "Treino já concluído não pode ser alterado.",
+      error: "Somente treino com status PENDENTE pode ser adaptado por este fluxo.",
       status: 409 as const,
     };
   }
