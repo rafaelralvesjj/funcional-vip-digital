@@ -46,6 +46,31 @@ function includesAny(text: string, terms: string[]): boolean {
   return terms.some((term) => text.includes(term));
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Verifica palavras ou frases completas.
+ * Evita que "costumo" seja confundido com "acostumado".
+ */
+function includesPhrase(text: string, phrase: string): boolean {
+  const normalizedPhrase = normalizeTrainingPreferenceText(phrase);
+  if (!normalizedPhrase) return false;
+
+  const pattern = normalizedPhrase
+    .split(" ")
+    .filter(Boolean)
+    .map(escapeRegExp)
+    .join("\\s+");
+
+  return new RegExp(`(^|[^a-z0-9])${pattern}($|[^a-z0-9])`, "i").test(text);
+}
+
+function includesAnyPhrase(text: string, phrases: string[]): boolean {
+  return phrases.some((phrase) => includesPhrase(text, phrase));
+}
+
 export function classifyCareSignal(content: string): CareSignalClassification {
   const text = normalizeTrainingPreferenceText(content);
   const paddedText = ` ${text} `;
@@ -227,46 +252,122 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
   const original = String(content || "").trim();
   const text = normalizeTrainingPreferenceText(original);
 
-  if (!text) {
-    return {
-      hasSignal: false,
-      category: "PREFERENCIA_GERAL",
-      summary: "",
-    };
-  }
+  const noPreference: TrainingPreferenceClassification = {
+    hasSignal: false,
+    category: "PREFERENCIA_GERAL",
+    summary: "",
+  };
 
-  const preferenceCues = [
+  if (!text) return noPreference;
+
+  /*
+   * Relatos de experiência ou nível não são, por si só, pedidos de mudança.
+   * Ex.: "estou acostumado com um nível mais avançado de treino".
+   * Eles permanecem na conversa, mas não abrem evento de preferência.
+   */
+  const experienceOrLevelCues = [
+    "estou acostumado",
+    "estou acostumada",
+    "sou acostumado",
+    "sou acostumada",
+    "tenho experiencia",
+    "ja tenho experiencia",
+    "tenho bastante experiencia",
+    "ja treino ha",
+    "treino ha anos",
+    "meu nivel e",
+    "meu nivel de treino",
+    "nivel iniciante",
+    "nivel intermediario",
+    "nivel avancado",
+    "sou iniciante",
+    "sou intermediario",
+    "sou intermediaria",
+    "sou avancado",
+    "sou avancada",
+  ];
+
+  /*
+   * Para virar preferência, o texto precisa demonstrar escolha, restrição,
+   * prioridade ou pedido de ajuste. Apenas descrever capacidade não basta.
+   */
+  const actionablePreferenceCues = [
     "eu prefiro",
     "prefiro",
-    "eu costumo",
-    "costumo",
+    "eu quero",
+    "quero",
+    "gostaria",
     "nao quero",
     "nao gostaria",
     "nao gosto",
     "gosto mais",
     "quero focar",
+    "quero priorizar",
+    "priorizar",
+    "focar na",
+    "focar no",
+    "focar em",
     "foco na",
+    "foco no",
     "foco em",
     "somente",
     "apenas",
     "so no",
     "so na",
     "evito",
+    "prefiro evitar",
+    "quero evitar",
+    "pode incluir",
+    "pode tirar",
+    "pode retirar",
+    "quero incluir",
+    "quero retirar",
+    "quero trocar",
+    "quero substituir",
+    "quero aumentar",
+    "quero diminuir",
+    "preciso ajustar",
     "para mim e melhor",
     "funciona melhor para mim",
   ];
 
+  const habitCues = ["eu costumo", "costumo"];
+  const habitWithChoiceCues = [
+    "somente",
+    "apenas",
+    "so no",
+    "so na",
+    "nao quero",
+    "nao gosto",
+    "evito",
+    "focar na",
+    "focar no",
+    "focar em",
+    "foco na",
+    "foco no",
+    "foco em",
+    "priorizo",
+    "quando vou",
+    "nos dias",
+  ];
+
   const trainingTopics = [
     "treino",
+    "treinos",
     "academia",
     "musculacao",
     "cardio",
     "corrida",
     "correr",
     "exercicio",
+    "exercicios",
     "carga",
+    "cargas",
     "serie",
+    "series",
     "repeticao",
+    "repeticoes",
+    "intensidade",
     "alongamento",
     "mobilidade",
     "funcional",
@@ -281,20 +382,41 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
     "peito",
   ];
 
-  const hasPreferenceCue = includesAny(text, preferenceCues);
-  const hasTrainingTopic = includesAny(text, trainingTopics);
+  const hasTrainingTopic = includesAnyPhrase(text, trainingTopics);
+  if (!hasTrainingTopic) return noPreference;
 
-  if (!hasPreferenceCue || !hasTrainingTopic) {
-    return {
-      hasSignal: false,
-      category: "PREFERENCIA_GERAL",
-      summary: "",
-    };
+  const hasExperienceOrLevelStatement = includesAnyPhrase(text, experienceOrLevelCues);
+  const hasActionablePreference = includesAnyPhrase(text, actionablePreferenceCues);
+  const hasHabitCue = includesAnyPhrase(text, habitCues);
+  const habitExpressesChoice =
+    hasHabitCue && includesAnyPhrase(text, habitWithChoiceCues);
+
+  /*
+   * Uma declaração de nível/experiência só vira preferência quando também
+   * contém um pedido claro, por exemplo:
+   * "sou avançado e prefiro treinos mais intensos".
+   */
+  if (hasExperienceOrLevelStatement && !hasActionablePreference) {
+    return noPreference;
   }
 
-  const mentionsCardio = includesAny(text, ["cardio", "esteira", "bicicleta", "bike", "aerobico"]);
-  const mentionsRunning = includesAny(text, ["corrida", "correr", "rua"]);
-  const mentionsGymStrength = includesAny(text, ["academia", "musculacao", "forca"]);
+  if (!hasActionablePreference && !habitExpressesChoice) {
+    return noPreference;
+  }
+
+  const mentionsCardio = includesAnyPhrase(text, [
+    "cardio",
+    "esteira",
+    "bicicleta",
+    "bike",
+    "aerobico",
+  ]);
+  const mentionsRunning = includesAnyPhrase(text, ["corrida", "correr", "rua"]);
+  const mentionsGymStrength = includesAnyPhrase(text, [
+    "academia",
+    "musculacao",
+    "forca",
+  ]);
 
   if (mentionsCardio && mentionsRunning && mentionsGymStrength) {
     return {
@@ -305,7 +427,7 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
     };
   }
 
-  if (includesAny(text, ["em casa", "na academia", "ao ar livre", "parque"])) {
+  if (includesAnyPhrase(text, ["em casa", "na academia", "ao ar livre", "parque"])) {
     return {
       hasSignal: true,
       category: "AMBIENTE_TREINO",
@@ -313,7 +435,18 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
     };
   }
 
-  if (includesAny(text, ["nao quero", "nao gosto", "evito"])) {
+  if (
+    includesAnyPhrase(text, [
+      "nao quero",
+      "nao gosto",
+      "evito",
+      "prefiro evitar",
+      "quero evitar",
+      "quero retirar",
+      "pode tirar",
+      "pode retirar",
+    ])
+  ) {
     return {
       hasSignal: true,
       category: "EXERCICIO_EVITAR",
@@ -321,7 +454,21 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
     };
   }
 
-  if (includesAny(text, ["prefiro", "quero focar", "gosto mais", "foco na", "foco em"])) {
+  if (
+    includesAnyPhrase(text, [
+      "prefiro",
+      "quero focar",
+      "quero priorizar",
+      "priorizar",
+      "focar na",
+      "focar no",
+      "focar em",
+      "foco na",
+      "foco no",
+      "foco em",
+      "gosto mais",
+    ])
+  ) {
     return {
       hasSignal: true,
       category: "EXERCICIO_PRIORIZAR",
@@ -329,7 +476,7 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
     };
   }
 
-  if (includesAny(text, ["dias", "horario", "rotina", "quando vou"])) {
+  if (includesAnyPhrase(text, ["dias", "horario", "rotina", "quando vou"])) {
     return {
       hasSignal: true,
       category: "ROTINA_TREINO",
