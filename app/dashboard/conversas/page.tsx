@@ -34,7 +34,11 @@ function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date
   return { startOfWeek, endOfWeek };
 }
 
-export default async function TeacherConversationsPage() {
+export default async function TeacherConversationsPage({
+  searchParams,
+}: {
+  searchParams?: { conversationId?: string | string[] };
+}) {
   const session = await getServerSession(authOptions);
   const sessionUser = session?.user as any;
 
@@ -44,6 +48,10 @@ export default async function TeacherConversationsPage() {
 
   const userId = String(sessionUser.id);
   const role = normalizeRole(sessionUser.role);
+  const rawConversationId = searchParams?.conversationId;
+  const initialConversationId = Array.isArray(rawConversationId)
+    ? rawConversationId[0] || null
+    : rawConversationId || null;
 
   if (role !== "TEACHER") {
     redirect("/dashboard");
@@ -124,9 +132,12 @@ export default async function TeacherConversationsPage() {
     }),
     prisma.studentTrainingPreference.findMany({
       where: {
-        professorId: userId,
         status: "ACTIVE",
         currentWeekAction: "PENDING",
+        OR: [
+          { professorId: userId },
+          { student: { userId } },
+        ],
       },
       select: {
         id: true,
@@ -152,7 +163,7 @@ export default async function TeacherConversationsPage() {
     ? await prisma.workout.findMany({
         where: {
           studentId: { in: preferenceStudentIds },
-          status: { not: "CONCLUIDO" },
+          status: "PENDENTE",
           date: {
             gte: startOfWeek,
             lt: endOfWeek,
@@ -299,6 +310,7 @@ export default async function TeacherConversationsPage() {
           students={students}
           studentConversations={studentConversations}
           managementConversations={managementConversations}
+          initialConversationId={initialConversationId}
         />
       </div>
     </div>
