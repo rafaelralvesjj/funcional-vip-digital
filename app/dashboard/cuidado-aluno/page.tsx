@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import StudentTrainingPreferencesPanel from "@/components/StudentTrainingPreferencesPanel";
 
 type CommercialImpact = {
   applies: boolean;
@@ -227,6 +229,23 @@ export default function CuidadoAlunoPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const canManageEvents = permissions.canManageEvents;
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"CARE" | "PREFERENCES">("CARE");
+
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    setActiveTab(tab === "preferencias" ? "PREFERENCES" : "CARE");
+  }, []);
+
+  function changeTab(nextTab: "CARE" | "PREFERENCES") {
+    setActiveTab(nextTab);
+    router.replace(
+      nextTab === "PREFERENCES"
+        ? "/dashboard/cuidado-aluno?tab=preferencias"
+        : "/dashboard/cuidado-aluno",
+      { scroll: false }
+    );
+  }
 
   async function loadEvents() {
     setLoading(true);
@@ -359,11 +378,10 @@ export default function CuidadoAlunoPage() {
             Experiência e retenção
           </p>
           <h1 className="text-2xl md:text-3xl font-bold text-[#D4A373]">
-            Central de Cuidado do Aluno
+            Acompanhamento do Aluno
           </h1>
           <p className="text-sm text-[#a1a1a1] mt-2 max-w-4xl">
-            Aqui aparecem sinais importantes do aluno: treino difícil, dor/desconforto, falta de tempo,
-            dúvida de execução, desmotivação, baixa aderência e impactos comerciais de pausas por cuidado. O professor trata os alertas dos próprios alunos; a gestão acompanha em modo leitura.
+            Central única para acompanhar eventos de cuidado e preferências de treino. A conversa mantém o contexto humano; esta tela organiza as pendências que exigem decisão do professor.
           </p>
         </div>
 
@@ -374,6 +392,37 @@ export default function CuidadoAlunoPage() {
           Ver indicadores comerciais
         </Link>
       </div>
+
+      <div className="border-b border-[#ffffff10]">
+        <div className="flex flex-wrap gap-6">
+          <button
+            type="button"
+            onClick={() => changeTab("CARE")}
+            className={`border-b-2 px-2 py-4 text-sm font-semibold transition ${
+              activeTab === "CARE"
+                ? "border-[#D4A373] text-[#D4A373]"
+                : "border-transparent text-[#a1a1a1] hover:text-[#f5f5f5]"
+            }`}
+          >
+            Eventos de cuidado
+          </button>
+
+          <button
+            type="button"
+            onClick={() => changeTab("PREFERENCES")}
+            className={`border-b-2 px-2 py-4 text-sm font-semibold transition ${
+              activeTab === "PREFERENCES"
+                ? "border-[#D4A373] text-[#D4A373]"
+                : "border-transparent text-[#a1a1a1] hover:text-[#f5f5f5]"
+            }`}
+          >
+            Preferências de treino
+          </button>
+        </div>
+      </div>
+
+      {activeTab === "CARE" && (
+        <div className="space-y-5">
 
       {message && (
         <div
@@ -670,6 +719,12 @@ export default function CuidadoAlunoPage() {
           ))
         )}
       </div>
+        </div>
+      )}
+
+      {activeTab === "PREFERENCES" && (
+        <StudentTrainingPreferencesPanel />
+      )}
     </div>
   );
 }
