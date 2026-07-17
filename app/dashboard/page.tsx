@@ -78,8 +78,12 @@ export default async function DashboardPage() {
       : 'Dúvidas sem resposta dos meus alunos',
 
     careEventsCard: isGestor
-      ? 'Alertas de cuidado abertos'
-      : 'Alertas de cuidado dos meus alunos',
+      ? 'Eventos de cuidado pendentes'
+      : 'Eventos de cuidado dos meus alunos',
+
+    trainingPreferencesCard: isGestor
+      ? 'Preferências de treino pendentes'
+      : 'Preferências pendentes dos meus alunos',
 
     pendingNoticesCard: isGestor
       ? 'Avisos pendentes de todos os alunos'
@@ -106,8 +110,12 @@ export default async function DashboardPage() {
       : 'Dúvidas sem resposta dos meus alunos',
 
     careEventsList: isGestor
-      ? 'Alertas de cuidado de todos os alunos'
-      : 'Alertas de cuidado dos meus alunos',
+      ? 'Eventos de cuidado de todos os alunos'
+      : 'Eventos de cuidado dos meus alunos',
+
+    trainingPreferencesList: isGestor
+      ? 'Preferências de treino de todos os alunos'
+      : 'Preferências de treino dos meus alunos',
 
     managementNoticesList: isGestor
       ? 'Avisos da gestão de todos os professores'
@@ -663,27 +671,48 @@ export default async function DashboardPage() {
 
   const now = new Date();
 
-  const pendingTrainingPreferences = isTeacher
-    ? await prisma.studentTrainingPreference.findMany({
-        where: {
-          professorId: userId,
-          status: 'ACTIVE',
-          currentWeekAction: 'PENDING',
-        },
+  const pendingTrainingPreferences = await prisma.studentTrainingPreference.findMany({
+    where: {
+      status: 'ACTIVE',
+      currentWeekAction: 'PENDING',
+      ...(isTeacher
+        ? {
+            OR: [
+              { professorId: userId },
+              { student: { userId } },
+            ],
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+      studentId: true,
+      professorId: true,
+      sourceConversationId: true,
+      source: true,
+      category: true,
+      summary: true,
+      originalMessage: true,
+      relatedWorkoutId: true,
+      createdAt: true,
+      student: {
         select: {
           id: true,
-          studentId: true,
-          sourceConversationId: true,
-          category: true,
-          summary: true,
-          originalMessage: true,
-          createdAt: true,
+          name: true,
+          image: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      })
-    : [];
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
 
   const adjustmentStudentIds = Array.from(
     new Set(pendingTrainingPreferences.map((preference) => preference.studentId))
@@ -693,7 +722,7 @@ export default async function DashboardPage() {
     ? await prisma.workout.findMany({
         where: {
           studentId: { in: adjustmentStudentIds },
-          status: { not: 'CONCLUIDO' },
+          status: 'PENDENTE',
           date: {
             gte: adjustmentWeek.startOfWeek,
             lt: adjustmentWeek.endOfWeek,
@@ -1344,7 +1373,11 @@ export default async function DashboardPage() {
       id: 'care-events',
       label: labels.careEventsCard,
       value: openCareEvents.length,
-      tone: openCareEvents.length > 0 ? 'danger' : 'default',
+    },
+    {
+      id: 'training-preferences',
+      label: labels.trainingPreferencesCard,
+      value: pendingTrainingPreferences.length,
     },
     {
       id: 'pending-notices',
@@ -2002,6 +2035,102 @@ export default async function DashboardPage() {
                         >
                           {isTeacher ? 'Abrir e tratar alerta' : 'Visualizar central'}
                         </a>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-[#f5f5f5]">
+                  {labels.trainingPreferencesList}
+                </h2>
+                <p className="text-sm text-[#a1a1a1] mt-1">
+                  Preferências identificadas no chat ou no relato ao concluir um treino e que ainda aguardam decisão.
+                </p>
+              </div>
+
+              <a
+                href="/dashboard/cuidado-aluno?tab=preferencias"
+                className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition"
+              >
+                Abrir central de preferências
+              </a>
+            </div>
+
+            {pendingTrainingPreferences.length === 0 ? (
+              <p className="text-[#a1a1a1]">
+                Nenhuma preferência aguardando decisão.
+              </p>
+            ) : (
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
+                {pendingTrainingPreferences.map((preference) => (
+                  <div
+                    key={preference.id}
+                    className="bg-[#111111] border border-emerald-500/20 rounded-xl overflow-hidden"
+                  >
+                    <div className="p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#1a1a1a] flex items-center justify-center">
+                            {preference.student.image ? (
+                              <img
+                                src={preference.student.image}
+                                alt={preference.student.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-xs font-bold text-[#D4A373]">
+                                {getStudentInitials(preference.student.name)}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                                NOVA PREFERÊNCIA
+                              </span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a1a1a] text-[#a1a1a1]">
+                                {preference.source === 'WORKOUT_COMPLETION' ? 'Relato do treino' : 'Chat'}
+                              </span>
+                            </div>
+
+                            <p className="text-sm font-bold text-[#f5f5f5]">
+                              {preference.student.name}
+                            </p>
+                            <p className="text-xs text-[#a1a1a1] mt-1">
+                              Professor: <span className="text-[#D4A373]">{preference.student.user?.name || 'Não informado'}</span>
+                            </p>
+                            <p className="text-sm text-[#e5e5e5] mt-3 whitespace-pre-wrap line-clamp-4">
+                              {preference.summary}
+                            </p>
+                            <p className="text-[10px] text-[#6b6b6b] mt-2">
+                              Registrada em {formatDate(preference.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 shrink-0">
+                          <a
+                            href="/dashboard/cuidado-aluno?tab=preferencias"
+                            className="inline-flex items-center justify-center text-xs px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10] hover:text-white"
+                          >
+                            Ver na central
+                          </a>
+                          {isTeacher && (
+                            <a
+                              href={`/dashboard/conversas?conversationId=${encodeURIComponent(preference.sourceConversationId)}`}
+                              className="inline-flex items-center justify-center text-xs px-3 py-2 rounded-lg bg-[#D4A373] text-[#0a0a0a] font-semibold hover:bg-[#c49563]"
+                            >
+                              Abrir conversa e tratar
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
