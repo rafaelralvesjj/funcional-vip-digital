@@ -16,6 +16,8 @@ type StudentForEngagement = {
     id: string;
     name: string | null;
     email: string | null;
+    image: string | null;
+    role: string | null;
   } | null;
 };
 
@@ -105,6 +107,82 @@ async function getNoticeAuthorId(): Promise<string | null> {
 
 function getStudentEmail(student: StudentForEngagement): string | null {
   return student.email || student.userAuth?.email || null;
+}
+
+type StudentCommunicationIdentity = {
+  authorId: string;
+  senderName: string;
+  senderRoleLabel: "Professor" | "Gestão";
+  senderImage: string | null;
+  sentByProfessor: boolean;
+};
+
+function getInitials(name?: string | null): string {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return "FV";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function getSafeRemoteImageUrl(value?: string | null): string | null {
+  const imageUrl = String(value || "").trim();
+  return /^https?:\/\//i.test(imageUrl) ? imageUrl : null;
+}
+
+function buildEmailAvatarHtml(name: string, image?: string | null): string {
+  const safeName = escapeHtml(name);
+  const safeImageUrl = getSafeRemoteImageUrl(image);
+
+  if (safeImageUrl) {
+    return `
+      <img
+        src="${escapeHtml(safeImageUrl)}"
+        width="48"
+        height="48"
+        alt="Foto de ${safeName}"
+        style="display:block; width:48px; height:48px; border-radius:999px; object-fit:cover; border:1px solid #D4A373;"
+      />
+    `;
+  }
+
+  return `
+    <div style="width:48px; height:48px; border-radius:999px; background:#D4A373; color:#0a0a0a; font-size:15px; font-weight:bold; line-height:48px; text-align:center;">
+      ${escapeHtml(getInitials(name))}
+    </div>
+  `;
+}
+
+function getStudentCommunicationIdentity(
+  student: StudentForEngagement,
+  managementAuthorId: string
+): StudentCommunicationIdentity {
+  const assignedUserRole = String(student.user?.role || "").toUpperCase();
+  const hasAssignedProfessor = Boolean(
+    student.user?.id && ["TEACHER", "PROFESSOR"].includes(assignedUserRole)
+  );
+
+  if (hasAssignedProfessor && student.user) {
+    return {
+      authorId: student.user.id,
+      senderName: student.user.name?.trim() || "Seu professor",
+      senderRoleLabel: "Professor",
+      senderImage: student.user.image || null,
+      sentByProfessor: true,
+    };
+  }
+
+  return {
+    authorId: managementAuthorId,
+    senderName: "Equipe Funcional VIP Digital",
+    senderRoleLabel: "Gestão",
+    senderImage: null,
+    sentByProfessor: false,
+  };
 }
 
 async function alreadySent({
@@ -202,14 +280,20 @@ async function createNotice({
 async function sendStudentEmail({
   to,
   studentName,
-  professorName,
+  senderName,
+  senderRoleLabel,
+  senderImage,
+  sentByProfessor,
   subject,
   title,
   content,
 }: {
   to: string | null;
   studentName: string;
-  professorName?: string | null;
+  senderName: string;
+  senderRoleLabel: "Professor" | "Gestão";
+  senderImage?: string | null;
+  sentByProfessor: boolean;
   subject: string;
   title: string;
   content: string;
@@ -218,21 +302,30 @@ async function sendStudentEmail({
 
   const alunoUrl = getAppAlunoUrl();
   const safeStudentName = escapeHtml(studentName);
-  const safeProfessorName = escapeHtml(professorName || "seu professor");
+  const safeSenderName = escapeHtml(senderName);
+  const safeSenderRoleLabel = escapeHtml(senderRoleLabel);
   const safeTitle = escapeHtml(title);
   const safeContent = escapeHtml(content).replaceAll("\n", "<br />");
+  const avatarHtml = buildEmailAvatarHtml(senderName, senderImage);
+
+  const chatGuidance = sentByProfessor
+    ? `Se precisar falar sobre treino, use o chat da plataforma. Assim, ${senderName} consegue acompanhar seu histórico e responder com mais contexto.`
+    : "Se precisar falar sobre treino, use o chat da plataforma para que o professor responsável acompanhe seu histórico e responda com mais contexto.";
+
+  const automationDisclosure = sentByProfessor
+    ? "Mensagem automática de acompanhamento enviada em nome do seu professor."
+    : "Mensagem automática enviada pela gestão do Funcional VIP Digital.";
 
   const text = [
     `Oi, ${studentName}!`,
     "",
     content,
     "",
-    `Se precisar falar sobre treino, use o chat da plataforma. Assim, ${professorName || "seu professor"} consegue acompanhar seu histórico e responder com mais contexto.`,
+    chatGuidance,
     "Para dúvidas de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.",
     "",
-    professorName || "Seu professor",
-    "Funcional VIP Digital",
-    "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+    `Enviado por: ${senderName} · ${senderRoleLabel}`,
+    automationDisclosure,
     "",
     `Acesse sua área do aluno: ${alunoUrl}`,
   ].join("\n");
@@ -240,6 +333,16 @@ async function sendStudentEmail({
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 18px;">
+          <tr>
+            <td style="vertical-align:middle; padding-right:12px;">${avatarHtml}</td>
+            <td style="vertical-align:middle;">
+              <div style="color:#f5f5f5; font-size:15px; font-weight:bold;">${safeSenderName}</div>
+              <div style="color:#D4A373; font-size:12px; margin-top:3px;">${safeSenderRoleLabel} · Funcional VIP Digital</div>
+            </td>
+          </tr>
+        </table>
+
         <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
 
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
@@ -251,7 +354,7 @@ async function sendStudentEmail({
         </p>
 
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          Se precisar falar sobre treino, use o chat da plataforma. Assim, <strong>${safeProfessorName}</strong> consegue acompanhar seu histórico e responder com mais contexto.
+          ${escapeHtml(chatGuidance)}
         </p>
 
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
@@ -262,12 +365,8 @@ async function sendStudentEmail({
           Acessar minha área
         </a>
 
-        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">
-          ${safeProfessorName}<br />Funcional VIP Digital
-        </p>
-
-        <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">
-          Mensagem automática de acompanhamento enviada em nome do seu professor.
+        <p style="color:#6b6b6b; font-size:11px; margin-top:22px;">
+          ${escapeHtml(automationDisclosure)}
         </p>
       </div>
     </div>
@@ -275,7 +374,7 @@ async function sendStudentEmail({
 
   await sendEmail({
     to,
-    subject,
+    subject: `${senderName} — ${subject}`,
     text,
     html,
   });
@@ -359,10 +458,10 @@ async function sendProfessorEmail({
 
 async function notifyTodayWorkout({
   workout,
-  authorId,
+  managementAuthorId,
 }: {
   workout: WorkoutForEngagement;
-  authorId: string;
+  managementAuthorId: string;
 }) {
   const eventType = "WORKOUT_DAY_REMINDER";
   const eventKey = workout.id;
@@ -373,26 +472,42 @@ async function notifyTodayWorkout({
 
   const workoutName = workout.workoutPlan?.name || "seu treino";
   const studentName = workout.student?.name || "Aluno";
-  const professorName = workout.student?.user?.name || "seu professor";
+  const identity = getStudentCommunicationIdentity(
+    workout.student,
+    managementAuthorId
+  );
   const title = "Seu treino de hoje está te esperando 💪";
-  const content = [
-    `Oi, ${studentName}! Aqui é ${professorName}.`,
-    "",
-    `O treino de hoje já está disponível: ${workoutName}.`,
-    "Quando puder, reserve esse momento para você e faça tudo com atenção às orientações.",
-    "Se alguma coisa não estiver clara ou se precisar adaptar, fale comigo pelo chat da plataforma antes de executar.",
-    "",
-    "Bom treino! Estou acompanhando sua evolução.",
-    professorName,
-    "Funcional VIP Digital",
-    "Mensagem automática de acompanhamento enviada em nome do seu professor.",
-  ].join("\n");
+
+  const content = identity.sentByProfessor
+    ? [
+        `Oi, ${studentName}! Aqui é ${identity.senderName}.`,
+        "",
+        `O treino de hoje já está disponível: ${workoutName}.`,
+        "Quando puder, reserve esse momento para você e faça tudo com atenção às orientações.",
+        "Se alguma coisa não estiver clara ou se precisar adaptar, fale comigo pelo chat da plataforma antes de executar.",
+        "",
+        "Bom treino! Estou acompanhando sua evolução.",
+        identity.senderName,
+        "Funcional VIP Digital",
+        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+      ].join("\n")
+    : [
+        `Oi, ${studentName}! Aqui é a equipe do Funcional VIP Digital.`,
+        "",
+        `O treino de hoje já está disponível: ${workoutName}.`,
+        "Quando puder, reserve esse momento para você e faça tudo com atenção às orientações.",
+        "Se alguma coisa não estiver clara ou se precisar adaptar, fale com o professor responsável pelo chat da plataforma antes de executar.",
+        "",
+        "Bom treino! Seguimos acompanhando sua evolução.",
+        "Equipe Funcional VIP Digital",
+        "Mensagem automática de acompanhamento.",
+      ].join("\n");
 
   const notice = await createNotice({
     title,
     content,
     targetRole: "ALUNO",
-    authorId,
+    authorId: identity.authorId,
     studentId: workout.studentId,
     expiresAt: addDays(1),
   });
@@ -413,12 +528,12 @@ async function notifyMissedWorkoutLevel({
   student,
   missedWorkouts,
   level,
-  authorId,
+  managementAuthorId,
 }: {
   student: StudentForEngagement;
   missedWorkouts: WorkoutForEngagement[];
   level: 1 | 2 | 3;
-  authorId: string;
+  managementAuthorId: string;
 }) {
   const latestMissedWorkout = missedWorkouts
     .slice()
@@ -438,7 +553,7 @@ async function notifyMissedWorkoutLevel({
   const studentName = student.name || "Aluno";
   const missedCount = missedWorkouts.length;
 
-  const professorName = student.user?.name || "seu professor";
+  const identity = getStudentCommunicationIdentity(student, managementAuthorId);
 
   const title =
     level === 1
@@ -450,7 +565,7 @@ async function notifyMissedWorkoutLevel({
   const content =
     level === 1
       ? [
-          `Oi, ${studentName}! Aqui é ${professorName}.`,
+          `Oi, ${studentName}! Aqui é ${identity.senderName}.`,
           "",
           "Vi que o último treino não foi concluído. Isso pode acontecer e não apaga o caminho que você já começou.",
           "Quando estiver pronto, retome pelo próximo treino disponível. Se algo dificultou a execução, me conte pelo chat para eu considerar no seu acompanhamento.",
@@ -459,7 +574,7 @@ async function notifyMissedWorkoutLevel({
         ].join("\n")
       : level === 2
         ? [
-            `Oi, ${studentName}! Aqui é ${professorName}.`,
+            `Oi, ${studentName}! Aqui é ${identity.senderName}.`,
             "",
             `Notei que alguns treinos ficaram sem conclusão (${missedCount} até agora). Antes de pensar apenas em constância, quero entender o que está acontecendo na sua rotina.`,
             "Pode ser tempo, dúvida, dificuldade com algum exercício ou necessidade de ajuste. Fale comigo pelo chat da plataforma para organizarmos uma proposta mais possível para você.",
@@ -467,7 +582,7 @@ async function notifyMissedWorkoutLevel({
             "Você não precisa resolver isso sozinho.",
           ].join("\n")
         : [
-            `Oi, ${studentName}! Aqui é ${professorName}.`,
+            `Oi, ${studentName}! Aqui é ${identity.senderName}.`,
             "",
             `Percebi que ${missedCount} treinos ficaram sem conclusão. Quero evitar que essa sequência vire um afastamento do seu objetivo.`,
             "Vamos conversar pelo chat da plataforma para entender suas barreiras e decidir juntos se precisamos reduzir duração, ajustar exercícios, reorganizar dias ou fazer uma retomada mais leve.",
@@ -479,7 +594,7 @@ async function notifyMissedWorkoutLevel({
     title,
     content,
     targetRole: "ALUNO",
-    authorId,
+    authorId: identity.authorId,
     studentId: student.id,
     expiresAt: addDays(level === 1 ? 7 : 15),
   });
@@ -490,7 +605,10 @@ async function notifyMissedWorkoutLevel({
     studentEmailSent = await sendStudentEmail({
       to: getStudentEmail(student),
       studentName,
-      professorName,
+      senderName: identity.senderName,
+      senderRoleLabel: identity.senderRoleLabel,
+      senderImage: identity.senderImage,
+      sentByProfessor: identity.sentByProfessor,
       subject: title,
       title,
       content,
@@ -530,7 +648,7 @@ async function notifyMissedWorkoutLevel({
       title: professorTitle,
       content: professorContent,
       targetRole: "PROFESSOR",
-      authorId,
+      authorId: managementAuthorId,
       professorId: student.user.id,
       expiresAt: addDays(15),
     });
@@ -569,7 +687,7 @@ async function notifyMissedWorkoutLevel({
       title: gestaoTitle,
       content: gestaoContent,
       targetRole: "GESTOR",
-      authorId,
+      authorId: managementAuthorId,
       expiresAt: addDays(15),
     });
 
@@ -603,9 +721,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const authorId = await getNoticeAuthorId();
+  const managementAuthorId = await getNoticeAuthorId();
 
-  if (!authorId) {
+  if (!managementAuthorId) {
     return NextResponse.json(
       { error: "Nenhum gestor/admin encontrado para assinar os avisos." },
       { status: 400 }
@@ -652,6 +770,8 @@ export async function GET(request: NextRequest) {
               id: true,
               name: true,
               email: true,
+              image: true,
+              role: true,
             },
           },
         },
@@ -698,6 +818,8 @@ export async function GET(request: NextRequest) {
               id: true,
               name: true,
               email: true,
+              image: true,
+              role: true,
             },
           },
         },
@@ -716,7 +838,7 @@ export async function GET(request: NextRequest) {
     try {
       const result = await notifyTodayWorkout({
         workout,
-        authorId,
+        managementAuthorId,
       });
 
       reminderResults.push({
@@ -754,7 +876,7 @@ export async function GET(request: NextRequest) {
         student,
         missedWorkouts: workouts,
         level,
-        authorId,
+        managementAuthorId,
       });
 
       missedResults.push({
