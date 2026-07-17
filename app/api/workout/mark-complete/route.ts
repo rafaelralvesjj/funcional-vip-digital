@@ -522,6 +522,7 @@ async function createWorkoutPreferenceConversation({
     studentId,
     professorId,
     content,
+    source: "WORKOUT_COMPLETION",
     referenceDate,
   });
 
