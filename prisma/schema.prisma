@@ -474,6 +474,7 @@ model StudentTrainingPreference {
   professorId          String?   @map("professor_id")
   sourceConversationId String    @map("source_conversation_id")
   sourceQuestionId     String    @unique @map("source_question_id")
+  source               String    @default("CHAT")
   category             String
   summary              String    @db.Text
   originalMessage      String    @map("original_message") @db.Text
