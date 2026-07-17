@@ -577,6 +577,7 @@ async function maybeRegisterTrainingPreferenceFromStudentQuestion({
     studentId,
     professorId,
     content,
+    source: "CHAT",
   });
 }
 
