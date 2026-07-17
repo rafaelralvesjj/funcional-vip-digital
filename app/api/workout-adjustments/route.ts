@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
+import { sendEmail } from "@/lib/sendEmail";
 
 
 type AdjustmentAction =
@@ -73,6 +74,172 @@ function cleanPositiveInteger(value: unknown, fallback: number): number {
   return Math.round(parsed);
 }
 
+function getAppAlunoUrl(): string {
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://funcional-vip-digital.vercel.app";
+
+  return `${appUrl.replace(/\/$/, "")}/aluno`;
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDatePtBr(date: Date): string {
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function getInitials(name: string): string {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return "FV";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+
+  return `${parts[0][0] || ""}${parts[parts.length - 1][0] || ""}`.toUpperCase();
+}
+
+function buildSenderAvatarHtml(name: string, image?: string | null): string {
+  const safeName = escapeHtml(name);
+  const safeImage =
+    image && /^https?:\/\//i.test(image) ? escapeHtml(image) : "";
+
+  if (safeImage) {
+    return `<img src="${safeImage}" alt="${safeName}" width="52" height="52" style="display:block; width:52px; height:52px; border-radius:999px; object-fit:cover; border:2px solid #D4A373;" />`;
+  }
+
+  return `<div style="width:52px; height:52px; border-radius:999px; background:#2a2119; border:2px solid #D4A373; color:#D4A373; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:17px;">${escapeHtml(
+    getInitials(name)
+  )}</div>`;
+}
+
+async function sendWorkoutAdjustmentEmail({
+  to,
+  studentName,
+  professorName,
+  professorImage,
+  workoutName,
+  workoutDate,
+  objective,
+  studentMessage,
+}: {
+  to: string | null;
+  studentName: string;
+  professorName: string;
+  professorImage?: string | null;
+  workoutName: string;
+  workoutDate: Date;
+  objective: string;
+  studentMessage: string;
+}): Promise<boolean> {
+  if (!to) return false;
+
+  const alunoUrl = getAppAlunoUrl();
+  const safeStudentName = escapeHtml(studentName);
+  const safeProfessorName = escapeHtml(professorName);
+  const safeWorkoutName = escapeHtml(workoutName);
+  const safeWorkoutDate = escapeHtml(formatDatePtBr(workoutDate));
+  const safeObjective = escapeHtml(objective);
+  const safeStudentMessage = escapeHtml(studentMessage).replaceAll("\n", "<br />");
+  const avatarHtml = buildSenderAvatarHtml(professorName, professorImage);
+  const subject = `${professorName}: seu treino foi ajustado`;
+
+  const text = [
+    `Oi, ${studentName}!`,
+    "",
+    studentMessage,
+    "",
+    `Treino atualizado: ${workoutName}`,
+    `Data: ${formatDatePtBr(workoutDate)}`,
+    objective ? `Objetivo: ${objective}` : "",
+    "",
+    "Acesse sua área do aluno para conferir os exercícios, séries, repetições e orientações atualizadas.",
+    `Acessar treino: ${alunoUrl}`,
+    "",
+    "Caso queira comentar como foi a adaptação ou tenha alguma dúvida, use o chat da plataforma.",
+    "",
+    professorName,
+    "Professor · Funcional VIP Digital",
+    "Mensagem automática enviada após a revisão e confirmação do professor.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif; background:#0a0a0a; padding:24px;">
+      <div style="max-width:580px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:18px; overflow:hidden;">
+        <div style="padding:22px 24px; border-bottom:1px solid #2a2a2a; display:flex; align-items:center; gap:14px;">
+          ${avatarHtml}
+          <div>
+            <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.3;">${safeProfessorName}</div>
+            <div style="color:#D4A373; font-size:12px; margin-top:3px;">Professor · Funcional VIP Digital</div>
+          </div>
+        </div>
+
+        <div style="padding:24px;">
+          <h2 style="color:#D4A373; margin:0 0 16px; font-size:22px;">Seu treino foi ajustado</h2>
+
+          <p style="color:#f5f5f5; font-size:15px; line-height:1.6;">
+            Oi, <strong>${safeStudentName}</strong>!
+          </p>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.7;">
+            ${safeStudentMessage}
+          </p>
+
+          <div style="background:#1a1510; border:1px solid #7c5228; border-radius:12px; padding:16px; margin:18px 0;">
+            <div style="color:#D4A373; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">Treino atualizado</div>
+            <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.4;">${safeWorkoutName}</div>
+            <div style="color:#b8b8b8; font-size:13px; margin-top:6px;">Data: ${safeWorkoutDate}</div>
+            ${
+              safeObjective
+                ? `<div style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:8px;">Objetivo: ${safeObjective}</div>`
+                : ""
+            }
+          </div>
+
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+            Acesse sua área para conferir os exercícios, séries, repetições e orientações atualizadas antes de iniciar.
+          </p>
+
+          <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:4px;">
+            Ver treino atualizado
+          </a>
+
+          <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin-top:22px;">
+            Caso queira comentar como foi a adaptação ou tenha alguma dúvida, use o chat da plataforma.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:20px;">
+            ${safeProfessorName}<br />Professor · Funcional VIP Digital
+          </p>
+
+          <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">
+            Mensagem automática enviada após a revisão e confirmação do professor.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  await sendEmail({ to, subject, text, html });
+
+  return true;
+}
+
 function getCurrentWeekRange() {
   const now = new Date();
   const date = new Date(now);
@@ -113,9 +280,11 @@ async function getAdjustmentContext({
           userId: true,
           notes: true,
           contractedTrainingDaysPerMonth: true,
+          email: true,
           userAuth: {
             select: {
               birthDate: true,
+              email: true,
             },
           },
         },
@@ -683,6 +852,26 @@ export async function POST(req: NextRequest) {
         "Mensagem automática enviada após a revisão do professor.",
       ].join("\n\n");
 
+    const professorId =
+      context.preference.professorId || (role === "TEACHER" ? userId : null);
+    const professor = professorId
+      ? await prisma.user.findUnique({
+          where: { id: professorId },
+          select: {
+            name: true,
+            image: true,
+          },
+        })
+      : null;
+    const professorName =
+      cleanText(professor?.name) ||
+      (role === "TEACHER" ? cleanText(sessionUser.name) : "Equipe Funcional VIP Digital");
+    const professorImage = professor?.image || null;
+    const studentEmail =
+      cleanText(context.preference.student.email) ||
+      cleanText(context.preference.student.userAuth?.email) ||
+      null;
+
     await prisma.$transaction(async (tx) => {
       const adaptedPlan = await tx.workoutPlan.create({
         data: {
@@ -776,11 +965,46 @@ export async function POST(req: NextRequest) {
       });
     });
 
+    let emailSent = false;
+    let emailStatus: "SENT" | "NO_EMAIL" | "FAILED" = studentEmail
+      ? "FAILED"
+      : "NO_EMAIL";
+
+    if (studentEmail) {
+      try {
+        emailSent = await sendWorkoutAdjustmentEmail({
+          to: studentEmail,
+          studentName: context.preference.student.name,
+          professorName,
+          professorImage,
+          workoutName: cleanText(proposal.name) || plan.name,
+          workoutDate: context.workout.date,
+          objective: cleanText(proposal.objective) || cleanText(plan.objective),
+          studentMessage,
+        });
+        emailStatus = emailSent ? "SENT" : "FAILED";
+      } catch (emailError) {
+        console.error(
+          "Falha ao enviar e-mail de treino ajustado ao aluno:",
+          emailError
+        );
+        emailStatus = "FAILED";
+      }
+    }
+
+    const responseMessage =
+      emailStatus === "SENT"
+        ? "Treino pendente ajustado. O treino concluído permaneceu intacto e o aluno foi avisado no chat e por e-mail."
+        : emailStatus === "NO_EMAIL"
+          ? "Treino pendente ajustado e aviso registrado no chat. O aluno não possui e-mail cadastrado para receber a notificação."
+          : "Treino pendente ajustado e aviso registrado no chat, mas não foi possível enviar o e-mail neste momento.";
+
     return NextResponse.json({
       ok: true,
       action: "ADAPTED",
-      message:
-        "Treino pendente ajustado. O treino concluído permaneceu intacto.",
+      emailSent,
+      emailStatus,
+      message: responseMessage,
     });
   } catch (error) {
     console.error("POST /api/workout-adjustments error:", error);
