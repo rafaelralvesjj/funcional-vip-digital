@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 
 type ConversationRole = "GESTOR" | "ADMIN" | "TEACHER" | "PROFESSOR";
 
@@ -100,6 +100,7 @@ type Props = {
   currentRole: ConversationRole;
   emptyMessage?: string;
   allowReply?: boolean;
+  initialExpandedConversationId?: string | null;
 };
 
 function formatDateTime(dateStr: string): string {
@@ -255,10 +256,13 @@ export default function DashboardConversationList({
   currentRole,
   emptyMessage = "Nenhuma conversa encontrada.",
   allowReply = true,
+  initialExpandedConversationId = null,
 }: Props) {
   const router = useRouter();
 
-  const [expandedConversationId, setExpandedConversationId] = useState<string | null>(null);
+  const [expandedConversationId, setExpandedConversationId] = useState<string | null>(
+    initialExpandedConversationId
+  );
   const [replyContentById, setReplyContentById] = useState<Record<string, string>>({});
   const [replyFileById, setReplyFileById] = useState<Record<string, File | null>>({});
   const [sendingConversationId, setSendingConversationId] = useState<string | null>(null);
@@ -270,6 +274,20 @@ export default function DashboardConversationList({
   const [adjustmentDraftByConversationId, setAdjustmentDraftByConversationId] = useState<
     Record<string, AdjustmentDraftState | null>
   >({});
+
+  useEffect(() => {
+    if (!initialExpandedConversationId) return;
+
+    setExpandedConversationId(initialExpandedConversationId);
+
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById(`conversation-${initialExpandedConversationId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+
+    return () => window.clearTimeout(timer);
+  }, [initialExpandedConversationId]);
 
   function renderChatAttachmentViewer(
     item: { id?: string | null; imageUrl?: string | null; videoUrl?: string | null },
@@ -777,6 +795,7 @@ export default function DashboardConversationList({
         return (
           <div
             key={conversation.id}
+            id={`conversation-${conversation.id}`}
             className="bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden"
           >
             <div className="p-4">
