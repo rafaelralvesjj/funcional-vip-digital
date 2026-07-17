@@ -65,6 +65,7 @@ type Props = {
   students: TeacherStudentOption[];
   studentConversations: ConversationItem[];
   managementConversations: ConversationItem[];
+  initialConversationId?: string | null;
 };
 
 type ActiveTab = "students" | "management";
@@ -74,6 +75,7 @@ export default function TeacherConversationCenter({
   students,
   studentConversations,
   managementConversations,
+  initialConversationId = null,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("students");
 
@@ -165,6 +167,9 @@ export default function TeacherConversationCenter({
                 : "Nenhuma conversa com a gestão encontrada."
             }
             allowReply={true}
+            initialExpandedConversationId={
+              isStudentsTab ? initialConversationId : null
+            }
           />
         </div>
       </div>
