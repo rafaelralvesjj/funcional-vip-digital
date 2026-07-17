@@ -29,6 +29,7 @@ export type RegisterTrainingPreferenceInput = {
   studentId: string;
   professorId?: string | null;
   content: string;
+  source?: "CHAT" | "WORKOUT_COMPLETION";
   referenceDate?: Date;
 };
 
@@ -367,6 +368,7 @@ export async function registerTrainingPreferenceFromStudentMessage({
   studentId,
   professorId,
   content,
+  source = "CHAT",
   referenceDate = new Date(),
 }: RegisterTrainingPreferenceInput) {
   const careClassification = classifyCareSignal(content);
@@ -441,6 +443,7 @@ export async function registerTrainingPreferenceFromStudentMessage({
       update: {
         professorId: effectiveProfessorId,
         sourceConversationId,
+        source,
         category: preference.category,
         summary: preference.summary,
         originalMessage: content,
@@ -456,6 +459,7 @@ export async function registerTrainingPreferenceFromStudentMessage({
         professorId: effectiveProfessorId,
         sourceConversationId,
         sourceQuestionId: sourceMessageId,
+        source,
         category: preference.category,
         summary: preference.summary,
         originalMessage: content,
