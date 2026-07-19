@@ -18,7 +18,7 @@ export default async function BibliotecaExerciciosPage() {
 
   return (
     <div className="space-y-6 p-6 min-h-screen bg-[#0a0a0a]">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#f5f5f5]">
             🏋️ Biblioteca de Exercícios
@@ -27,6 +27,19 @@ export default async function BibliotecaExerciciosPage() {
             {exercises.length} exercício(s) cadastrado(s)
           </p>
         </div>
+
+        {["GESTOR", "ADMIN"].includes(String(session.user.role || "").toUpperCase()) && (
+          <a
+            href="/api/exercise-library/export"
+            className="inline-flex items-center justify-center rounded-xl bg-[#ff6b00] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e85f00]"
+          >
+            ↓ Exportar imagens para IA
+          </a>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-[#2a2a2a] bg-[#111111] p-4 text-sm text-[#c7c7c7]">
+        O arquivo ZIP inclui uma imagem por exercício e um manifesto CSV com os dados da biblioteca para organizar a produção dos vídeos no CapCut.
       </div>
 
       <ExerciseGrid exercises={exercises} />
