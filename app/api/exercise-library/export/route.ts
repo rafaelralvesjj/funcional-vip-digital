@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import JSZip from "jszip";
@@ -10,6 +11,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+const EXERCISES_PER_ZIP = 10;
+const MAX_BATCH_SIZE = 10;
+
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
   if (value === "PROFESSOR") return "TEACHER";
@@ -19,6 +23,11 @@ function normalizeRole(role?: string | null): string {
 
 function canExport(role?: string | null): boolean {
   return ["GESTOR", "ADMIN"].includes(normalizeRole(role));
+}
+
+function positiveInteger(value: string | null, fallback: number): number {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function slugify(value: string): string {
@@ -79,7 +88,7 @@ async function readImage(
         extension: getExtensionFromUrl(normalized) || ".jpg",
       };
     } catch {
-      // Em produção, o arquivo pode estar hospedado fora do filesystem da função.
+      // Na Vercel, a imagem pode estar em uma URL persistente.
     }
   }
 
@@ -88,7 +97,10 @@ async function readImage(
       ? normalized
       : new URL(normalized, origin).toString();
 
-  const response = await fetch(absoluteUrl, { cache: "no-store" });
+  const response = await fetch(absoluteUrl, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(30_000),
+  });
 
   if (!response.ok) {
     throw new Error(`Falha ao baixar imagem (${response.status}).`);
@@ -103,9 +115,7 @@ async function readImage(
 }
 
 function compactText(value: unknown): string {
-  return String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
 function buildNarration(exercise: {
@@ -116,10 +126,7 @@ function buildNarration(exercise: {
   const instructions = compactText(exercise.instructions);
   const safety = compactText(exercise.safetyNotes);
 
-  if (instructions && safety) {
-    return `${instructions} ${safety}`;
-  }
-
+  if (instructions && safety) return `${instructions} ${safety}`;
   if (instructions) return instructions;
   if (safety) return safety;
 
@@ -136,7 +143,6 @@ function buildVideoPrompt(exercise: {
   commonMistakes: string | null;
   safetyNotes: string | null;
   contraindications: string | null;
-  sequenceFramesCount: number | null;
   sequencePrompt: string | null;
 }): string {
   const narration = buildNarration(exercise);
@@ -145,7 +151,7 @@ function buildVideoPrompt(exercise: {
     `VÍDEO DO EXERCÍCIO: ${exercise.name}`,
     "",
     "Use a imagem principal como imagem de origem e a imagem de sequência apenas como referência técnica do movimento.",
-    "Anime mantendo exatamente a mesma pessoa, rosto, roupa, equipamento, iluminação, cenário e identidade visual.",
+    "Mantenha a mesma pessoa, roupa, equipamento, cenário, iluminação e identidade visual.",
     "Não altere anatomia, proporções corporais, mãos, pés, equipamento ou fundo.",
     "",
     "MOVIMENTO:",
@@ -161,23 +167,17 @@ function buildVideoPrompt(exercise: {
     "",
     "PADRÃO DO VÍDEO:",
     "- Duração entre 6 e 8 segundos.",
-    "- Mostrar de 2 a 3 repetições controladas, quando o exercício for dinâmico.",
-    "- Se o exercício for isométrico, mostrar entrada segura, sustentação e saída controlada.",
+    "- Mostrar de 2 a 3 repetições controladas quando o exercício for dinâmico.",
+    "- Para exercício isométrico, mostrar entrada segura, sustentação e saída controlada.",
     "- Câmera estável e corpo inteiro visível.",
-    "- Movimento contínuo, natural, didático e tecnicamente coerente.",
-    "- Sem texto na tela, sem legendas, sem logotipo, sem música e sem efeitos exagerados.",
-    "- Não inventar fases diferentes da execução correta.",
+    "- Sem texto, legendas, logotipo, música ou efeitos exagerados.",
     "",
     "NARRAÇÃO:",
-    '- Gerar voz em português brasileiro nativo, dicção clara, tom profissional de professor de educação física e sem sotaque estrangeiro.',
+    "- Voz em português brasileiro nativo, dicção clara e tom profissional.",
     `- Falar exatamente: "${narration}"`,
     "",
-    "ENTREGA:",
-    "- Entregar um único vídeo final com a narração sincronizada.",
-    "- Preservar o visual premium escuro do Funcional VIP Digital.",
-    "",
     exercise.sequencePrompt
-      ? `REFERÊNCIA ADICIONAL CADASTRADA:\n${compactText(exercise.sequencePrompt)}`
+      ? `REFERÊNCIA ADICIONAL:\n${compactText(exercise.sequencePrompt)}`
       : "",
   ]
     .filter(Boolean)
@@ -196,9 +196,29 @@ export async function GET(req: NextRequest) {
     const includeInactive =
       req.nextUrl.searchParams.get("includeInactive") === "true";
 
+    const requestedBatch = positiveInteger(
+      req.nextUrl.searchParams.get("batch"),
+      1
+    );
+
+    const requestedLimit = positiveInteger(
+      req.nextUrl.searchParams.get("limit"),
+      EXERCISES_PER_ZIP
+    );
+
+    const batchSize = Math.min(requestedLimit, MAX_BATCH_SIZE);
+    const where = includeInactive ? {} : { active: true };
+
+    const totalExercises = await prisma.exerciseLibrary.count({ where });
+    const totalBatches = Math.max(1, Math.ceil(totalExercises / batchSize));
+    const batch = Math.min(requestedBatch, totalBatches);
+    const skip = (batch - 1) * batchSize;
+
     const exercises = await prisma.exerciseLibrary.findMany({
-      where: includeInactive ? {} : { active: true },
+      where,
       orderBy: { name: "asc" },
+      skip,
+      take: batchSize,
       select: {
         id: true,
         name: true,
@@ -207,9 +227,6 @@ export async function GET(req: NextRequest) {
         imageUrl: true,
         videoUrl: true,
         sequenceImageUrl: true,
-        sequenceImageLabel: true,
-        sequenceImageNotes: true,
-        sequenceFramesCount: true,
         sequencePrompt: true,
         active: true,
         equipmentTags: true,
@@ -221,14 +238,25 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const zip = new JSZip();
-    const rootFolder = zip.folder("FUNCIONAL_VIP_EXPORT_IA");
-    const imagesFolder = rootFolder?.folder("imagens");
-    const promptsFolder = rootFolder?.folder("prompts");
+    if (exercises.length === 0) {
+      return NextResponse.json(
+        { error: "Nenhum exercício encontrado para este lote." },
+        { status: 404 }
+      );
+    }
 
-    const manifestRows: string[][] = [
+    const batchLabel = String(batch).padStart(2, "0");
+    const totalLabel = String(totalBatches).padStart(2, "0");
+    const zip = new JSZip();
+    const root = zip.folder(
+      `FUNCIONAL_VIP_EXPORT_IA_PARTE_${batchLabel}_DE_${totalLabel}`
+    );
+    const imagesFolder = root?.folder("imagens");
+    const promptsFolder = root?.folder("prompts");
+
+    const rows: string[][] = [
       [
-        "ordem",
+        "ordem_geral",
         "id",
         "nome",
         "slug",
@@ -240,82 +268,62 @@ export async function GET(req: NextRequest) {
         "arquivo_prompt",
         "status_video_no_sistema",
         "video_url",
-        "ativo",
-        "equipamentos",
-        "nivel",
-        "descricao",
-        "como_executar",
-        "erros_comuns",
-        "cuidados",
-        "contraindicacoes",
       ],
     ];
 
     let principalExported = 0;
-    let principalMissing = 0;
-    let principalFailed = 0;
     let sequenceExported = 0;
-    let sequenceMissing = 0;
-    let sequenceFailed = 0;
-    let promptsExported = 0;
-    let videosRegistered = 0;
+    let failures = 0;
 
     for (let index = 0; index < exercises.length; index += 1) {
       const exercise = exercises[index];
-      const order = String(index + 1).padStart(3, "0");
+      const globalOrder = skip + index + 1;
       const slug = slugify(exercise.name);
 
       let principalFileName = "";
       let principalStatus = "SEM_IMAGEM";
 
-      if (!exercise.imageUrl) {
-        principalMissing += 1;
-      } else {
+      if (exercise.imageUrl) {
         try {
           const image = await readImage(exercise.imageUrl, req.nextUrl.origin);
           principalFileName = `${slug}__principal${image.extension}`;
-          imagesFolder?.file(principalFileName, image.buffer);
+          imagesFolder?.file(principalFileName, image.buffer, {
+            compression: "STORE",
+          });
           principalExported += 1;
           principalStatus = "EXPORTADA";
         } catch (error: any) {
-          principalFailed += 1;
-          principalStatus = `ERRO: ${String(
-            error?.message || "falha ao baixar imagem principal"
-          )}`;
+          failures += 1;
+          principalStatus = `ERRO: ${String(error?.message || "falha")}`;
         }
       }
 
       let sequenceFileName = "";
       let sequenceStatus = "SEM_IMAGEM";
 
-      if (!exercise.sequenceImageUrl) {
-        sequenceMissing += 1;
-      } else {
+      if (exercise.sequenceImageUrl) {
         try {
           const image = await readImage(
             exercise.sequenceImageUrl,
             req.nextUrl.origin
           );
           sequenceFileName = `${slug}__sequencia${image.extension}`;
-          imagesFolder?.file(sequenceFileName, image.buffer);
+          imagesFolder?.file(sequenceFileName, image.buffer, {
+            compression: "STORE",
+          });
           sequenceExported += 1;
           sequenceStatus = "EXPORTADA";
         } catch (error: any) {
-          sequenceFailed += 1;
-          sequenceStatus = `ERRO: ${String(
-            error?.message || "falha ao baixar imagem sequencial"
-          )}`;
+          failures += 1;
+          sequenceStatus = `ERRO: ${String(error?.message || "falha")}`;
         }
       }
 
       const promptFileName = `${slug}.txt`;
       promptsFolder?.file(promptFileName, buildVideoPrompt(exercise));
-      promptsExported += 1;
 
-      if (exercise.videoUrl) videosRegistered += 1;
-
-      manifestRows.push([
-        order,
+      rows.push([
+        String(globalOrder),
         exercise.id,
         exercise.name,
         slug,
@@ -327,79 +335,53 @@ export async function GET(req: NextRequest) {
         promptFileName,
         exercise.videoUrl ? "VIDEO_CADASTRADO" : "VIDEO_PENDENTE",
         exercise.videoUrl || "",
-        exercise.active ? "SIM" : "NAO",
-        exercise.equipmentTags || "",
-        exercise.levelTags || "",
-        exercise.description || "",
-        exercise.instructions || "",
-        exercise.commonMistakes || "",
-        exercise.safetyNotes || "",
-        exercise.contraindications || "",
       ]);
     }
 
     const csv =
-      "\uFEFF" +
-      manifestRows.map((row) => row.map(csvCell).join(";")).join("\n");
+      "\uFEFF" + rows.map((row) => row.map(csvCell).join(";")).join("\n");
 
-    rootFolder?.file("manifesto.csv", csv);
-    rootFolder?.file("status.csv", csv);
-
-    rootFolder?.file(
+    root?.file("manifesto.csv", csv);
+    root?.file("status.csv", csv);
+    root?.file(
       "LEIA-ME.txt",
       [
-        "EXPORTAÇÃO PARA GERAÇÃO DE VÍDEOS — FUNCIONAL VIP DIGITAL",
+        "EXPORTAÇÃO PARA VÍDEOS — FUNCIONAL VIP DIGITAL",
         "",
-        `Exercícios encontrados: ${exercises.length}`,
+        `Parte: ${batch} de ${totalBatches}`,
+        `Exercícios neste pacote: ${exercises.length}`,
+        `Faixa da biblioteca: ${skip + 1} até ${skip + exercises.length}`,
         `Imagens principais exportadas: ${principalExported}`,
-        `Imagens principais ausentes: ${principalMissing}`,
-        `Falhas nas imagens principais: ${principalFailed}`,
         `Imagens sequenciais exportadas: ${sequenceExported}`,
-        `Imagens sequenciais ausentes: ${sequenceMissing}`,
-        `Falhas nas imagens sequenciais: ${sequenceFailed}`,
-        `Prompts de vídeo gerados: ${promptsExported}`,
-        `Vídeos já cadastrados no sistema: ${videosRegistered}`,
+        `Falhas de imagem: ${failures}`,
         "",
-        "ESTRUTURA DO PACOTE",
-        "- imagens/: contém a imagem principal e a sequência de cada exercício.",
-        "- prompts/: contém um prompt individual para gerar o vídeo no CapCut.",
-        "- manifesto.csv e status.csv: mostram o que foi exportado e o que ainda está pendente.",
+        "Use __principal como origem no CapCut.",
+        "Use __sequencia como referência da execução.",
+        "O TXT de mesmo nome contém o prompt individual.",
         "",
-        "COMO USAR NO CAPCUT",
-        "1. Abra a pasta imagens.",
-        "2. Escolha o arquivo terminado em __principal como imagem de origem.",
-        "3. Consulte o arquivo terminado em __sequencia para conferir a execução.",
-        "4. Abra o TXT de mesmo nome dentro da pasta prompts.",
-        "5. Copie e cole o prompt na ferramenta de imagem para vídeo.",
-        "6. Salve o vídeo com o nome do exercício, por exemplo: agachamento-livre.mp4.",
-        "",
-        "OBSERVAÇÃO",
-        "O CapCut normalmente gera um exercício por vez. O ZIP organiza o trabalho, mas não envia todos os exercícios automaticamente para o CapCut.",
+        `Depois desta parte, baixe a parte ${batch < totalBatches ? batch + 1 : "finalizada"}.`,
       ].join("\n")
     );
 
-    const zipBuffer = await zip.generateAsync({
-      type: "nodebuffer",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 },
+    const zipBytes = await zip.generateAsync({
+      type: "uint8array",
+      compression: "STORE",
     });
 
-    const date = new Date().toISOString().slice(0, 10);
-
-    const zipArrayBuffer = new ArrayBuffer(zipBuffer.byteLength);
-    new Uint8Array(zipArrayBuffer).set(zipBuffer);
+    const zipArrayBuffer = zipBytes.buffer.slice(
+      zipBytes.byteOffset,
+      zipBytes.byteOffset + zipBytes.byteLength
+    ) as ArrayBuffer;
 
     return new NextResponse(zipArrayBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="funcional-vip-export-ia-${date}.zip"`,
+        "Content-Disposition": `attachment; filename="funcional-vip-export-ia-parte-${batchLabel}-de-${totalLabel}.zip"`,
         "Cache-Control": "no-store",
-        "X-Principal-Exported": String(principalExported),
-        "X-Principal-Missing": String(principalMissing),
-        "X-Sequence-Exported": String(sequenceExported),
-        "X-Sequence-Missing": String(sequenceMissing),
-        "X-Prompts-Exported": String(promptsExported),
+        "X-Export-Batch": String(batch),
+        "X-Export-Total-Batches": String(totalBatches),
+        "X-Export-Exercises": String(exercises.length),
       },
     });
   } catch (error: any) {
@@ -407,7 +389,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
-        error: "Não foi possível exportar a biblioteca para IA.",
+        error: "Não foi possível exportar este lote da biblioteca.",
         message: error?.message,
       },
       { status: 500 }
