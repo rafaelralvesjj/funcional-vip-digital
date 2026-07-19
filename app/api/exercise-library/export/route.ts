@@ -195,7 +195,12 @@ export async function GET(req: NextRequest) {
     });
 
     const date = new Date().toISOString().slice(0, 10);
-    return new NextResponse(zipBuffer, {
+
+    // Converte o Buffer do Node.js em ArrayBuffer real, aceito pelo NextResponse.
+    const zipArrayBuffer = new ArrayBuffer(zipBuffer.byteLength);
+    new Uint8Array(zipArrayBuffer).set(zipBuffer);
+
+    return new NextResponse(zipArrayBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
