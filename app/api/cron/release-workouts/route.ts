@@ -371,7 +371,7 @@ export async function GET(request: NextRequest) {
             in: planIds,
           },
           status: {
-            in: ["PRE_PLANEJADO", "AGUARDANDO_REVISAO"],
+            in: ["PRE_PLANEJADO", "PRECISA_REVISAO", "AGUARDANDO_REVISAO"],
           },
         },
         data: {
