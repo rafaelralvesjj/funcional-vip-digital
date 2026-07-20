@@ -449,7 +449,7 @@ export default function AlunoPage() {
     if (!canValidateWorkoutDay(selectedDay)) {
       setMessage({
         type: "error",
-        text: "O prazo deste treino encerrou na sexta-feira às 23h59. Ele permanece disponível para consulta, mas está registrado como não realizado.",
+        text: "O prazo para validar este treino já foi encerrado. Você pode visualizar o treino, mas não pode mais marcar como concluído.",
       });
       setShowWorkoutModal(false);
       setTimeout(() => setMessage(null), 5000);
@@ -932,6 +932,9 @@ export default function AlunoPage() {
       return workoutStr === ds && w.status === "CONCLUIDO";
     });
   }
+  function hasPlan(day: number): boolean {
+    return getPlanForDay(day) !== null;
+  }
   function isNotCompletedInClosedWeek(day: number): boolean {
     if (!hasPlan(day) || isCompleted(day)) return false;
 
@@ -939,10 +942,6 @@ export default function AlunoPage() {
     selectedDate.setHours(0, 0, 0, 0);
 
     return selectedDate < getStartOfCurrentWeek();
-  }
-
-  function hasPlan(day: number): boolean {
-    return getPlanForDay(day) !== null;
   }
   function getCommercialUiState(): string {
     return String(dashboardSummary?.uiState || "").toUpperCase();
@@ -1188,7 +1187,7 @@ export default function AlunoPage() {
                   const sel = selectedDay === day;
                   const done = isCompleted(day);
                   const plan = hasPlan(day);
-                  const notDone = isNotCompletedInClosedWeek(day);
+                  const notCompleted = isNotCompletedInClosedWeek(day);
                   const dayDate = new Date(currentYear, currentMonth, day);
                   dayDate.setHours(0, 0, 0, 0);
                   const isFutureHidden = dayDate >= getStartOfNextWeek();
@@ -1200,9 +1199,9 @@ export default function AlunoPage() {
                          "text-[#a1a1a1] hover:bg-white/5")}>
                       <span>{day}</span>
                       <div className="flex gap-px mt-px">
-                        {done && <div className="w-[2px] h-[2px] rounded-full bg-green-500" title="Treino concluído" />}
-                        {notDone && <div className="w-[2px] h-[2px] rounded-full bg-red-500/70" title="Treino não realizado" />}
-                        {plan && !done && !notDone && <div className="w-[2px] h-[2px] rounded-full bg-[#D4A373]" title="Treino disponível" />}
+                        {done && <div className="w-[2px] h-[2px] rounded-full bg-green-500" />}
+                        {plan && !done && !notCompleted && <div className="w-[2px] h-[2px] rounded-full bg-[#D4A373]" />}
+                        {notCompleted && <div className="w-[2px] h-[2px] rounded-full bg-red-500/80" />}
                       </div>
                     </button>
                   );
@@ -1213,7 +1212,7 @@ export default function AlunoPage() {
               )}
 
               <p className="text-[8px] text-[#6b6b6b] mt-1 leading-relaxed">
-                Treinos de semanas anteriores ficam disponíveis para consulta, mas só podem ser concluídos até sexta-feira, às 23h59.
+                Treinos de semanas anteriores ficam disponíveis para consulta, mas a conclusão só pode ser feita até sexta-feira, às 23h59.
               </p>
                 </>
               )}
@@ -1634,7 +1633,7 @@ export default function AlunoPage() {
                   </div>
                 )}
 
-                {!isCompleted(selectedDay) && canValidateWorkoutDay(selectedDay) && (
+                {!isCompleted(selectedDay) && (
                   <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-3 space-y-2">
                     <div>
                       <p className="text-[11px] text-[#D4A373] font-semibold">
