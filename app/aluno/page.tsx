@@ -449,7 +449,7 @@ export default function AlunoPage() {
     if (!canValidateWorkoutDay(selectedDay)) {
       setMessage({
         type: "error",
-        text: "O prazo para validar este treino já foi encerrado. Você pode visualizar o treino, mas não pode mais marcar como concluído.",
+        text: "O prazo deste treino encerrou na sexta-feira às 23h59. Ele permanece disponível para consulta, mas está registrado como não realizado.",
       });
       setShowWorkoutModal(false);
       setTimeout(() => setMessage(null), 5000);
@@ -800,15 +800,27 @@ export default function AlunoPage() {
     return startOfNextWeek;
   }
 
+  function getCurrentWeekClosingDate(): Date {
+    const closingDate = new Date(getStartOfCurrentWeek());
+    closingDate.setDate(closingDate.getDate() + 5);
+    closingDate.setHours(0, 0, 0, 0);
+
+    return closingDate;
+  }
+
   function isDateInCurrentValidationWeek(date: Date): boolean {
     const normalized = new Date(date);
     normalized.setHours(0, 0, 0, 0);
 
-    return normalized >= getStartOfCurrentWeek() && normalized < getStartOfNextWeek();
+    return (
+      new Date() < getCurrentWeekClosingDate() &&
+      normalized >= getStartOfCurrentWeek() &&
+      normalized < getCurrentWeekClosingDate()
+    );
   }
 
   function getValidationDeadlineLabel(): string {
-    const deadline = new Date(getStartOfNextWeek());
+    const deadline = new Date(getCurrentWeekClosingDate());
     deadline.setDate(deadline.getDate() - 1);
 
     return deadline.toLocaleDateString("pt-BR", {
@@ -920,6 +932,15 @@ export default function AlunoPage() {
       return workoutStr === ds && w.status === "CONCLUIDO";
     });
   }
+  function isNotCompletedInClosedWeek(day: number): boolean {
+    if (!hasPlan(day) || isCompleted(day)) return false;
+
+    const selectedDate = new Date(currentYear, currentMonth, day);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    return selectedDate < getStartOfCurrentWeek();
+  }
+
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
   }
@@ -1167,6 +1188,7 @@ export default function AlunoPage() {
                   const sel = selectedDay === day;
                   const done = isCompleted(day);
                   const plan = hasPlan(day);
+                  const notDone = isNotCompletedInClosedWeek(day);
                   const dayDate = new Date(currentYear, currentMonth, day);
                   dayDate.setHours(0, 0, 0, 0);
                   const isFutureHidden = dayDate >= getStartOfNextWeek();
@@ -1178,8 +1200,9 @@ export default function AlunoPage() {
                          "text-[#a1a1a1] hover:bg-white/5")}>
                       <span>{day}</span>
                       <div className="flex gap-px mt-px">
-                        {done && <div className="w-[2px] h-[2px] rounded-full bg-green-500" />}
-                        {plan && !done && <div className="w-[2px] h-[2px] rounded-full bg-[#D4A373]" />}
+                        {done && <div className="w-[2px] h-[2px] rounded-full bg-green-500" title="Treino concluído" />}
+                        {notDone && <div className="w-[2px] h-[2px] rounded-full bg-red-500/70" title="Treino não realizado" />}
+                        {plan && !done && !notDone && <div className="w-[2px] h-[2px] rounded-full bg-[#D4A373]" title="Treino disponível" />}
                       </div>
                     </button>
                   );
@@ -1190,7 +1213,7 @@ export default function AlunoPage() {
               )}
 
               <p className="text-[8px] text-[#6b6b6b] mt-1 leading-relaxed">
-                Treinos de semanas anteriores ficam disponíveis para consulta, mas a validação só pode ser feita na semana vigente, até domingo.
+                Treinos de semanas anteriores ficam disponíveis para consulta, mas só podem ser concluídos até sexta-feira, às 23h59.
               </p>
                 </>
               )}
@@ -1478,9 +1501,11 @@ export default function AlunoPage() {
                 <p className="text-[10px] text-[#a1a1a1]">{getWeekDayName(selectedDay!)} - {selectedDay}/{currentMonth + 1}/{currentYear}</p>
                 {selectedDay !== null && (
                   <p className="text-[9px] mt-0.5 text-[#D4A373]">
-                    {canValidateWorkoutDay(selectedDay)
-                      ? `Validação liberada até ${getValidationDeadlineLabel()}`
-                      : "Prazo de validação encerrado. Treino disponível apenas para consulta."}
+                    {isCompleted(selectedDay)
+                      ? "Treino concluído"
+                      : canValidateWorkoutDay(selectedDay)
+                        ? `Disponível para conclusão até sexta-feira, 23h59 (${getValidationDeadlineLabel()})`
+                        : "Prazo encerrado — treino não realizado"}
                   </p>
                 )}
               </div>
@@ -1601,15 +1626,15 @@ export default function AlunoPage() {
             {selectedDay !== null && (
               <div className="px-3 pb-3 space-y-2">
                 {!canValidateWorkoutDay(selectedDay) && !isCompleted(selectedDay) && (
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2">
-                    <p className="text-[10px] text-amber-300 leading-relaxed">
-                      Este treino pertence a uma semana já encerrada. Ele continua disponível para consulta,
-                      mas não pode mais ser validado para não distorcer sua avaliação de adesão.
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-2">
+                    <p className="text-[10px] text-red-200 leading-relaxed">
+                      Este treino não foi concluído dentro da semana programada e está marcado como não realizado.
+                      Ele continua disponível para consulta, mas não poderá mais ser concluído nem contabilizado como treino feito.
                     </p>
                   </div>
                 )}
 
-                {!isCompleted(selectedDay) && (
+                {!isCompleted(selectedDay) && canValidateWorkoutDay(selectedDay) && (
                   <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-3 space-y-2">
                     <div>
                       <p className="text-[11px] text-[#D4A373] font-semibold">
@@ -1712,25 +1737,23 @@ export default function AlunoPage() {
                   </div>
                 )}
 
-                <button
-                  onClick={() => markAsComplete()}
-                  disabled={completing || isCompleted(selectedDay) || !canValidateWorkoutDay(selectedDay)}
-                  className={"w-full text-xs font-semibold py-2.5 rounded-lg transition " + (
-                    isCompleted(selectedDay)
-                      ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default"
-                      : !canValidateWorkoutDay(selectedDay)
-                        ? "bg-[#2a2a2a] text-[#6b6b6b] border border-[#ffffff10] cursor-not-allowed"
-                        : "bg-green-500 text-white hover:bg-green-600"
-                  )}
-                >
-                  {completing
-                    ? "..."
-                    : isCompleted(selectedDay)
-                      ? "Treino Concluido ✓"
-                      : !canValidateWorkoutDay(selectedDay)
-                        ? "Prazo encerrado"
-                        : "Concluir Treino"}
-                </button>
+                {isCompleted(selectedDay) ? (
+                  <div className="w-full text-center text-xs font-semibold py-2.5 rounded-lg bg-green-500/20 text-green-400 border border-green-500/30">
+                    Treino concluído ✓
+                  </div>
+                ) : canValidateWorkoutDay(selectedDay) ? (
+                  <button
+                    onClick={() => markAsComplete()}
+                    disabled={completing}
+                    className="w-full text-xs font-semibold py-2.5 rounded-lg transition bg-green-500 text-white hover:bg-green-600 disabled:opacity-50"
+                  >
+                    {completing ? "Concluindo..." : "Concluir treino"}
+                  </button>
+                ) : (
+                  <div className="w-full text-center text-xs font-semibold py-2.5 rounded-lg bg-[#2a2a2a] text-red-300 border border-red-500/20">
+                    Prazo encerrado — Não realizado
+                  </div>
+                )}
               </div>
             )}
             <div className="p-2.5 border-t border-[#ffffff10]">
