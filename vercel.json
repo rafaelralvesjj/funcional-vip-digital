@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/release-workouts",
-      "schedule": "0 9 * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/workout-engagement",
