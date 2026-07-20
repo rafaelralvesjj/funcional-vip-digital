@@ -14,6 +14,14 @@ type StudentForRelease = {
   user?: {
     name: string | null;
   } | null;
+  contracts: Array<{
+    id: string;
+    workoutsPerWeek: number;
+    workoutsPerMonth: number;
+    professorId: string | null;
+    startDate: Date;
+    endDate: Date;
+  }>;
 };
 
 function getAppLoginUrl(): string {
@@ -273,9 +281,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { startOfWeek, endOfWeek } = getWeekRange(new Date());
+  const now = new Date();
+  const { startOfWeek, endOfWeek } = getWeekRange(now);
 
-  const allActiveStudents = await prisma.student.findMany({
+  const allActiveStudents = (await prisma.student.findMany({
     where: {
       active: true,
     },
@@ -291,21 +300,42 @@ export async function GET(request: NextRequest) {
           name: true,
         },
       },
+      contracts: {
+        where: {
+          status: "ACTIVE",
+          startDate: {
+            lte: now,
+          },
+          endDate: {
+            gte: now,
+          },
+        },
+        select: {
+          id: true,
+          workoutsPerWeek: true,
+          workoutsPerMonth: true,
+          professorId: true,
+          startDate: true,
+          endDate: true,
+        },
+        orderBy: {
+          endDate: "desc",
+        },
+        take: 1,
+      },
     },
     orderBy: {
       name: "asc",
     },
-  });
+  })) as StudentForRelease[];
 
-  /*
-   * Filtramos professor vinculado e dias contratados em memória para evitar
-   * incompatibilidade de tipo quando o Prisma Client do projeto trata userId
-   * como string obrigatória em vez de string nullable.
-   */
   const students = allActiveStudents.filter((student) => {
-    const weeklyLimit = getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth);
+    const activeContract = student.contracts[0];
+    const weeklyLimit = activeContract?.workoutsPerWeek ||
+      getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth);
+    const professorId = activeContract?.professorId || student.userId;
 
-    return Boolean(student.userId) && Boolean(weeklyLimit);
+    return Boolean(professorId) && Number(weeklyLimit) > 0;
   });
 
   const released: any[] = [];
@@ -314,16 +344,27 @@ export async function GET(request: NextRequest) {
 
   for (const student of students) {
     try {
-      const weeklyLimit = getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth);
+      const activeContract = student.contracts[0] || null;
+      const weeklyLimit = Number(
+        activeContract?.workoutsPerWeek ||
+          getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth) ||
+          0
+      );
 
       if (!weeklyLimit) {
-        skipped.push({ studentId: student.id, studentName: student.name, reason: "Sem limite semanal" });
+        skipped.push({
+          studentId: student.id,
+          studentName: student.name,
+          reason: "Contrato ativo sem quantidade semanal configurada",
+        });
         continue;
       }
 
       const plansThisWeek = await prisma.workoutPlan.findMany({
         where: {
           studentId: student.id,
+          active: true,
+          ...(activeContract ? { contractId: activeContract.id } : {}),
           date: {
             gte: startOfWeek,
             lt: endOfWeek,
@@ -334,9 +375,15 @@ export async function GET(request: NextRequest) {
           name: true,
           date: true,
           createdAt: true,
+          workouts: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
         },
         orderBy: {
-          createdAt: "desc",
+          date: "asc",
         },
       });
 
@@ -344,34 +391,38 @@ export async function GET(request: NextRequest) {
         skipped.push({
           studentId: student.id,
           studentName: student.name,
+          contractId: activeContract?.id || null,
           reason: `Semana incompleta: ${plansThisWeek.length}/${weeklyLimit}`,
         });
         continue;
       }
 
-      const previousPlanCount = await prisma.workoutPlan.count({
-        where: {
+      const planIds = plansThisWeek.map((plan: { id: string }) => plan.id);
+      const workoutIds = plansThisWeek.flatMap(
+        (plan: { workouts: Array<{ id: string }> }) =>
+          plan.workouts.map((workout: { id: string }) => workout.id)
+      );
+
+      if (workoutIds.length === 0) {
+        skipped.push({
           studentId: student.id,
-          date: {
-            lt: startOfWeek,
-          },
-        },
-      });
+          studentName: student.name,
+          contractId: activeContract?.id || null,
+          reason: "Os planos existem, mas não possuem registros em workouts",
+        });
+        continue;
+      }
 
-      /*
-       * Libera de fato os treinos da semana para o calendário do aluno.
-       * O aviso/e-mail sozinho não torna o treino visível: a API do aluno
-       * oculta registros com status PRE_PLANEJADO.
-       */
-      const planIds = plansThisWeek.map((plan) => plan.id);
-
+      // Mesma regra usada pela liberação manual da semana:
+      // todos os workouts dos planos selecionados passam para PENDENTE.
       const releasedWorkouts = await prisma.workout.updateMany({
         where: {
+          id: {
+            in: workoutIds,
+          },
+          studentId: student.id,
           workoutPlanId: {
             in: planIds,
-          },
-          status: {
-            in: ["PRE_PLANEJADO", "PRECISA_REVISAO", "AGUARDANDO_REVISAO"],
           },
         },
         data: {
@@ -379,31 +430,63 @@ export async function GET(request: NextRequest) {
         },
       });
 
+      // Confirma no banco antes de avisar o aluno.
+      const hiddenAfterRelease = await prisma.workout.count({
+        where: {
+          id: {
+            in: workoutIds,
+          },
+          status: {
+            not: "PENDENTE",
+          },
+        },
+      });
+
+      if (hiddenAfterRelease > 0) {
+        throw new Error(
+          `Falha ao confirmar a liberação: ${hiddenAfterRelease} treino(s) ainda não estão como PENDENTE.`
+        );
+      }
+
+      const previousPlanCount = await prisma.workoutPlan.count({
+        where: {
+          studentId: student.id,
+          ...(activeContract ? { contractId: activeContract.id } : {}),
+          date: {
+            lt: startOfWeek,
+          },
+        },
+      });
+
+      // Usa o professor do contrato ativo como fonte principal.
+      const studentForNotification: StudentForRelease = {
+        ...student,
+        userId: activeContract?.professorId || student.userId,
+      };
+
       const notification = await notifyWorkoutAvailableForCurrentWeek({
-        student,
+        student: studentForNotification,
         weeklyLimit,
         startOfWeek,
         endOfWeek,
         isFirstWorkoutPackage: previousPlanCount === 0,
-        lastPlanName: plansThisWeek[0]?.name || "Treino da semana",
+        lastPlanName:
+          plansThisWeek[plansThisWeek.length - 1]?.name || "Treino da semana",
       });
 
-      if (notification.skipped) {
-        skipped.push({
-          studentId: student.id,
-          studentName: student.name,
-          reason: notification.reason,
-        });
-      } else {
-        released.push({
-          studentId: student.id,
-          studentName: student.name,
-          weeklyLimit,
-          plansThisWeek: plansThisWeek.length,
-          workoutsReleased: releasedWorkouts.count,
-          emailOrNoticeSent: notification.sent,
-        });
-      }
+      released.push({
+        studentId: student.id,
+        studentName: student.name,
+        contractId: activeContract?.id || null,
+        weeklyLimit,
+        plansThisWeek: plansThisWeek.length,
+        workoutsFound: workoutIds.length,
+        workoutsUpdated: releasedWorkouts.count,
+        releaseConfirmed: true,
+        notificationSent: notification.sent,
+        notificationSkipped: notification.skipped,
+        notificationReason: notification.reason,
+      });
     } catch (error: any) {
       errors.push({
         studentId: student.id,
@@ -418,9 +501,12 @@ export async function GET(request: NextRequest) {
     week: {
       start: startOfWeek.toISOString(),
       end: endOfWeek.toISOString(),
-      label: `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(new Date(endOfWeek.getTime() - 1))}`,
+      label: `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(
+        new Date(endOfWeek.getTime() - 1)
+      )}`,
     },
     totals: {
+      activeStudentsFound: allActiveStudents.length,
       studentsChecked: students.length,
       released: released.length,
       skipped: skipped.length,
@@ -431,3 +517,4 @@ export async function GET(request: NextRequest) {
     errors,
   });
 }
+
