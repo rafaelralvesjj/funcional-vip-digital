@@ -358,6 +358,25 @@ export async function GET(request: NextRequest) {
         },
       });
 
+      /*
+       * Libera de fato os treinos da semana para o calendário do aluno.
+       * O aviso/e-mail sozinho não torna o treino visível: a API do aluno
+       * oculta registros com status PRE_PLANEJADO.
+       */
+      const releasedWorkouts = await prisma.workout.updateMany({
+        where: {
+          studentId: student.id,
+          date: {
+            gte: startOfWeek,
+            lt: endOfWeek,
+          },
+          status: "PRE_PLANEJADO",
+        },
+        data: {
+          status: "PENDENTE",
+        },
+      });
+
       const notification = await notifyWorkoutAvailableForCurrentWeek({
         student,
         weeklyLimit,
@@ -379,6 +398,7 @@ export async function GET(request: NextRequest) {
           studentName: student.name,
           weeklyLimit,
           plansThisWeek: plansThisWeek.length,
+          workoutsReleased: releasedWorkouts.count,
           emailOrNoticeSent: notification.sent,
         });
       }
