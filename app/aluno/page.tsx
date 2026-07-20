@@ -463,7 +463,7 @@ export default function AlunoPage() {
     if (careEventType && !description) {
       setMessage({
         type: "error",
-        text: "Explique em poucas palavras o ajuste, a preferência ou o cuidado antes de encerrar o treino.",
+        text: "Explique em poucas palavras o que aconteceu antes de encerrar o treino com relato de cuidado.",
       });
       setTimeout(() => setMessage(null), 5000);
       return;
@@ -534,10 +534,6 @@ export default function AlunoPage() {
 
   // Envia nova dúvida (fora do modal) ou follow-up (dentro do modal)
   function getCareEventFriendlyMessage(eventType: string): string {
-    if (eventType === "PREFERENCIA_TREINO") {
-      return "Preferência registrada. O professor poderá considerar essa informação no treino pendente e nos próximos planejamentos.";
-    }
-
     if (eventType === "DOR_DESCONFORTO") {
       return "Obrigado por avisar. Sua segurança vem primeiro. O professor foi sinalizado para revisar seu treino antes de qualquer progressão.";
     }
@@ -800,27 +796,15 @@ export default function AlunoPage() {
     return startOfNextWeek;
   }
 
-  function getCurrentWeekClosingDate(): Date {
-    const closingDate = new Date(getStartOfCurrentWeek());
-    closingDate.setDate(closingDate.getDate() + 5);
-    closingDate.setHours(0, 0, 0, 0);
-
-    return closingDate;
-  }
-
   function isDateInCurrentValidationWeek(date: Date): boolean {
     const normalized = new Date(date);
     normalized.setHours(0, 0, 0, 0);
 
-    return (
-      new Date() < getCurrentWeekClosingDate() &&
-      normalized >= getStartOfCurrentWeek() &&
-      normalized < getCurrentWeekClosingDate()
-    );
+    return normalized >= getStartOfCurrentWeek() && normalized < getStartOfNextWeek();
   }
 
   function getValidationDeadlineLabel(): string {
-    const deadline = new Date(getCurrentWeekClosingDate());
+    const deadline = new Date(getStartOfNextWeek());
     deadline.setDate(deadline.getDate() - 1);
 
     return deadline.toLocaleDateString("pt-BR", {
@@ -934,14 +918,6 @@ export default function AlunoPage() {
   }
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
-  }
-  function isNotCompletedInClosedWeek(day: number): boolean {
-    if (!hasPlan(day) || isCompleted(day)) return false;
-
-    const selectedDate = new Date(currentYear, currentMonth, day);
-    selectedDate.setHours(0, 0, 0, 0);
-
-    return selectedDate < getStartOfCurrentWeek();
   }
   function getCommercialUiState(): string {
     return String(dashboardSummary?.uiState || "").toUpperCase();
@@ -1187,7 +1163,6 @@ export default function AlunoPage() {
                   const sel = selectedDay === day;
                   const done = isCompleted(day);
                   const plan = hasPlan(day);
-                  const notCompleted = isNotCompletedInClosedWeek(day);
                   const dayDate = new Date(currentYear, currentMonth, day);
                   dayDate.setHours(0, 0, 0, 0);
                   const isFutureHidden = dayDate >= getStartOfNextWeek();
@@ -1200,8 +1175,7 @@ export default function AlunoPage() {
                       <span>{day}</span>
                       <div className="flex gap-px mt-px">
                         {done && <div className="w-[2px] h-[2px] rounded-full bg-green-500" />}
-                        {plan && !done && !notCompleted && <div className="w-[2px] h-[2px] rounded-full bg-[#D4A373]" />}
-                        {notCompleted && <div className="w-[2px] h-[2px] rounded-full bg-red-500/80" />}
+                        {plan && !done && <div className="w-[2px] h-[2px] rounded-full bg-[#D4A373]" />}
                       </div>
                     </button>
                   );
@@ -1212,7 +1186,7 @@ export default function AlunoPage() {
               )}
 
               <p className="text-[8px] text-[#6b6b6b] mt-1 leading-relaxed">
-                Treinos de semanas anteriores ficam disponíveis para consulta, mas a conclusão só pode ser feita até sexta-feira, às 23h59.
+                Treinos de semanas anteriores ficam disponíveis para consulta, mas a validação só pode ser feita na semana vigente, até domingo.
               </p>
                 </>
               )}
@@ -1500,11 +1474,9 @@ export default function AlunoPage() {
                 <p className="text-[10px] text-[#a1a1a1]">{getWeekDayName(selectedDay!)} - {selectedDay}/{currentMonth + 1}/{currentYear}</p>
                 {selectedDay !== null && (
                   <p className="text-[9px] mt-0.5 text-[#D4A373]">
-                    {isCompleted(selectedDay)
-                      ? "Treino concluído"
-                      : canValidateWorkoutDay(selectedDay)
-                        ? `Disponível para conclusão até sexta-feira, 23h59 (${getValidationDeadlineLabel()})`
-                        : "Prazo encerrado — treino não realizado"}
+                    {canValidateWorkoutDay(selectedDay)
+                      ? `Validação liberada até ${getValidationDeadlineLabel()}`
+                      : "Prazo de validação encerrado. Treino disponível apenas para consulta."}
                   </p>
                 )}
               </div>
@@ -1625,10 +1597,10 @@ export default function AlunoPage() {
             {selectedDay !== null && (
               <div className="px-3 pb-3 space-y-2">
                 {!canValidateWorkoutDay(selectedDay) && !isCompleted(selectedDay) && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-2">
-                    <p className="text-[10px] text-red-200 leading-relaxed">
-                      Este treino não foi concluído dentro da semana programada e está marcado como não realizado.
-                      Ele continua disponível para consulta, mas não poderá mais ser concluído nem contabilizado como treino feito.
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2">
+                    <p className="text-[10px] text-amber-300 leading-relaxed">
+                      Este treino pertence a uma semana já encerrada. Ele continua disponível para consulta,
+                      mas não pode mais ser validado para não distorcer sua avaliação de adesão.
                     </p>
                   </div>
                 )}
@@ -1637,25 +1609,25 @@ export default function AlunoPage() {
                   <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-3 space-y-2">
                     <div>
                       <p className="text-[11px] text-[#D4A373] font-semibold">
-                        Precisa registrar algum ajuste, preferência ou cuidado?
+                        Precisa de algum ajuste ou cuidado?
                       </p>
                       <p className="text-[10px] text-[#a1a1a1] leading-relaxed mt-0.5">
-                        Conte o que aconteceu antes de encerrar o treino. O sistema separa preferência de treino de relato de cuidado
-                        e encaminha cada situação para o fluxo correto do professor.
+                        Conte o que aconteceu antes de encerrar o treino. O relato será salvo junto com o encerramento,
+                        para o professor ajustar sua próxima semana sem transformar dificuldade em cobrança.
                       </p>
                     </div>
 
                     <textarea
                       value={careEventDetail}
                       onChange={(event) => setCareEventDetail(event.target.value)}
-                      placeholder="Explique em poucas palavras: preferência de treino, dificuldade, dor, desconforto ou outro contexto."
+                      placeholder="Obrigatório se for encerrar com relato: explique em poucas palavras o que aconteceu."
                       className="w-full min-h-[60px] bg-[#111] border border-[#ffffff10] rounded-lg px-3 py-2 text-[11px] text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
                     />
 
                     {careEventSentForPlanId[selectedPlan?.id] ? (
                       <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2">
                         <p className="text-[10px] text-green-400">
-                          Recebemos seu relato. O sistema identificou se é preferência de treino ou cuidado e encaminhou ao professor.
+                          Recebemos seu relato. Obrigado por avisar — isso ajuda o professor a cuidar melhor do seu treino.
                         </p>
                       </div>
                     ) : (
@@ -1699,15 +1671,6 @@ export default function AlunoPage() {
                         <button
                           type="button"
                           disabled={sendingCareEvent || completing}
-                          onClick={() => reportCareEvent("PREFERENCIA_TREINO", "CONCLUIDO")}
-                          className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-[#D4A373]/10 text-[#D4A373] hover:bg-[#D4A373]/20 border border-[#D4A373]/30 disabled:opacity-50"
-                        >
-                          Concluí e quero registrar uma preferência de treino
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={sendingCareEvent || completing}
                           onClick={() => reportCareEvent("DOR_DESCONFORTO", "CONCLUIDO")}
                           className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-red-500/10 text-red-300 hover:bg-red-500/20 border border-red-500/20 disabled:opacity-50"
                         >
@@ -1736,23 +1699,25 @@ export default function AlunoPage() {
                   </div>
                 )}
 
-                {isCompleted(selectedDay) ? (
-                  <div className="w-full text-center text-xs font-semibold py-2.5 rounded-lg bg-green-500/20 text-green-400 border border-green-500/30">
-                    Treino concluído ✓
-                  </div>
-                ) : canValidateWorkoutDay(selectedDay) ? (
-                  <button
-                    onClick={() => markAsComplete()}
-                    disabled={completing}
-                    className="w-full text-xs font-semibold py-2.5 rounded-lg transition bg-green-500 text-white hover:bg-green-600 disabled:opacity-50"
-                  >
-                    {completing ? "Concluindo..." : "Concluir treino"}
-                  </button>
-                ) : (
-                  <div className="w-full text-center text-xs font-semibold py-2.5 rounded-lg bg-[#2a2a2a] text-red-300 border border-red-500/20">
-                    Prazo encerrado — Não realizado
-                  </div>
-                )}
+                <button
+                  onClick={() => markAsComplete()}
+                  disabled={completing || isCompleted(selectedDay) || !canValidateWorkoutDay(selectedDay)}
+                  className={"w-full text-xs font-semibold py-2.5 rounded-lg transition " + (
+                    isCompleted(selectedDay)
+                      ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default"
+                      : !canValidateWorkoutDay(selectedDay)
+                        ? "bg-[#2a2a2a] text-[#6b6b6b] border border-[#ffffff10] cursor-not-allowed"
+                        : "bg-green-500 text-white hover:bg-green-600"
+                  )}
+                >
+                  {completing
+                    ? "..."
+                    : isCompleted(selectedDay)
+                      ? "Treino Concluido ✓"
+                      : !canValidateWorkoutDay(selectedDay)
+                        ? "Prazo encerrado"
+                        : "Concluir Treino"}
+                </button>
               </div>
             )}
             <div className="p-2.5 border-t border-[#ffffff10]">
@@ -1936,9 +1901,14 @@ export default function AlunoPage() {
                 </div>
               )}
             </div>
-            <div className="p-3 border-t border-[#ffffff10] flex gap-2">
-              <button onClick={() => setSelectedExercise(null)} className="flex-1 bg-[#1a1a1a] text-[#a1a1a1] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#222] transition border border-[#ffffff10]">Voltar</button>
-              <button onClick={() => { setShowWorkoutModal(false); setSelectedExercise(null); }} className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-[11px] font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">Fechar</button>
+            <div className="p-3 border-t border-[#ffffff10]">
+              <button
+                type="button"
+                onClick={() => setSelectedExercise(null)}
+                className="w-full bg-[#D4A373] text-[#0a0a0a] text-[11px] font-semibold py-2.5 rounded-lg hover:bg-[#c4956a] transition"
+              >
+                Voltar para os exercícios
+              </button>
             </div>
           </div>
         </div>
