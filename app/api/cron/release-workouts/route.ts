@@ -363,14 +363,16 @@ export async function GET(request: NextRequest) {
        * O aviso/e-mail sozinho não torna o treino visível: a API do aluno
        * oculta registros com status PRE_PLANEJADO.
        */
+      const planIds = plansThisWeek.map((plan) => plan.id);
+
       const releasedWorkouts = await prisma.workout.updateMany({
         where: {
-          studentId: student.id,
-          date: {
-            gte: startOfWeek,
-            lt: endOfWeek,
+          workoutPlanId: {
+            in: planIds,
           },
-          status: "PRE_PLANEJADO",
+          status: {
+            in: ["PRE_PLANEJADO", "AGUARDANDO_REVISAO"],
+          },
         },
         data: {
           status: "PENDENTE",
