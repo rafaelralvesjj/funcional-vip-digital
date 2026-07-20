@@ -118,19 +118,21 @@ function compactText(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
-function buildNarration(exercise: {
+function buildMovementInstruction(exercise: {
   name: string;
+  description: string;
   instructions: string | null;
-  safetyNotes: string | null;
+  sequencePrompt: string | null;
 }): string {
+  const sequencePrompt = compactText(exercise.sequencePrompt);
   const instructions = compactText(exercise.instructions);
-  const safety = compactText(exercise.safetyNotes);
+  const description = compactText(exercise.description);
 
-  if (instructions && safety) return `${instructions} ${safety}`;
+  if (sequencePrompt) return sequencePrompt;
   if (instructions) return instructions;
-  if (safety) return safety;
+  if (description) return description;
 
-  return `Execute ${exercise.name} com postura estável, movimento controlado e respiração natural.`;
+  return `Executar uma repetição completa de ${exercise.name}, com movimento lento, controlado e retorno à posição inicial.`;
 }
 
 function buildVideoPrompt(exercise: {
@@ -145,40 +147,49 @@ function buildVideoPrompt(exercise: {
   contraindications: string | null;
   sequencePrompt: string | null;
 }): string {
-  const narration = buildNarration(exercise);
+  const movementInstruction = buildMovementInstruction(exercise);
+  const mistakes = compactText(exercise.commonMistakes);
+  const safety = compactText(exercise.safetyNotes);
 
   return [
-    `VÍDEO DO EXERCÍCIO: ${exercise.name}`,
+    `ANIMAÇÃO DE EXERCÍCIO — ${exercise.name}`,
     "",
-    "Use a imagem principal como imagem de origem e a imagem de sequência apenas como referência técnica do movimento.",
-    "Mantenha a mesma pessoa, roupa, equipamento, cenário, iluminação e identidade visual.",
-    "Não altere anatomia, proporções corporais, mãos, pés, equipamento ou fundo.",
+    "Crie somente a animação corporal do exercício mostrado na imagem.",
+    "A imagem principal é a cena inicial. A imagem de sequência, quando enviada, serve apenas como referência técnica das fases do movimento.",
     "",
-    "MOVIMENTO:",
-    `- Exercício: ${exercise.name}`,
-    `- Grupo muscular: ${compactText(exercise.muscleGroup) || "não informado"}`,
-    `- Descrição: ${compactText(exercise.description) || "não informada"}`,
-    `- Equipamento: ${compactText(exercise.equipmentTags) || "não informado"}`,
-    `- Nível: ${compactText(exercise.levelTags) || "não informado"}`,
-    `- Como executar: ${compactText(exercise.instructions) || "executar com controle"}`,
-    `- Erros a evitar: ${compactText(exercise.commonMistakes) || "evitar compensações e movimentos bruscos"}`,
-    `- Cuidados: ${compactText(exercise.safetyNotes) || "manter postura segura e amplitude confortável"}`,
-    `- Atenções: ${compactText(exercise.contraindications) || "adaptar em caso de dor ou restrição individual"}`,
+    "MOVIMENTO OBRIGATÓRIO:",
+    movementInstruction,
     "",
-    "PADRÃO DO VÍDEO:",
-    "- Duração entre 6 e 8 segundos.",
-    "- Mostrar de 2 a 3 repetições controladas quando o exercício for dinâmico.",
-    "- Para exercício isométrico, mostrar entrada segura, sustentação e saída controlada.",
-    "- Câmera estável e corpo inteiro visível.",
-    "- Sem texto, legendas, logotipo, música ou efeitos exagerados.",
+    "PADRÃO FIXO:",
+    "- Fazer somente uma repetição completa.",
+    "- Movimento lento, contínuo, controlado e biomecanicamente coerente.",
+    "- Começar na posição inicial, executar o movimento e terminar exatamente na posição inicial.",
+    "- Câmera totalmente fixa.",
+    "- Sem zoom, rotação, panorâmica, cortes ou mudança de enquadramento.",
+    "- Manter roupa, equipamento, fundo, iluminação, cores, proporções corporais e composição visual da imagem.",
+    "- Manter os pés, mãos e equipamentos estáveis e anatomicamente coerentes.",
+    "- Não criar movimentos extras, passos, gestos, saltos ou balanços que não façam parte do exercício.",
+    "- Não adicionar ou remover pessoas, objetos ou equipamentos.",
+    "- Não transformar o ambiente.",
+    "- Duração aproximada de 6 segundos.",
     "",
-    "NARRAÇÃO:",
-    "- Voz em português brasileiro nativo, dicção clara e tom profissional.",
-    `- Falar exatamente: "${narration}"`,
+    "ÁUDIO E ELEMENTOS GRÁFICOS:",
+    "- Sem voz.",
+    "- Sem narração.",
+    "- Sem música.",
+    "- Sem efeitos sonoros.",
+    "- Sem texto.",
+    "- Sem legendas.",
+    "- Sem logotipo.",
+    "- Sem marca-d'água.",
+    "- Sem transições.",
+    "- Sem efeitos visuais.",
     "",
-    exercise.sequencePrompt
-      ? `REFERÊNCIA ADICIONAL:\n${compactText(exercise.sequencePrompt)}`
-      : "",
+    mistakes ? `EVITAR: ${mistakes}` : "",
+    safety ? `CUIDADO TÉCNICO: ${safety}` : "",
+    "",
+    "RESULTADO ESPERADO:",
+    "Vídeo silencioso, didático, limpo e padronizado para uma biblioteca profissional de exercícios do Funcional VIP Digital.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -357,7 +368,8 @@ export async function GET(req: NextRequest) {
         "",
         "Use __principal como origem no CapCut.",
         "Use __sequencia como referência da execução.",
-        "O TXT de mesmo nome contém o prompt individual.",
+        "O TXT de mesmo nome contém o prompt individual otimizado para o CapCut.",
+        "Os prompts geram somente movimento: sem voz, música, texto ou efeitos.",
         "",
         `Depois desta parte, baixe a parte ${batch < totalBatches ? batch + 1 : "finalizada"}.`,
       ].join("\n")
