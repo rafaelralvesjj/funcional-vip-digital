@@ -36,39 +36,65 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
-function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
-  const date = new Date(referenceDate);
-  date.setHours(0, 0, 0, 0);
+const TRAINING_TIME_ZONE = "America/Maceio";
 
-  const day = date.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
+function getIsoDateInTrainingTimeZone(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TRAINING_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
 
-  const startOfWeek = new Date(date);
-  startOfWeek.setDate(date.getDate() + diffToMonday);
-  startOfWeek.setHours(0, 0, 0, 0);
+function parseWorkoutIsoDate(date: Date): string {
+  return [
+    String(date.getUTCFullYear()).padStart(4, "0"),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
 
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 7);
-  endOfWeek.setHours(0, 0, 0, 0);
+function getMondayIso(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  const weekday = date.getUTCDay();
+  const diffToMonday = weekday === 0 ? -6 : 1 - weekday;
 
-  return { startOfWeek, endOfWeek };
+  date.setUTCDate(date.getUTCDate() + diffToMonday);
+
+  return parseWorkoutIsoDate(date);
+}
+
+function addIsoDays(isoDate: string, days: number): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return parseWorkoutIsoDate(date);
 }
 
 function isDateInCurrentValidationWeek(date: Date): boolean {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
+  const todayIso = getIsoDateInTrainingTimeZone();
+  const currentMondayIso = getMondayIso(todayIso);
+  const currentSaturdayIso = addIsoDays(currentMondayIso, 5);
+  const workoutIso = parseWorkoutIsoDate(date);
 
-  const currentWeek = getWeekRange(new Date());
-
-  return normalized >= currentWeek.startOfWeek && normalized < currentWeek.endOfWeek;
+  return (
+    todayIso >= currentMondayIso &&
+    todayIso < currentSaturdayIso &&
+    workoutIso >= currentMondayIso &&
+    workoutIso < currentSaturdayIso
+  );
 }
 
 function getCurrentValidationDeadlineLabel(): string {
-  const currentWeek = getWeekRange(new Date());
-  const deadline = new Date(currentWeek.endOfWeek);
-  deadline.setDate(deadline.getDate() - 1);
+  const todayIso = getIsoDateInTrainingTimeZone();
+  const fridayIso = addIsoDays(getMondayIso(todayIso), 4);
+  const [year, month, day] = fridayIso.split("-").map(Number);
 
-  return formatDatePtBr(deadline);
+  return formatDatePtBr(new Date(Date.UTC(year, month - 1, day, 12)));
 }
 
 function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): number | null {
@@ -1414,7 +1440,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            `Prazo de validação encerrado. O treino só pode ser validado na própria semana, até domingo (${getCurrentValidationDeadlineLabel()}).`,
+            `Prazo encerrado. Este treino só poderia ser concluído até sexta-feira, 23h59 (${getCurrentValidationDeadlineLabel()}). Ele permanece disponível apenas para consulta e será considerado não realizado.`,
           code: "VALIDATION_WINDOW_CLOSED",
         },
         { status: 403 }
