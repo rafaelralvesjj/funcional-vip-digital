@@ -144,6 +144,85 @@ function slugify(value: string): string {
     .trim();
 }
 
+function firstSentence(value?: string | null): string {
+  const text = compactText(value);
+  if (!text) return "";
+  return text.split(/[.!?]/)[0]?.trim() || text;
+}
+
+function limitWords(value: string, maxWords: number): string {
+  return compactText(value).split(" ").filter(Boolean).slice(0, maxWords).join(" ");
+}
+
+function ensureFinalPeriod(value: string): string {
+  const text = compactText(value).replace(/[.,;:!?]+$/g, "");
+  return text ? `${text}.` : "";
+}
+
+function buildShortNarration(exercise: Exercise): string {
+  const source =
+    firstSentence(exercise.instructions) ||
+    firstSentence(exercise.safetyNotes) ||
+    firstSentence(exercise.description);
+
+  if (!source) {
+    return "Execute com controle e mantenha o corpo bem alinhado.";
+  }
+
+  return ensureFinalPeriod(limitWords(source, 10));
+}
+
+function buildMovementGuidance(exercise: Exercise): string {
+  const parts = [
+    exercise.instructions
+      ? `Movement instructions: ${compactText(exercise.instructions)}`
+      : null,
+    exercise.safetyNotes
+      ? `Safety and posture: ${compactText(exercise.safetyNotes)}`
+      : null,
+    exercise.commonMistakes
+      ? `Avoid these mistakes: ${compactText(exercise.commonMistakes)}`
+      : null,
+  ].filter(Boolean);
+
+  if (parts.length > 0) return parts.join(" ");
+
+  return `Perform one technically correct and controlled repetition of ${compactText(
+    exercise.name
+  )}.`;
+}
+
+function buildVideoPrompt(exercise: Exercise): string {
+  const exerciseName = compactText(exercise.name) || "the exercise";
+  const movementGuidance = buildMovementGuidance(exercise);
+
+  return `Use the uploaded image as the exact reference. Preserve the same person, face, body, clothing, equipment, lighting and background. Create a realistic 6-second 16:9 video. Keep the camera completely fixed in a full-body shot during the entire video, with the complete body and all equipment always visible. The person performs one complete repetition of ${exerciseName}. ${movementGuidance} Start from the position shown in the reference image, execute the movement slowly and naturally, then return smoothly to the starting position. Keep the posture stable and the movement controlled, safe and technically correct. Do not change the person, environment, equipment or camera framing. Do not zoom, crop, pan or move the camera.`;
+}
+
+function buildAudioPrompt(exercise: Exercise): string {
+  const narration = buildShortNarration(exercise);
+
+  return `Voiceover in Brazilian Portuguese, confident male voice:\n\n"${narration}"\n\nNatural breathing.\nSoft movement sounds appropriate for the exercise.\nQuiet indoor gym ambience.\nNo background music.`;
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
 export default function ExerciseGrid({
   exercises: initialExercises,
 }: {
@@ -157,6 +236,7 @@ export default function ExerciseGrid({
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingSequence, setUploadingSequence] = useState(false);
   const [downloadingImageId, setDownloadingImageId] = useState<string | null>(null);
+  const [copiedPromptKey, setCopiedPromptKey] = useState<string | null>(null);
 
   const mainFileInputRef = useRef<HTMLInputElement>(null);
   const sequenceFileInputRef = useRef<HTMLInputElement>(null);
@@ -265,9 +345,7 @@ export default function ExerciseGrid({
 
       if (target === "sequenceImageUrl") {
         setUploadingSequence(false);
-        if (sequenceFileInputRef.current) {
-          sequenceFileInputRef.current.value = "";
-        }
+        if (sequenceFileInputRef.current) sequenceFileInputRef.current.value = "";
       }
     }
   }
@@ -305,9 +383,7 @@ export default function ExerciseGrid({
       const res = await fetch("/api/exercise-library", {
         method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          editingId ? { id: editingId, ...payload } : payload
-        ),
+        body: JSON.stringify(editingId ? { id: editingId, ...payload } : payload),
       });
 
       const data = await res.json().catch(() => null);
@@ -335,9 +411,7 @@ export default function ExerciseGrid({
         );
       } else {
         setExercises((current) =>
-          [...current, savedExercise].sort((a, b) =>
-            a.name.localeCompare(b.name)
-          )
+          [...current, savedExercise].sort((a, b) => a.name.localeCompare(b.name))
         );
       }
 
@@ -353,12 +427,9 @@ export default function ExerciseGrid({
     if (!confirm("Desativar este exercício da biblioteca?")) return;
 
     try {
-      const res = await fetch(
-        `/api/exercise-library?id=${encodeURIComponent(id)}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const res = await fetch(`/api/exercise-library?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -399,9 +470,7 @@ export default function ExerciseGrid({
       const link = document.createElement("a");
 
       link.href = objectUrl;
-      link.download = `${
-        slugify(exercise.name) || "exercicio"
-      }__principal.${extension}`;
+      link.download = `${slugify(exercise.name) || "exercicio"}__principal.${extension}`;
 
       document.body.appendChild(link);
       link.click();
@@ -422,14 +491,35 @@ export default function ExerciseGrid({
     }
   }
 
+  async function handleCopyPrompt(
+    exercise: Exercise,
+    type: "video" | "audio"
+  ) {
+    const key = `${exercise.id}-${type}`;
+
+    try {
+      const text =
+        type === "video"
+          ? buildVideoPrompt(exercise)
+          : buildAudioPrompt(exercise);
+
+      await copyTextToClipboard(text);
+      setCopiedPromptKey(key);
+
+      window.setTimeout(() => {
+        setCopiedPromptKey((current) => (current === key ? null : current));
+      }, 1800);
+    } catch {
+      alert("Não foi possível copiar o texto. Tente novamente.");
+    }
+  }
+
   const groups = useMemo(() => {
     return exercises.reduce(
       (acc, exercise) => {
         const group = exercise.muscleGroup || "Sem grupo muscular";
-
         if (!acc[group]) acc[group] = [];
         acc[group].push(exercise);
-
         return acc;
       },
       {} as Record<string, Exercise[]>
@@ -468,14 +558,10 @@ export default function ExerciseGrid({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-[#e5e5e5] block mb-1">
-                Nome *
-              </label>
+              <label className="text-sm text-[#e5e5e5] block mb-1">Nome *</label>
               <input
                 value={form.name}
-                onChange={(event) =>
-                  updateForm("name", event.target.value)
-                }
+                onChange={(event) => updateForm("name", event.target.value)}
                 required
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
                 placeholder="Ex: Agachamento na cadeira"
@@ -500,9 +586,7 @@ export default function ExerciseGrid({
                   !MUSCLE_GROUP_OPTIONS.some(
                     (option) => option.value === form.muscleGroup
                   ) && (
-                    <option value={form.muscleGroup}>
-                      {form.muscleGroup}
-                    </option>
+                    <option value={form.muscleGroup}>{form.muscleGroup}</option>
                   )}
 
                 {MUSCLE_GROUP_OPTIONS.map((option) => (
@@ -625,9 +709,7 @@ export default function ExerciseGrid({
             </div>
 
             <div>
-              <label className="text-sm text-[#e5e5e5] block mb-1">
-                Locais
-              </label>
+              <label className="text-sm text-[#e5e5e5] block mb-1">Locais</label>
               <input
                 value={form.locationTags}
                 onChange={(event) =>
@@ -653,9 +735,7 @@ export default function ExerciseGrid({
             </div>
 
             <div>
-              <label className="text-sm text-[#e5e5e5] block mb-1">
-                Níveis
-              </label>
+              <label className="text-sm text-[#e5e5e5] block mb-1">Níveis</label>
               <input
                 value={form.levelTags}
                 onChange={(event) =>
@@ -733,8 +813,7 @@ export default function ExerciseGrid({
                     alt="Preview imagem principal"
                     className="w-16 h-16 bg-[#1a1a1a] rounded-lg border border-[#ffffff10] object-cover"
                     onError={(event) => {
-                      (event.target as HTMLImageElement).style.display =
-                        "none";
+                      (event.target as HTMLImageElement).style.display = "none";
                     }}
                   />
                   <span className="text-xs text-[#a1a1a1] truncate flex-1">
@@ -782,10 +861,7 @@ export default function ExerciseGrid({
                   <input
                     value={form.sequenceImageLabel}
                     onChange={(event) =>
-                      updateForm(
-                        "sequenceImageLabel",
-                        event.target.value
-                      )
+                      updateForm("sequenceImageLabel", event.target.value)
                     }
                     className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
                     placeholder="Ex: Sequência de execução do agachamento"
@@ -800,10 +876,7 @@ export default function ExerciseGrid({
                 <textarea
                   value={form.sequenceImageNotes}
                   onChange={(event) =>
-                    updateForm(
-                      "sequenceImageNotes",
-                      event.target.value
-                    )
+                    updateForm("sequenceImageNotes", event.target.value)
                   }
                   rows={3}
                   className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
@@ -842,8 +915,7 @@ export default function ExerciseGrid({
                     alt="Preview imagem sequencial"
                     className="w-24 h-16 bg-[#1a1a1a] rounded-lg border border-[#ffffff10] object-cover"
                     onError={(event) => {
-                      (event.target as HTMLImageElement).style.display =
-                        "none";
+                      (event.target as HTMLImageElement).style.display = "none";
                     }}
                   />
                   <span className="text-xs text-[#a1a1a1] truncate flex-1">
@@ -866,10 +938,7 @@ export default function ExerciseGrid({
                   type="checkbox"
                   checked={form.sequenceGeneratedByAi}
                   onChange={(event) =>
-                    updateForm(
-                      "sequenceGeneratedByAi",
-                      event.target.checked
-                    )
+                    updateForm("sequenceGeneratedByAi", event.target.checked)
                   }
                   className="accent-[#D4A373]"
                 />
@@ -937,22 +1006,45 @@ export default function ExerciseGrid({
                       alt={exercise.name}
                       className="w-full h-48 object-cover"
                       onError={(event) => {
-                        (event.target as HTMLImageElement).style.display =
-                          "none";
+                        (event.target as HTMLImageElement).style.display = "none";
                       }}
                     />
 
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadImage(exercise)}
-                      disabled={downloadingImageId === exercise.id}
-                      className="absolute bottom-3 right-3 rounded-lg border border-[#ffffff20] bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#f5f5f5] shadow-lg backdrop-blur transition hover:border-[#D4A373] hover:text-[#D4A373] disabled:cursor-wait disabled:opacity-70"
-                      title="Baixar imagem principal"
-                    >
-                      {downloadingImageId === exercise.id
-                        ? "Baixando..."
-                        : "⬇ Baixar imagem"}
-                    </button>
+                    <div className="absolute bottom-3 right-3 flex flex-col items-stretch gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadImage(exercise)}
+                        disabled={downloadingImageId === exercise.id}
+                        className="rounded-lg border border-[#ffffff20] bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#f5f5f5] shadow-lg backdrop-blur transition hover:border-[#D4A373] hover:text-[#D4A373] disabled:cursor-wait disabled:opacity-70"
+                        title="Baixar imagem principal"
+                      >
+                        {downloadingImageId === exercise.id
+                          ? "Baixando..."
+                          : "⬇ Baixar imagem"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPrompt(exercise, "video")}
+                        className="rounded-lg border border-[#D4A373]/40 bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#D4A373] shadow-lg backdrop-blur transition hover:border-[#D4A373] hover:bg-[#D4A373] hover:text-[#0a0a0a]"
+                        title="Copiar comando do vídeo"
+                      >
+                        {copiedPromptKey === `${exercise.id}-video`
+                          ? "✓ Comando copiado"
+                          : "📋 Copiar comando"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPrompt(exercise, "audio")}
+                        className="rounded-lg border border-[#ffffff20] bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#f5f5f5] shadow-lg backdrop-blur transition hover:border-[#D4A373] hover:text-[#D4A373]"
+                        title="Copiar texto de som e narração"
+                      >
+                        {copiedPromptKey === `${exercise.id}-audio`
+                          ? "✓ Som copiado"
+                          : "🔊 Copiar som"}
+                      </button>
+                    </div>
                   </div>
                 ) : null}
 
@@ -965,6 +1057,30 @@ export default function ExerciseGrid({
                 </div>
 
                 <div className="p-4 space-y-3">
+                  {!exercise.imageUrl && (
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPrompt(exercise, "video")}
+                        className="w-full rounded-lg border border-[#D4A373]/40 bg-[#0a0a0a] px-3 py-2 text-xs font-semibold text-[#D4A373] transition hover:border-[#D4A373] hover:bg-[#D4A373] hover:text-[#0a0a0a]"
+                      >
+                        {copiedPromptKey === `${exercise.id}-video`
+                          ? "✓ Comando copiado"
+                          : "📋 Copiar comando"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPrompt(exercise, "audio")}
+                        className="w-full rounded-lg border border-[#ffffff20] bg-[#0a0a0a] px-3 py-2 text-xs font-semibold text-[#f5f5f5] transition hover:border-[#D4A373] hover:text-[#D4A373]"
+                      >
+                        {copiedPromptKey === `${exercise.id}-audio`
+                          ? "✓ Som copiado"
+                          : "🔊 Copiar som"}
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="text-base font-semibold text-[#f5f5f5]">
@@ -1001,8 +1117,7 @@ export default function ExerciseGrid({
                     </p>
 
                     <p className="text-sm text-[#a1a1a1] mt-1">
-                      {shortText(exercise.description) ||
-                        "Não informado."}
+                      {shortText(exercise.description) || "Não informado."}
                     </p>
                   </div>
 
