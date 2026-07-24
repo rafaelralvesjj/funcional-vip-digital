@@ -11,6 +11,7 @@ type StudentForEngagement = {
   userId: string | null;
   userAuth?: {
     email: string | null;
+    role: string | null;
   } | null;
   user?: {
     id: string;
@@ -124,7 +125,16 @@ async function getNoticeAuthorId(): Promise<string | null> {
 }
 
 function getStudentEmail(student: StudentForEngagement): string | null {
-  return student.email || student.userAuth?.email || null;
+  const linkedRole = String(student.userAuth?.role || "").toUpperCase();
+
+  if (linkedRole !== "ALUNO") {
+    console.warn(
+      `[workout-engagement] E-mail não enviado: cadastro ${student.id} não possui usuário ALUNO vinculado.`
+    );
+    return null;
+  }
+
+  return student.userAuth?.email?.trim() || null;
 }
 
 type StudentCommunicationIdentity = {
@@ -827,6 +837,7 @@ export async function GET(request: NextRequest) {
           userAuth: {
             select: {
               email: true,
+              role: true,
             },
           },
           user: {
@@ -875,6 +886,7 @@ export async function GET(request: NextRequest) {
           userAuth: {
             select: {
               email: true,
+              role: true,
             },
           },
           user: {
