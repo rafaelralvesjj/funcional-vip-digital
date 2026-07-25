@@ -1409,10 +1409,10 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6 md:p-8">
+    <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-3 sm:p-4 md:p-8">
       <DashboardAutoRefresh />
 
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-5 md:space-y-8">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
