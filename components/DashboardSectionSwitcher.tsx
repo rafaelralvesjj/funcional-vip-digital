@@ -4,7 +4,7 @@ import { Children, ReactNode, useMemo, useState } from "react";
 import {
   Bell,
   CalendarDays,
-  CircleHelp,
+  HelpCircle,
   ClipboardList,
   Dumbbell,
   HeartPulse,
@@ -62,7 +62,7 @@ function CardIcon({ id }: { id: string }) {
     case "pending-workouts":
       return <ClipboardList className={className} />;
     case "unanswered-questions":
-      return <CircleHelp className={className} />;
+      return <HelpCircle className={className} />;
     case "care-events":
       return <HeartPulse className={className} />;
     case "training-preferences":
