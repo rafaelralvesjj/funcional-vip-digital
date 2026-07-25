@@ -122,39 +122,6 @@ function buildProfessorNoticeContent({
   ].join("\n");
 }
 
-function buildGestaoNoticeContent({
-  groups,
-  weekLabel,
-}: {
-  groups: ProfessorPendingGroup[];
-  weekLabel: string;
-}): string {
-  const lines = groups
-    .map((group) => {
-      const professorName = group.professor.name || "Professor";
-      const students = group.students
-        .map((student) => {
-          return `  - ${student.name}: ${student.createdCount}/${student.weeklyLimit} treino(s) criado(s). Falta(m) ${student.missingCount}.`;
-        })
-        .join("\n");
-
-      return `${professorName}\n${students}`;
-    })
-    .join("\n\n");
-
-  return [
-    "Acompanhamento da preparação da próxima semana.",
-    "",
-    "Ainda existem alunos sem a quantidade completa de treinos. O objetivo deste aviso é facilitar a priorização, o apoio aos professores e a continuidade do atendimento.",
-    `Semana de referência: ${weekLabel}.`,
-    "",
-    "Pendências por professor:",
-    lines,
-    "",
-    "Acompanhe o dashboard e combine com cada professor a conclusão, a prioridade ou uma eventual cobertura necessária.",
-  ].join("\n");
-}
-
 async function notifyProfessorDeadline({
   group,
   authorId,
@@ -308,187 +275,6 @@ async function notifyProfessorDeadline({
   };
 }
 
-async function notifyGestaoDeadline({
-  groups,
-  authorId,
-  weekLabel,
-  expiresAt,
-}: {
-  groups: ProfessorPendingGroup[];
-  authorId: string;
-  weekLabel: string;
-  expiresAt: Date;
-}) {
-  if (groups.length === 0) {
-    return {
-      emailSentTo: 0,
-      noticeCreated: false,
-      skipped: true,
-      reason: "Sem pendências para gestão",
-    };
-  }
-
-  const dashboardUrl = getAppDashboardUrl();
-  const title = "Acompanhamento de hoje: treinos da próxima semana pendentes";
-  const content = buildGestaoNoticeContent({
-    groups,
-    weekLabel,
-  });
-
-  const existingNotice = await prisma.notice.findFirst({
-    where: {
-      targetRole: "GESTOR",
-      type: "MANAGEMENT",
-      title,
-      content: {
-        contains: weekLabel,
-      },
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (existingNotice) {
-    return {
-      emailSentTo: 0,
-      noticeCreated: false,
-      skipped: true,
-      reason: "Aviso de prazo já enviado para gestão nesta semana alvo",
-    };
-  }
-
-  await prisma.notice.create({
-    data: {
-      title,
-      content,
-      type: "MANAGEMENT",
-      targetRole: "GESTOR",
-      authorId,
-      expiresAt,
-    },
-  });
-
-  const gestores = await prisma.user.findMany({
-    where: {
-      role: {
-        in: ["GESTOR", "ADMIN"],
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
-
-  const totalPendingStudents = groups.reduce((total, group) => total + group.students.length, 0);
-
-  const professorSectionsHtml = groups
-    .map((group) => {
-      const professorName = escapeHtml(group.professor.name || "Professor");
-      const studentsHtml = group.students
-        .map((student) => {
-          return `
-            <li style="margin-bottom:6px; color:#d4d4d4; font-size:14px; line-height:1.5;">
-              <strong style="color:#f5f5f5;">${escapeHtml(student.name)}</strong>:
-              ${student.createdCount}/${student.weeklyLimit} treino(s).
-              <span style="color:#f87171;">Falta(m) ${student.missingCount}.</span>
-            </li>
-          `;
-        })
-        .join("");
-
-      return `
-        <div style="margin-top:16px; padding-top:12px; border-top:1px solid #2a2a2a;">
-          <p style="color:#D4A373; font-size:14px; font-weight:bold; margin:0 0 8px;">${professorName}</p>
-          <ul style="padding-left:20px; margin:0;">
-            ${studentsHtml}
-          </ul>
-        </div>
-      `;
-    })
-    .join("");
-
-  let emailSentTo = 0;
-
-  for (const gestor of gestores) {
-    if (!gestor.email) continue;
-
-    const gestorName = gestor.name || "Gestão";
-    const safeGestorName = escapeHtml(gestorName);
-
-    const text = [
-      `Oi, ${gestorName}! Tudo bem?`,
-      "",
-      "Ainda existem alunos sem a quantidade completa de treinos para a próxima semana.",
-      `Semana de referência: ${weekLabel}.`,
-      `Total de alunos com pendência: ${totalPendingStudents}.`,
-      "",
-      content,
-      "",
-      "Use este resumo para apoiar a priorização, alinhar eventuais impedimentos e combinar cobertura quando necessário.",
-      "",
-      `Acessar dashboard: ${dashboardUrl}`,
-      "",
-      "Funcional VIP Digital",
-      "Mensagem automática de acompanhamento operacional.",
-    ].join("\n");
-
-    const html = `
-      <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-        <div style="max-width:720px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-          <h2 style="color:#D4A373; margin:0 0 16px;">Acompanhamento da preparação da próxima semana</h2>
-
-          <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-            Oi, <strong>${safeGestorName}</strong>! Tudo bem?
-          </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Ainda existem <strong style="color:#f5f5f5;">${totalPendingStudents}</strong> aluno(s) sem a quantidade completa de treinos para a próxima semana.
-          </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-            Semana de referência: <strong style="color:#f5f5f5;">${escapeHtml(weekLabel)}</strong>.
-          </p>
-
-          ${professorSectionsHtml}
-
-          <div style="background:#D4A37314; border:1px solid #D4A37333; border-radius:12px; padding:14px; margin-top:18px;">
-            <p style="color:#D4A373; font-size:13px; line-height:1.6; margin:0;">
-              Use este resumo para apoiar a priorização, alinhar eventuais impedimentos e combinar cobertura quando necessário.
-            </p>
-          </div>
-
-          <a href="${dashboardUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:20px;">
-            Abrir dashboard
-          </a>
-
-          <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-            Mensagem automática de acompanhamento operacional do Funcional VIP Digital.
-          </p>
-        </div>
-      </div>
-    `;
-
-    await sendEmail({
-      to: gestor.email,
-      subject: title,
-      text,
-      html,
-    });
-
-    emailSentTo += 1;
-  }
-
-  return {
-    emailSentTo,
-    noticeCreated: true,
-    skipped: false,
-    reason: null,
-  };
-}
-
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
@@ -622,22 +408,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  let gestaoResult: any = null;
-
-  try {
-    gestaoResult = await notifyGestaoDeadline({
-      groups: professorGroups,
-      authorId: author.id,
-      weekLabel,
-      expiresAt: nextWeek.startOfWeek,
-    });
-  } catch (error: any) {
-    errors.push({
-      type: "GESTAO",
-      message: error?.message || "Erro desconhecido",
-    });
-  }
-
   return NextResponse.json({
     ok: errors.length === 0,
     weekTarget: {
@@ -651,12 +421,10 @@ export async function GET(request: NextRequest) {
       pendingStudents: professorGroups.reduce((total, group) => total + group.students.length, 0),
       professorNotified: professorNotified.length,
       professorSkipped: professorSkipped.length,
-      gestaoEmailSentTo: gestaoResult?.emailSentTo || 0,
       errors: errors.length,
     },
     professorNotified,
     professorSkipped,
-    gestao: gestaoResult,
     errors,
   });
 }
