@@ -6,6 +6,37 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+function getSaoPauloWorkoutWindow(referenceDate = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  }).formatToParts(referenceDate);
+
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value || "";
+
+  const weekday = value("weekday");
+  const localDate = new Date(`${value("year")}-${value("month")}-${value("day")}T12:00:00-03:00`);
+  const day = localDate.getUTCDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+
+  const startOfWeek = new Date(localDate);
+  startOfWeek.setUTCDate(localDate.getUTCDate() + diffToMonday);
+  startOfWeek.setUTCHours(3, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 7);
+
+  return {
+    isOpen: !["Sat", "Sun"].includes(weekday),
+    startOfWeek,
+    endOfWeek,
+  };
+}
+
 export default async function GestorDashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "GESTOR") redirect("/auth/signin");
@@ -30,23 +61,32 @@ export default async function GestorDashboardPage() {
 
   const allStudentIds = allStudents.map((s) => s.id);
 
-  // 3. WORKOUTS PENDENTES - query direta e simples
-  const pendingWorkouts = await prisma.workout.findMany({
-    where: {
-      studentId: { in: allStudentIds },
-      status: "PENDENTE",
-    },
-    select: {
-      id: true,
-      studentId: true,
-      date: true,
-      workoutPlan: { select: { name: true } },
-      student: {
-        select: { id: true, name: true, userId: true, user: { select: { name: true } } },
-      },
-    },
-    orderBy: { date: "desc" },
-  });
+  // 3. WORKOUTS PENDENTES
+  // Apenas treinos da semana atual e ainda dentro da janela de conclusão
+  // (segunda a sexta) entram no contador.
+  const workoutWindow = getSaoPauloWorkoutWindow();
+  const pendingWorkouts = workoutWindow.isOpen
+    ? await prisma.workout.findMany({
+        where: {
+          studentId: { in: allStudentIds },
+          status: "PENDENTE",
+          date: {
+            gte: workoutWindow.startOfWeek,
+            lt: workoutWindow.endOfWeek,
+          },
+        },
+        select: {
+          id: true,
+          studentId: true,
+          date: true,
+          workoutPlan: { select: { name: true } },
+          student: {
+            select: { id: true, name: true, userId: true, user: { select: { name: true } } },
+          },
+        },
+        orderBy: { date: "desc" },
+      })
+    : [];
 
   const pendingByStudent = new Map<string, typeof pendingWorkouts>();
   for (const w of pendingWorkouts) {
