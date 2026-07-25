@@ -804,8 +804,8 @@ export default function AlunoPage() {
   }
 
   function getValidationDeadlineLabel(): string {
-    const deadline = new Date(getStartOfNextWeek());
-    deadline.setDate(deadline.getDate() - 1);
+    const deadline = new Date(getStartOfCurrentWeek());
+    deadline.setDate(deadline.getDate() + 4);
 
     return deadline.toLocaleDateString("pt-BR", {
       weekday: "long",
@@ -814,13 +814,31 @@ export default function AlunoPage() {
     });
   }
 
+  function getStartOfValidationClosure(): Date {
+    const closure = new Date(getStartOfCurrentWeek());
+    closure.setDate(closure.getDate() + 5);
+    closure.setHours(0, 0, 0, 0);
+
+    return closure;
+  }
+
   function canValidateWorkoutDay(day: number | null): boolean {
     if (day === null) return false;
 
     const selectedDate = new Date(currentYear, currentMonth, day);
     selectedDate.setHours(0, 0, 0, 0);
 
-    return isDateInCurrentValidationWeek(selectedDate);
+    const now = new Date();
+
+    return (
+      now < getStartOfValidationClosure() &&
+      selectedDate >= getStartOfCurrentWeek() &&
+      selectedDate < getStartOfValidationClosure()
+    );
+  }
+
+  function isExpiredWorkoutDay(day: number): boolean {
+    return hasPlan(day) && !isCompleted(day) && !canValidateWorkoutDay(day);
   }
 
   function canStudentSeePlanByDate(value?: string | null): boolean {
@@ -1174,8 +1192,13 @@ export default function AlunoPage() {
                          "text-[#a1a1a1] hover:bg-white/5")}>
                       <span>{day}</span>
                       <div className="flex gap-px mt-px">
-                        {done && <div className="w-[2px] h-[2px] rounded-full bg-green-500" />}
-                        {plan && !done && <div className="w-[2px] h-[2px] rounded-full bg-[#D4A373]" />}
+                        {done && <div className="w-[3px] h-[3px] rounded-full bg-green-500" />}
+                        {plan && !done && canValidateWorkoutDay(day) && (
+                          <div className="w-[3px] h-[3px] rounded-full bg-[#F97316]" />
+                        )}
+                        {isExpiredWorkoutDay(day) && (
+                          <div className="w-[3px] h-[3px] rounded-full bg-[#EF4444]" />
+                        )}
                       </div>
                     </button>
                   );
@@ -1185,8 +1208,20 @@ export default function AlunoPage() {
                 <p className="text-[8px] text-[#D4A373] mt-1">Em breve...</p>
               )}
 
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[8px] text-[#a1a1a1]">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-green-500" /> Concluído
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-[#F97316]" /> Disponível
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-[#EF4444]" /> Não concluído
+                </span>
+              </div>
+
               <p className="text-[8px] text-[#6b6b6b] mt-1 leading-relaxed">
-                Treinos de semanas anteriores ficam disponíveis para consulta, mas a validação só pode ser feita na semana vigente, até domingo.
+                A conclusão fica disponível somente na semana vigente, até sexta-feira, 23h59. Depois disso, o treino permanece apenas para consulta.
               </p>
                 </>
               )}
@@ -1597,15 +1632,17 @@ export default function AlunoPage() {
             {selectedDay !== null && (
               <div className="px-3 pb-3 space-y-2">
                 {!canValidateWorkoutDay(selectedDay) && !isCompleted(selectedDay) && (
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2">
-                    <p className="text-[10px] text-amber-300 leading-relaxed">
-                      Este treino pertence a uma semana já encerrada. Ele continua disponível para consulta,
-                      mas não pode mais ser validado para não distorcer sua avaliação de adesão.
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+                    <p className="text-[11px] font-semibold text-red-300">
+                      Prazo de conclusão encerrado
+                    </p>
+                    <p className="mt-1 text-[10px] text-red-200/90 leading-relaxed">
+                      Este treino poderia ser concluído até sexta-feira, 23h59. Agora ele permanece disponível somente para consulta e será registrado como não concluído.
                     </p>
                   </div>
                 )}
 
-                {!isCompleted(selectedDay) && (
+                {!isCompleted(selectedDay) && canValidateWorkoutDay(selectedDay) && (
                   <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-3 space-y-2">
                     <div>
                       <p className="text-[11px] text-[#D4A373] font-semibold">
@@ -1699,25 +1736,23 @@ export default function AlunoPage() {
                   </div>
                 )}
 
-                <button
-                  onClick={() => markAsComplete()}
-                  disabled={completing || isCompleted(selectedDay) || !canValidateWorkoutDay(selectedDay)}
-                  className={"w-full text-xs font-semibold py-2.5 rounded-lg transition " + (
-                    isCompleted(selectedDay)
-                      ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default"
-                      : !canValidateWorkoutDay(selectedDay)
-                        ? "bg-[#2a2a2a] text-[#6b6b6b] border border-[#ffffff10] cursor-not-allowed"
+                {(isCompleted(selectedDay) || canValidateWorkoutDay(selectedDay)) && (
+                  <button
+                    onClick={() => markAsComplete()}
+                    disabled={completing || isCompleted(selectedDay)}
+                    className={"w-full text-xs font-semibold py-2.5 rounded-lg transition " + (
+                      isCompleted(selectedDay)
+                        ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default"
                         : "bg-green-500 text-white hover:bg-green-600"
-                  )}
-                >
-                  {completing
-                    ? "..."
-                    : isCompleted(selectedDay)
-                      ? "Treino Concluido ✓"
-                      : !canValidateWorkoutDay(selectedDay)
-                        ? "Prazo encerrado"
+                    )}
+                  >
+                    {completing
+                      ? "..."
+                      : isCompleted(selectedDay)
+                        ? "Treino Concluido ✓"
                         : "Concluir Treino"}
-                </button>
+                  </button>
+                )}
               </div>
             )}
             <div className="p-2.5 border-t border-[#ffffff10]">
