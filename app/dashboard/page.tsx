@@ -514,31 +514,43 @@ export default async function DashboardPage() {
     ? 'Prazo vence hoje'
     : 'Prazo final: sábado';
 
-  const pendingWorkouts = await prisma.workout.findMany({
-    where: {
-      status: 'PENDENTE',
-      ...(isTeacher ? { studentId: { in: myStudentIds } } : {}),
-    },
-    select: {
-      id: true,
-      createdAt: true,
-      student: {
+  // Um treino só permanece pendente enquanto a semana dele ainda está aberta
+  // para conclusão (segunda a sexta). Treinos de semanas anteriores continuam
+  // visíveis no histórico, mas não entram mais no contador/lista de pendências.
+  const currentWeekdayInSaoPaulo = getWeekdayInSaoPaulo(new Date());
+  const isWorkoutCompletionWindowOpen = !['Sat', 'Sun'].includes(currentWeekdayInSaoPaulo);
+
+  const pendingWorkouts = isWorkoutCompletionWindowOpen
+    ? await prisma.workout.findMany({
+        where: {
+          status: 'PENDENTE',
+          date: {
+            gte: currentWorkoutWeek.startOfWeek,
+            lt: currentWorkoutWeek.endOfWeek,
+          },
+          ...(isTeacher ? { studentId: { in: myStudentIds } } : {}),
+        },
         select: {
           id: true,
-          name: true,
-          user: {
+          createdAt: true,
+          student: {
             select: {
               id: true,
               name: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
         },
-      },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  });
+        orderBy: {
+          createdAt: 'desc',
+        },
+      })
+    : [];
 
   const openCareEvents = await prisma.studentCareEvent.findMany({
     where: {
