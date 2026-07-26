@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { upload } from "@vercel/blob/client";
 
 type Exercise = {
   id: string;
@@ -80,6 +81,8 @@ const emptyForm: ExerciseForm = {
 
 const ALLOWED_EXERCISE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_EXERCISE_IMAGE_SIZE = 4 * 1024 * 1024;
+const ALLOWED_EXERCISE_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+const MAX_EXERCISE_VIDEO_SIZE = 100 * 1024 * 1024;
 
 const MUSCLE_GROUP_OPTIONS = [
   { value: "Pernas", label: "Pernas" },
@@ -235,11 +238,13 @@ export default function ExerciseGrid({
   const [saving, setSaving] = useState(false);
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingSequence, setUploadingSequence] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [downloadingImageId, setDownloadingImageId] = useState<string | null>(null);
   const [copiedPromptKey, setCopiedPromptKey] = useState<string | null>(null);
 
   const mainFileInputRef = useRef<HTMLInputElement>(null);
   const sequenceFileInputRef = useRef<HTMLInputElement>(null);
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
 
   function updateForm<K extends keyof ExerciseForm>(
     field: K,
@@ -347,6 +352,46 @@ export default function ExerciseGrid({
         setUploadingSequence(false);
         if (sequenceFileInputRef.current) sequenceFileInputRef.current.value = "";
       }
+    }
+  }
+
+  async function handleVideoUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!ALLOWED_EXERCISE_VIDEO_TYPES.includes(file.type)) {
+      alert("Tipo não permitido. Use MP4, WebM ou MOV.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_EXERCISE_VIDEO_SIZE) {
+      alert(`O vídeo possui ${(file.size / 1024 / 1024).toFixed(1)} MB. O limite é 100 MB.`);
+      event.target.value = "";
+      return;
+    }
+
+    setUploadingVideo(true);
+
+    try {
+      const baseName = slugify(form.name || file.name.replace(/\.[a-z0-9]+$/i, "")) || "video-exercicio";
+      const extension = file.type === "video/webm" ? "webm" : file.type === "video/quicktime" ? "mov" : "mp4";
+      const blob = await upload(
+        `exercise-library/videos/${Date.now()}-${baseName}.${extension}`,
+        file,
+        {
+          access: "public",
+          handleUploadUrl: "/api/exercise-library/upload-video",
+        }
+      );
+
+      updateForm("videoUrl", blob.url);
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao enviar vídeo ao Vercel Blob.");
+    } finally {
+      setUploadingVideo(false);
+      if (videoFileInputRef.current) videoFileInputRef.current.value = "";
     }
   }
 
@@ -947,17 +992,41 @@ export default function ExerciseGrid({
             </div>
           </div>
 
-          <div>
-            <label className="text-sm text-[#e5e5e5] block mb-1">
-              Vídeo demonstrativo
-            </label>
+          <div className="rounded-xl border border-[#D4A373]/20 bg-[#0d0d0d] p-4 space-y-3">
+            <div>
+              <label className="text-sm text-[#e5e5e5] block mb-1">
+                Vídeo com orientação narrada
+              </label>
+              <p className="text-[10px] text-[#6b6b6b] mb-2">
+                MP4, WebM ou MOV de até 100 MB, enviado diretamente ao Vercel Blob.
+              </p>
+              <input
+                type="file"
+                ref={videoFileInputRef}
+                accept="video/mp4,video/webm,video/quicktime"
+                onChange={handleVideoUpload}
+                className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#b88a5e]"
+              />
+            </div>
+
+            {uploadingVideo && (
+              <p className="text-xs text-[#D4A373]">Enviando vídeo...</p>
+            )}
+
+            {form.videoUrl && !uploadingVideo && (
+              <video
+                src={form.videoUrl}
+                controls
+                preload="metadata"
+                className="max-h-72 w-full rounded-xl border border-[#ffffff10] bg-black"
+              />
+            )}
+
             <input
               value={form.videoUrl}
-              onChange={(event) =>
-                updateForm("videoUrl", event.target.value)
-              }
+              onChange={(event) => updateForm("videoUrl", event.target.value)}
               className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
-              placeholder="Cole a URL do vídeo, se houver..."
+              placeholder="Ou cole a URL do vídeo..."
             />
           </div>
 
@@ -975,7 +1044,7 @@ export default function ExerciseGrid({
 
           <button
             type="submit"
-            disabled={saving || uploadingMain || uploadingSequence}
+            disabled={saving || uploadingMain || uploadingSequence || uploadingVideo}
             className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#b88a5e] disabled:opacity-70"
           >
             {saving
@@ -1149,6 +1218,20 @@ export default function ExerciseGrid({
                           170
                         )}
                       </p>
+                    </div>
+                  )}
+
+                  {exercise.videoUrl && (
+                    <div className="rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#D4A373]">
+                        Orientação narrada disponível
+                      </p>
+                      <video
+                        src={exercise.videoUrl}
+                        controls
+                        preload="metadata"
+                        className="mt-2 max-h-56 w-full rounded-lg bg-black"
+                      />
                     </div>
                   )}
 
