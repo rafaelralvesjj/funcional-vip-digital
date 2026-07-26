@@ -245,8 +245,7 @@ export async function POST(req: NextRequest) {
           addRandomSuffix: true,
           contentType: file.type,
           cacheControlMaxAge: 365 * 24 * 60 * 60,
-          maximumSizeInBytes: MAX_FILE_SIZE,
-        });
+            });
         uploadedBlobUrl = blob.url;
 
         const data =
