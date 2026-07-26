@@ -6,8 +6,20 @@ import Providers from './providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Funcional Vip Digital',
-  description: 'Sua plataforma digital funcional e prática.',
+  title: 'Funcional VIP Digital',
+  description: 'Treinamento funcional personalizado com acompanhamento humano.',
+  icons: {
+    icon: [
+      { url: '/branding/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/branding/favicon-64.png', sizes: '64x64', type: 'image/png' },
+    ],
+    apple: [{ url: '/branding/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  openGraph: {
+    title: 'Funcional VIP Digital',
+    description: 'Treinamento funcional personalizado com acompanhamento humano.',
+    images: ['/branding/logo-1024.png'],
+  },
 }
 
 export default function RootLayout({
