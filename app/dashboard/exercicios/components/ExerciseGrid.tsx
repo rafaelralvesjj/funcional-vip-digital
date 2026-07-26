@@ -387,8 +387,12 @@ export default function ExerciseGrid({
 
       updateForm("videoUrl", blob.url);
     } catch (error) {
-      console.error(error);
-      alert("Erro ao enviar vídeo ao Vercel Blob.");
+      console.error("Erro no upload do vídeo:", error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Erro desconhecido ao enviar o vídeo.";
+      alert(`Erro ao enviar vídeo ao Vercel Blob: ${message}`);
     } finally {
       setUploadingVideo(false);
       if (videoFileInputRef.current) videoFileInputRef.current.value = "";
