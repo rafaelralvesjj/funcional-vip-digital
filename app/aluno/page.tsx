@@ -1860,10 +1860,10 @@ export default function AlunoPage() {
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <h3 className="text-[10px] font-semibold text-[#D4A373]">
-                              Vídeo demonstrativo
+                              Orientação narrada
                             </h3>
                             <p className="mt-1 text-[10px] text-[#a1a1a1]">
-                              Abra somente se quiser ver o movimento em vídeo.
+                              Assista à execução com a orientação narrada do exercício.
                             </p>
                           </div>
                           <button
@@ -1871,7 +1871,7 @@ export default function AlunoPage() {
                             onClick={() => setShowExerciseVideo((current) => !current)}
                             className="shrink-0 rounded-lg border border-[#D4A373]/30 px-3 py-1.5 text-[10px] font-semibold text-[#D4A373]"
                           >
-                            {showExerciseVideo ? "Ocultar" : "Ver vídeo"}
+                            {showExerciseVideo ? "Ocultar vídeo" : "Veja o vídeo com a orientação narrada"}
                           </button>
                         </div>
 
