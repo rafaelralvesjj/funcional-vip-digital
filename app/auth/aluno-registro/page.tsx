@@ -1,5 +1,7 @@
 "use client";
 
+import BrandLogo from "../../../components/BrandLogo";
+
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -358,8 +360,11 @@ export default function AlunoRegisterPage() {
     <main className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
+          <div className="mb-4 flex justify-center">
+            <BrandLogo variant="full" size="lg" priority />
+          </div>
           <h1 className="text-2xl font-bold text-[#D4A373]">
-            Funcional Vip Digital
+            Funcional VIP Digital
           </h1>
           <p className="text-sm text-[#a1a1a1] mt-2">
             Crie sua conta para iniciar sua experiência gratuita
