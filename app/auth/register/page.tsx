@@ -1,5 +1,7 @@
 "use client";
 
+import BrandLogo from "../../../components/BrandLogo";
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
@@ -75,8 +77,11 @@ export default function RegisterPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4 py-8">
       <div className="w-full max-w-md rounded-xl border border-[#ffffff10] bg-[#111111] p-6 shadow-2xl sm:p-8">
+        <div className="mb-4 flex justify-center">
+          <BrandLogo variant="full" size="lg" priority />
+        </div>
         <h1 className="mb-2 text-center text-2xl font-bold text-[#D4A373] sm:text-3xl">
-          Funcional Vip Digital
+          Funcional VIP Digital
         </h1>
         <p className="mb-6 text-center text-sm text-[#a1a1a1] sm:text-base">
           Crie sua conta
