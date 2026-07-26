@@ -44,9 +44,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json(jsonResponse);
   } catch (error) {
     console.error("POST /api/exercise-library/upload-video error:", error);
+
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : "Não foi possível gerar a autorização para o upload.";
+
     return NextResponse.json(
-      { error: "Não foi possível enviar o vídeo ao Vercel Blob." },
-      { status: 500 }
+      { error: message },
+      { status: 400 }
     );
   }
 }
