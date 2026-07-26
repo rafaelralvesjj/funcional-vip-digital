@@ -91,7 +91,6 @@ export async function POST(request: Request) {
       addRandomSuffix: true,
       contentType: fileEntry.type,
       cacheControlMaxAge: 365 * 24 * 60 * 60,
-      maximumSizeInBytes: MAX_FILE_SIZE,
     });
 
     return NextResponse.json({
