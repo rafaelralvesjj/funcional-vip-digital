@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import BrandLogo from "../components/BrandLogo";
 import {
   Activity,
   ArrowRight,
@@ -149,15 +150,12 @@ const faqs = [
 function BrandMark() {
   return (
     <div className="flex items-center gap-3">
-      <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-[#D4A373]/35 bg-[#D4A373]/10">
-        <span className="absolute h-7 w-3 rotate-45 rounded-full bg-[#D4A373]" />
-        <span className="absolute h-5 w-3 -translate-x-2 -rotate-45 rounded-full bg-[#D4A373]/75" />
-      </div>
+      <BrandLogo variant="symbol" size="md" priority />
       <div className="leading-none">
-        <div className="text-sm font-black uppercase tracking-[0.18em] text-white sm:text-base">
-          Funcional Vip
+        <div className="text-sm font-black uppercase tracking-[0.16em] text-white sm:text-base">
+          Funcional VIP
         </div>
-        <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.42em] text-[#D4A373]">
+        <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.42em] text-[#ff7a00]">
           Digital
         </div>
       </div>
