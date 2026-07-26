@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
 
 type Exercise = {
   id: string;
@@ -82,7 +81,7 @@ const emptyForm: ExerciseForm = {
 const ALLOWED_EXERCISE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_EXERCISE_IMAGE_SIZE = 4 * 1024 * 1024;
 const ALLOWED_EXERCISE_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
-const MAX_EXERCISE_VIDEO_SIZE = 100 * 1024 * 1024;
+const MAX_EXERCISE_VIDEO_SIZE = 4 * 1024 * 1024;
 
 const MUSCLE_GROUP_OPTIONS = [
   { value: "Pernas", label: "Pernas" },
@@ -366,7 +365,7 @@ export default function ExerciseGrid({
     }
 
     if (file.size > MAX_EXERCISE_VIDEO_SIZE) {
-      alert(`O vídeo possui ${(file.size / 1024 / 1024).toFixed(1)} MB. O limite é 100 MB.`);
+      alert(`O vídeo possui ${(file.size / 1024 / 1024).toFixed(1)} MB. O limite seguro para este envio é 4 MB.`);
       event.target.value = "";
       return;
     }
@@ -374,25 +373,30 @@ export default function ExerciseGrid({
     setUploadingVideo(true);
 
     try {
-      const baseName = slugify(form.name || file.name.replace(/\.[a-z0-9]+$/i, "")) || "video-exercicio";
-      const extension = file.type === "video/webm" ? "webm" : file.type === "video/quicktime" ? "mov" : "mp4";
-      const blob = await upload(
-        `exercise-library/videos/${Date.now()}-${baseName}.${extension}`,
-        file,
-        {
-          access: "public",
-          handleUploadUrl: "/api/exercise-library/upload-video",
-        }
-      );
+      const body = new FormData();
+      body.append("file", file);
+      body.append("exerciseName", form.name.trim());
 
-      updateForm("videoUrl", blob.url);
+      const response = await fetch("/api/exercise-library/upload-video", {
+        method: "POST",
+        body,
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.url) {
+        alert(
+          `Erro ao enviar vídeo: ${
+            data?.error || data?.message || "tente novamente"
+          }`
+        );
+        return;
+      }
+
+      updateForm("videoUrl", data.url as string);
     } catch (error) {
       console.error("Erro no upload do vídeo:", error);
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : "Erro desconhecido ao enviar o vídeo.";
-      alert(`Erro ao enviar vídeo ao Vercel Blob: ${message}`);
+      alert("Erro ao conectar com o Vercel Blob.");
     } finally {
       setUploadingVideo(false);
       if (videoFileInputRef.current) videoFileInputRef.current.value = "";
@@ -1002,7 +1006,7 @@ export default function ExerciseGrid({
                 Vídeo com orientação narrada
               </label>
               <p className="text-[10px] text-[#6b6b6b] mb-2">
-                MP4, WebM ou MOV de até 100 MB, enviado diretamente ao Vercel Blob.
+                MP4, WebM ou MOV de até 4 MB, enviado ao Vercel Blob já conectado ao projeto.
               </p>
               <input
                 type="file"
