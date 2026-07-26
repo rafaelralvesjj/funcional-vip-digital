@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import BrandLogo from "../../components/BrandLogo";
 import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
 import type { JSX } from "react";
@@ -157,14 +158,12 @@ export default function DashboardLayout({
 
       <aside className={`w-64 lg:w-72 fixed left-0 top-0 h-screen bg-[#111111] border-r border-[#ffffff10] flex flex-col z-50 transition-transform duration-300 ease-in-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
         <div className="p-6 border-b border-[#ffffff10] flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#D4A373] flex items-center justify-center text-[#0a0a0a] font-bold text-sm">
-              F
-            </div>
-            <span className="text-[#D4A373] font-bold text-base leading-tight">
-              Funcional Vip Digital
-            </span>
-          </Link>
+          <div className="flex items-center gap-3">
+            <BrandLogo href="/dashboard" variant="symbol" size="sm" priority />
+            <Link href="/dashboard" className="text-[#D4A373] font-bold text-base leading-tight">
+              Funcional VIP Digital
+            </Link>
+          </div>
 
           <button
             onClick={() => setSidebarOpen(false)}
@@ -231,9 +230,12 @@ export default function DashboardLayout({
             </svg>
           </button>
 
-          <span className="text-[#D4A373] font-bold text-sm">
-            Funcional Vip Digital
-          </span>
+          <div className="flex items-center gap-2">
+            <BrandLogo href="/dashboard" variant="symbol" size="sm" priority />
+            <span className="text-[#D4A373] font-bold text-xs sm:text-sm">
+              Funcional VIP Digital
+            </span>
+          </div>
 
           <div className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-xs">
             {session?.user?.name?.charAt(0).toUpperCase() || "U"}
