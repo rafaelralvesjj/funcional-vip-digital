@@ -1,4 +1,6 @@
 "use client";
+
+import BrandLogo from "../../../components/BrandLogo";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -41,8 +43,11 @@ export default function SignInPage() {
   return (
     <main className="min-h-screen w-full bg-[#0a0a0a] flex items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
       <div className="w-full max-w-md bg-[#111111] border border-[#ffffff10] rounded-xl p-6 sm:p-8 shadow-2xl">
+        <div className="mb-4 flex justify-center">
+          <BrandLogo variant="full" size="lg" priority />
+        </div>
         <h1 className="text-center text-2xl sm:text-3xl font-bold text-[#D4A373] mb-2">
-          Funcional Vip Digital
+          Funcional VIP Digital
         </h1>
         <p className="text-center text-[#a1a1a1] text-sm sm:text-base mb-6">
           Acesse sua conta
