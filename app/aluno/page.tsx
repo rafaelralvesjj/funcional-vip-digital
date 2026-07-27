@@ -1529,7 +1529,7 @@ export default function AlunoPage() {
                       <span>{day}</span>
                       <div className="flex gap-px mt-px">
                         {done && !partial && <div className="w-[3px] h-[3px] rounded-full bg-green-500" />}
-                        {partial && <div className="w-[3px] h-[3px] rounded-full bg-emerald-300" />}
+                        {partial && <div className="w-[3px] h-[3px] rounded-full bg-[#A3E635]" />}
                         {plan && !done && canValidateWorkoutDay(day) && (
                           <div className="w-[3px] h-[3px] rounded-full bg-[#F97316]" />
                         )}
@@ -1550,7 +1550,7 @@ export default function AlunoPage() {
                   <span className="h-2 w-2 rounded-full bg-green-500" /> Concluído
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-300" /> Concluído parcialmente
+                  <span className="h-2 w-2 rounded-full bg-[#A3E635]" /> Concluído parcialmente
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-[#F97316]" /> Disponível
