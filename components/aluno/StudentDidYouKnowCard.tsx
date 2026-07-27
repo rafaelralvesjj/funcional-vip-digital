@@ -55,6 +55,14 @@ export function StudentDidYouKnowCard() {
     };
   }, []);
 
+  function handleGoToChat() {
+    window.dispatchEvent(
+      new CustomEvent("fvd:open-student-chat", {
+        detail: { category: content?.category || "CHAT_FIRST_USE" },
+      })
+    );
+  }
+
   async function handleNextTip() {
     if (!content || confirming) return;
 
@@ -118,12 +126,13 @@ export function StudentDidYouKnowCard() {
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <a
-              href={content.actionHref || "/aluno#conversas-aluno"}
+            <button
+              type="button"
+              onClick={handleGoToChat}
               className="rounded-lg bg-[#D4A373] px-3 py-1.5 text-[10px] font-bold text-[#0a0a0a] transition hover:bg-[#e2b583]"
             >
-              {content.actionLabel || "Ir para o chat"}
-            </a>
+              {content.actionLabel || "Falar com meu professor"}
+            </button>
 
             <button
               type="button"
