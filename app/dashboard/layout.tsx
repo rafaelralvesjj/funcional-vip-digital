@@ -31,6 +31,7 @@ export default function DashboardLayout({
   const professorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/students", label: "Alunos", icon: "users" },
+    { href: "/dashboard/treinos", label: "Treinos", icon: "book" },
     { href: "/dashboard/conversas", label: "Conversas", icon: "message" },
     { href: "/dashboard/cuidado-aluno", label: "Acompanhamento do Aluno", icon: "heart" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
@@ -50,6 +51,7 @@ export default function DashboardLayout({
   const gestorItems = [
     { href: "/dashboard", label: "Dashboard", icon: "grid" },
     { href: "/dashboard/cuidado-aluno", label: "Acompanhamento do Aluno", icon: "heart" },
+    { href: "/dashboard/treinos", label: "Treinos", icon: "book" },
     { href: "/dashboard/financeiro", label: "Financeiro", icon: "credit" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/gestao", label: "Gestão", icon: "message" },
