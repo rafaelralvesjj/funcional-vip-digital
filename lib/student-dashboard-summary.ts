@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getStudentDisplayName } from "@/lib/display-name";
 
 export type StudentDashboardUiState =
   | "EXPERIENCIA_ATIVA"
@@ -23,6 +24,8 @@ export type StudentDashboardSummary = {
   student: {
     id: string;
     name: string;
+    preferredName: string | null;
+    displayName: string;
     email: string | null;
     phone: string | null;
     image: string | null;
@@ -486,6 +489,8 @@ export async function getStudentDashboardSummary(
     student: {
       id: student.id,
       name: student.name,
+      preferredName: student.preferredName,
+      displayName: getStudentDisplayName(student),
       email: student.email,
       phone: student.phone,
       image: student.image || student.userAuth?.image || null,
