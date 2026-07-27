@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { calculateAgeYears, formatBirthDateInput, formatBirthDatePtBr } from "@/lib/student-age";
+import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -624,6 +625,7 @@ function getEvolutionDecisionStatus({
 
 function buildAiPrompt(summaryText: string): string {
   return [
+    ...MANUAL_AI_EXECUTION_HEADER_LINES,
     "Você é um professor de educação física apoiando a montagem de um treino personalizado.",
     "",
     "Use APENAS o resumo do aluno abaixo para criar uma sugestão de treino. Não invente restrições, lesões, equipamentos ou metas que não estejam no resumo.",
