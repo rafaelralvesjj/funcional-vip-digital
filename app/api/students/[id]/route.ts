@@ -419,6 +419,10 @@ export async function PUT(
 
     const name =
       body.name !== undefined ? String(body.name || "").trim() : undefined;
+    const preferredName =
+      body.preferredName !== undefined
+        ? String(body.preferredName || "").trim().slice(0, 40) || null
+        : undefined;
     const email =
       body.email !== undefined ? normalizeEmail(body.email) : undefined;
     const phone =
@@ -533,6 +537,7 @@ export async function PUT(
         where: { id },
         data: {
           ...(name !== undefined && { name }),
+          ...(preferredName !== undefined && { preferredName }),
           ...(email !== undefined && { email }),
           ...(phone !== undefined && { phone }),
           ...(notes !== undefined && { notes }),
@@ -548,6 +553,7 @@ export async function PUT(
           userId: true,
           userAuthId: true,
           name: true,
+          preferredName: true,
           email: true,
           phone: true,
           notes: true,
