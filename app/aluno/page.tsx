@@ -797,6 +797,22 @@ export default function AlunoPage() {
     return startOfNextWeek;
   }
 
+  function isSundayWorkoutReleaseWindowOpen(referenceDate = new Date()): boolean {
+    return referenceDate.getDay() === 0 && referenceDate.getHours() >= 15;
+  }
+
+  function getStudentPlanVisibilityLimit(): Date {
+    const limit = getStartOfNextWeek();
+
+    // Aos domingos, a partir das 15h, os treinos da semana seguinte já ficam
+    // disponíveis para o aluno consultar antes de começar na segunda-feira.
+    if (isSundayWorkoutReleaseWindowOpen()) {
+      limit.setDate(limit.getDate() + 7);
+    }
+
+    return limit;
+  }
+
   function isDateInCurrentValidationWeek(date: Date): boolean {
     const normalized = new Date(date);
     normalized.setHours(0, 0, 0, 0);
@@ -856,7 +872,7 @@ export default function AlunoPage() {
      * Treinos de semana futura podem ser planejados pelo professor,
      * mas não aparecem no calendário, nas bolinhas ou na lista do aluno.
      */
-    return planDate < getStartOfNextWeek();
+    return planDate < getStudentPlanVisibilityLimit();
   }
 
   function getWeekDayName(day: number): string {
@@ -872,7 +888,7 @@ export default function AlunoPage() {
     const selectedDate = new Date(currentYear, currentMonth, day);
     selectedDate.setHours(0, 0, 0, 0);
 
-    if (selectedDate >= getStartOfNextWeek()) {
+    if (selectedDate >= getStudentPlanVisibilityLimit()) {
       return null;
     }
 
@@ -905,7 +921,7 @@ export default function AlunoPage() {
     setSelectedExercise(null);
     setSelectedPlan(null);
 
-    if (selectedDate >= getStartOfNextWeek()) {
+    if (selectedDate >= getStudentPlanVisibilityLimit()) {
       return;
     }
 
@@ -924,7 +940,7 @@ export default function AlunoPage() {
     const selectedDate = new Date(currentYear, currentMonth, day);
     selectedDate.setHours(0, 0, 0, 0);
 
-    if (selectedDate >= getStartOfNextWeek()) {
+    if (selectedDate >= getStudentPlanVisibilityLimit()) {
       return false;
     }
 
@@ -1186,7 +1202,7 @@ export default function AlunoPage() {
                   const plan = hasPlan(day);
                   const dayDate = new Date(currentYear, currentMonth, day);
                   dayDate.setHours(0, 0, 0, 0);
-                  const isFutureHidden = dayDate >= getStartOfNextWeek();
+                  const isFutureHidden = dayDate >= getStudentPlanVisibilityLimit();
                   return (
                     <button key={day} onClick={() => handleDayClick(day)}
                       className={"aspect-square rounded-sm flex flex-col items-center justify-center text-[7px] transition " + (isFutureHidden ? "cursor-default opacity-40 " : "cursor-pointer ") +
