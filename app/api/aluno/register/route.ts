@@ -535,6 +535,7 @@ export async function POST(req: NextRequest) {
       : await req.json();
 
     const name = getString(body, ["name", "nome", "fullName", "aluno"]);
+    const preferredName = getString(body, ["preferredName", "nomePreferido", "apelido"]).slice(0, 40);
     const email = normalizeEmail(getString(body, ["email", "mail"]));
     const phone = getString(body, ["phone", "telefone", "whatsapp", "celular"]);
     const phoneDigits = normalizePhone(phone);
@@ -714,6 +715,7 @@ export async function POST(req: NextRequest) {
       const student = await tx.student.create({
         data: {
           name,
+          preferredName: preferredName || null,
           email,
           phone: phone || null,
           image,
