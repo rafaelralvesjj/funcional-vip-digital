@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     const action = cleanText(body?.action).toUpperCase();
     const questionId = cleanText(body?.questionId);
     const question = await getAccessibleQuestion(questionId, userId, role);
-    if (!question) return NextResponse.json({ error: "Documento não encontrado ou sem permissão." }, { status: 404 });
+    if (!question || !question.student) return NextResponse.json({ error: "Documento não encontrado ou sem permissão." }, { status: 404 });
 
     if (action === "PREPARE_PROMPT") {
       return NextResponse.json({ ok: true, manualPrompt: buildPrompt(question) });
