@@ -1724,11 +1724,11 @@ export default function AlunoPage() {
                 <div key={ex.id || idx}
                   className={`rounded-xl p-2.5 border transition ${done ? "bg-green-500/10 border-green-500/30" : skipped ? "bg-amber-500/10 border-amber-500/30" : "bg-[#1a1a1a] border-[#ffffff08]"}`}>
                   <div className="flex items-start gap-2">
-                    <button type="button" onClick={() => saveExerciseProgress(ex, done ? "PENDENTE" : "CONCLUIDO")}
-                      disabled={savingExerciseId === ex.id || isCompleted(selectedDay!)}
-                      className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5 border ${done ? "bg-green-500 text-white border-green-400" : "bg-[#D4A373]/15 text-[#D4A373] border-[#D4A373]/30"}`}>
+                    <div
+                      className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5 border ${done ? "bg-green-500 text-white border-green-400" : "bg-[#D4A373]/15 text-[#D4A373] border-[#D4A373]/30"}`}
+                    >
                       {done ? "✓" : idx + 1}
-                    </button>
+                    </div>
                     <button type="button" onClick={() => { setSelectedExercise(ex); setImgError(false); setShowSequenceImage(false); setShowExerciseVideo(false); }} className="flex-1 min-w-0 text-left">
                       <p className={`text-sm font-medium ${done ? "text-green-300 line-through decoration-green-500/50" : "text-[#f5f5f5]"}`}>{ex.name}</p>
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[9px] text-[#a1a1a1]">
@@ -1739,8 +1739,26 @@ export default function AlunoPage() {
                       {done && <p className="mt-1 text-[9px] text-green-400">Feito {progress?.effort ? `• ${progress.effort === "FACIL" ? "Fácil" : progress.effort === "DIFICIL" ? "Difícil" : "Na medida"}` : ""}</p>}
                       {skipped && <p className="mt-1 text-[9px] text-amber-300">Não realizado • {progress.skipReason}</p>}
                     </button>
-                    {!done && !isCompleted(selectedDay!) && (
-                      <button type="button" onClick={() => { setSkipExercise(ex); setSkipReason(""); }} className="px-2 py-1 text-[9px] rounded-lg border border-[#ffffff10] text-[#a1a1a1]">Não fiz</button>
+                    {!isCompleted(selectedDay!) && (
+                      <div className="flex shrink-0 flex-col gap-1.5">
+                        <button
+                          type="button"
+                          disabled={savingExerciseId === ex.id}
+                          onClick={() => saveExerciseProgress(ex, done ? "PENDENTE" : "CONCLUIDO")}
+                          className={`min-w-[68px] rounded-lg border px-2 py-1.5 text-[9px] font-semibold transition ${done ? "border-green-500/40 bg-green-500/15 text-green-300" : "border-[#D4A373]/40 bg-[#D4A373]/15 text-[#E7B785]"}`}
+                        >
+                          {savingExerciseId === ex.id ? "Salvando..." : done ? "✓ Feito" : "Marcar feito"}
+                        </button>
+                        {!done && (
+                          <button
+                            type="button"
+                            onClick={() => { setSkipExercise(ex); setSkipReason(""); }}
+                            className="min-w-[68px] rounded-lg border border-[#ffffff10] px-2 py-1 text-[9px] text-[#a1a1a1]"
+                          >
+                            Não fiz
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2112,17 +2130,37 @@ export default function AlunoPage() {
             </div>
             <div className="p-3 border-t border-[#ffffff10] space-y-2">
               {!isCompleted(selectedDay || 0) && (
-                <div>
-                  <p className="mb-2 text-center text-[10px] text-[#a1a1a1]">Como foi este exercício?</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[["FACIL", "😊 Fácil"], ["NA_MEDIDA", "😐 Na medida"], ["DIFICIL", "🥵 Difícil"]].map(([value, label]) => (
-                      <button key={value} type="button" disabled={savingExerciseId === selectedExercise.id}
-                        onClick={() => saveExerciseProgress(selectedExercise, "CONCLUIDO", { effort: value })}
-                        className={`rounded-lg border px-2 py-2 text-[10px] font-semibold ${exerciseProgress[selectedExercise.id]?.effort === value ? "border-green-500 bg-green-500/20 text-green-300" : "border-[#ffffff10] bg-[#1a1a1a] text-[#e5e5e5]"}`}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={savingExerciseId === selectedExercise.id}
+                    onClick={() => saveExerciseProgress(
+                      selectedExercise,
+                      exerciseProgress[selectedExercise.id]?.status === "CONCLUIDO" ? "PENDENTE" : "CONCLUIDO"
+                    )}
+                    className={`w-full rounded-lg border py-3 text-[12px] font-bold transition ${exerciseProgress[selectedExercise.id]?.status === "CONCLUIDO" ? "border-green-500/40 bg-green-500/15 text-green-300" : "border-[#D4A373] bg-[#D4A373] text-[#0a0a0a]"}`}
+                  >
+                    {savingExerciseId === selectedExercise.id
+                      ? "Salvando..."
+                      : exerciseProgress[selectedExercise.id]?.status === "CONCLUIDO"
+                        ? "✓ Exercício feito — tocar para desmarcar"
+                        : "Marcar exercício como feito"}
+                  </button>
+
+                  {exerciseProgress[selectedExercise.id]?.status === "CONCLUIDO" && (
+                    <div>
+                      <p className="mb-2 text-center text-[10px] text-[#a1a1a1]">Como foi este exercício?</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[["FACIL", "😊 Fácil"], ["NA_MEDIDA", "😐 Na medida"], ["DIFICIL", "🥵 Difícil"]].map(([value, label]) => (
+                          <button key={value} type="button" disabled={savingExerciseId === selectedExercise.id}
+                            onClick={() => saveExerciseProgress(selectedExercise, "CONCLUIDO", { effort: value })}
+                            className={`rounded-lg border px-2 py-2 text-[10px] font-semibold ${exerciseProgress[selectedExercise.id]?.effort === value ? "border-green-500 bg-green-500/20 text-green-300" : "border-[#ffffff10] bg-[#1a1a1a] text-[#e5e5e5]"}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               <button
