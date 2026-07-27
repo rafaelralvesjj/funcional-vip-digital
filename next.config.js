@@ -1,3 +1,5 @@
+const path = require("path");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -6,6 +8,17 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["@vercel/blob", "undici"],
   },
-}
 
-module.exports = nextConfig
+  webpack(config, { isServer }) {
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        undici: path.resolve(__dirname, "lib/undici-browser.js"),
+      };
+    }
+
+    return config;
+  },
+};
+
+module.exports = nextConfig;
