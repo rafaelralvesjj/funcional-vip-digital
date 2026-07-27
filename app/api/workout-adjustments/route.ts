@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
-import { getStudentTechnicalContext, formatStudentTechnicalContext } from "@/lib/student-technical-memory";
+import { getStudentTechnicalContext } from "@/lib/student-technical-memory";
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 
 
@@ -528,7 +528,6 @@ function buildAdjustmentPrompt({
     reps: exercise.reps,
     weight: exercise.weight,
     restTime: exercise.restTime,
-    notes: exercise.notes,
     order: exercise.order,
   }));
 
@@ -545,105 +544,78 @@ function buildAdjustmentPrompt({
     name: exercise.name,
   }));
 
-  const requiredResponseExample = {
-    name: "Nome do treino adaptado",
-    description: "Descrição objetiva do treino",
-    objective: "Objetivo principal",
-    focusAreas: "Áreas de foco",
-    intensity: "Intensidade",
-    estimatedDurationMinutes: 45,
-    estimatedCaloriesMin: 0,
-    estimatedCaloriesMax: 0,
-    studentSummary: "Resumo simples para o aluno",
-    safetyNote: "Orientação de segurança, sem inventar restrições",
-    notes: "Observações para o professor",
-    rationale: "Explique de forma objetiva o que foi alterado e por quê",
-    studentMessage:
-      "Mensagem humana para informar ao aluno que o treino pendente foi ajustado após revisão do professor.",
-    exercises: [
-      {
-        exerciseId: "ID_EXATO_DA_BIBLIOTECA",
-        series: 3,
-        reps: "10",
-        weight: "",
-        restTime: "60s",
-        notes: "",
-        order: 0,
-      },
-    ],
+  const technicalContext = context.technicalContext || {};
+  const adherence = technicalContext.adherence || {};
+  const exerciseHistory = technicalContext.exerciseHistory || {};
+
+  const preferences = (context.activePreferences || [])
+    .map((item: any) => cleanText(item.originalMessage || item.summary))
+    .filter(Boolean);
+
+  const easy = (exerciseHistory.easy || []).map((item: any) =>
+    `${item.exerciseName}${item.count ? ` (${item.count}x)` : ""}`
+  );
+  const difficult = (exerciseHistory.difficult || []).map((item: any) =>
+    `${item.exerciseName}${item.count ? ` (${item.count}x)` : ""}`
+  );
+  const skipped = (exerciseHistory.skipped || []).map((item: any) => {
+    const reasons = Array.isArray(item.reasons) ? item.reasons.join(", ") : "";
+    return `${item.exerciseName}${reasons ? `: ${reasons}` : ""}`;
+  });
+  const care = (technicalContext.openCareEvents || [])
+    .map((item: any) =>
+      cleanText(`${item.title || ""}${item.description ? `: ${item.description}` : ""}`)
+    )
+    .filter(Boolean);
+  const approvedMemory = (technicalContext.approvedTechnicalMemory || [])
+    .map((item: any) => cleanText(item.summary || item.content || item.description))
+    .filter(Boolean);
+
+  const historySummary = {
+    adherence: cleanText(adherence.summary) || "Sem resumo de adesão.",
+    easy,
+    difficult,
+    skipped,
+    care,
+    approvedMemory,
+  };
+
+  const currentWorkout = {
+    name: plan.name,
+    description: plan.description,
+    objective: plan.objective,
+    focusAreas: plan.focusAreas,
+    intensity: plan.intensity,
+    estimatedDurationMinutes: plan.estimatedDurationMinutes,
+    estimatedCaloriesMin: plan.estimatedCaloriesMin,
+    estimatedCaloriesMax: plan.estimatedCaloriesMax,
+    studentSummary: plan.studentSummary,
+    safetyNote: plan.safetyNote,
+    exercises: currentExercises,
   };
 
   return [
     ...MANUAL_AI_EXECUTION_HEADER_LINES,
-    "Você é um assistente de prescrição de treino que apoia um professor de educação física.",
-    "Adapte SOMENTE o treino pendente informado. O treino já concluído não pode ser alterado.",
-    "A proposta será revisada e confirmada pelo professor antes de substituir o treino atual.",
-    "Use exclusivamente exerciseId da biblioteca oficial fornecida.",
-    "Mantenha a data, o objetivo geral e uma duração coerente, mas substitua os exercícios incompatíveis com as preferências ativas.",
-    "Não invente lesões, restrições, equipamentos, cargas ou diagnósticos.",
-    "Não transforme preferência em evento de cuidado.",
-    "Evite cardio de academia quando a preferência disser que o cardio ocorre somente na corrida de rua.",
-    "Priorize musculação nos dias de academia quando essa preferência estiver registrada.",
-    "Retorne SOMENTE um JSON válido, sem markdown, sem crases, sem comentários e sem texto antes ou depois.",
-    "Mantenha exatamente todos os campos do modelo de resposta.",
-    "O campo exercises deve conter ao menos um exercício e todos os exerciseId devem existir na biblioteca fornecida.",
-    "Os campos numéricos devem ser números, não textos.",
+    "Adapte apenas o treino pendente abaixo para apoiar o professor.",
+    "Responda somente com um objeto JSON válido, sem markdown ou explicações.",
+    "Use somente exerciseId da biblioteca fornecida. Não invente exercícios, cargas, restrições, lesões, equipamentos ou diagnósticos.",
+    "Mantenha data e objetivo geral. Respeite preferências, histórico e eventos de cuidado. Um relato isolado pede cautela, não progressão automática.",
+    "Exercício difícil ou não realizado deve ser simplificado ou substituído. Dor/desconforto exige revisão humana.",
+    "A proposta será revisada pelo professor antes de ser aplicada.",
     "",
     `ALUNO: ${context.preference.student.name}`,
-    `DATA DO TREINO: ${context.workout.date.toISOString().slice(0, 10)}`,
+    `DATA: ${context.workout.date.toISOString().slice(0, 10)}`,
+    `PREFERÊNCIA PRINCIPAL: ${cleanText(context.preference.originalMessage || context.preference.summary)}`,
+    `PREFERÊNCIAS ATIVAS: ${JSON.stringify(preferences)}`,
+    `HISTÓRICO RESUMIDO: ${JSON.stringify(historySummary)}`,
+    `TREINO ATUAL: ${JSON.stringify(currentWorkout)}`,
+    `BIBLIOTECA PERMITIDA: ${JSON.stringify(availableExercises)}`,
     "",
-    "PREFERÊNCIA QUE GEROU O AJUSTE:",
-    JSON.stringify(
-      {
-        category: context.preference.category,
-        summary: context.preference.summary,
-        originalMessage: context.preference.originalMessage,
-      },
-      null,
-      2
-    ),
-    "",
-    "TODAS AS PREFERÊNCIAS ATIVAS:",
-    JSON.stringify(context.activePreferences, null, 2),
-    "",
-    "HISTÓRICO INTELIGENTE E MEMÓRIA TÉCNICA APROVADA:",
-    context.technicalContext ? formatStudentTechnicalContext(context.technicalContext) : "Sem histórico adicional.",
-    "",
-    "REGRAS OBRIGATÓRIAS DE DECISÃO:",
-    "- Use sinais Fácil/Difícil/Não realizado e seus motivos; não trate um único relato como tendência sem indicar cautela.",
-    "- Dor ou desconforto exige revisão humana e não autoriza progressão automática.",
-    "- Falta de equipamento exige substituição compatível com os recursos confirmados.",
-    "- Falta de tempo pede redução de volume/duração, preservando o objetivo principal.",
-    "- Informações de documento só podem ser usadas se estiverem na memória técnica aprovada.",
-    "- Antes de responder, confira se respeitou preferências, histórico, cuidado, equipamentos, duração e IDs da biblioteca.",
-    "",
-    "TREINO ATUAL:",
-    JSON.stringify(
-      {
-        name: plan.name,
-        description: plan.description,
-        objective: plan.objective,
-        focusAreas: plan.focusAreas,
-        intensity: plan.intensity,
-        estimatedDurationMinutes: plan.estimatedDurationMinutes,
-        estimatedCaloriesMin: plan.estimatedCaloriesMin,
-        estimatedCaloriesMax: plan.estimatedCaloriesMax,
-        studentSummary: plan.studentSummary,
-        safetyNote: plan.safetyNote,
-        notes: plan.notes,
-        exercises: currentExercises,
-      },
-      null,
-      2
-    ),
-    "",
-    "BIBLIOTECA OFICIAL COMPACTA PARA ESTE AJUSTE:",
-    `Foram enviados ${availableExercises.length} exercícios: os exercícios atuais e as alternativas mais relevantes já filtradas pelo sistema.`,
-    "Cada item contém somente exerciseId e name para reduzir o tamanho do prompt. Use apenas esses IDs.",
-    JSON.stringify(availableExercises, null, 2),
-    "",
-    "MODELO OBRIGATÓRIO DA RESPOSTA:",
-    JSON.stringify(requiredResponseExample, null, 2),
+    "CAMPOS OBRIGATÓRIOS NO JSON:",
+    "name, description, objective, focusAreas, intensity, estimatedDurationMinutes, estimatedCaloriesMin, estimatedCaloriesMax, studentSummary, safetyNote, notes, rationale, studentMessage, exercises.",
+    "Cada item de exercises deve conter: exerciseId, series, reps, weight, restTime, notes, order.",
+    "estimatedDurationMinutes, estimatedCaloriesMin, estimatedCaloriesMax, series e order devem ser números.",
+    "studentMessage deve informar de forma humana que o treino pendente foi ajustado após revisão do professor.",
   ].join("\n");
 }
 
