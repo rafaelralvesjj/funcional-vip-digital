@@ -223,7 +223,23 @@ export default async function DashboardPage() {
   }
 
   const students = await prisma.student.findMany({
-    where: isTeacher ? { userId } : {},
+    where: isTeacher
+      ? {
+          OR: [
+            { userId },
+            {
+              contracts: {
+                some: {
+                  professorId: userId,
+                  status: {
+                    notIn: ['CANCELADO', 'CANCELLED', 'FINALIZADO', 'FINALIZED', 'INATIVO', 'ENCERRADO'],
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {},
     select: {
       id: true,
       name: true,
@@ -243,6 +259,7 @@ export default async function DashboardPage() {
         ],
         select: {
           id: true,
+          professorId: true,
           startDate: true,
           endDate: true,
           status: true,
@@ -290,6 +307,31 @@ export default async function DashboardPage() {
     return String(student.commercialStatus || 'SEM_CONTRATO_ATIVO').toUpperCase();
   }
 
+  function isUsableProfessorContract(contract: {
+    professorId?: string | null;
+    status?: string | null;
+  }): boolean {
+    const status = String(contract.status || '').toUpperCase();
+
+    return !['CANCELADO', 'CANCELLED', 'FINALIZADO', 'FINALIZED', 'INATIVO', 'ENCERRADO'].includes(status);
+  }
+
+  function getLinkedProfessorIds(student: (typeof students)[number]): string[] {
+    const linkedProfessorIds = new Set<string>();
+
+    if (student.userId) {
+      linkedProfessorIds.add(student.userId);
+    }
+
+    for (const contract of student.contracts || []) {
+      if (contract.professorId && isUsableProfessorContract(contract)) {
+        linkedProfessorIds.add(contract.professorId);
+      }
+    }
+
+    return Array.from(linkedProfessorIds);
+  }
+
   function getDashboardWeeklyWorkoutLimit(student: { contractedTrainingDaysPerMonth?: number | null }) {
     /*
      * O dashboard precisa funcionar também para aluno recém-criado/teste,
@@ -304,8 +346,9 @@ export default async function DashboardPage() {
     ? students.filter((student) => {
         if (student.active === false) return false;
 
-        const hasProfessorLinked =
-          Boolean(student.userId) && professorIds.includes(student.userId || '');
+        const hasProfessorLinked = getLinkedProfessorIds(student).some((professorId) =>
+          professorIds.includes(professorId)
+        );
 
         /*
          * Regra ajustada:
@@ -337,8 +380,10 @@ export default async function DashboardPage() {
      * experiência agendada para a próxima semana não aparece como pendência
      * da semana atual.
      */
-    const hasProfessorLinked =
-      Boolean(student.userId) && professorIds.includes(student.userId || '');
+    const linkedProfessorIds = getLinkedProfessorIds(student);
+    const hasProfessorLinked = isTeacher
+      ? linkedProfessorIds.includes(userId)
+      : linkedProfessorIds.some((professorId) => professorIds.includes(professorId));
 
     return hasProfessorLinked;
   });
