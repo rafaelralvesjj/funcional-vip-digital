@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { signOut } from "next-auth/react";
 import { upload } from "@vercel/blob/client";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
@@ -215,6 +215,7 @@ export default function AlunoPage() {
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [questionFileInputKey, setQuestionFileInputKey] = useState(0);
   const [sendingQuestion, setSendingQuestion] = useState(false);
+  const questionTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
   const [imgError, setImgError] = useState(false);
@@ -242,6 +243,24 @@ export default function AlunoPage() {
   const [followUpFile, setFollowUpFile] = useState<File | null>(null);
   const [followUpFileInputKey, setFollowUpFileInputKey] = useState(0);
   const [sendingFollowUp, setSendingFollowUp] = useState(false);
+
+  useEffect(() => {
+    function openStudentChat() {
+      setQuestionTarget("PROFESSOR");
+
+      const chatSection = document.getElementById("conversas-aluno");
+      chatSection?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      window.setTimeout(() => {
+        questionTextAreaRef.current?.focus({ preventScroll: true });
+      }, 500);
+    }
+
+    window.addEventListener("fvd:open-student-chat", openStudentChat);
+    return () => {
+      window.removeEventListener("fvd:open-student-chat", openStudentChat);
+    };
+  }, []);
 
   const getImageUrl = (url?: string): string | null => {
     if (!url) return null;
@@ -1571,7 +1590,7 @@ export default function AlunoPage() {
                 <option value="GESTAO">Gestão</option>
               </select>
 
-              <textarea value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
+              <textarea ref={questionTextAreaRef} value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
                 placeholder={questionTarget === "GESTAO" ? "Pergunte para a gestão..." : "Pergunte para seu professor..."}
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
               <div className="flex items-center gap-1 mb-1.5">
