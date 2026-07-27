@@ -5,6 +5,7 @@ import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialSt
 import ProfilePhotoEditor from "@/components/ProfilePhotoEditor";
 import StudentSurveyPanel from "@/components/aluno/StudentSurveyPanel";
 import EmailNotificationReminder from "@/components/aluno/EmailNotificationReminder";
+import { StudentDidYouKnowCard } from "@/components/aluno/StudentDidYouKnowCard";
 type PersonAvatarProps = {
   image?: string | null;
   name?: string | null;
@@ -1057,6 +1058,8 @@ export default function AlunoPage() {
       <EmailNotificationReminder />
 
       <AlunoCommercialStatusPanel />
+
+      <StudentDidYouKnowCard />
 
       <StudentSurveyPanel />
 
