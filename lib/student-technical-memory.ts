@@ -106,7 +106,7 @@ export async function getStudentTechnicalContext(studentId: string): Promise<Tec
     : "Sem treinos registrados nos últimos 84 dias.";
 
   const sortCounts = (map: Map<string, number>) =>
-    [...map.entries()]
+    Array.from(map.entries())
       .map(([exerciseName, count]) => ({ exerciseName, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
@@ -115,8 +115,8 @@ export async function getStudentTechnicalContext(studentId: string): Promise<Tec
     exerciseSignals: {
       easy: sortCounts(easy),
       difficult: sortCounts(difficult),
-      skipped: [...skipped.entries()]
-        .map(([exerciseName, value]) => ({ exerciseName, count: value.count, reasons: [...value.reasons] }))
+      skipped: Array.from(skipped.entries())
+        .map(([exerciseName, value]) => ({ exerciseName, count: value.count, reasons: Array.from(value.reasons) }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 20),
     },
