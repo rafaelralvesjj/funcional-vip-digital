@@ -124,6 +124,10 @@ export default function AlunoPage() {
   const [careEvents, setCareEvents] = useState<any[]>([]);
   const [loadingCareEvents, setLoadingCareEvents] = useState(false);
   const [sendingCareReturn, setSendingCareReturn] = useState(false);
+  const [exerciseProgress, setExerciseProgress] = useState<Record<string, any>>({});
+  const [savingExerciseId, setSavingExerciseId] = useState<string | null>(null);
+  const [skipExercise, setSkipExercise] = useState<any>(null);
+  const [skipReason, setSkipReason] = useState("");
 
   // Estados para o modal de dúvidas (thread)
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
@@ -367,6 +371,65 @@ export default function AlunoPage() {
       }
     } catch {}
   }
+  function getSelectedWorkoutDateIso(day: number | null = selectedDay): string {
+    if (day === null) return "";
+    const date = new Date(currentYear, currentMonth, day, 12, 0, 0, 0);
+    return date.toISOString();
+  }
+
+  async function fetchExerciseProgress(planId: string, day: number) {
+    try {
+      const params = new URLSearchParams({
+        workoutPlanId: planId,
+        date: getSelectedWorkoutDateIso(day),
+      });
+      const res = await fetch(`/api/workout/exercise-progress?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        const next: Record<string, any> = {};
+        for (const item of Array.isArray(data?.items) ? data.items : []) next[item.exerciseId] = item;
+        setExerciseProgress(next);
+      }
+    } catch {}
+  }
+
+  async function saveExerciseProgress(exercise: any, status: "CONCLUIDO" | "PULADO" | "PENDENTE", options?: { effort?: string; skipReason?: string }) {
+    if (!selectedPlan || selectedDay === null) return;
+    setSavingExerciseId(exercise.id);
+    try {
+      const res = await fetch("/api/workout/exercise-progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workoutPlanId: selectedPlan.id,
+          exerciseId: exercise.id,
+          date: getSelectedWorkoutDateIso(),
+          status,
+          effort: options?.effort || null,
+          skipReason: options?.skipReason || null,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.item) {
+        setExerciseProgress((current) => ({ ...current, [exercise.id]: data.item }));
+        setSkipExercise(null);
+        setSkipReason("");
+      } else {
+        setMessage({ type: "error", text: data?.error || "Não foi possível registrar o exercício." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Não foi possível registrar o exercício." });
+    }
+    setSavingExerciseId(null);
+  }
+
+  function getExerciseTotals() {
+    const exercises = Array.isArray(selectedPlan?.exercises) ? selectedPlan.exercises : [];
+    const done = exercises.filter((exercise: any) => exerciseProgress[exercise.id]?.status === "CONCLUIDO").length;
+    const skipped = exercises.filter((exercise: any) => exerciseProgress[exercise.id]?.status === "PULADO").length;
+    return { total: exercises.length, done, skipped, resolved: done + skipped };
+  }
+
   async function fetchWorkouts(id: string) {
     try {
       const url = "/api/workout/mark-complete?studentId=" + id + "&month=" + (currentMonth + 1) + "&year=" + currentYear;
@@ -928,8 +991,10 @@ export default function AlunoPage() {
     const plan = getPlanForDay(day);
     if (plan) {
       setSelectedPlan(plan);
+      setExerciseProgress({});
       setCareEventDetail("");
       setShowWorkoutModal(true);
+      void fetchExerciseProgress(plan.id, day);
     }
   }
   function isToday(day: number) {
@@ -1470,6 +1535,24 @@ export default function AlunoPage() {
         </div>
       )}
 
+      {skipExercise && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-amber-500/30 bg-[#111] p-4 shadow-2xl">
+            <h3 className="text-sm font-bold text-[#f5f5f5]">Por que não realizou?</h3>
+            <p className="mt-1 text-[10px] text-[#a1a1a1]">{skipExercise.name}</p>
+            <div className="mt-3 grid gap-2">
+              {["Não deu tempo", "Senti dor ou desconforto", "Muito difícil", "Não tinha equipamento", "Não entendi como fazer", "Outro motivo"].map((reason) => (
+                <button key={reason} type="button" onClick={() => setSkipReason(reason)} className={`rounded-lg border px-3 py-2 text-left text-[11px] ${skipReason === reason ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-[#ffffff10] bg-[#1a1a1a] text-[#e5e5e5]"}`}>{reason}</button>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button type="button" onClick={() => { setSkipExercise(null); setSkipReason(""); }} className="flex-1 rounded-lg border border-[#ffffff10] py-2 text-[11px] text-[#a1a1a1]">Cancelar</button>
+              <button type="button" disabled={!skipReason || savingExerciseId === skipExercise.id} onClick={() => saveExerciseProgress(skipExercise, "PULADO", { skipReason })} className="flex-1 rounded-lg bg-amber-500 py-2 text-[11px] font-semibold text-black disabled:opacity-40">Registrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL DO AVISO */}
       {selectedNotice && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedNotice(null)}>
@@ -1616,26 +1699,52 @@ export default function AlunoPage() {
                 </div>
               )}
 
-              {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => (
+              {(() => {
+                const totals = getExerciseTotals();
+                const percent = totals.total ? Math.round((totals.resolved / totals.total) * 100) : 0;
+                return totals.total ? (
+                  <div className="rounded-xl border border-[#D4A373]/20 bg-[#0a0a0a] p-3">
+                    <div className="mb-2 flex items-center justify-between text-[10px]">
+                      <span className="font-semibold text-[#f5f5f5]">Progresso do treino</span>
+                      <span className="text-[#D4A373]">{totals.resolved} de {totals.total} • {percent}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-[#242424]">
+                      <div className="h-full rounded-full bg-[#D4A373] transition-all" style={{ width: `${percent}%` }} />
+                    </div>
+                    {totals.total - totals.resolved === 1 && <p className="mt-2 text-[10px] text-green-300">Falta só mais um exercício. Vamos terminar!</p>}
+                  </div>
+                ) : null;
+              })()}
+
+              {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => {
+                const progress = exerciseProgress[ex.id];
+                const done = progress?.status === "CONCLUIDO";
+                const skipped = progress?.status === "PULADO";
+                return (
                 <div key={ex.id || idx}
-                  onClick={() => { setSelectedExercise(ex); setImgError(false); setShowSequenceImage(false); setShowExerciseVideo(false); }}
-                  className="bg-[#1a1a1a] rounded-xl p-2.5 border border-[#ffffff08] cursor-pointer hover:border-[#D4A373]/40 transition active:scale-[0.98]">
+                  className={`rounded-xl p-2.5 border transition ${done ? "bg-green-500/10 border-green-500/30" : skipped ? "bg-amber-500/10 border-amber-500/30" : "bg-[#1a1a1a] border-[#ffffff08]"}`}>
                   <div className="flex items-start gap-2">
-                    <span className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">{idx + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#f5f5f5]">{ex.name}</p>
+                    <button type="button" onClick={() => saveExerciseProgress(ex, done ? "PENDENTE" : "CONCLUIDO")}
+                      disabled={savingExerciseId === ex.id || isCompleted(selectedDay!)}
+                      className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5 border ${done ? "bg-green-500 text-white border-green-400" : "bg-[#D4A373]/15 text-[#D4A373] border-[#D4A373]/30"}`}>
+                      {done ? "✓" : idx + 1}
+                    </button>
+                    <button type="button" onClick={() => { setSelectedExercise(ex); setImgError(false); setShowSequenceImage(false); setShowExerciseVideo(false); }} className="flex-1 min-w-0 text-left">
+                      <p className={`text-sm font-medium ${done ? "text-green-300 line-through decoration-green-500/50" : "text-[#f5f5f5]"}`}>{ex.name}</p>
                       <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[9px] text-[#a1a1a1]">
                         <span>{ex.series || '-'} series x {ex.reps || '-'} reps</span>
                         {ex.weight && <span>Carga: {ex.weight}kg</span>}
                         {ex.restTime && <span>Descanso: {ex.restTime}</span>}
                       </div>
-                    </div>
-                    <svg className="w-3.5 h-3.5 text-[#525252] shrink-0 mt-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                      {done && <p className="mt-1 text-[9px] text-green-400">Feito {progress?.effort ? `• ${progress.effort === "FACIL" ? "Fácil" : progress.effort === "DIFICIL" ? "Difícil" : "Na medida"}` : ""}</p>}
+                      {skipped && <p className="mt-1 text-[9px] text-amber-300">Não realizado • {progress.skipReason}</p>}
+                    </button>
+                    {!done && !isCompleted(selectedDay!) && (
+                      <button type="button" onClick={() => { setSkipExercise(ex); setSkipReason(""); }} className="px-2 py-1 text-[9px] rounded-lg border border-[#ffffff10] text-[#a1a1a1]">Não fiz</button>
+                    )}
                   </div>
                 </div>
-              ))}
+              )})}
               {(!selectedPlan.exercises || selectedPlan.exercises.length === 0) && (
                 <p className="text-center text-[#6b6b6b] text-sm py-6">Nenhum exercicio cadastrado neste treino.</p>
               )}
@@ -1755,23 +1864,41 @@ export default function AlunoPage() {
                   </div>
                 )}
 
-                {(isCompleted(selectedDay) || canValidateWorkoutDay(selectedDay)) && (
-                  <button
-                    onClick={() => markAsComplete()}
-                    disabled={completing || isCompleted(selectedDay)}
-                    className={"w-full text-xs font-semibold py-2.5 rounded-lg transition " + (
-                      isCompleted(selectedDay)
-                        ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default"
-                        : "bg-green-500 text-white hover:bg-green-600"
-                    )}
-                  >
-                    {completing
-                      ? "..."
-                      : isCompleted(selectedDay)
-                        ? "Treino Concluido ✓"
-                        : "Concluir Treino"}
-                  </button>
-                )}
+                {(isCompleted(selectedDay) || canValidateWorkoutDay(selectedDay)) && (() => {
+                  const totals = getExerciseTotals();
+                  const allDone = totals.total > 0 && totals.done === totals.total;
+                  const allResolved = totals.total > 0 && totals.resolved === totals.total;
+                  return (
+                    <div className="space-y-2">
+                      {!isCompleted(selectedDay) && !allResolved && (
+                        <p className="text-center text-[10px] text-[#a1a1a1]">Marque todos os exercícios como feitos ou informe o motivo dos que não realizou.</p>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (allDone) return markAsComplete();
+                          if (allResolved && totals.skipped > 0) {
+                            const skippedItems = (selectedPlan.exercises || []).filter((ex: any) => exerciseProgress[ex.id]?.status === "PULADO");
+                            const detail = skippedItems.map((ex: any) => `${ex.name}: ${exerciseProgress[ex.id]?.skipReason}`).join(" | ");
+                            setCareEventDetail(detail);
+                            return markAsComplete({ careEventType: "OUTRO", careEventDescription: detail, completionStatus: "NAO_CONCLUIDO_COM_RELATO" });
+                          }
+                        }}
+                        disabled={completing || isCompleted(selectedDay) || !allResolved}
+                        className={"w-full text-xs font-semibold py-2.5 rounded-lg transition " + (
+                          isCompleted(selectedDay)
+                            ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default"
+                            : allDone
+                              ? "bg-green-500 text-white hover:bg-green-600"
+                              : allResolved
+                                ? "bg-amber-500 text-black hover:bg-amber-400"
+                                : "bg-[#242424] text-[#6b6b6b] cursor-not-allowed"
+                        )}
+                      >
+                        {completing ? "..." : isCompleted(selectedDay) ? "Treino Concluído ✓" : allDone ? "Concluir Treino" : allResolved ? "Encerrar treino com relato" : `Faltam ${Math.max(0, totals.total - totals.resolved)} exercício(s)`}
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             <div className="p-2.5 border-t border-[#ffffff10]">
@@ -1983,7 +2110,21 @@ export default function AlunoPage() {
                 </div>
               )}
             </div>
-            <div className="p-3 border-t border-[#ffffff10]">
+            <div className="p-3 border-t border-[#ffffff10] space-y-2">
+              {!isCompleted(selectedDay || 0) && (
+                <div>
+                  <p className="mb-2 text-center text-[10px] text-[#a1a1a1]">Como foi este exercício?</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[["FACIL", "😊 Fácil"], ["NA_MEDIDA", "😐 Na medida"], ["DIFICIL", "🥵 Difícil"]].map(([value, label]) => (
+                      <button key={value} type="button" disabled={savingExerciseId === selectedExercise.id}
+                        onClick={() => saveExerciseProgress(selectedExercise, "CONCLUIDO", { effort: value })}
+                        className={`rounded-lg border px-2 py-2 text-[10px] font-semibold ${exerciseProgress[selectedExercise.id]?.effort === value ? "border-green-500 bg-green-500/20 text-green-300" : "border-[#ffffff10] bg-[#1a1a1a] text-[#e5e5e5]"}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedExercise(null)}
