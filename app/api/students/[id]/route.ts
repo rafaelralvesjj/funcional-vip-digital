@@ -195,6 +195,7 @@ function buildStudentResponse(student: AnyStudent) {
   return {
     id: student.id,
     name: student.name,
+    preferredName: student.preferredName,
     email: student.email,
     phone: student.phone || student.userAuth?.phone || null,
     birthDate: formatBirthDateInput(student.userAuth?.birthDate),
@@ -262,6 +263,7 @@ export async function GET(
         userId: true,
         userAuthId: true,
         name: true,
+        preferredName: true,
         email: true,
         phone: true,
         notes: true,
@@ -610,6 +612,7 @@ export async function PUT(
         userId: true,
         userAuthId: true,
         name: true,
+        preferredName: true,
         email: true,
         phone: true,
         notes: true,
