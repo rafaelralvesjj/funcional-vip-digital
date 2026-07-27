@@ -1437,6 +1437,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (requestedCompletionStatus === "CONCLUIDO") {
+      const dayStart = new Date(workoutDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      const [exerciseCount, completedExerciseCount] = await Promise.all([
+        prisma.exercise.count({ where: { workoutPlanId } }),
+        prisma.workoutExerciseProgress.count({
+          where: {
+            studentId,
+            workoutPlanId,
+            status: "CONCLUIDO",
+            workoutDate: { gte: dayStart, lt: dayEnd },
+          },
+        }),
+      ]);
+
+      if (exerciseCount > 0 && completedExerciseCount < exerciseCount) {
+        return NextResponse.json(
+          {
+            error: `Conclua todos os exercícios antes de finalizar o treino. Progresso atual: ${completedExerciseCount} de ${exerciseCount}.`,
+            code: "EXERCISES_PENDING",
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     if (requestedCareEventType && !careEventDescription) {
       return NextResponse.json(
         { error: "Descreva em poucas palavras o que aconteceu antes de encerrar o treino com relato." },
