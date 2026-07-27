@@ -248,7 +248,7 @@ export default function GestorVoceSabiaPage() {
           Gestão de conteúdo
         </p>
         <h1 className="text-2xl font-bold text-[#f5f5f5] mt-2">
-          Você sabia?
+          Dicas do Professor
         </h1>
         <p className="text-sm text-[#a1a1a1] mt-1 max-w-3xl">
           Gerencie as dicas rotativas que ensinam o aluno a usar o chat. O sistema prioriza automaticamente o que cada aluno ainda não utilizou, como envio de vídeo, foto ou documento.
