@@ -20,7 +20,7 @@
   "dependencies": {
     "@auth/prisma-adapter": "1.5.0",
     "@prisma/client": "^5.10.0",
-    "@vercel/blob": "2.6.1",
+    "@vercel/blob": "2.0.0",
     "autoprefixer": "^10.4.18",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.0",
@@ -48,5 +48,8 @@
     "prisma": "^5.10.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "undici": "5.28.5"
   }
 }
