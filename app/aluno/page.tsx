@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { signOut } from "next-auth/react";
-import { upload } from "@vercel/blob/client";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
 import ProfilePhotoEditor from "@/components/ProfilePhotoEditor";
 import StudentSurveyPanel from "@/components/aluno/StudentSurveyPanel";
@@ -144,21 +143,59 @@ async function uploadStudentChatFile(studentId: string, file: File): Promise<Cha
   }
 
   const pathname = `chat/${studentId}/${Date.now()}-${sanitizeChatFileName(file.name)}`;
-  const blob = await upload(pathname, file, {
-    access: "public",
-    handleUploadUrl: "/api/chat/upload",
+  const prepareResponse = await fetch("/api/chat/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      pathname,
+      contentType: file.type,
+      size: file.size,
+    }),
   });
 
+  const preparePayload = await prepareResponse.json().catch(() => null);
+
+  if (!prepareResponse.ok || !preparePayload?.presignedUrl) {
+    throw new Error(
+      preparePayload?.message ||
+        preparePayload?.error ||
+        "Não foi possível preparar o envio do arquivo."
+    );
+  }
+
+  const uploadResponse = await fetch(String(preparePayload.presignedUrl), {
+    method: "PUT",
+    headers: { "Content-Type": file.type },
+    body: file,
+  });
+
+  if (!uploadResponse.ok) {
+    const uploadError = await uploadResponse.text().catch(() => "");
+    throw new Error(
+      uploadError || "Não foi possível concluir o envio do arquivo."
+    );
+  }
+
+  const blobPayload = await uploadResponse.json().catch(() => null);
+  const publicUrl = (() => {
+    if (blobPayload?.url) return String(blobPayload.url);
+
+    const url = new URL(String(preparePayload.presignedUrl));
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  })();
+
   if (file.type.startsWith("video/")) {
-    return { videoUrl: blob.url };
+    return { videoUrl: publicUrl };
   }
 
   if (file.type.startsWith("image/")) {
-    return { imageUrl: blob.url };
+    return { imageUrl: publicUrl };
   }
 
   return {
-    documentUrl: blob.url,
+    documentUrl: publicUrl,
     documentName: file.name,
     documentMimeType: file.type || "application/octet-stream",
   };
