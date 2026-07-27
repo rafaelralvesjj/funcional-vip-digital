@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
+import { getStudentTechnicalContext, formatStudentTechnicalContext } from "@/lib/student-technical-memory";
 
 
 type AdjustmentAction =
@@ -317,6 +318,7 @@ async function getAdjustmentContext({
       preference,
       workout: null,
       activePreferences: [],
+      technicalContext: null,
     };
   }
 
@@ -368,7 +370,7 @@ async function getAdjustmentContext({
     };
   }
 
-  const activePreferences = await prisma.studentTrainingPreference.findMany({
+  const [activePreferences, technicalContext] = await Promise.all([prisma.studentTrainingPreference.findMany({
     where: {
       studentId: preference.studentId,
       status: "ACTIVE",
@@ -379,12 +381,13 @@ async function getAdjustmentContext({
       summary: true,
       originalMessage: true,
     },
-  });
+  }), getStudentTechnicalContext(preference.studentId)]);
 
   return {
     preference,
     workout,
     activePreferences,
+    technicalContext,
   };
 }
 
@@ -481,6 +484,17 @@ function buildAdjustmentPrompt({
     "",
     "TODAS AS PREFERÊNCIAS ATIVAS:",
     JSON.stringify(context.activePreferences, null, 2),
+    "",
+    "HISTÓRICO INTELIGENTE E MEMÓRIA TÉCNICA APROVADA:",
+    context.technicalContext ? formatStudentTechnicalContext(context.technicalContext) : "Sem histórico adicional.",
+    "",
+    "REGRAS OBRIGATÓRIAS DE DECISÃO:",
+    "- Use sinais Fácil/Difícil/Não realizado e seus motivos; não trate um único relato como tendência sem indicar cautela.",
+    "- Dor ou desconforto exige revisão humana e não autoriza progressão automática.",
+    "- Falta de equipamento exige substituição compatível com os recursos confirmados.",
+    "- Falta de tempo pede redução de volume/duração, preservando o objetivo principal.",
+    "- Informações de documento só podem ser usadas se estiverem na memória técnica aprovada.",
+    "- Antes de responder, confira se respeitou preferências, histórico, cuidado, equipamentos, duração e IDs da biblioteca.",
     "",
     "TREINO ATUAL:",
     JSON.stringify(
