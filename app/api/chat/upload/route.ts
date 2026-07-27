@@ -1,4 +1,4 @@
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { issueSignedToken, presignUrl } from "@vercel/blob";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -6,8 +6,9 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-const ALLOWED_CONTENT_TYPES = [
+const ALLOWED_CONTENT_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
@@ -18,9 +19,16 @@ const ALLOWED_CONTENT_TYPES = [
   "video/quicktime",
   "video/x-msvideo",
   "video/mpeg",
-];
+]);
 
 const MAX_CHAT_MEDIA_SIZE = 25 * 1024 * 1024;
+const SIGNED_URL_VALIDITY_MS = 15 * 60 * 1000;
+
+type UploadRequestBody = {
+  pathname?: unknown;
+  contentType?: unknown;
+  size?: unknown;
+};
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
@@ -34,18 +42,6 @@ function normalizePathname(value: string): string {
     .replace(/[^a-zA-Z0-9._/-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^\/+/, "");
-}
-
-function getStudentIdFromPayload(tokenPayload?: string | null): string | null {
-  if (!tokenPayload) return null;
-
-  try {
-    const parsed = JSON.parse(tokenPayload) as { studentId?: unknown };
-    const studentId = String(parsed?.studentId || "").trim();
-    return studentId || null;
-  } catch {
-    return null;
-  }
 }
 
 async function getStudentForSession() {
@@ -81,61 +77,76 @@ async function getStudentForSession() {
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    const student = await getStudentForSession();
+
+    if (!student) {
       return NextResponse.json(
-        { error: "Vercel Blob não está conectado ao projeto." },
-        { status: 500 }
+        { error: "Aluno não encontrado para o usuário conectado." },
+        { status: 401 }
       );
     }
 
-    const body = (await request.json()) as HandleUploadBody;
+    const body = (await request.json()) as UploadRequestBody;
+    const pathname = String(body.pathname || "").trim();
+    const contentType = String(body.contentType || "").trim().toLowerCase();
+    const size = Number(body.size);
+    const normalizedPathname = normalizePathname(pathname);
+    const expectedPrefix = `chat/${student.id}/`;
 
-    const response = await handleUpload({
-      body,
-      request,
-      onBeforeGenerateToken: async (pathname) => {
-        const student = await getStudentForSession();
+    if (
+      !pathname ||
+      normalizedPathname !== pathname ||
+      !normalizedPathname.startsWith(expectedPrefix) ||
+      normalizedPathname.includes("../")
+    ) {
+      return NextResponse.json(
+        { error: "Caminho de upload inválido para este aluno." },
+        { status: 400 }
+      );
+    }
 
-        if (!student) {
-          throw new Error("Aluno não encontrado para o usuário conectado.");
-        }
+    if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+      return NextResponse.json(
+        { error: "Formato de foto ou vídeo não permitido." },
+        { status: 400 }
+      );
+    }
 
-        const normalizedPathname = normalizePathname(pathname);
-        const expectedPrefix = `chat/${student.id}/`;
+    if (!Number.isFinite(size) || size <= 0 || size > MAX_CHAT_MEDIA_SIZE) {
+      return NextResponse.json(
+        { error: "Fotos e vídeos precisam ter até 25 MB." },
+        { status: 400 }
+      );
+    }
 
-        if (
-          !normalizedPathname.startsWith(expectedPrefix) ||
-          normalizedPathname !== pathname ||
-          normalizedPathname.includes("../")
-        ) {
-          throw new Error("Caminho de upload inválido para este aluno.");
-        }
-
-        return {
-          allowedContentTypes: ALLOWED_CONTENT_TYPES,
-          maximumSizeInBytes: MAX_CHAT_MEDIA_SIZE,
-          addRandomSuffix: true,
-          tokenPayload: JSON.stringify({ studentId: student.id }),
-        };
-      },
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
-        console.info("Upload de chat concluído", {
-          pathname: blob.pathname,
-          studentId: getStudentIdFromPayload(tokenPayload),
-        });
-      },
+    const validUntil = Date.now() + SIGNED_URL_VALIDITY_MS;
+    const token = await issueSignedToken({
+      pathname: normalizedPathname,
+      operations: ["put"],
+      allowedContentTypes: [contentType],
+      maximumSizeInBytes: MAX_CHAT_MEDIA_SIZE,
+      validUntil,
     });
 
-    return NextResponse.json(response);
+    const { presignedUrl } = await presignUrl(token, {
+      pathname: normalizedPathname,
+      operation: "put",
+      access: "public",
+      validUntil,
+      addRandomSuffix: true,
+      allowOverwrite: false,
+    });
+
+    return NextResponse.json({ presignedUrl });
   } catch (error) {
     console.error("POST /api/chat/upload error:", error);
 
     return NextResponse.json(
       {
-        error: "Não foi possível enviar o arquivo do chat.",
+        error: "Não foi possível preparar o envio do arquivo do chat.",
         message: getErrorMessage(error),
       },
-      { status: 400 }
+      { status: 500 }
     );
   }
 }
