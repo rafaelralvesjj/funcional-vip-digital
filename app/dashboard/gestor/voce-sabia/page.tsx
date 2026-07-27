@@ -18,7 +18,17 @@ type Message = {
   text: string;
 };
 
-const categories = [
+const chatCategories = [
+  "CHAT_FIRST_USE",
+  "CHAT_VIDEO",
+  "CHAT_PHOTO",
+  "CHAT_DOCUMENT",
+  "CHAT_OBJECTIVE",
+  "CHAT_EQUIPMENT",
+  "CHAT_PAIN",
+] as const;
+
+const legacyCategories = [
   "CONSTANCIA",
   "TREINO",
   "RECUPERACAO",
@@ -29,14 +39,44 @@ const categories = [
   "EVOLUCAO",
   "ACOMPANHAMENTO",
   "MOTIVACAO",
+  "SEGURANCA",
   "GERAL",
-];
+] as const;
+
+const categoryLabels: Record<string, string> = {
+  CHAT_FIRST_USE: "Primeiro uso do chat",
+  CHAT_VIDEO: "Vídeo para correção técnica",
+  CHAT_PHOTO: "Foto para tirar dúvidas",
+  CHAT_DOCUMENT: "Exame, laudo ou prescrição",
+  CHAT_OBJECTIVE: "Mudança de objetivo",
+  CHAT_EQUIPMENT: "Novo equipamento ou local",
+  CHAT_PAIN: "Dor ou desconforto",
+  CONSTANCIA: "Constância",
+  TREINO: "Treino",
+  RECUPERACAO: "Recuperação",
+  HIDRATACAO: "Hidratação",
+  NUTRICAO: "Nutrição",
+  SONO: "Sono",
+  HABITOS: "Hábitos",
+  EVOLUCAO: "Evolução",
+  ACOMPANHAMENTO: "Acompanhamento",
+  MOTIVACAO: "Motivação",
+  SEGURANCA: "Segurança",
+  GERAL: "Geral",
+};
+
+const chatCategorySet = new Set<string>(chatCategories);
+
+function getCategoryLabel(category: string): string {
+  return categoryLabels[category] || category;
+}
+
 
 const emptyForm = {
   id: "",
   title: "",
   content: "",
-  category: "GERAL",
+  category: "CHAT_FIRST_USE",
   priority: 0,
   active: true,
 };
@@ -211,7 +251,7 @@ export default function GestorVoceSabiaPage() {
           Você sabia?
         </h1>
         <p className="text-sm text-[#a1a1a1] mt-1 max-w-3xl">
-          Cadastre conteúdos educativos que serão enviados automaticamente aos alunos uma vez por semana. O sistema evita repetir o mesmo conteúdo para o mesmo aluno até concluir o ciclo.
+          Gerencie as dicas rotativas que ensinam o aluno a usar o chat. O sistema prioriza automaticamente o que cada aluno ainda não utilizou, como envio de vídeo, foto ou documento.
         </p>
       </div>
 
@@ -237,7 +277,7 @@ export default function GestorVoceSabiaPage() {
               {form.id ? "Editar conteúdo" : "Novo conteúdo"}
             </h2>
             <p className="text-xs text-[#6b6b6b] mt-1">
-              Use linguagem simples, educativa e motivadora.
+              Use linguagem simples, prática e direcionada ao uso do chat.
             </p>
           </div>
 
@@ -260,7 +300,7 @@ export default function GestorVoceSabiaPage() {
             <input
               value={form.title}
               onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-              placeholder="Ex.: Você sabia que o descanso também faz parte do treino?"
+              placeholder="Ex.: Seu professor está a uma mensagem de distância"
               className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#525252] outline-none focus:border-[#D4A373]"
             />
           </div>
@@ -274,12 +314,24 @@ export default function GestorVoceSabiaPage() {
               onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
               className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
             >
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
+              <optgroup label="Dicas personalizadas do chat">
+                {chatCategories.map((category) => (
+                  <option key={category} value={category}>
+                    {getCategoryLabel(category)}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Conteúdos antigos — fora da rotação atual">
+                {legacyCategories.map((category) => (
+                  <option key={category} value={category}>
+                    {getCategoryLabel(category)}
+                  </option>
+                ))}
+              </optgroup>
             </select>
+            <p className="mt-1 text-[10px] leading-relaxed text-[#6b6b6b]">
+              Os temas de chat entram na rotação personalizada. Os temas antigos ficam preservados apenas para consulta.
+            </p>
           </div>
         </div>
 
@@ -290,7 +342,7 @@ export default function GestorVoceSabiaPage() {
           <textarea
             value={form.content}
             onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))}
-            placeholder="Escreva o conteúdo educativo que será enviado ao aluno."
+            placeholder="Explique como o aluno pode usar o chat para receber orientação e acompanhamento."
             className="w-full min-h-[130px] rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#525252] outline-none focus:border-[#D4A373] resize-y"
           />
         </div>
@@ -315,7 +367,7 @@ export default function GestorVoceSabiaPage() {
               onChange={(event) => setForm((prev) => ({ ...prev, active: event.target.checked }))}
               className="h-4 w-4 accent-[#D4A373]"
             />
-            Ativo para envio automático
+            Ativo na rotação do aluno
           </label>
 
           <button
@@ -336,7 +388,7 @@ export default function GestorVoceSabiaPage() {
               Conteúdos cadastrados
             </h2>
             <p className="text-xs text-[#6b6b6b] mt-1">
-              {contents.filter((item) => item.active).length} ativo(s) de {contents.length} cadastrado(s).
+              {contents.filter((item) => item.active && chatCategorySet.has(item.category)).length} dica(s) ativa(s) na rotação personalizada.
             </p>
           </div>
 
@@ -373,8 +425,13 @@ export default function GestorVoceSabiaPage() {
                         {item.active ? "ATIVO" : "INATIVO"}
                       </span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D4A373]/10 text-[#D4A373]">
-                        {item.category}
+                        {getCategoryLabel(item.category)}
                       </span>
+                      {!chatCategorySet.has(item.category) && (
+                        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">
+                          Fora da rotação atual
+                        </span>
+                      )}
                       <span className="text-[10px] text-[#6b6b6b]">
                         Prioridade {item.priority || 0}
                       </span>
