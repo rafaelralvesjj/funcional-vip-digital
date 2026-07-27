@@ -269,6 +269,33 @@ async function hasOpenCareEventInCurrentWeek(studentId: string): Promise<boolean
 }
 
 
+
+async function hasWorkoutReleaseNoticeToday(studentId: string): Promise<boolean> {
+  const { start, end } = getTodayRange();
+
+  const existing = await prisma.notice.findFirst({
+    where: {
+      studentId,
+      type: "WORKOUT",
+      createdAt: {
+        gte: start,
+        lt: end,
+      },
+      title: {
+        in: [
+          "Seus treinos da semana estão disponíveis",
+          "Seus primeiros treinos já estão disponíveis",
+        ],
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return Boolean(existing);
+}
+
 async function registerSent({
   studentId,
   workoutId,
@@ -529,6 +556,13 @@ async function notifyTodayWorkout({
 
   if (await alreadySent({ studentId: workout.studentId, eventType, eventKey })) {
     return { sent: false, reason: "Já enviado" };
+  }
+
+  if (await hasWorkoutReleaseNoticeToday(workout.studentId)) {
+    return {
+      sent: false,
+      reason: "Comunicação de liberação da semana já enviada hoje",
+    };
   }
 
   const workoutName = workout.workoutPlan?.name || "seu treino";
