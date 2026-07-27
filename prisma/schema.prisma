@@ -109,6 +109,7 @@ model Student {
   contracts        StudentContract[]
   contractPayments        ContractPayment[]
   contractLifecycleEvents ContractLifecycleEvent[]
+  exerciseProgress       WorkoutExerciseProgress[]
 
   @@map("students")
 }
@@ -166,6 +167,7 @@ model WorkoutPlan {
   exercises Exercise[]
   workouts  Workout[]
   careEvents StudentCareEvent[]
+  exerciseProgress WorkoutExerciseProgress[]
 
   @@map("workout_plans")
 }
@@ -188,6 +190,7 @@ model Exercise {
 
   workoutPlan     WorkoutPlan      @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
   libraryExercise ExerciseLibrary? @relation(fields: [libraryExerciseId], references: [id])
+  progress        WorkoutExerciseProgress[]
 
   @@index([libraryExerciseId])
   @@map("exercises")
@@ -210,6 +213,29 @@ model Workout {
   careEvents  StudentCareEvent[]
 
   @@map("workouts")
+}
+
+
+model WorkoutExerciseProgress {
+  id            String   @id @default(uuid())
+  studentId     String   @map("student_id")
+  workoutPlanId String   @map("workout_plan_id")
+  exerciseId    String   @map("exercise_id")
+  workoutDate   DateTime @map("workout_date")
+  status        String   @default("PENDENTE")
+  effort        String?
+  skipReason    String?  @map("skip_reason")
+  completedAt   DateTime? @map("completed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  workoutPlan WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+  exercise    Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, exerciseId, workoutDate])
+  @@index([studentId, workoutPlanId, workoutDate])
+  @@map("workout_exercise_progress")
 }
 
 model CheckIn {
