@@ -608,6 +608,41 @@ async function validateTeacher(teacherId: string) {
   });
 }
 
+async function isStudentLinkedToTeacher(studentId: string, teacherId: string): Promise<boolean> {
+  const linkedStudent = await prisma.student.findFirst({
+    where: {
+      id: studentId,
+      OR: [
+        {
+          userId: teacherId,
+        },
+        {
+          contracts: {
+            some: {
+              professorId: teacherId,
+              status: {
+                notIn: [
+                  "CANCELADO",
+                  "CANCELLED",
+                  "FINALIZADO",
+                  "FINALIZED",
+                  "INATIVO",
+                  "ENCERRADO",
+                ],
+              },
+            },
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return Boolean(linkedStudent);
+}
+
 async function findActiveContractIdForCareEvent(studentId: string): Promise<string | null> {
   const now = new Date();
 
@@ -831,27 +866,10 @@ export async function GET(req: NextRequest) {
     }
 
     if (role === "TEACHER") {
-      const myStudents = await prisma.student.findMany({
-        where: {
-          userId,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      const myStudentIds = myStudents.map((student) => student.id);
-
-      where.OR = [
-        {
-          teacherId: userId,
-        },
-        {
-          studentId: {
-            in: myStudentIds,
-          },
-        },
-      ];
+      // O professor acessa somente os fios que foram direcionados a ele.
+      // Isso impede que conversas de outro professor apareçam apenas porque
+      // o aluno também está ou esteve vinculado ao usuário autenticado.
+      where.teacherId = userId;
     }
 
     if (role === "STUDENT") {
@@ -1079,11 +1097,25 @@ export async function POST(req: NextRequest) {
       }
 
       if (loggedRole === "TEACHER") {
-        if (validatedStudent.userId !== userId) {
+        if (parentId && teacherId && teacherId !== userId) {
           return NextResponse.json(
-            { error: "Você só pode iniciar ou responder conversas com alunos vinculados a você" },
+            { error: "Esta conversa foi direcionada a outro professor e não pode ser respondida por você." },
             { status: 403 }
           );
+        }
+
+        // Uma resposta em fio já direcionado ao professor continua permitida.
+        // Para iniciar uma conversa ou assumir um fio antigo sem teacherId,
+        // o aluno precisa estar vinculado diretamente ou por contrato.
+        if (!parentId || !teacherId) {
+          const isLinkedStudent = await isStudentLinkedToTeacher(studentId, userId);
+
+          if (!isLinkedStudent) {
+            return NextResponse.json(
+              { error: "Você só pode iniciar ou responder conversas com alunos vinculados a você" },
+              { status: 403 }
+            );
+          }
         }
 
         // Em conversa professor-aluno, o professor autenticado é sempre o teacherId.
