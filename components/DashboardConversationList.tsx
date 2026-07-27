@@ -811,6 +811,22 @@ export default function DashboardConversationList({
     }
   }
 
+  function handleDownloadManualPrompt(conversationId: string) {
+    const prompt = adjustmentDraftByConversationId[conversationId]?.manualPrompt;
+
+    if (!prompt) return;
+
+    const blob = new Blob([prompt], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `prompt-adaptacao-treino-${conversationId}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleCopyManualPrompt(conversationId: string) {
     const prompt = adjustmentDraftByConversationId[conversationId]?.manualPrompt;
 
@@ -1074,13 +1090,22 @@ export default function DashboardConversationList({
                           </p>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => handleCopyManualPrompt(conversation.id)}
-                          className="rounded-lg border border-blue-400/30 px-3 py-2 text-[11px] font-semibold text-blue-200 hover:bg-blue-500/10"
-                        >
-                          Copiar prompt de adaptação
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyManualPrompt(conversation.id)}
+                            className="rounded-lg border border-blue-400/30 px-3 py-2 text-[11px] font-semibold text-blue-200 hover:bg-blue-500/10"
+                          >
+                            Copiar prompt de adaptação
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadManualPrompt(conversation.id)}
+                            className="rounded-lg border border-blue-400/30 px-3 py-2 text-[11px] font-semibold text-blue-200 hover:bg-blue-500/10"
+                          >
+                            Baixar prompt em TXT
+                          </button>
+                        </div>
 
                         <div>
                           <label
