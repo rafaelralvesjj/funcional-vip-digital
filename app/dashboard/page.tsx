@@ -655,10 +655,15 @@ export default async function DashboardPage() {
     where: {
       parentId: null,
       senderRole: 'STUDENT',
-      teacherId: {
-        not: null,
-      },
-      ...(isTeacher ? { studentId: { in: myStudentIds } } : {}),
+      ...(isTeacher
+        ? {
+            teacherId: userId,
+          }
+        : {
+            teacherId: {
+              not: null,
+            },
+          }),
     },
     select: {
       id: true,
