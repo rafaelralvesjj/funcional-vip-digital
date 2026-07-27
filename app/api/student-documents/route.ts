@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
+import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 
 function normalizeRole(value?: string | null): string {
   const role = String(value || "").toUpperCase();
@@ -53,6 +54,7 @@ function buildPrompt(question: any): string {
   };
 
   return [
+    ...MANUAL_AI_EXECUTION_HEADER_LINES,
     "Você está apoiando um professor de educação física na leitura de um documento enviado por um aluno.",
     "Analise o ARQUIVO QUE SERÁ ANEXADO JUNTO COM ESTE PROMPT.",
     "Não dê diagnóstico, não interprete valores além do texto, não invente restrições e não substitua avaliação médica.",
