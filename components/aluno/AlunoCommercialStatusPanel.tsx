@@ -232,137 +232,118 @@ export function AlunoCommercialStatusPanel() {
   const isButtonDisabled = requestStatus === "loading" || requestStatus === "success";
 
   return (
-    <section className="bg-[#111] border border-[#ffffff10] rounded-xl p-3">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="text-[9px] uppercase tracking-[0.18em] text-[#D4A373] font-semibold">
+    <section className="rounded-xl border border-[#ffffff10] bg-[#111] px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#D4A373]">
             Meu acompanhamento
           </p>
-          <h2 className="mt-1 text-sm font-bold text-[#f5f5f5]">
+          <h2 className="mt-0.5 text-[13px] font-bold leading-snug text-[#f5f5f5]">
             {getStatusTitle(summary)}
           </h2>
-          <p className="mt-1 text-[11px] leading-relaxed text-[#a1a1a1]">
-            {summary.message}
-          </p>
         </div>
 
         {cycle && (
-          <div className="shrink-0 rounded-full border border-[#ffffff10] bg-[#1a1a1a] px-3 py-1 text-[10px] text-[#e5e5e5]">
+          <div className="shrink-0 rounded-full border border-[#ffffff10] bg-[#1a1a1a] px-2.5 py-1 text-[9px] text-[#e5e5e5]">
             {isTrialScheduled && (cycle.daysUntilStart || summary.flags?.daysUntilTrialStart)
               ? `Começa em ${cycle.daysUntilStart || summary.flags?.daysUntilTrialStart} dia(s)`
               : cycle.daysLeft >= 0
-                ? `${cycle.daysLeft} dia(s) restante(s)`
-                : "Ciclo vencido"}
+                ? `${cycle.daysLeft} dia(s)`
+                : "Vencido"}
           </div>
         )}
       </div>
 
-      {isTrialScheduled && (
-        <div className="mt-3 rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 p-3">
-          <p className="text-[11px] font-semibold text-[#D4A373]">
-            Início direcionado para a próxima janela segura
-          </p>
-          <p className="mt-1 text-[10px] leading-relaxed text-[#e8d6c0]">
-            Como o cadastro aconteceu no fim da semana, seus treinos começam na primeira semana real de acompanhamento. Assim evitamos treino corrido ou acumulado só para cumprir quantidade.
-          </p>
+      <p className="mt-1.5 text-[10px] leading-relaxed text-[#9a9a9a]">
+        {summary.message}
+      </p>
 
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+      {isTrialScheduled && (
+        <div className="mt-2 rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 px-2.5 py-2">
+          <p className="text-[10px] font-semibold text-[#D4A373]">
+            Início na próxima janela segura
+          </p>
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
             <InfoItem label="Início" value={formatDate(cycle?.startDate)} />
             <InfoItem label="Vencimento" value={formatDate(cycle?.endDate)} />
-            <InfoItem label="Treinos" value="Aguardando semana segura" />
+            <InfoItem label="Treinos" value="Semana segura" />
           </div>
         </div>
       )}
 
       {isCarePause && (
-        <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
-          <p className="text-[11px] font-semibold text-red-300">
-            Pausa por cuidado ativa
+        <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-2">
+          <p className="text-[10px] font-semibold text-red-300">Pausa por cuidado ativa</p>
+          <p className="mt-0.5 text-[9px] leading-relaxed text-red-100/75">
+            Aguarde a liberação do professor antes de retomar os treinos.
           </p>
-          <p className="mt-1 text-[10px] leading-relaxed text-red-100/80">
-            Seus treinos ficam pausados até a retomada ser revisada pelo professor. Esse período não deve ser tratado como falta, baixa adesão comum ou treino realizado.
-          </p>
-
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
             <InfoItem label="Status" value={getCarePauseStatusLabel(summary.currentCarePause?.status)} />
             <InfoItem
               label="Impacto"
-              value={summary.commercialImpact?.status === "CONGELAR_EXPERIENCIA" ? "Preservar experiência" : "Avaliar compensação"}
+              value={summary.commercialImpact?.status === "CONGELAR_EXPERIENCIA" ? "Preservar ciclo" : "Em avaliação"}
             />
-            <InfoItem
-              label="Treinos"
-              value="Não conta como feito/falta"
-            />
+            <InfoItem label="Treinos" value="Pausados" />
           </div>
-
-          {summary.commercialImpact?.message && (
-            <p className="mt-2 text-[10px] leading-relaxed text-red-100/70">
-              {summary.commercialImpact.message}
-            </p>
-          )}
         </div>
       )}
 
-      <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
         <InfoItem label="Ciclo" value={getCycleLabel(summary)} />
         <InfoItem label="Vencimento" value={formatDate(cycle?.endDate)} />
-        <InfoItem label="Professor" value={summary.professor?.name || "Aguardando vínculo"} />
+        <InfoItem label="Professor" value={summary.professor?.name || "Aguardando"} />
         <InfoItem
           label="Treinos"
-          value={cycle ? `${cycle.totalContractedWorkouts} no ciclo · ${cycle.workoutsPerWeek}/semana` : "—"}
+          value={cycle ? `${cycle.totalContractedWorkouts} · ${cycle.workoutsPerWeek}/sem` : "—"}
         />
       </div>
 
       {summary.payment && (
-        <div className="mt-3 rounded-lg border border-[#ffffff10] bg-[#0a0a0a] p-3">
-          <p className="text-[10px] font-semibold text-[#f5f5f5]">Pagamento</p>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <InfoItem label="Status" value={summary.payment.status} />
-            <InfoItem label="Vencimento" value={formatDate(summary.payment.dueDate)} />
-            <InfoItem label="Valor" value={formatMoney(summary.payment.amountCents)} />
-          </div>
-
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-2.5 py-2 text-[9px] text-[#bdbdbd]">
+          <span><strong className="text-[#f5f5f5]">Pagamento:</strong> {summary.payment.status}</span>
+          <span><strong className="text-[#f5f5f5]">Vence:</strong> {formatDate(summary.payment.dueDate)}</span>
+          <span><strong className="text-[#f5f5f5]">Valor:</strong> {formatMoney(summary.payment.amountCents)}</span>
           {summary.payment.paymentLinkUrl && summary.payment.status !== "PAGO" && (
             <a
               href={summary.payment.paymentLinkUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-3 inline-flex rounded-lg bg-[#D4A373] px-3 py-1.5 text-[11px] font-semibold text-[#0a0a0a]"
+              className="ml-auto rounded-md bg-[#D4A373] px-2.5 py-1 text-[9px] font-semibold text-[#0a0a0a]"
             >
-              Ir para pagamento
+              Pagar
             </a>
           )}
         </div>
       )}
 
       {canRequestTrialContinuation && (
-        <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
-          <p className="text-[11px] font-semibold text-emerald-300">
-            Gostou da experiência?
-          </p>
-          <p className="mt-1 text-[10px] leading-relaxed text-emerald-100/80">
-            Clique em “Quero continuar” para avisar a equipe que deseja seguir com um plano pago.
-          </p>
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold text-emerald-300">Gostou da experiência?</p>
+            <p className="mt-0.5 text-[9px] leading-snug text-emerald-100/75">
+              Avise a equipe que deseja continuar.
+            </p>
+          </div>
 
           <button
             type="button"
             onClick={handleContinueTrial}
             disabled={isButtonDisabled}
-            className="mt-2 rounded-lg bg-[#D4A373] px-3 py-1.5 text-[11px] font-semibold text-[#0a0a0a] disabled:opacity-60"
+            className="shrink-0 rounded-lg bg-[#D4A373] px-3 py-1.5 text-[10px] font-semibold text-[#0a0a0a] disabled:opacity-60"
           >
             {requestStatus === "loading"
               ? "Enviando..."
               : requestStatus === "success"
-                ? "Interesse registrado"
+                ? "Registrado"
                 : "Quero continuar"}
           </button>
-
-          {requestMessage && (
-            <p className={"mt-2 text-[10px] leading-relaxed " + (requestStatus === "error" ? "text-red-300" : "text-emerald-200")}>
-              {requestMessage}
-            </p>
-          )}
         </div>
+      )}
+
+      {requestMessage && (
+        <p className={"mt-1.5 text-[9px] leading-relaxed " + (requestStatus === "error" ? "text-red-300" : "text-emerald-200")}>
+          {requestMessage}
+        </p>
       )}
     </section>
   );
@@ -370,9 +351,11 @@ export function AlunoCommercialStatusPanel() {
 
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] p-2">
-      <p className="text-[8px] uppercase tracking-wide text-[#6b6b6b]">{label}</p>
-      <p className="mt-0.5 text-[10px] font-semibold text-[#e5e5e5]">{value}</p>
+    <div className="min-w-0 rounded-md border border-[#ffffff0d] bg-[#1a1a1a] px-2 py-1.5">
+      <p className="truncate text-[7px] uppercase tracking-wide text-[#6b6b6b]">{label}</p>
+      <p className="mt-0.5 truncate text-[9px] font-semibold text-[#e5e5e5]" title={value}>
+        {value}
+      </p>
     </div>
   );
 }
