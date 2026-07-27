@@ -1,48 +1,73 @@
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 
-import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-function normalizeEmail(value?: string | null): string | null {
-  return value?.trim().toLowerCase() || null;
-}
+const INITIAL_CONTENTS = [
+  {
+    title: "Consistência vale mais que pressa",
+    content:
+      "Resultados duradouros vêm da regularidade. Fazer o treino com atenção e manter a rotina é mais importante do que tentar compensar tudo em um único dia.",
+    category: "MOTIVACAO",
+    priority: 10,
+  },
+  {
+    title: "Dor não é sinal de treino melhor",
+    content:
+      "Desconforto intenso, dor aguda ou piora de uma dor anterior não devem ser ignorados. Pare o exercício e avise seu professor pelo chat para receber orientação.",
+    category: "SEGURANCA",
+    priority: 20,
+  },
+  {
+    title: "A execução vem antes da velocidade",
+    content:
+      "Movimentos controlados ajudam você a aproveitar melhor o exercício e reduzem o risco de compensações. Confira as orientações e as imagens antes de começar.",
+    category: "TREINO",
+    priority: 30,
+  },
+  {
+    title: "Descanso também faz parte do treino",
+    content:
+      "O corpo precisa de recuperação para se adaptar. Sono, hidratação e intervalos adequados ajudam no desempenho e na evolução ao longo das semanas.",
+    category: "RECUPERACAO",
+    priority: 40,
+  },
+  {
+    title: "Seu feedback melhora o próximo treino",
+    content:
+      "Conte ao professor como você se sentiu, quais exercícios foram fáceis ou difíceis e se houve qualquer incômodo. Essas informações ajudam a personalizar os próximos treinos.",
+    category: "ACOMPANHAMENTO",
+    priority: 50,
+  },
+] as const;
 
 async function findStudentForSession() {
-  const session = await getServerSession(authOptions);
-  const sessionUser = session?.user as
-    | { id?: string; email?: string | null; role?: string | null }
-    | undefined;
+  const session = await getServerSession();
+  const email = session?.user?.email?.trim();
 
-  if (!sessionUser?.id && !sessionUser?.email) {
-    return null;
-  }
-
-  const email = normalizeEmail(sessionUser.email);
-  const orWhere: any[] = [];
-
-  if (sessionUser.id) {
-    orWhere.push({ userAuthId: sessionUser.id });
-    orWhere.push({ userId: sessionUser.id });
-  }
-
-  if (email) {
-    orWhere.push({ email: { equals: email, mode: "insensitive" } });
-    orWhere.push({ userAuth: { email: { equals: email, mode: "insensitive" } } });
-  }
-
-  if (!orWhere.length) return null;
+  if (!email) return null;
 
   return prisma.student.findFirst({
     where: {
-      active: true,
-      OR: orWhere,
+      email: {
+        equals: email,
+        mode: "insensitive",
+      },
     },
-    select: {
-      id: true,
-    },
+    select: { id: true },
+  });
+}
+
+async function ensureInitialContents() {
+  const totalContents = await prisma.didYouKnowContent.count();
+
+  if (totalContents > 0) return;
+
+  await prisma.didYouKnowContent.createMany({
+    data: INITIAL_CONTENTS.map((item) => ({ ...item, active: true })),
+    skipDuplicates: true,
   });
 }
 
@@ -57,14 +82,14 @@ export async function GET() {
       );
     }
 
+    await ensureInitialContents();
+
     const acknowledgedDeliveries = await prisma.didYouKnowDelivery.findMany({
       where: {
         studentId: student.id,
         channel: "CARD_ENTENDI",
       },
-      select: {
-        contentId: true,
-      },
+      select: { contentId: true },
     });
 
     const acknowledgedContentIds = acknowledgedDeliveries.map(
@@ -74,7 +99,7 @@ export async function GET() {
     const content = await prisma.didYouKnowContent.findFirst({
       where: {
         active: true,
-        ...(acknowledgedContentIds.length
+        ...(acknowledgedContentIds.length > 0
           ? { id: { notIn: acknowledgedContentIds } }
           : {}),
       },
@@ -87,12 +112,12 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ content: content || null });
+    return NextResponse.json({ content: content ?? null });
   } catch (error) {
-    console.error("Erro ao buscar conteúdo Você Sabia:", error);
+    console.error("GET /api/student/did-you-know error:", error);
 
     return NextResponse.json(
-      { error: "Não foi possível carregar o conteúdo Você Sabia." },
+      { error: "Não foi possível carregar o Você Sabia." },
       { status: 500 }
     );
   }
@@ -110,7 +135,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => null);
-    const contentId = String(body?.contentId || "").trim();
+    const contentId = String(body?.contentId ?? "").trim();
 
     if (!contentId) {
       return NextResponse.json(
@@ -120,13 +145,8 @@ export async function POST(request: NextRequest) {
     }
 
     const content = await prisma.didYouKnowContent.findFirst({
-      where: {
-        id: contentId,
-        active: true,
-      },
-      select: {
-        id: true,
-      },
+      where: { id: contentId, active: true },
+      select: { id: true },
     });
 
     if (!content) {
@@ -158,7 +178,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("Erro ao confirmar conteúdo Você Sabia:", error);
+    console.error("POST /api/student/did-you-know error:", error);
 
     return NextResponse.json(
       { error: "Não foi possível registrar a confirmação da dica." },
