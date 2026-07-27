@@ -110,6 +110,7 @@ model Student {
   contractPayments        ContractPayment[]
   contractLifecycleEvents ContractLifecycleEvent[]
   exerciseProgress       WorkoutExerciseProgress[]
+  technicalMemories      StudentTechnicalMemory[]
 
   @@map("students")
 }
@@ -476,6 +477,9 @@ model Question {
   content      String
   videoUrl     String?   @map("video_url")
   imageUrl     String?   @map("image_url")
+  documentUrl  String?   @map("document_url") @db.Text
+  documentName String?   @map("document_name")
+  documentMimeType String? @map("document_mime_type")
   answer       String?
   answeredAt   DateTime? @map("answered_at")
   answeredById String?   @map("answered_by_id")
@@ -494,6 +498,31 @@ model Question {
   @@map("questions")
 }
 
+
+
+model StudentTechnicalMemory {
+  id                 String    @id @default(uuid())
+  studentId          String    @map("student_id")
+  sourceQuestionId   String?   @map("source_question_id")
+  category           String    @default("DOCUMENT")
+  title              String
+  summary            String    @db.Text
+  sourceDocumentName String?   @map("source_document_name")
+  sourceDocumentUrl  String?   @map("source_document_url") @db.Text
+  status             String    @default("APPROVED")
+  validUntil         DateTime? @map("valid_until")
+  reviewedById       String?   @map("reviewed_by_id")
+  reviewedAt         DateTime? @map("reviewed_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([status])
+  @@index([sourceQuestionId])
+  @@map("student_technical_memories")
+}
 
 model StudentTrainingPreference {
   id                   String    @id @default(uuid())
