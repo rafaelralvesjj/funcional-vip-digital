@@ -229,6 +229,9 @@ async function readBody(req: NextRequest): Promise<Record<string, unknown>> {
 type ChatAttachmentResult = {
   imageUrl: string | null;
   videoUrl: string | null;
+  documentUrl: string | null;
+  documentName: string | null;
+  documentMimeType: string | null;
   error?: string;
 };
 
@@ -250,11 +253,14 @@ async function getChatAttachmentFromBody(body: Record<string, unknown>): Promise
     return {
       imageUrl: cleanId(body.imageUrl) || cleanId(body.image) || null,
       videoUrl: cleanId(body.videoUrl) || cleanId(body.video) || null,
+      documentUrl: cleanId(body.documentUrl) || null,
+      documentName: cleanId(body.documentName) || null,
+      documentMimeType: cleanId(body.documentMimeType) || null,
     };
   }
 
   if (!file.size) {
-    return { imageUrl: null, videoUrl: null };
+    return { imageUrl: null, videoUrl: null, documentUrl: null, documentName: null, documentMimeType: null };
   }
 
   const fileType = String(file.type || "").toLowerCase();
@@ -265,6 +271,9 @@ async function getChatAttachmentFromBody(body: Record<string, unknown>): Promise
     return {
       imageUrl: null,
       videoUrl: null,
+      documentUrl: null,
+      documentName: null,
+      documentMimeType: null,
       error: "Envie apenas imagem ou vídeo no chat.",
     };
   }
@@ -273,6 +282,9 @@ async function getChatAttachmentFromBody(body: Record<string, unknown>): Promise
     return {
       imageUrl: null,
       videoUrl: null,
+      documentUrl: null,
+      documentName: null,
+      documentMimeType: null,
       error: "O anexo precisa ter até 3MB. Envie uma foto comprimida ou um vídeo curto.",
     };
   }
@@ -283,6 +295,9 @@ async function getChatAttachmentFromBody(body: Record<string, unknown>): Promise
   return {
     imageUrl: isImage ? dataUrl : null,
     videoUrl: isVideo ? dataUrl : null,
+    documentUrl: null,
+    documentName: null,
+    documentMimeType: null,
   };
 }
 
@@ -640,10 +655,10 @@ export async function POST(req: NextRequest) {
     }
 
     let content = cleanText(body.content || body.question || body.message);
-    const hasAttachment = Boolean(attachment.imageUrl || attachment.videoUrl);
+    const hasAttachment = Boolean(attachment.imageUrl || attachment.videoUrl || attachment.documentUrl);
 
     if (!content && hasAttachment) {
-      content = attachment.videoUrl ? "Vídeo enviado pelo aluno." : "Imagem enviada pelo aluno.";
+      content = attachment.videoUrl ? "Vídeo enviado pelo aluno." : attachment.documentUrl ? "Documento enviado pelo aluno." : "Imagem enviada pelo aluno.";
     }
 
     const studentIdFromBody = cleanId(body.studentId);
@@ -759,6 +774,9 @@ export async function POST(req: NextRequest) {
         answeredById: userId,
         imageUrl: attachment.imageUrl,
         videoUrl: attachment.videoUrl,
+        documentUrl: attachment.documentUrl,
+        documentName: attachment.documentName,
+        documentMimeType: attachment.documentMimeType,
       },
       include: getQuestionIncludes(),
     });
