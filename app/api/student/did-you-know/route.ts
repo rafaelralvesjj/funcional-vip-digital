@@ -1,74 +1,316 @@
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
+import { classifyCareSignal, normalizeTrainingPreferenceText } from "@/lib/student-training-preferences";
 
 export const dynamic = "force-dynamic";
 
-const INITIAL_CONTENTS = [
+type ChatTipCategory =
+  | "CHAT_FIRST_USE"
+  | "CHAT_VIDEO"
+  | "CHAT_PHOTO"
+  | "CHAT_DOCUMENT"
+  | "CHAT_OBJECTIVE"
+  | "CHAT_EQUIPMENT"
+  | "CHAT_PAIN";
+
+type ChatUsageProfile = {
+  hasUsedChat: boolean;
+  hasSentVideo: boolean;
+  hasSentPhoto: boolean;
+  hasSentDocument: boolean;
+  hasSharedObjectiveChange: boolean;
+  hasSharedEquipmentChange: boolean;
+  hasSharedPainOrDiscomfort: boolean;
+};
+
+const CHAT_CONTENTS: Array<{
+  title: string;
+  content: string;
+  category: ChatTipCategory;
+  priority: number;
+}> = [
   {
-    title: "Consistência vale mais que pressa",
+    title: "Seu professor está no chat",
     content:
-      "Resultados duradouros vêm da regularidade. Fazer o treino com atenção e manter a rotina é mais importante do que tentar compensar tudo em um único dia.",
-    category: "MOTIVACAO",
+      "O chat é o canal oficial do seu acompanhamento. Use sempre que tiver dúvida, precisar explicar uma dificuldade ou quiser contar algo que possa melhorar seus próximos treinos.",
+    category: "CHAT_FIRST_USE",
     priority: 10,
   },
   {
-    title: "Dor não é sinal de treino melhor",
+    title: "Envie um vídeo da sua execução",
     content:
-      "Desconforto intenso, dor aguda ou piora de uma dor anterior não devem ser ignorados. Pare o exercício e avise seu professor pelo chat para receber orientação.",
-    category: "SEGURANCA",
+      "Você pode gravar um vídeo curto fazendo o exercício e enviar pelo chat. Assim, o professor consegue observar sua execução e orientar ajustes de postura, ritmo e movimento.",
+    category: "CHAT_VIDEO",
     priority: 20,
   },
   {
-    title: "A execução vem antes da velocidade",
+    title: "Uma foto também ajuda muito",
     content:
-      "Movimentos controlados ajudam você a aproveitar melhor o exercício e reduzem o risco de compensações. Confira as orientações e as imagens antes de começar.",
-    category: "TREINO",
+      "Envie uma foto pelo chat quando quiser mostrar o espaço de treino, um equipamento, a posição de um exercício ou qualquer detalhe que seja difícil explicar somente por mensagem.",
+    category: "CHAT_PHOTO",
     priority: 30,
   },
   {
-    title: "Descanso também faz parte do treino",
+    title: "Laudos e prescrições podem direcionar seu treino",
     content:
-      "O corpo precisa de recuperação para se adaptar. Sono, hidratação e intervalos adequados ajudam no desempenho e na evolução ao longo das semanas.",
-    category: "RECUPERACAO",
+      "Exames, laudos, atestados e prescrições médicas podem ser enviados como documento pelo chat. O professor poderá considerar essas informações na montagem do treino, sem substituir a orientação do profissional de saúde.",
+    category: "CHAT_DOCUMENT",
     priority: 40,
   },
   {
-    title: "Seu feedback melhora o próximo treino",
+    title: "Seu objetivo mudou? Conte pelo chat",
     content:
-      "Conte ao professor como você se sentiu, quais exercícios foram fáceis ou difíceis e se houve qualquer incômodo. Essas informações ajudam a personalizar os próximos treinos.",
-    category: "ACOMPANHAMENTO",
+      "Avise quando surgir uma nova meta, como começar a correr, fortalecer uma região, melhorar a mobilidade ou se preparar para uma prova. Seu treino pode ser ajustado para acompanhar essa mudança.",
+    category: "CHAT_OBJECTIVE",
     priority: 50,
   },
-] as const;
+  {
+    title: "Avise quando tiver novos equipamentos",
+    content:
+      "Comprou elástico, halteres, bicicleta ou começou a treinar em outro lugar? Conte pelo chat. Saber quais equipamentos estão disponíveis aumenta as possibilidades dos seus próximos treinos.",
+    category: "CHAT_EQUIPMENT",
+    priority: 60,
+  },
+  {
+    title: "Dor ou desconforto precisam ser informados",
+    content:
+      "Não espere o próximo treino para avisar. Se sentir dor, desconforto ou alguma limitação, pare o movimento e fale com o professor pelo chat antes de continuar.",
+    category: "CHAT_PAIN",
+    priority: 70,
+  },
+];
+
+const CHAT_CATEGORIES = CHAT_CONTENTS.map((item) => item.category);
+
+function includesAny(text: string, terms: string[]): boolean {
+  return terms.some((term) => text.includes(term));
+}
+
+function buildUsageProfile(
+  messages: Array<{
+    content: string;
+    imageUrl: string | null;
+    videoUrl: string | null;
+    documentUrl: string | null;
+  }>
+): ChatUsageProfile {
+  const normalizedMessages = messages.map((message) => ({
+    ...message,
+    normalizedContent: normalizeTrainingPreferenceText(message.content),
+  }));
+
+  const objectiveTerms = [
+    "meu objetivo mudou",
+    "mudei meu objetivo",
+    "nova meta",
+    "novo objetivo",
+    "quero emagrecer",
+    "quero correr",
+    "quero comecar a correr",
+    "quero fortalecer",
+    "quero ganhar massa",
+    "quero melhorar",
+    "vou fazer uma prova",
+    "maratona",
+    "meia maratona",
+  ];
+
+  const equipmentTerms = [
+    "novo equipamento",
+    "novos equipamentos",
+    "comprei um",
+    "comprei uma",
+    "agora tenho",
+    "nao tenho mais",
+    "troquei de academia",
+    "comecei na academia",
+    "halter",
+    "kettlebell",
+    "elastico",
+    "miniband",
+    "esteira",
+    "bicicleta",
+    "equipamento",
+  ];
+
+  return {
+    hasUsedChat: messages.length > 0,
+    hasSentVideo: messages.some((message) => Boolean(message.videoUrl)),
+    hasSentPhoto: messages.some((message) => Boolean(message.imageUrl)),
+    hasSentDocument: messages.some((message) => Boolean(message.documentUrl)),
+    hasSharedObjectiveChange: normalizedMessages.some((message) =>
+      includesAny(message.normalizedContent, objectiveTerms)
+    ),
+    hasSharedEquipmentChange: normalizedMessages.some((message) =>
+      includesAny(message.normalizedContent, equipmentTerms)
+    ),
+    hasSharedPainOrDiscomfort: messages.some((message) =>
+      classifyCareSignal(message.content).hasSignal
+    ),
+  };
+}
+
+function getPersonalizedCategoryOrder(profile: ChatUsageProfile): ChatTipCategory[] {
+  if (!profile.hasUsedChat) {
+    return [
+      "CHAT_FIRST_USE",
+      "CHAT_VIDEO",
+      "CHAT_PHOTO",
+      "CHAT_DOCUMENT",
+      "CHAT_OBJECTIVE",
+      "CHAT_EQUIPMENT",
+      "CHAT_PAIN",
+    ];
+  }
+
+  const order: ChatTipCategory[] = [];
+
+  if (!profile.hasSentVideo) order.push("CHAT_VIDEO");
+  if (!profile.hasSentPhoto) order.push("CHAT_PHOTO");
+  if (!profile.hasSentDocument) order.push("CHAT_DOCUMENT");
+  if (!profile.hasSharedObjectiveChange) order.push("CHAT_OBJECTIVE");
+  if (!profile.hasSharedEquipmentChange) order.push("CHAT_EQUIPMENT");
+  if (!profile.hasSharedPainOrDiscomfort) order.push("CHAT_PAIN");
+
+  order.push("CHAT_FIRST_USE");
+
+  for (const category of CHAT_CATEGORIES) {
+    if (!order.includes(category)) order.push(category);
+  }
+
+  return order;
+}
 
 async function findStudentForSession() {
-  const session = await getServerSession();
-  const email = session?.user?.email?.trim();
+  const session = await getServerSession(authOptions);
+  const sessionUser = session?.user as
+    | { id?: string | null; email?: string | null }
+    | undefined;
+  const userId = String(sessionUser?.id || "").trim();
+  const email = String(sessionUser?.email || "").trim();
 
-  if (!email) return null;
+  if (!userId && !email) return null;
 
   return prisma.student.findFirst({
     where: {
-      email: {
-        equals: email,
-        mode: "insensitive",
-      },
+      active: true,
+      OR: [
+        ...(userId ? [{ userAuthId: userId }] : []),
+        ...(email
+          ? [
+              { email: { equals: email, mode: "insensitive" as const } },
+              {
+                userAuth: {
+                  email: { equals: email, mode: "insensitive" as const },
+                },
+              },
+            ]
+          : []),
+      ],
     },
     select: { id: true },
   });
 }
 
-async function ensureInitialContents() {
-  const totalContents = await prisma.didYouKnowContent.count();
-
-  if (totalContents > 0) return;
-
+async function ensureChatContents() {
   await prisma.didYouKnowContent.createMany({
-    data: INITIAL_CONTENTS.map((item) => ({ ...item, active: true })),
+    data: CHAT_CONTENTS.map((item) => ({ ...item, active: true })),
     skipDuplicates: true,
   });
+}
+
+async function getNextContent(studentId: string) {
+  await ensureChatContents();
+
+  const [contents, messages] = await Promise.all([
+    prisma.didYouKnowContent.findMany({
+      where: {
+        active: true,
+        category: { in: CHAT_CATEGORIES },
+      },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        category: true,
+        priority: true,
+      },
+    }),
+    prisma.question.findMany({
+      where: {
+        studentId,
+        senderRole: { in: ["STUDENT", "ALUNO"] },
+      },
+      select: {
+        content: true,
+        imageUrl: true,
+        videoUrl: true,
+        documentUrl: true,
+      },
+    }),
+  ]);
+
+  if (contents.length === 0) return null;
+
+  const deliveries = await prisma.didYouKnowDelivery.findMany({
+    where: {
+      studentId,
+      channel: "CARD_ENTENDI",
+      contentId: { in: contents.map((content) => content.id) },
+    },
+    select: {
+      contentId: true,
+      sentAt: true,
+    },
+  });
+
+  const profile = buildUsageProfile(messages);
+  const categoryOrder = getPersonalizedCategoryOrder(profile);
+  const categoryRank = new Map(
+    categoryOrder.map((category, index) => [category, index])
+  );
+  const deliveryByContentId = new Map(
+    deliveries.map((delivery) => [delivery.contentId, delivery.sentAt])
+  );
+
+  const personalizedContents = [...contents].sort((first, second) => {
+    const firstRank = categoryRank.get(first.category as ChatTipCategory) ?? 999;
+    const secondRank = categoryRank.get(second.category as ChatTipCategory) ?? 999;
+
+    if (firstRank !== secondRank) return firstRank - secondRank;
+    return first.priority - second.priority;
+  });
+
+  const neverSeen = personalizedContents.find(
+    (content) => !deliveryByContentId.has(content.id)
+  );
+
+  const selected =
+    neverSeen ||
+    [...personalizedContents].sort((first, second) => {
+      const firstSeenAt = deliveryByContentId.get(first.id)?.getTime() ?? 0;
+      const secondSeenAt = deliveryByContentId.get(second.id)?.getTime() ?? 0;
+
+      if (firstSeenAt !== secondSeenAt) return firstSeenAt - secondSeenAt;
+
+      const firstRank = categoryRank.get(first.category as ChatTipCategory) ?? 999;
+      const secondRank = categoryRank.get(second.category as ChatTipCategory) ?? 999;
+      return firstRank - secondRank;
+    })[0];
+
+  return selected
+    ? {
+        id: selected.id,
+        title: selected.title,
+        content: selected.content,
+        category: selected.category,
+        actionLabel: "Ir para o chat",
+        actionHref: "/aluno#conversas-aluno",
+      }
+    : null;
 }
 
 export async function GET() {
@@ -82,42 +324,14 @@ export async function GET() {
       );
     }
 
-    await ensureInitialContents();
+    const content = await getNextContent(student.id);
 
-    const acknowledgedDeliveries = await prisma.didYouKnowDelivery.findMany({
-      where: {
-        studentId: student.id,
-        channel: "CARD_ENTENDI",
-      },
-      select: { contentId: true },
-    });
-
-    const acknowledgedContentIds = acknowledgedDeliveries.map(
-      (delivery) => delivery.contentId
-    );
-
-    const content = await prisma.didYouKnowContent.findFirst({
-      where: {
-        active: true,
-        ...(acknowledgedContentIds.length > 0
-          ? { id: { notIn: acknowledgedContentIds } }
-          : {}),
-      },
-      orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        category: true,
-      },
-    });
-
-    return NextResponse.json({ content: content ?? null });
+    return NextResponse.json({ content });
   } catch (error) {
     console.error("GET /api/student/did-you-know error:", error);
 
     return NextResponse.json(
-      { error: "Não foi possível carregar o Você Sabia." },
+      { error: "Não foi possível carregar a dica do chat." },
       { status: 500 }
     );
   }
@@ -145,13 +359,17 @@ export async function POST(request: NextRequest) {
     }
 
     const content = await prisma.didYouKnowContent.findFirst({
-      where: { id: contentId, active: true },
+      where: {
+        id: contentId,
+        active: true,
+        category: { in: CHAT_CATEGORIES },
+      },
       select: { id: true },
     });
 
     if (!content) {
       return NextResponse.json(
-        { error: "Conteúdo não encontrado ou inativo." },
+        { error: "Dica não encontrada ou inativa." },
         { status: 404 }
       );
     }
@@ -176,12 +394,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ ok: true });
+    const nextContent = await getNextContent(student.id);
+
+    return NextResponse.json({ ok: true, content: nextContent });
   } catch (error) {
     console.error("POST /api/student/did-you-know error:", error);
 
     return NextResponse.json(
-      { error: "Não foi possível registrar a confirmação da dica." },
+      { error: "Não foi possível avançar para a próxima dica." },
       { status: 500 }
     );
   }
