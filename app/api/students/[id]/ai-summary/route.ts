@@ -786,6 +786,7 @@ export async function GET(
       engagementNotifications,
       careEvents,
       trainingPreferences,
+      exerciseProgress,
     ] = await Promise.all([
       prisma.avaliacao.findMany({
         where: {
@@ -974,6 +975,16 @@ export async function GET(
         },
         take: 20,
       }),
+
+      prisma.workoutExerciseProgress.findMany({
+        where: { studentId },
+        include: {
+          exercise: { select: { id: true, name: true } },
+          workoutPlan: { select: { id: true, name: true, date: true } },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 200,
+      }),
     ]);
 
     const contentIds = Array.from(
@@ -1103,6 +1114,74 @@ export async function GET(
       ].join("\n");
     });
 
+    const effortLabel: Record<string, string> = {
+      FACIL: "fácil",
+      NA_MEDIDA: "na medida",
+      DIFICIL: "difícil",
+    };
+    const completedExerciseProgress = exerciseProgress.filter((item) => item.status === "CONCLUIDO");
+    const skippedExerciseProgress = exerciseProgress.filter((item) => item.status === "PULADO");
+    const difficultExerciseProgress = completedExerciseProgress.filter((item) => item.effort === "DIFICIL");
+    const easyExerciseProgress = completedExerciseProgress.filter((item) => item.effort === "FACIL");
+    const ratedExerciseProgress = completedExerciseProgress.filter((item) => Boolean(item.effort));
+
+    const exerciseHistoryMap = new Map<string, {
+      name: string;
+      completed: number;
+      easy: number;
+      adequate: number;
+      difficult: number;
+      skipped: number;
+      skipReasons: string[];
+      lastDate: Date;
+    }>();
+
+    for (const item of exerciseProgress) {
+      const current = exerciseHistoryMap.get(item.exerciseId) || {
+        name: item.exercise.name,
+        completed: 0,
+        easy: 0,
+        adequate: 0,
+        difficult: 0,
+        skipped: 0,
+        skipReasons: [],
+        lastDate: item.workoutDate,
+      };
+      if (item.status === "CONCLUIDO") {
+        current.completed += 1;
+        if (item.effort === "FACIL") current.easy += 1;
+        if (item.effort === "NA_MEDIDA") current.adequate += 1;
+        if (item.effort === "DIFICIL") current.difficult += 1;
+      }
+      if (item.status === "PULADO") {
+        current.skipped += 1;
+        if (item.skipReason && !current.skipReasons.includes(item.skipReason)) current.skipReasons.push(item.skipReason);
+      }
+      if (item.workoutDate > current.lastDate) current.lastDate = item.workoutDate;
+      exerciseHistoryMap.set(item.exerciseId, current);
+    }
+
+    const exerciseProgressLines = Array.from(exerciseHistoryMap.values())
+      .sort((a, b) => b.lastDate.getTime() - a.lastDate.getTime())
+      .slice(0, 30)
+      .map((item) => {
+        const effortParts = [
+          item.easy ? `${item.easy} fácil` : "",
+          item.adequate ? `${item.adequate} na medida` : "",
+          item.difficult ? `${item.difficult} difícil` : "",
+        ].filter(Boolean).join(", ");
+        return `- ${item.name}: ${item.completed} execução(ões)${effortParts ? ` (${effortParts})` : ""}; ${item.skipped} não realizada(s)${item.skipReasons.length ? `; motivos: ${item.skipReasons.join(" | ")}` : ""}; último registro: ${formatDate(item.lastDate)}`;
+      });
+
+    const recentExerciseProgressLines = exerciseProgress.slice(0, 60).map((item) => {
+      const outcome = item.status === "CONCLUIDO"
+        ? `feito${item.effort ? ` — esforço ${effortLabel[item.effort] || item.effort}` : " — sem avaliação de esforço"}`
+        : item.status === "PULADO"
+          ? `não realizado — motivo: ${item.skipReason || "não informado"}`
+          : "pendente";
+      return `- ${formatDate(item.workoutDate)} | ${item.workoutPlan.name} | ${item.exercise.name} | ${outcome}`;
+    });
+
     const openCareEvents = careEvents.filter((event) => event.status !== "RESOLVIDO");
     const openQuestions = questions.filter((question) => !question.resolvedAt);
     const openQuestionTexts = openQuestions.map(getQuestionConversationText);
@@ -1112,7 +1191,10 @@ export async function GET(
       const severity = String(event.severity || "").toUpperCase();
       return eventType === "DOR_DESCONFORTO" || eventType === "RELATO_DOR_DUVIDA" || severity === "CUIDADO";
     });
-    const hasDifficultExercise = openCareEvents.some((event) => event.eventType === "EXERCICIO_DIFICIL");
+    const hasDifficultExercise = openCareEvents.some((event) => event.eventType === "EXERCICIO_DIFICIL") || difficultExerciseProgress.length > 0;
+    const hasSkippedForPain = skippedExerciseProgress.some((item) => /dor|desconforto/i.test(String(item.skipReason || "")));
+    const hasSkippedForEquipment = skippedExerciseProgress.some((item) => /equipamento/i.test(String(item.skipReason || "")));
+    const hasSkippedForUnderstanding = skippedExerciseProgress.some((item) => /não entendi|nao entendi/i.test(String(item.skipReason || "")));
     const hasLowMotivation = openCareEvents.some((event) => event.eventType === "DESMOTIVACAO" || event.eventType === "FALTA_TEMPO");
     const hasOpenPainQuestion = openQuestionTexts.some(hasPainOrInjurySignal);
     const hasOpenDifficultQuestion = openQuestionTexts.some(hasDifficultExerciseSignal);
@@ -1228,31 +1310,39 @@ export async function GET(
       "Últimos planos de treino com exercícios:",
       recentWorkoutLines.length ? recentWorkoutLines.join("\n\n") : "Nenhum plano de treino encontrado.",
       "",
-      "4) Preferências ativas de treino registradas pelo aluno",
+      "4) Execução por exercício e percepção de esforço",
+      `Registros de exercícios: ${exerciseProgress.length}; feitos: ${completedExerciseProgress.length}; avaliados: ${ratedExerciseProgress.length}; difíceis: ${difficultExerciseProgress.length}; fáceis: ${easyExerciseProgress.length}; não realizados: ${skippedExerciseProgress.length}.`,
+      "Resumo acumulado por exercício:",
+      exerciseProgressLines.length ? exerciseProgressLines.join("\n") : "Nenhum progresso por exercício registrado.",
+      "Registros recentes:",
+      recentExerciseProgressLines.length ? recentExerciseProgressLines.join("\n") : "Nenhum registro recente por exercício.",
+      "Regra obrigatória para a próxima prescrição: exercícios avaliados repetidamente como difíceis não devem receber aumento automático de carga, volume, impacto ou complexidade; exercícios repetidamente fáceis podem ser considerados para progressão conservadora somente se não houver dor, cuidado aberto ou baixa adesão; exercícios pulados exigem análise do motivo e alternativa adequada.",
+      "",
+      "5) Preferências ativas de treino registradas pelo aluno",
       trainingPreferenceLines.length
         ? trainingPreferenceLines.join("\n")
         : "Nenhuma preferência estruturada registrada no chat.",
       "Regra: tratar essas preferências como contexto obrigatório para os próximos treinos, salvo conflito com segurança, contrato, ambiente, equipamentos ou decisão técnica do professor.",
       "",
-      "5) Dúvidas e interações com professor/gestão",
+      "6) Dúvidas e interações com professor/gestão",
       questionLines.length ? questionLines.join("\n") : "Nenhuma dúvida encontrada.",
       "",
-      "6) Avisos relevantes recentes",
+      "7) Avisos relevantes recentes",
       noticeLines.length ? noticeLines.join("\n") : "Nenhum aviso recente encontrado.",
       "",
-      "7) Feedbacks de evolução",
+      "8) Feedbacks de evolução",
       feedbackLines.length ? feedbackLines.join("\n") : "Nenhum feedback de evolução encontrado.",
       "",
-      "8) Conteúdos educativos Você Sabia recebidos",
+      "9) Conteúdos educativos Você Sabia recebidos",
       educationLines.length ? educationLines.join("\n") : "Nenhum conteúdo Você Sabia encontrado.",
       "",
-      "9) Régua de engajamento/alertas automáticos recentes",
+      "10) Régua de engajamento/alertas automáticos recentes",
       engagementLines.length ? engagementLines.join("\n") : "Nenhum alerta automático recente encontrado.",
       "",
-      "10) Sinais recentes de cuidado do aluno",
+      "11) Sinais recentes de cuidado do aluno",
       careLines.length ? careLines.join("\n") : "Nenhum sinal de cuidado registrado.",
       "",
-      "11) Leitura operacional para montagem de treino",
+      "12) Leitura operacional para montagem de treino",
       `Considerar a idade atual de ${ageYears} ano(s) na definição de intensidade, volume, descanso, recuperação, complexidade e progressão, sempre em conjunto com histórico, objetivo, adesão, dores e restrições informadas.`,
       isMinor
         ? "Aluno menor de 18 anos: manter revisão humana obrigatória, progressão conservadora e atenção à supervisão/contexto informado."
@@ -1281,6 +1371,21 @@ export async function GET(
       hasLowMotivation || hasOpenLowMotivationQuestion
         ? "Atenção: há sinal de falta de tempo/desmotivação. Priorizar treino curto, objetivo e aderente."
         : "Sem sinal aberto de falta de tempo/desmotivação.",
+      difficultExerciseProgress.length > 0
+        ? `Existem ${difficultExerciseProgress.length} registro(s) recente(s) de exercício difícil. Revisar os movimentos, reduzir dificuldade quando necessário e não evoluir automaticamente.`
+        : "Sem exercício recente marcado como difícil.",
+      easyExerciseProgress.length > 0
+        ? `Existem ${easyExerciseProgress.length} registro(s) de exercício fácil. Progressão só pode ser conservadora e condicionada a boa execução, ausência de dor e adesão suficiente.`
+        : "Sem exercício recente marcado como fácil.",
+      hasSkippedForPain
+        ? "Há exercício não realizado por dor/desconforto. Priorizar segurança e revisão humana antes de repetir o movimento."
+        : "Nenhum exercício recente foi pulado por dor/desconforto.",
+      hasSkippedForEquipment
+        ? "Há exercício não realizado por equipamento indisponível. Criar alternativa compatível com o ambiente e os recursos reais do aluno."
+        : "Sem bloqueio recente por falta de equipamento.",
+      hasSkippedForUnderstanding
+        ? "Há exercício não realizado por falta de entendimento. Melhorar instruções, imagem/vídeo e orientar pelo chat antes de repetir."
+        : "Sem bloqueio recente por dúvida de execução.",
       weeklyLimit
         ? `A sugestão de treino deve respeitar aproximadamente ${weeklyLimit} treino(s) por semana, conforme os dias contratados.`
         : "A meta semanal ainda não está configurada; confirmar quantidade de treinos antes de montar.",
@@ -1326,6 +1431,11 @@ export async function GET(
         openQuestions: openQuestions.length,
         careEvents: careEvents.length,
         openCareEvents: openCareEvents.length,
+        exerciseProgress: exerciseProgress.length,
+        completedExerciseProgress: completedExerciseProgress.length,
+        skippedExerciseProgress: skippedExerciseProgress.length,
+        difficultExerciseProgress: difficultExerciseProgress.length,
+        easyExerciseProgress: easyExerciseProgress.length,
       },
       evolutionContext: evolutionDecision,
       summaryText,
