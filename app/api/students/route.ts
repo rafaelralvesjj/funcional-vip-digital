@@ -163,6 +163,7 @@ export async function GET() {
       select: {
         id: true,
         name: true,
+        preferredName: true,
         email: true,
         phone: true,
         notes: true,
