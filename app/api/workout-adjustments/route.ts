@@ -501,18 +501,16 @@ function selectRelevantLibraryExercises({
     return { exercise, score, index };
   });
 
-  const selected = scored
-    .filter((item) => item.score > 0)
+  const currentExercises = library.filter((exercise) => currentIds.has(exercise.id));
+  const currentLibraryIds = new Set(currentExercises.map((exercise) => exercise.id));
+
+  const alternatives = scored
+    .filter((item) => item.score > 0 && !currentLibraryIds.has(item.exercise.id))
     .sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, 45)
+    .slice(0, Math.max(0, 20 - currentExercises.length))
     .map((item) => item.exercise);
 
-  const selectedIds = new Set(selected.map((exercise) => exercise.id));
-  const missingCurrent = library.filter(
-    (exercise) => currentIds.has(exercise.id) && !selectedIds.has(exercise.id)
-  );
-
-  return [...missingCurrent, ...selected].slice(0, 50);
+  return [...currentExercises, ...alternatives].slice(0, 20);
 }
 
 function buildAdjustmentPrompt({
@@ -545,11 +543,6 @@ function buildAdjustmentPrompt({
   const availableExercises = relevantLibrary.map((exercise) => ({
     exerciseId: exercise.id,
     name: exercise.name,
-    muscleGroup: exercise.muscleGroup,
-    objectiveTags: exercise.objectiveTags,
-    locationTags: exercise.locationTags,
-    equipmentTags: exercise.equipmentTags,
-    intensity: exercise.intensity,
   }));
 
   const requiredResponseExample = {
@@ -644,8 +637,9 @@ function buildAdjustmentPrompt({
       2
     ),
     "",
-    "BIBLIOTECA OFICIAL FILTRADA PARA ESTE AJUSTE:",
-    `Foram enviados ${availableExercises.length} exercícios relevantes, incluindo os exercícios atuais e alternativas compatíveis.`,
+    "BIBLIOTECA OFICIAL COMPACTA PARA ESTE AJUSTE:",
+    `Foram enviados ${availableExercises.length} exercícios: os exercícios atuais e as alternativas mais relevantes já filtradas pelo sistema.`,
+    "Cada item contém somente exerciseId e name para reduzir o tamanho do prompt. Use apenas esses IDs.",
     JSON.stringify(availableExercises, null, 2),
     "",
     "MODELO OBRIGATÓRIO DA RESPOSTA:",
