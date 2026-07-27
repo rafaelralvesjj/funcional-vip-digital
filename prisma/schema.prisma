@@ -81,6 +81,7 @@ model Student {
   id                             String   @id @default(uuid())
   userId                         String   @map("user_id")
   name                           String
+  preferredName                  String?  @map("preferred_name")
   email                          String?
   phone                          String?
   notes                          String?
