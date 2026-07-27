@@ -129,12 +129,8 @@ async function chooseContentForStudent({
     (content) => !alreadyDeliveredContentIds.has(content.id)
   );
 
-  /*
-   * Quando o aluno já recebeu todos os conteúdos ativos,
-   * o ciclo recomeça. A trava semanal continua evitando repetição na mesma semana.
-   */
   if (availableContents.length === 0) {
-    availableContents = activeContents;
+    return null;
   }
 
   const lowestPriority = Math.min(...availableContents.map((content) => content.priority || 0));
