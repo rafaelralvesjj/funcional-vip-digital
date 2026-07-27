@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/release-workouts",
-      "schedule": "0 8 * * *"
+      "schedule": "0 18 * * 0"
     },
     {
       "path": "/api/cron/workout-engagement",
@@ -24,10 +24,6 @@
     {
       "path": "/api/cron/student-surveys",
       "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron/sunday-week-preparation",
-      "schedule": "0 23 * * 0"
     }
   ]
 }
