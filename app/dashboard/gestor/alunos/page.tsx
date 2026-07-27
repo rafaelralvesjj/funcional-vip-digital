@@ -6,6 +6,7 @@ import { calculateAgeYears, getTodayDateInput, validateBirthDateInput } from "@/
 interface Student {
   id: string;
   name: string;
+  preferredName?: string | null;
   email?: string | null;
   phone?: string | null;
   birthDate?: string | null;
@@ -34,6 +35,7 @@ interface Teacher {
 
 interface StudentFormState {
   name: string;
+  preferredName: string;
   email: string;
   phone: string;
   birthDate: string;
@@ -47,6 +49,7 @@ interface StudentFormState {
 
 const emptyForm: StudentFormState = {
   name: "",
+  preferredName: "",
   email: "",
   phone: "",
   birthDate: "",
@@ -159,6 +162,7 @@ export default function GerenciarAlunosPage() {
     setEditStudent(student);
     setEditForm({
       name: student.name || "",
+      preferredName: student.preferredName || "",
       email: student.email || "",
       phone: student.phone || "",
       birthDate: student.birthDate || "",
@@ -178,6 +182,7 @@ export default function GerenciarAlunosPage() {
   function buildPayload(form: StudentFormState, includePassword: boolean) {
     return {
       name: form.name.trim(),
+      preferredName: form.preferredName.trim() || null,
       email: form.email.trim(),
       phone: form.phone.trim() || null,
       birthDate: form.birthDate,
@@ -314,6 +319,20 @@ export default function GerenciarAlunosPage() {
           placeholder="Nome completo"
           className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
         />
+
+        <div>
+          <label className="mb-1 block text-xs text-[#a1a1a1]">
+            Como gosta de ser chamado
+          </label>
+          <input
+            value={form.preferredName}
+            onChange={(e) => onChange("preferredName", e.target.value)}
+            placeholder="Ex.: Rafa, Dê, João..."
+            maxLength={40}
+            autoComplete="nickname"
+            className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
+          />
+        </div>
 
         <input
           value={form.email}
