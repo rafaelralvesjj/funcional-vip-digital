@@ -208,6 +208,7 @@ export async function GET() {
         return {
           id: student.id,
           name: student.name,
+          preferredName: student.preferredName,
           email: student.email,
           phone: student.phone || student.userAuth?.phone || null,
           birthDate: formatBirthDateInput(student.userAuth?.birthDate),
@@ -276,6 +277,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const name = String(body?.name || "").trim();
+    const preferredName = String(body?.preferredName || "").trim().slice(0, 40) || null;
     const email = String(body?.email || "").trim().toLowerCase();
     const phone = String(body?.phone || "").trim() || null;
     const password = String(body?.password || "");
@@ -377,6 +379,7 @@ export async function POST(req: NextRequest) {
           userId: responsibleUserId,
           userAuthId: authUser.id,
           name,
+          preferredName,
           email,
           phone,
           notes,
@@ -389,6 +392,7 @@ export async function POST(req: NextRequest) {
         select: {
           id: true,
           name: true,
+          preferredName: true,
           email: true,
           phone: true,
           notes: true,
