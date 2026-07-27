@@ -12,6 +12,9 @@ type ConversationReply = {
   content: string;
   imageUrl?: string | null;
   videoUrl?: string | null;
+  documentUrl?: string | null;
+  documentName?: string | null;
+  documentMimeType?: string | null;
   senderRole: string;
   createdAt: string;
   resolvedAt?: string | null;
@@ -79,6 +82,9 @@ type ConversationItem = {
   content: string;
   imageUrl?: string | null;
   videoUrl?: string | null;
+  documentUrl?: string | null;
+  documentName?: string | null;
+  documentMimeType?: string | null;
   senderRole: string;
   createdAt: string;
   resolvedAt?: string | null;
@@ -234,11 +240,11 @@ function canCurrentUserCloseConversation(
 }
 
 
-function hasChatAttachment(item: { imageUrl?: string | null; videoUrl?: string | null }): boolean {
-  return Boolean(item.imageUrl || item.videoUrl);
+function hasChatAttachment(item: { imageUrl?: string | null; videoUrl?: string | null; documentUrl?: string | null }): boolean {
+  return Boolean(item.imageUrl || item.videoUrl || item.documentUrl);
 }
 
-function renderAttachmentIndicator(item: { imageUrl?: string | null; videoUrl?: string | null }) {
+function renderAttachmentIndicator(item: { imageUrl?: string | null; videoUrl?: string | null; documentUrl?: string | null; documentName?: string | null }) {
   if (!hasChatAttachment(item)) return null;
 
   return (
@@ -271,6 +277,9 @@ export default function DashboardConversationList({
   const [successById, setSuccessById] = useState<Record<string, string>>({});
   const [openAttachmentKey, setOpenAttachmentKey] = useState<string | null>(null);
   const [adjustmentLoadingKey, setAdjustmentLoadingKey] = useState<string | null>(null);
+  const [documentPromptById, setDocumentPromptById] = useState<Record<string, string>>({});
+  const [documentResponseById, setDocumentResponseById] = useState<Record<string, string>>({});
+  const [documentLoadingId, setDocumentLoadingId] = useState<string | null>(null);
   const [adjustmentDraftByConversationId, setAdjustmentDraftByConversationId] = useState<
     Record<string, AdjustmentDraftState | null>
   >({});
@@ -290,7 +299,7 @@ export default function DashboardConversationList({
   }, [initialExpandedConversationId]);
 
   function renderChatAttachmentViewer(
-    item: { id?: string | null; imageUrl?: string | null; videoUrl?: string | null },
+    item: { id?: string | null; imageUrl?: string | null; videoUrl?: string | null; documentUrl?: string | null; documentName?: string | null },
     fallbackKey: string
   ) {
     if (!hasChatAttachment(item)) return null;
@@ -312,6 +321,17 @@ export default function DashboardConversationList({
             >
               {isImageOpen ? "Ocultar imagem" : "Ver imagem enviada"}
             </button>
+          )}
+
+          {item.documentUrl && (
+            <a
+              href={item.documentUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-300 hover:border-amber-400/40"
+            >
+              Abrir {item.documentName || "documento"}
+            </a>
           )}
 
           {item.videoUrl && (
@@ -349,6 +369,46 @@ export default function DashboardConversationList({
         )}
       </div>
     );
+  }
+
+
+  async function handlePrepareDocumentPrompt(conversation: ConversationItem) {
+    setDocumentLoadingId(conversation.id);
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+    try {
+      const response = await fetch("/api/student-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "PREPARE_PROMPT", questionId: conversation.id }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || "Não foi possível preparar o prompt.");
+      setDocumentPromptById((current) => ({ ...current, [conversation.id]: data.manualPrompt }));
+      setSuccessById((current) => ({ ...current, [conversation.id]: "Prompt preparado. Abra o documento e envie-o junto com o prompt para a IA externa." }));
+    } catch (error: any) {
+      setErrorById((current) => ({ ...current, [conversation.id]: error?.message || "Erro ao preparar o prompt." }));
+    } finally {
+      setDocumentLoadingId(null);
+    }
+  }
+
+  async function handleSaveDocumentAnalysis(conversation: ConversationItem) {
+    setDocumentLoadingId(conversation.id);
+    try {
+      const response = await fetch("/api/student-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "SAVE_ANALYSIS", questionId: conversation.id, manualResponse: documentResponseById[conversation.id] || "" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || "Não foi possível salvar a análise.");
+      setSuccessById((current) => ({ ...current, [conversation.id]: data.message }));
+      setDocumentResponseById((current) => ({ ...current, [conversation.id]: "" }));
+    } catch (error: any) {
+      setErrorById((current) => ({ ...current, [conversation.id]: error?.message || "Erro ao salvar a análise." }));
+    } finally {
+      setDocumentLoadingId(null);
+    }
   }
 
   async function handleReply(event: FormEvent<HTMLFormElement>, conversation: ConversationItem) {
@@ -821,6 +881,25 @@ export default function DashboardConversationList({
 
               {!isExpanded && renderAttachmentIndicator(conversation)}
               {isExpanded && renderChatAttachmentViewer(conversation, `conversation-${conversation.id}`)}
+
+              {isExpanded && conversation.documentUrl && normalizeRole(currentRole) === "TEACHER" && (
+                <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 space-y-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300">Documento do aluno</p>
+                    <p className="mt-1 text-xs text-[#d4d4d4]">Gere o prompt, abra o documento e envie os dois juntos para a IA externa. Depois cole o JSON para salvar na memória técnica.</p>
+                  </div>
+                  <button type="button" onClick={() => handlePrepareDocumentPrompt(conversation)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg bg-[#D4A373] px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">
+                    {documentLoadingId === conversation.id ? "Preparando..." : "Gerar prompt para analisar documento"}
+                  </button>
+                  {documentPromptById[conversation.id] && (
+                    <>
+                      <button type="button" onClick={() => navigator.clipboard.writeText(documentPromptById[conversation.id])} className="w-full rounded-lg border border-amber-400/30 px-3 py-2 text-[11px] font-semibold text-amber-200">Copiar prompt do documento</button>
+                      <textarea rows={9} value={documentResponseById[conversation.id] || ""} onChange={(event) => setDocumentResponseById((current) => ({ ...current, [conversation.id]: event.target.value }))} placeholder="Cole aqui somente o JSON devolvido pela IA" className="w-full rounded-lg border border-amber-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none" />
+                      <button type="button" onClick={() => handleSaveDocumentAnalysis(conversation)} disabled={documentLoadingId === conversation.id || !(documentResponseById[conversation.id] || "").trim()} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Salvar análise aprovada na memória técnica</button>
+                    </>
+                  )}
+                </div>
+              )}
 
               <p className="text-xs text-[#a1a1a1] mb-3 mt-3">
                 Para: <span className="text-[#D4A373]">{conversation.targetLabel}</span>
