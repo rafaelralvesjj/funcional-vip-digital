@@ -898,7 +898,7 @@ async function notifyWeekCompletedIfNeeded({
     where: {
       studentId: student.id,
       ...contractFilter,
-      status: "CONCLUIDO",
+      status: { in: ["CONCLUIDO", "CONCLUIDO_PARCIALMENTE"] },
       date: {
         gte: startOfWeek,
         lt: endOfWeek,
@@ -1430,7 +1430,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!["CONCLUIDO", "NAO_CONCLUIDO_COM_RELATO", "INTERROMPIDO_CUIDADO"].includes(requestedCompletionStatus)) {
+    if (!["CONCLUIDO", "CONCLUIDO_PARCIALMENTE", "NAO_CONCLUIDO_COM_RELATO", "INTERROMPIDO_CUIDADO"].includes(requestedCompletionStatus)) {
       return NextResponse.json(
         { error: "Status de encerramento inválido." },
         { status: 400 }
@@ -1449,7 +1449,7 @@ export async function POST(req: NextRequest) {
           where: {
             studentId,
             workoutPlanId,
-            status: "CONCLUIDO",
+            status: { in: ["CONCLUIDO", "CONCLUIDO_PARCIALMENTE"] },
             workoutDate: { gte: dayStart, lt: dayEnd },
           },
         }),
@@ -1533,6 +1533,8 @@ export async function POST(req: NextRequest) {
 
     if (shouldPauseForCare || requestedCompletionStatus === "INTERROMPIDO_CUIDADO") {
       workoutStatus = "INTERROMPIDO_CUIDADO";
+    } else if (requestedCompletionStatus === "CONCLUIDO_PARCIALMENTE") {
+      workoutStatus = "CONCLUIDO_PARCIALMENTE";
     } else if (requestedCompletionStatus === "NAO_CONCLUIDO_COM_RELATO") {
       workoutStatus = "NAO_CONCLUIDO_COM_RELATO";
     }
@@ -1637,11 +1639,11 @@ export async function POST(req: NextRequest) {
       reason: "Treino não concluído; semana não reconhecida como completa.",
     };
 
-    if (workoutStatus === "CONCLUIDO") {
+    if (["CONCLUIDO", "CONCLUIDO_PARCIALMENTE"].includes(workoutStatus)) {
       const completedCountAfter = await prisma.workout.count({
         where: {
           studentId,
-          status: "CONCLUIDO",
+          status: { in: ["CONCLUIDO", "CONCLUIDO_PARCIALMENTE"] },
           ...(workout.contractId ? { contractId: workout.contractId } : {}),
         },
       });
@@ -1666,11 +1668,11 @@ export async function POST(req: NextRequest) {
       reason: "Treino não gerou marco de feedback evolutivo.",
     };
 
-    if (workoutStatus === "CONCLUIDO") {
+    if (["CONCLUIDO", "CONCLUIDO_PARCIALMENTE"].includes(workoutStatus)) {
       const completedCountAfterForEvolution = await prisma.workout.count({
         where: {
           studentId,
-          status: "CONCLUIDO",
+          status: { in: ["CONCLUIDO", "CONCLUIDO_PARCIALMENTE"] },
           ...(workout.contractId ? { contractId: workout.contractId } : {}),
         },
       });
@@ -1692,8 +1694,12 @@ export async function POST(req: NextRequest) {
         : finalCareEventType
           ? workoutStatus === "CONCLUIDO"
             ? "Treino concluído e relato enviado ao seu professor para acompanhamento."
-            : "Treino encerrado e relato enviado ao seu professor para acompanhamento."
-          : "Treino concluído e registrado. Parabéns por mais esse passo!";
+            : workoutStatus === "CONCLUIDO_PARCIALMENTE"
+              ? "Treino concluído parcialmente e contabilizado. Seu relato foi enviado ao professor para ajustar os próximos treinos."
+              : "Treino encerrado e relato enviado ao seu professor para acompanhamento."
+          : workoutStatus === "CONCLUIDO_PARCIALMENTE"
+            ? "Treino concluído parcialmente e contabilizado."
+            : "Treino concluído e registrado. Parabéns por mais esse passo!";
 
     return NextResponse.json({
       ok: true,
