@@ -394,8 +394,22 @@ export default function AlunoPage() {
   }
 
   async function saveExerciseProgress(exercise: any, status: "CONCLUIDO" | "PULADO" | "PENDENTE", options?: { effort?: string; skipReason?: string }) {
-    if (!selectedPlan || selectedDay === null) return;
+    if (!selectedPlan || selectedDay === null || !exercise?.id) return;
+
+    const previousItem = exerciseProgress[exercise.id];
+    const optimisticItem = {
+      ...(previousItem || {}),
+      exerciseId: exercise.id,
+      workoutPlanId: selectedPlan.id,
+      status,
+      effort: status === "CONCLUIDO" ? (options?.effort || previousItem?.effort || null) : null,
+      skipReason: status === "PULADO" ? (options?.skipReason || null) : null,
+      completedAt: status === "PENDENTE" ? null : new Date().toISOString(),
+    };
+
+    setExerciseProgress((current) => ({ ...current, [exercise.id]: optimisticItem }));
     setSavingExerciseId(exercise.id);
+
     try {
       const res = await fetch("/api/workout/exercise-progress", {
         method: "POST",
@@ -405,7 +419,7 @@ export default function AlunoPage() {
           exerciseId: exercise.id,
           date: getSelectedWorkoutDateIso(),
           status,
-          effort: options?.effort || null,
+          effort: options?.effort || (status === "CONCLUIDO" ? previousItem?.effort || null : null),
           skipReason: options?.skipReason || null,
         }),
       });
@@ -415,12 +429,25 @@ export default function AlunoPage() {
         setSkipExercise(null);
         setSkipReason("");
       } else {
-        setMessage({ type: "error", text: data?.error || "Não foi possível registrar o exercício." });
+        setExerciseProgress((current) => {
+          const next = { ...current };
+          if (previousItem) next[exercise.id] = previousItem;
+          else delete next[exercise.id];
+          return next;
+        });
+        setMessage({ type: "error", text: data?.error || "Não foi possível registrar o exercício. Confira se a atualização do banco foi aplicada." });
       }
     } catch {
-      setMessage({ type: "error", text: "Não foi possível registrar o exercício." });
+      setExerciseProgress((current) => {
+        const next = { ...current };
+        if (previousItem) next[exercise.id] = previousItem;
+        else delete next[exercise.id];
+        return next;
+      });
+      setMessage({ type: "error", text: "Não foi possível registrar o exercício. Tente novamente." });
+    } finally {
+      setSavingExerciseId(null);
     }
-    setSavingExerciseId(null);
   }
 
   function getExerciseTotals() {
@@ -2147,20 +2174,23 @@ export default function AlunoPage() {
                         : "Marcar exercício como feito"}
                   </button>
 
-                  {exerciseProgress[selectedExercise.id]?.status === "CONCLUIDO" && (
-                    <div>
-                      <p className="mb-2 text-center text-[10px] text-[#a1a1a1]">Como foi este exercício?</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[["FACIL", "😊 Fácil"], ["NA_MEDIDA", "😐 Na medida"], ["DIFICIL", "🥵 Difícil"]].map(([value, label]) => (
-                          <button key={value} type="button" disabled={savingExerciseId === selectedExercise.id}
-                            onClick={() => saveExerciseProgress(selectedExercise, "CONCLUIDO", { effort: value })}
-                            className={`rounded-lg border px-2 py-2 text-[10px] font-semibold ${exerciseProgress[selectedExercise.id]?.effort === value ? "border-green-500 bg-green-500/20 text-green-300" : "border-[#ffffff10] bg-[#1a1a1a] text-[#e5e5e5]"}`}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
+                  <div>
+                    <p className="mb-2 text-center text-[10px] text-[#a1a1a1]">Como foi este exercício?</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[["FACIL", "😊 Fácil"], ["NA_MEDIDA", "😐 Na medida"], ["DIFICIL", "🥵 Difícil"]].map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={savingExerciseId === selectedExercise.id}
+                          onClick={() => saveExerciseProgress(selectedExercise, "CONCLUIDO", { effort: value })}
+                          className={`rounded-lg border px-2 py-2 text-[10px] font-semibold transition ${exerciseProgress[selectedExercise.id]?.effort === value ? "border-green-500 bg-green-500/20 text-green-300" : "border-[#ffffff10] bg-[#1a1a1a] text-[#e5e5e5]"}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
-                  )}
+                    <p className="mt-1.5 text-center text-[9px] text-[#6b6b6b]">Ao escolher uma opção, o exercício também será marcado como feito.</p>
+                  </div>
                 </div>
               )}
               <button
