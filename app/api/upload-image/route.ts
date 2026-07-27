@@ -9,6 +9,10 @@ const ALLOWED_TYPES = [
   "video/webm",
   "video/quicktime",
   "video/x-msvideo",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
 ];
 
 // 🔥 Tamanho máximo: 50MB
@@ -28,7 +32,7 @@ export async function POST(req: Request) {
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
         {
-          error: `Tipo de arquivo não permitido: ${file.type || "desconhecido"}. Aceitamos apenas imagens (JPEG, PNG, WebP) e vídeos (MP4, WebM, MOV, AVI).`,
+          error: `Tipo de arquivo não permitido: ${file.type || "desconhecido"}. Aceitamos imagens, vídeos, PDF, Word e TXT.`,
         },
         { status: 400 }
       );
@@ -69,7 +73,7 @@ export async function POST(req: Request) {
       .replace(/-+/g, "-")
       .toLowerCase();
 
-    const allowedFolders = ["", "biblioteca", "sequencias", "videos", "chat", "perfil"];
+    const allowedFolders = ["", "biblioteca", "sequencias", "videos", "chat", "documentos", "perfil"];
     const folder = allowedFolders.includes(safeFolder) ? safeFolder : "biblioteca";
     const uniqueName = `${Date.now()}-${originalName}`;
     const relativePath = folder ? `${folder}/${uniqueName}` : uniqueName;
@@ -117,6 +121,9 @@ export async function POST(req: Request) {
     return NextResponse.json({
       url: `/images/exercices/${relativePath}`,
       fileName: uniqueName,
+      originalName: file.name,
+      mimeType: file.type,
+      kind: file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "document",
     });
   } catch {
     return NextResponse.json(
