@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getStudentTechnicalContext, formatStudentTechnicalContext } from "@/lib/student-technical-memory";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
@@ -1228,7 +1229,7 @@ export async function GET(
       : baseEvolutionDecision;
     const onboardingOperationalLines = getOnboardingOperationalLines(onboardingProfile);
 
-    const summaryText = [
+    const baseSummaryText = [
       "RESUMO COMPLETO DO ALUNO — FUNCIONAL VIP DIGITAL",
       "",
       "1) Identificação",
@@ -1399,6 +1400,14 @@ export async function GET(
         : "Nenhuma lesão/restrição registrada na última avaliação; confirmar com o aluno se houver dúvida.",
       "Ao sugerir resumo para o aluno, explicar objetivo, foco, intensidade e duração estimada em linguagem simples.",
       "Gasto energético deve aparecer como faixa aproximada e conservadora, nunca como promessa de perda de calorias ou resultado corporal.",
+    ].join("\n");
+
+    const technicalContext = await getStudentTechnicalContext(student.id);
+    const summaryText = [
+      baseSummaryText,
+      "",
+      "12) Histórico inteligente e memória técnica aprovada",
+      formatStudentTechnicalContext(technicalContext),
     ].join("\n");
 
     const aiPrompt = buildAiPrompt(summaryText);
