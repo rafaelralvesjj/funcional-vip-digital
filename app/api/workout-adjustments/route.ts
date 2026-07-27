@@ -392,6 +392,129 @@ async function getAdjustmentContext({
   };
 }
 
+
+function normalizeSearchText(value: unknown): string {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function selectRelevantLibraryExercises({
+  context,
+  library,
+  currentExerciseIds,
+}: {
+  context: any;
+  library: any[];
+  currentExerciseIds: string[];
+}): any[] {
+  const preferenceText = normalizeSearchText(
+    [
+      context.preference?.summary,
+      context.preference?.originalMessage,
+      ...(context.activePreferences || []).flatMap((item: any) => [
+        item?.summary,
+        item?.originalMessage,
+      ]),
+      context.workout?.workoutPlan?.name,
+      context.workout?.workoutPlan?.description,
+      context.workout?.workoutPlan?.objective,
+      context.workout?.workoutPlan?.focusAreas,
+    ].join(" ")
+  );
+
+  const currentIds = new Set(currentExerciseIds.filter(Boolean));
+  const importantTerms = Array.from(
+    new Set(
+      preferenceText
+        .split(/[^a-z0-9]+/)
+        .filter((term) => term.length >= 4)
+        .filter(
+          (term) =>
+            ![
+              "treino",
+              "aluno",
+              "preferencia",
+              "geral",
+              "fazer",
+              "gostaria",
+              "objetivo",
+              "fortalecer",
+              "mais",
+              "para",
+              "pela",
+              "como",
+              "moderada",
+              "intenso",
+              "intensos",
+            ].includes(term)
+        )
+    )
+  );
+
+  const thematicBoosts: string[] = [];
+  if (preferenceText.includes("corrida")) {
+    thematicBoosts.push(
+      "corrida",
+      "pernas",
+      "gluteos",
+      "panturrilha",
+      "quadril",
+      "tornozelo",
+      "core",
+      "unilateral"
+    );
+  }
+  if (preferenceText.includes("agachamento")) thematicBoosts.push("agachamento");
+  if (preferenceText.includes("bulgar")) thematicBoosts.push("bulgar", "afundo");
+  if (preferenceText.includes("academia")) thematicBoosts.push("academia");
+  if (preferenceText.includes("casa")) thematicBoosts.push("casa", "nenhum equipamento");
+
+  const scored = library.map((exercise, index) => {
+    const searchable = normalizeSearchText(
+      [
+        exercise.name,
+        exercise.muscleGroup,
+        exercise.objectiveTags,
+        exercise.locationTags,
+        exercise.equipmentTags,
+        exercise.levelTags,
+        exercise.intensity,
+      ].join(" ")
+    );
+
+    let score = currentIds.has(exercise.id) ? 1000 : 0;
+
+    for (const term of importantTerms) {
+      if (searchable.includes(term)) score += term.length >= 7 ? 8 : 5;
+    }
+
+    for (const term of thematicBoosts) {
+      if (searchable.includes(term)) score += 12;
+    }
+
+    if (preferenceText.includes("corrida") && /pernas|gluteos|core|mobilidade/.test(searchable)) {
+      score += 8;
+    }
+
+    return { exercise, score, index };
+  });
+
+  const selected = scored
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 45)
+    .map((item) => item.exercise);
+
+  const selectedIds = new Set(selected.map((exercise) => exercise.id));
+  const missingCurrent = library.filter(
+    (exercise) => currentIds.has(exercise.id) && !selectedIds.has(exercise.id)
+  );
+
+  return [...missingCurrent, ...selected].slice(0, 50);
+}
+
 function buildAdjustmentPrompt({
   context,
   library,
@@ -411,19 +534,22 @@ function buildAdjustmentPrompt({
     order: exercise.order,
   }));
 
-  const availableExercises = library.map((exercise) => ({
+  const relevantLibrary = selectRelevantLibraryExercises({
+    context,
+    library,
+    currentExerciseIds: currentExercises
+      .map((exercise: any) => exercise.exerciseId)
+      .filter(Boolean),
+  });
+
+  const availableExercises = relevantLibrary.map((exercise) => ({
     exerciseId: exercise.id,
     name: exercise.name,
     muscleGroup: exercise.muscleGroup,
-    description: exercise.description,
     objectiveTags: exercise.objectiveTags,
     locationTags: exercise.locationTags,
     equipmentTags: exercise.equipmentTags,
-    restrictionTags: exercise.restrictionTags,
-    levelTags: exercise.levelTags,
     intensity: exercise.intensity,
-    safetyNotes: exercise.safetyNotes,
-    contraindications: exercise.contraindications,
   }));
 
   const requiredResponseExample = {
@@ -518,7 +644,8 @@ function buildAdjustmentPrompt({
       2
     ),
     "",
-    "BIBLIOTECA OFICIAL DISPONÍVEL:",
+    "BIBLIOTECA OFICIAL FILTRADA PARA ESTE AJUSTE:",
+    `Foram enviados ${availableExercises.length} exercícios relevantes, incluindo os exercícios atuais e alternativas compatíveis.`,
     JSON.stringify(availableExercises, null, 2),
     "",
     "MODELO OBRIGATÓRIO DA RESPOSTA:",
