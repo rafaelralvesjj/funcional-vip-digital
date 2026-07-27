@@ -85,6 +85,20 @@ const CHAT_CONTENTS: Array<{
 
 const CHAT_CATEGORIES = CHAT_CONTENTS.map((item) => item.category);
 
+function getChatActionLabel(category: ChatTipCategory): string {
+  const labels: Record<ChatTipCategory, string> = {
+    CHAT_FIRST_USE: "Falar com meu professor",
+    CHAT_VIDEO: "Enviar um vídeo",
+    CHAT_PHOTO: "Enviar uma foto",
+    CHAT_DOCUMENT: "Enviar um documento",
+    CHAT_OBJECTIVE: "Atualizar meu objetivo",
+    CHAT_EQUIPMENT: "Informar equipamento",
+    CHAT_PAIN: "Contar uma dor",
+  };
+
+  return labels[category];
+}
+
 function includesAny(text: string, terms: string[]): boolean {
   return terms.some((term) => text.includes(term));
 }
@@ -307,7 +321,7 @@ async function getNextContent(studentId: string) {
         title: selected.title,
         content: selected.content,
         category: selected.category,
-        actionLabel: "Ir para o chat",
+        actionLabel: getChatActionLabel(selected.category as ChatTipCategory),
         actionHref: "/aluno#conversas-aluno",
       }
     : null;
