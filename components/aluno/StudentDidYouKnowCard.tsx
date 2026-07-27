@@ -7,6 +7,8 @@ type DidYouKnowContent = {
   title: string;
   content: string;
   category: string;
+  actionLabel?: string | null;
+  actionHref?: string | null;
 };
 
 export function StudentDidYouKnowCard() {
@@ -53,7 +55,7 @@ export function StudentDidYouKnowCard() {
     };
   }, []);
 
-  async function handleUnderstood() {
+  async function handleNextTip() {
     if (!content || confirming) return;
 
     try {
@@ -68,15 +70,15 @@ export function StudentDidYouKnowCard() {
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(data?.error || "Não foi possível confirmar a dica.");
+        throw new Error(data?.error || "Não foi possível mostrar a próxima dica.");
       }
 
-      setContent(null);
+      setContent(data?.content ?? null);
     } catch (confirmError) {
       setError(
         confirmError instanceof Error
           ? confirmError.message
-          : "Não foi possível confirmar a dica."
+          : "Não foi possível mostrar a próxima dica."
       );
     } finally {
       setConfirming(false);
@@ -88,7 +90,7 @@ export function StudentDidYouKnowCard() {
   if (error && !content) {
     return (
       <section className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2.5">
-        <p className="text-[10px] font-semibold text-red-300">Você Sabia?</p>
+        <p className="text-[10px] font-semibold text-red-300">Você sabia?</p>
         <p className="mt-0.5 text-[10px] leading-relaxed text-red-100/80">{error}</p>
       </section>
     );
@@ -104,29 +106,34 @@ export function StudentDidYouKnowCard() {
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#D4A373]">
-                Você Sabia?
-              </p>
-              <h2 className="mt-0.5 text-[12px] font-semibold leading-snug text-[#f5f5f5]">
-                {content.title}
-              </h2>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleUnderstood}
-              disabled={confirming}
-              className="shrink-0 rounded-lg bg-[#D4A373] px-3 py-1.5 text-[10px] font-bold text-[#0a0a0a] transition hover:bg-[#e2b583] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {confirming ? "Salvando..." : "Entendi"}
-            </button>
-          </div>
+          <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#D4A373]">
+            Você sabia?
+          </p>
+          <h2 className="mt-0.5 text-[12px] font-semibold leading-snug text-[#f5f5f5]">
+            {content.title}
+          </h2>
 
           <p className="mt-1.5 whitespace-pre-line text-[10px] leading-relaxed text-[#a1a1a1]">
             {content.content}
           </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <a
+              href={content.actionHref || "/aluno#conversas-aluno"}
+              className="rounded-lg bg-[#D4A373] px-3 py-1.5 text-[10px] font-bold text-[#0a0a0a] transition hover:bg-[#e2b583]"
+            >
+              {content.actionLabel || "Ir para o chat"}
+            </a>
+
+            <button
+              type="button"
+              onClick={handleNextTip}
+              disabled={confirming}
+              className="rounded-lg border border-[#ffffff18] bg-[#1a1a1a] px-3 py-1.5 text-[10px] font-semibold text-[#d4d4d4] transition hover:border-[#D4A373]/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {confirming ? "Carregando..." : "Ver próxima dica"}
+            </button>
+          </div>
 
           {error && (
             <p className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-[9px] text-red-300">
