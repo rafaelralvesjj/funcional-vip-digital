@@ -55,7 +55,7 @@ export default function DashboardLayout({
     { href: "/dashboard/financeiro", label: "Financeiro", icon: "credit" },
     { href: "/dashboard/exercicios", label: "Biblioteca", icon: "book" },
     { href: "/dashboard/gestao", label: "Gestão", icon: "message" },
-    { href: "/dashboard/gestor/voce-sabia", label: "Você Sabia", icon: "book" },
+    { href: "/dashboard/gestor/voce-sabia", label: "Dicas do Professor", icon: "book" },
     { href: "/dashboard/gestor/vincular-alunos", label: "Vincular Alunos", icon: "link" },
     { href: "/dashboard/gestor/alunos", label: "Gerenciar Alunos", icon: "users" },
     { href: "/dashboard/gestor/professores", label: "Gerenciar Professores", icon: "user" },
