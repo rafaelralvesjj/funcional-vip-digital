@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
 import { getStudentTechnicalContext, formatStudentTechnicalContext } from "@/lib/student-technical-memory";
+import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 
 
 type AdjustmentAction =
@@ -454,6 +455,7 @@ function buildAdjustmentPrompt({
   };
 
   return [
+    ...MANUAL_AI_EXECUTION_HEADER_LINES,
     "Você é um assistente de prescrição de treino que apoia um professor de educação física.",
     "Adapte SOMENTE o treino pendente informado. O treino já concluído não pode ser alterado.",
     "A proposta será revisada e confirmada pelo professor antes de substituir o treino atual.",
