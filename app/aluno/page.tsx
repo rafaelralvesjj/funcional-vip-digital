@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { signOut } from "next-auth/react";
+import { upload } from "@vercel/blob/client";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
 import ProfilePhotoEditor from "@/components/ProfilePhotoEditor";
 import StudentSurveyPanel from "@/components/aluno/StudentSurveyPanel";
@@ -64,6 +65,105 @@ function getNoticeAuthorRoleLabel(notice: any): string {
   return "Funcional VIP Digital";
 }
 
+type ChatAttachmentPayload = {
+  imageUrl?: string;
+  videoUrl?: string;
+  documentUrl?: string;
+  documentName?: string;
+  documentMimeType?: string;
+};
+
+const MAX_CHAT_MEDIA_SIZE = 25 * 1024 * 1024;
+const MAX_CHAT_DOCUMENT_SIZE = 3 * 1024 * 1024;
+const ALLOWED_CHAT_MEDIA_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-msvideo",
+  "video/mpeg",
+]);
+const ALLOWED_CHAT_DOCUMENT_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+]);
+const ALLOWED_CHAT_DOCUMENT_EXTENSIONS = new Set(["pdf", "doc", "docx", "txt"]);
+
+function getChatFileExtension(fileName: string): string {
+  return String(fileName || "").split(".").pop()?.toLowerCase() || "";
+}
+
+function isChatDocument(file: File): boolean {
+  return (
+    ALLOWED_CHAT_DOCUMENT_TYPES.has(file.type) ||
+    ALLOWED_CHAT_DOCUMENT_EXTENSIONS.has(getChatFileExtension(file.name))
+  );
+}
+
+function validateChatFile(file: File): string | null {
+  const isMedia = ALLOWED_CHAT_MEDIA_TYPES.has(file.type);
+  const isDocument = isChatDocument(file);
+
+  if (!isMedia && !isDocument) {
+    return "Formato não permitido. Envie foto, vídeo, PDF, Word ou TXT.";
+  }
+
+  if (isDocument && file.size > MAX_CHAT_DOCUMENT_SIZE) {
+    return "Exames, laudos e documentos precisam ter até 3 MB.";
+  }
+
+  if (isMedia && file.size > MAX_CHAT_MEDIA_SIZE) {
+    return "Fotos e vídeos precisam ter até 25 MB.";
+  }
+
+  return null;
+}
+
+function sanitizeChatFileName(fileName: string): string {
+  return String(fileName || "arquivo")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "arquivo";
+}
+
+async function uploadStudentChatFile(studentId: string, file: File): Promise<ChatAttachmentPayload> {
+  const validationError = validateChatFile(file);
+
+  if (validationError) throw new Error(validationError);
+  if (isChatDocument(file)) {
+    throw new Error("Documentos devem ser enviados diretamente pela conversa.");
+  }
+
+  const pathname = `chat/${studentId}/${Date.now()}-${sanitizeChatFileName(file.name)}`;
+  const blob = await upload(pathname, file, {
+    access: "public",
+    handleUploadUrl: "/api/chat/upload",
+  });
+
+  if (file.type.startsWith("video/")) {
+    return { videoUrl: blob.url };
+  }
+
+  if (file.type.startsWith("image/")) {
+    return { imageUrl: blob.url };
+  }
+
+  return {
+    documentUrl: blob.url,
+    documentName: file.name,
+    documentMimeType: file.type || "application/octet-stream",
+  };
+}
+
 interface LibraryExercise {
   id: string;
   name: string;
@@ -113,6 +213,7 @@ export default function AlunoPage() {
   const [newQuestion, setNewQuestion] = useState("");
   const [questionTarget, setQuestionTarget] = useState<"PROFESSOR" | "GESTAO">("PROFESSOR");
   const [questionFile, setQuestionFile] = useState<File | null>(null);
+  const [questionFileInputKey, setQuestionFileInputKey] = useState(0);
   const [sendingQuestion, setSendingQuestion] = useState(false);
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<any>(null);
@@ -139,6 +240,7 @@ export default function AlunoPage() {
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
   const [followUpText, setFollowUpText] = useState("");
   const [followUpFile, setFollowUpFile] = useState<File | null>(null);
+  const [followUpFileInputKey, setFollowUpFileInputKey] = useState(0);
   const [sendingFollowUp, setSendingFollowUp] = useState(false);
 
   const getImageUrl = (url?: string): string | null => {
@@ -153,7 +255,7 @@ export default function AlunoPage() {
   };
 
   function renderChatAttachment(msg: any) {
-    if (!msg?.imageUrl && !msg?.videoUrl) return null;
+    if (!msg?.imageUrl && !msg?.videoUrl && !msg?.documentUrl) return null;
 
     return (
       <div className="mt-2 space-y-2">
@@ -161,7 +263,7 @@ export default function AlunoPage() {
           <a href={msg.imageUrl} target="_blank" rel="noreferrer" className="block">
             <img
               src={msg.imageUrl}
-              alt="Imagem enviada na dúvida"
+              alt="Imagem enviada na conversa"
               className="max-h-52 max-w-full rounded-xl border border-[#ffffff10] bg-[#0a0a0a] object-contain"
             />
             <span className="mt-1 block text-[9px] text-blue-400 underline">Abrir imagem</span>
@@ -175,6 +277,18 @@ export default function AlunoPage() {
               Abrir vídeo
             </a>
           </div>
+        )}
+
+        {msg.documentUrl && (
+          <a
+            href={msg.documentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-[10px] text-[#D4A373] hover:border-[#D4A373]/40"
+          >
+            <span className="text-base">📄</span>
+            <span className="min-w-0 truncate">Abrir {msg.documentName || "documento"}</span>
+          </a>
         )}
       </div>
     );
@@ -331,7 +445,7 @@ export default function AlunoPage() {
         if (r2.ok) {
           const data = await r2.json();
           setStudentId(data.id);
-          setStudentName(data.name);
+          setStudentName(data.displayName || data.preferredName || data.name);
           setStudentImage(data.image || data.photoUrl || data.avatarUrl || userImage || null);
         } else if (userName) {
           setStudentName(userName);
@@ -353,6 +467,10 @@ export default function AlunoPage() {
 
       if (res.ok && data?.summary) {
         setDashboardSummary(data.summary);
+
+        if (data.summary?.student?.displayName) {
+          setStudentName(data.summary.student.displayName);
+        }
 
         if (data.summary?.student?.image) {
           setStudentImage(data.summary.student.image);
@@ -733,52 +851,109 @@ export default function AlunoPage() {
     setTimeout(() => setMessage(null), 5000);
   }
 
+  function handleChatFileSelection(
+    event: ChangeEvent<HTMLInputElement>,
+    onSelect: (file: File | null) => void
+  ) {
+    const file = event.target.files?.[0] || null;
+
+    if (!file) {
+      onSelect(null);
+      return;
+    }
+
+    const validationError = validateChatFile(file);
+
+    if (validationError) {
+      event.target.value = "";
+      onSelect(null);
+      setMessage({ type: "error", text: validationError });
+      setTimeout(() => setMessage(null), 5000);
+      return;
+    }
+
+    onSelect(file);
+  }
+
   async function handleSendQuestion(parentId?: string) {
     const text = parentId ? followUpText : newQuestion;
     const file = parentId ? followUpFile : questionFile;
-    const content = text.trim() || (file ? "Anexo enviado pelo aluno." : "");
 
-    if (!content || !studentId) return;
+    if ((!text.trim() && !file) || !studentId) return;
 
     if (parentId) setSendingFollowUp(true);
     else setSendingQuestion(true);
 
+    setMessage(null);
+
     try {
-      const form = new FormData();
-      form.append("content", content);
-      form.append("studentId", studentId);
+      let res: Response;
 
-      if (parentId) {
-        form.append("parentId", parentId);
+      if (file && isChatDocument(file)) {
+        const form = new FormData();
+        form.append("content", text.trim() || "Documento enviado pelo aluno.");
+        form.append("studentId", studentId);
+        form.append("file", file);
+
+        if (parentId) form.append("parentId", parentId);
+        else form.append("target", questionTarget);
+
+        res = await fetch("/api/aluno/questions", {
+          method: "POST",
+          body: form,
+        });
       } else {
-        form.append("target", questionTarget);
-      }
-      if (file) form.append("file", file);
+        const attachment = file
+          ? await uploadStudentChatFile(studentId, file)
+          : {};
+        const attachmentFallback = attachment.videoUrl
+          ? "Vídeo enviado pelo aluno."
+          : attachment.imageUrl
+            ? "Imagem enviada pelo aluno."
+            : "";
 
-      const res = await fetch("/api/aluno/questions", { method: "POST", body: form });
+        const body = {
+          content: text.trim() || attachmentFallback,
+          studentId,
+          ...(parentId ? { parentId } : { target: questionTarget }),
+          ...attachment,
+        };
+
+        res = await fetch("/api/aluno/questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
+
       const data = await res.json().catch(() => null);
 
       if (res.ok) {
         if (parentId) {
           setFollowUpText("");
           setFollowUpFile(null);
+          setFollowUpFileInputKey((current) => current + 1);
           setSelectedQuestion(null);
         } else {
           setNewQuestion("");
           setQuestionFile(null);
+          setQuestionFileInputKey((current) => current + 1);
         }
-        setMessage({ type: "success", text: "Dúvida enviada!" });
+        setMessage({ type: "success", text: "Mensagem enviada pelo chat!" });
         await fetchQuestions(studentId);
       } else {
         setMessage({ type: "error", text: data?.error || "Erro ao enviar" });
       }
-    } catch {
-      setMessage({ type: "error", text: "Erro ao enviar" });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Erro ao enviar",
+      });
     }
 
     if (parentId) setSendingFollowUp(false);
     else setSendingQuestion(false);
-    setTimeout(() => setMessage(null), 3000);
+    setTimeout(() => setMessage(null), 5000);
   }
 
   // ⚫ Cinza = duvida resolvida (fechada)
@@ -1373,7 +1548,7 @@ export default function AlunoPage() {
               )}
             </div>
             {/* SEÇÃO DE DÚVIDAS - LADO DIREITO */}
-            <div className="sm:w-[45%] bg-[#111] border border-[#ffffff10] rounded-xl p-3">
+            <div id="conversas-aluno" className="sm:w-[45%] scroll-mt-4 bg-[#111] border border-[#ffffff10] rounded-xl p-3">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="font-semibold text-[#f5f5f5] text-xs">Conversas</h2>
                 {pendingCount > 0 && (
@@ -1400,13 +1575,33 @@ export default function AlunoPage() {
                 placeholder={questionTarget === "GESTAO" ? "Pergunte para a gestão..." : "Pergunte para seu professor..."}
                 className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
               <div className="flex items-center gap-1 mb-1.5">
-                <input type="file" accept="image/*,video/*" onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
-                  className="text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
-                {questionFile && <span className="text-[8px] text-[#D4A373]">1</span>}
+                <input
+                  key={questionFileInputKey}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg,.pdf,.doc,.docx,.txt"
+                  onChange={(event) => handleChatFileSelection(event, setQuestionFile)}
+                  className="min-w-0 flex-1 text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]"
+                />
+                {questionFile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuestionFile(null);
+                      setQuestionFileInputKey((current) => current + 1);
+                    }}
+                    title="Remover anexo"
+                    className="max-w-[130px] truncate rounded border border-[#D4A373]/30 px-1.5 py-0.5 text-[8px] text-[#D4A373] hover:bg-[#D4A373]/10"
+                  >
+                    {questionFile.name} ×
+                  </button>
+                )}
               </div>
+              <p className="mb-1.5 text-[8px] leading-relaxed text-[#6b6b6b]">
+                Fotos e vídeos: até 25 MB. Exames, laudos e prescrições: até 3 MB.
+              </p>
               <button onClick={() => handleSendQuestion()} disabled={sendingQuestion || (!newQuestion.trim() && !questionFile)}
                 className="w-full bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
-                {sendingQuestion ? "..." : "Enviar"}
+                {sendingQuestion ? "Enviando..." : "Enviar"}
               </button>
 
               {/* Lista de threads */}
@@ -1576,15 +1771,32 @@ export default function AlunoPage() {
                   placeholder="Digite aqui..."
                   className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none h-14 mb-1.5" />
                 <div className="flex items-center gap-1 mb-1.5">
-                  <input type="file" accept="image/*,video/*" onChange={(e) => setFollowUpFile(e.target.files?.[0] || null)}
-                    className="text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]" />
-                  {followUpFile && <span className="text-[8px] text-[#D4A373]">1</span>}
+                  <input
+                    key={followUpFileInputKey}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg,.pdf,.doc,.docx,.txt"
+                    onChange={(event) => handleChatFileSelection(event, setFollowUpFile)}
+                    className="min-w-0 flex-1 text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#D4A373] file:text-[#0a0a0a]"
+                  />
+                  {followUpFile && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFollowUpFile(null);
+                        setFollowUpFileInputKey((current) => current + 1);
+                      }}
+                      title="Remover anexo"
+                      className="max-w-[130px] truncate rounded border border-[#D4A373]/30 px-1.5 py-0.5 text-[8px] text-[#D4A373] hover:bg-[#D4A373]/10"
+                    >
+                      {followUpFile.name} ×
+                    </button>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleSendQuestion(selectedQuestion.id)}
                     disabled={sendingFollowUp || (!followUpText.trim() && !followUpFile)}
                     className="flex-1 bg-[#D4A373] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
-                    {sendingFollowUp ? "..." : "Continuar perguntando"}
+                    {sendingFollowUp ? "Enviando..." : "Continuar perguntando"}
                   </button>
                   <button onClick={() => { setSelectedQuestion(null); setNewQuestion(""); }}
                     className="text-[8px] text-[#6b6b6b] hover:text-white px-2 transition-colors">
