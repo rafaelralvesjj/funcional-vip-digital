@@ -87,11 +87,9 @@ export function StudentDidYouKnowCard() {
 
   if (error && !content) {
     return (
-      <section className="rounded-xl border border-red-500/20 bg-red-500/10 p-3">
-        <p className="text-xs font-semibold text-red-300">Você Sabia?</p>
-        <p className="mt-1 text-[11px] leading-relaxed text-red-100/80">
-          {error}
-        </p>
+      <section className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2.5">
+        <p className="text-[10px] font-semibold text-red-300">Você Sabia?</p>
+        <p className="mt-0.5 text-[10px] leading-relaxed text-red-100/80">{error}</p>
       </section>
     );
   }
@@ -99,44 +97,42 @@ export function StudentDidYouKnowCard() {
   if (!content) return null;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[#D4A373]/35 bg-[#111]">
-      <div className="border-b border-[#ffffff10] bg-[#D4A373]/10 px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#D4A373] text-lg text-[#0a0a0a]">
-            💡
-          </div>
-          <div>
-            <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#D4A373]">
-              Dica rápida
-            </p>
-            <h2 className="text-sm font-bold text-[#f5f5f5]">Você Sabia?</h2>
-          </div>
+    <section className="rounded-xl border border-[#D4A373]/35 bg-[#111] px-3 py-3">
+      <div className="flex items-start gap-2.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#D4A373] text-base text-[#0a0a0a]">
+          💡
         </div>
-      </div>
 
-      <div className="p-4">
-        <h3 className="text-sm font-semibold leading-relaxed text-[#f5f5f5]">
-          {content.title}
-        </h3>
-        <p className="mt-2 whitespace-pre-line text-[11px] leading-relaxed text-[#a1a1a1]">
-          {content.content}
-        </p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#D4A373]">
+                Você Sabia?
+              </p>
+              <h2 className="mt-0.5 text-[12px] font-semibold leading-snug text-[#f5f5f5]">
+                {content.title}
+              </h2>
+            </div>
 
-        {error && (
-          <p className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-[10px] text-red-300">
-            {error}
+            <button
+              type="button"
+              onClick={handleUnderstood}
+              disabled={confirming}
+              className="shrink-0 rounded-lg bg-[#D4A373] px-3 py-1.5 text-[10px] font-bold text-[#0a0a0a] transition hover:bg-[#e2b583] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {confirming ? "Salvando..." : "Entendi"}
+            </button>
+          </div>
+
+          <p className="mt-1.5 whitespace-pre-line text-[10px] leading-relaxed text-[#a1a1a1]">
+            {content.content}
           </p>
-        )}
 
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={handleUnderstood}
-            disabled={confirming}
-            className="rounded-lg bg-[#D4A373] px-4 py-2 text-[11px] font-bold text-[#0a0a0a] transition hover:bg-[#e2b583] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {confirming ? "Registrando..." : "Entendi"}
-          </button>
+          {error && (
+            <p className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-[9px] text-red-300">
+              {error}
+            </p>
+          )}
         </div>
       </div>
     </section>
