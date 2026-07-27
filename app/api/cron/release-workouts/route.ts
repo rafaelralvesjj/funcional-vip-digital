@@ -74,6 +74,22 @@ function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date
   return { startOfWeek, endOfWeek };
 }
 
+function getWeekToRelease(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
+  const currentWeek = getWeekRange(referenceDate);
+
+  // Este cron roda aos domingos, às 15h no horário de Brasília.
+  // Nesse momento, liberamos a semana que começa na segunda-feira seguinte.
+  if (referenceDate.getUTCDay() === 0) {
+    const startOfWeek = new Date(currentWeek.endOfWeek);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    return { startOfWeek, endOfWeek };
+  }
+
+  return currentWeek;
+}
+
 function formatDatePtBr(date: Date): string {
   return date.toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -282,7 +298,7 @@ export async function GET(request: NextRequest) {
   }
 
   const now = new Date();
-  const { startOfWeek, endOfWeek } = getWeekRange(now);
+  const { startOfWeek, endOfWeek } = getWeekToRelease(now);
 
   const allActiveStudents = (await prisma.student.findMany({
     where: {
@@ -303,11 +319,13 @@ export async function GET(request: NextRequest) {
       contracts: {
         where: {
           status: "ACTIVE",
+          // No domingo, o contrato pode começar somente na segunda-feira.
+          // Por isso buscamos contratos que cruzem a semana que será liberada.
           startDate: {
-            lte: now,
+            lt: endOfWeek,
           },
           endDate: {
-            gte: now,
+            gte: startOfWeek,
           },
         },
         select: {
@@ -517,4 +535,3 @@ export async function GET(request: NextRequest) {
     errors,
   });
 }
-
