@@ -47,6 +47,7 @@ export default function AlunoRegisterPage() {
 
   const [form, setForm] = useState({
     name: "",
+    preferredName: "",
     email: "",
     phone: "",
     birthDate: "",
@@ -298,6 +299,7 @@ export default function AlunoRegisterPage() {
         },
         body: JSON.stringify({
           name: form.name,
+          preferredName: form.preferredName,
           email: form.email,
           phone: form.phone,
           birthDate: form.birthDate,
@@ -433,6 +435,22 @@ export default function AlunoRegisterPage() {
                 placeholder="Seu nome"
                 autoComplete="name"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-1">
+                Como você gosta de ser chamado? <span className="text-[#6b6b6b]">(opcional)</span>
+              </label>
+              <input
+                name="preferredName"
+                value={form.preferredName}
+                onChange={handleChange}
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                placeholder="Ex.: Rafa, Dê, Gabi"
+                autoComplete="nickname"
+                maxLength={40}
+              />
+              <p className="mt-1 text-xs text-[#8a8a8a]">Usaremos esse nome nos e-mails, avisos e mensagens. Se não preencher, usaremos seu primeiro nome.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
