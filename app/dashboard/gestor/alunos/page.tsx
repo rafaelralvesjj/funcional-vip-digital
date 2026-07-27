@@ -332,6 +332,9 @@ export default function GerenciarAlunosPage() {
             autoComplete="nickname"
             className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#D4A373]"
           />
+          <p className="mt-1 text-[11px] leading-relaxed text-[#6b6b6b]">
+            Esse nome será usado nas saudações e comunicações com o aluno. O nome completo continua preservado no cadastro.
+          </p>
         </div>
 
         <input
@@ -473,6 +476,11 @@ export default function GerenciarAlunosPage() {
                     <p className="text-[#f5f5f5] text-sm font-medium truncate">
                       {student.name}
                     </p>
+                    {student.preferredName && (
+                      <p className="text-[10px] text-[#D4A373] truncate">
+                        Chamar de {student.preferredName}
+                      </p>
+                    )}
 
                     {student.notes && (
                       <p className="text-[#525252] text-xs truncate">
