@@ -6,6 +6,9 @@ interface Question {
   content: string;
   videoUrl?: string | null;
   imageUrl?: string | null;
+  documentUrl?: string | null;
+  documentName?: string | null;
+  documentMimeType?: string | null;
   answer: string | null;
   answeredAt: string | null;
   answeredBy: { name: string | null } | null;
@@ -30,8 +33,9 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
   const [content, setContent] = useState("");
   const [fileUrl, setFileUrl] = useState("");
-  const [fileType, setFileType] = useState<"image" | "video" | "">("");
+  const [fileType, setFileType] = useState<"image" | "video" | "document" | "">("");
   const [fileName, setFileName] = useState("");
+  const [fileMimeType, setFileMimeType] = useState("");
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -41,8 +45,10 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
     if (!file) return;
     setUploading(true);
     setFileName(file.name);
+    setFileMimeType(file.type || "application/octet-stream");
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("folder", file.type.startsWith("image/") || file.type.startsWith("video/") ? "chat" : "documentos");
     try {
       const res = await fetch("/api/upload-image", {
         method: "POST",
@@ -51,7 +57,7 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
       if (res.ok) {
         const data = await res.json();
         setFileUrl(data.url);
-        setFileType(file.type.startsWith("video") ? "video" : "image");
+        setFileType(file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : "document");
       } else {
         const err = await res.json();
         alert(`Erro ao enviar arquivo: ${err.error}`);
@@ -65,7 +71,7 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) return;
+    if (!content.trim() && !fileUrl) return;
     setLoading(true);
     setError("");
     try {
@@ -73,8 +79,12 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
       if (fileUrl) {
         if (fileType === "video") {
           body.videoUrl = fileUrl;
-        } else {
+        } else if (fileType === "image") {
           body.imageUrl = fileUrl;
+        } else {
+          body.documentUrl = fileUrl;
+          body.documentName = fileName;
+          body.documentMimeType = fileMimeType || "application/octet-stream";
         }
       }
       const res = await fetch("/api/aluno/questions", {
@@ -92,6 +102,7 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
       setFileUrl("");
       setFileType("");
       setFileName("");
+      setFileMimeType("");
     } catch {
       setError("Erro ao enviar dúvida. Tente novamente.");
     } finally {
@@ -114,26 +125,25 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
         />
         <div>
           <label className="block text-xs text-[#a1a1a1] mb-1">
-            📎 Anexar foto ou vídeo <span className="text-[#525252]">(opcional)</span>
+            📎 Anexar foto, vídeo ou documento <span className="text-[#525252]">(opcional)</span>
           </label>
           <input
             type="file"
-            accept="image/*,video/*"
-            capture="environment"
+            accept="image/*,video/*,.pdf,.doc,.docx,.txt"
             onChange={handleFileUpload}
             className="w-full text-xs text-[#e5e5e5] file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-xs hover:file:bg-[#b88a5e]"
           />
           {uploading && <p className="text-xs text-[#D4A373] mt-1">Enviando arquivo...</p>}
           {fileUrl && !uploading && (
             <p className="text-xs text-green-500 mt-1">
-              ✅ {fileType === "video" ? "📹 Vídeo" : "📸 Foto"} anexado: {fileName}
+              ✅ {fileType === "video" ? "📹 Vídeo" : fileType === "image" ? "📸 Foto" : "📄 Documento"} anexado: {fileName}
             </p>
           )}
         </div>
         {error && <p className="text-xs text-red-400">{error}</p>}
         <button
           type="submit"
-          disabled={loading || uploading || !content.trim()}
+          disabled={loading || uploading || (!content.trim() && !fileUrl)}
           className="w-full bg-[#D4A373] text-[#0a0a0a] font-medium text-sm rounded-lg px-4 py-2.5 hover:bg-[#c49463] transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Enviando..." : "Enviar dúvida"}
@@ -152,6 +162,11 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
                 {q.videoUrl && (
                   <a href={q.videoUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
                     📹 Ver vídeo
+                  </a>
+                )}
+                {q.documentUrl && (
+                  <a href={q.documentUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
+                    📄 Ver {q.documentName || "documento"}
                   </a>
                 )}
                 {q.imageUrl && (
@@ -178,6 +193,11 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
                 {q.videoUrl && (
                   <a href={q.videoUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
                     📹 Ver vídeo
+                  </a>
+                )}
+                {q.documentUrl && (
+                  <a href={q.documentUrl} target="_blank" className="text-xs text-[#D4A373] hover:underline">
+                    📄 Ver {q.documentName || "documento"}
                   </a>
                 )}
                 {q.imageUrl && (
