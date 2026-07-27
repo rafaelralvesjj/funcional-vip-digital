@@ -236,6 +236,31 @@ type ChatAttachmentResult = {
 };
 
 const MAX_CHAT_ATTACHMENT_BYTES = 3 * 1024 * 1024;
+const CHAT_DOCUMENT_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+]);
+const CHAT_DOCUMENT_EXTENSIONS = new Set(["pdf", "doc", "docx", "txt"]);
+
+function getFileExtension(fileName: string): string {
+  return String(fileName || "").split(".").pop()?.toLowerCase() || "";
+}
+
+function getDocumentMimeType(file: File): string {
+  if (file.type) return file.type;
+
+  const extension = getFileExtension(file.name);
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "doc") return "application/msword";
+  if (extension === "docx") {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+  if (extension === "txt") return "text/plain";
+
+  return "application/octet-stream";
+}
 
 function getFileFromBody(body: Record<string, unknown>): File | null {
   const value = body.file || body.attachment || body.image || body.video;
@@ -264,17 +289,21 @@ async function getChatAttachmentFromBody(body: Record<string, unknown>): Promise
   }
 
   const fileType = String(file.type || "").toLowerCase();
+  const fileExtension = getFileExtension(file.name);
   const isImage = fileType.startsWith("image/");
   const isVideo = fileType.startsWith("video/");
+  const isDocument =
+    CHAT_DOCUMENT_MIME_TYPES.has(fileType) ||
+    CHAT_DOCUMENT_EXTENSIONS.has(fileExtension);
 
-  if (!isImage && !isVideo) {
+  if (!isImage && !isVideo && !isDocument) {
     return {
       imageUrl: null,
       videoUrl: null,
       documentUrl: null,
       documentName: null,
       documentMimeType: null,
-      error: "Envie apenas imagem ou vídeo no chat.",
+      error: "Envie foto, vídeo, PDF, Word ou TXT no chat.",
     };
   }
 
@@ -285,40 +314,52 @@ async function getChatAttachmentFromBody(body: Record<string, unknown>): Promise
       documentUrl: null,
       documentName: null,
       documentMimeType: null,
-      error: "O anexo precisa ter até 3MB. Envie uma foto comprimida ou um vídeo curto.",
+      error: isDocument
+        ? "O documento precisa ter até 3 MB."
+        : "Este anexo enviado diretamente precisa ter até 3 MB.",
     };
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const dataUrl = `data:${file.type};base64,${buffer.toString("base64")}`;
+  const contentType = isDocument ? getDocumentMimeType(file) : file.type;
+  const dataUrl = `data:${contentType};base64,${buffer.toString("base64")}`;
 
   return {
     imageUrl: isImage ? dataUrl : null,
     videoUrl: isVideo ? dataUrl : null,
-    documentUrl: null,
-    documentName: null,
-    documentMimeType: null,
+    documentUrl: isDocument ? dataUrl : null,
+    documentName: isDocument ? file.name : null,
+    documentMimeType: isDocument ? contentType : null,
   };
 }
 
-async function getStudentFromSessionOrId(userId: string, studentId?: string | null) {
-  if (studentId) {
-    return prisma.student.findUnique({
-      where: {
-        id: studentId,
-      },
-      select: {
-        id: true,
-        name: true,
-        userId: true,
-        userAuthId: true,
-      },
-    });
-  }
+async function getStudentFromSessionOrId(
+  userId: string,
+  email?: string | null,
+  studentId?: string | null
+) {
+  const normalizedEmail = String(email || "").trim();
+  const sessionMatches = [
+    ...(userId ? [{ userAuthId: userId }] : []),
+    ...(normalizedEmail
+      ? [
+          { email: { equals: normalizedEmail, mode: "insensitive" as const } },
+          {
+            userAuth: {
+              email: { equals: normalizedEmail, mode: "insensitive" as const },
+            },
+          },
+        ]
+      : []),
+  ];
+
+  if (sessionMatches.length === 0) return null;
 
   return prisma.student.findFirst({
     where: {
-      userAuthId: userId,
+      active: true,
+      ...(studentId ? { id: studentId } : {}),
+      OR: sessionMatches,
     },
     select: {
       id: true,
@@ -607,7 +648,11 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const studentId = cleanId(searchParams.get("studentId"));
-    const student = await getStudentFromSessionOrId(String(sessionUser.id), studentId);
+    const student = await getStudentFromSessionOrId(
+      String(sessionUser.id),
+      sessionUser.email,
+      studentId
+    );
 
     if (!student) {
       return NextResponse.json([]);
@@ -672,7 +717,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const student = await getStudentFromSessionOrId(userId, studentIdFromBody);
+    const student = await getStudentFromSessionOrId(
+      userId,
+      sessionUser.email,
+      studentIdFromBody
+    );
 
     if (!student) {
       return NextResponse.json(
