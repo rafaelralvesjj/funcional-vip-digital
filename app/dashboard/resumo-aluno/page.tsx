@@ -1,4 +1,5 @@
 "use client";
+import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -622,6 +623,7 @@ export default function ResumoAlunoPage() {
       .join(", ");
 
     return [
+      ...MANUAL_AI_EXECUTION_HEADER_LINES,
       "Você é um professor de educação física apoiando a montagem de treino.",
       "",
       "Com base no resumo do aluno abaixo, gere uma sugestão de treinos em JSON válido.",
