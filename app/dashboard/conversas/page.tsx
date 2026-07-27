@@ -222,6 +222,9 @@ export default async function TeacherConversationsPage({
       content: conversation.content,
       imageUrl: conversation.imageUrl || null,
       videoUrl: conversation.videoUrl || null,
+      documentUrl: conversation.documentUrl || null,
+      documentName: conversation.documentName || null,
+      documentMimeType: conversation.documentMimeType || null,
       senderRole: conversation.senderRole || "TEACHER",
       createdAt: conversation.createdAt.toISOString(),
       resolvedAt: conversation.resolvedAt
