@@ -4,94 +4,95 @@ import { NextRequest, NextResponse } from "next/server";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 
-function normalizeEmail(value?: string | null) {
+export const dynamic = "force-dynamic";
+
+function normalizeEmail(value?: string | null): string | null {
   return value?.trim().toLowerCase() || null;
 }
 
-async function getAuthenticatedStudent() {
+async function findStudentForSession() {
   const session = await getServerSession(authOptions);
   const sessionUser = session?.user as
     | { id?: string; email?: string | null; role?: string | null }
     | undefined;
 
   if (!sessionUser?.id && !sessionUser?.email) {
-    return {
-      error: NextResponse.json({ error: "Não autenticado" }, { status: 401 }),
-      student: null,
-    };
+    return null;
   }
 
   const email = normalizeEmail(sessionUser.email);
-  const student = await prisma.student.findFirst({
-    where: {
-      OR: [
-        ...(sessionUser.id
-          ? [{ userAuthId: sessionUser.id }, { userId: sessionUser.id }]
-          : []),
-        ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : []),
-      ],
-    },
-    select: {
-      id: true,
-      active: true,
-    },
-  });
+  const orWhere: any[] = [];
 
-  if (!student) {
-    return {
-      error: NextResponse.json(
-        { error: "Aluno autenticado não encontrado" },
-        { status: 404 }
-      ),
-      student: null,
-    };
+  if (sessionUser.id) {
+    orWhere.push({ userAuthId: sessionUser.id });
+    orWhere.push({ userId: sessionUser.id });
   }
 
-  return { error: null, student };
-}
+  if (email) {
+    orWhere.push({ email: { equals: email, mode: "insensitive" } });
+    orWhere.push({ userAuth: { email: { equals: email, mode: "insensitive" } } });
+  }
 
-async function findNextContent(studentId: string) {
-  const deliveries = await prisma.didYouKnowDelivery.findMany({
-    where: { studentId },
-    select: { contentId: true },
-  });
+  if (!orWhere.length) return null;
 
-  const deliveredIds = deliveries.map((delivery) => delivery.contentId);
-
-  return prisma.didYouKnowContent.findFirst({
+  return prisma.student.findFirst({
     where: {
       active: true,
-      ...(deliveredIds.length > 0 ? { id: { notIn: deliveredIds } } : {}),
+      OR: orWhere,
     },
     select: {
       id: true,
-      title: true,
-      content: true,
-      category: true,
     },
-    orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
   });
 }
 
 export async function GET() {
   try {
-    const auth = await getAuthenticatedStudent();
+    const student = await findStudentForSession();
 
-    if (auth.error) return auth.error;
-    if (!auth.student) {
+    if (!student) {
       return NextResponse.json(
-        { error: "Aluno autenticado não encontrado" },
+        { error: "Aluno não encontrado para o usuário conectado." },
         { status: 404 }
       );
     }
 
-    const content = await findNextContent(auth.student.id);
+    const acknowledgedDeliveries = await prisma.didYouKnowDelivery.findMany({
+      where: {
+        studentId: student.id,
+        channel: "CARD_ENTENDI",
+      },
+      select: {
+        contentId: true,
+      },
+    });
 
-    return NextResponse.json({ content });
+    const acknowledgedContentIds = acknowledgedDeliveries.map(
+      (delivery) => delivery.contentId
+    );
+
+    const content = await prisma.didYouKnowContent.findFirst({
+      where: {
+        active: true,
+        ...(acknowledgedContentIds.length
+          ? { id: { notIn: acknowledgedContentIds } }
+          : {}),
+      },
+      orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        category: true,
+      },
+    });
+
+    return NextResponse.json({ content: content || null });
   } catch (error) {
-    console.error("GET /api/student/did-you-know error:", error);
+    console.error("Erro ao buscar conteúdo Você Sabia:", error);
+
     return NextResponse.json(
-      { error: "Erro ao carregar o conteúdo Você Sabia" },
+      { error: "Não foi possível carregar o conteúdo Você Sabia." },
       { status: 500 }
     );
   }
@@ -99,23 +100,21 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await getAuthenticatedStudent();
+    const student = await findStudentForSession();
 
-    if (auth.error) return auth.error;
-    if (!auth.student) {
+    if (!student) {
       return NextResponse.json(
-        { error: "Aluno autenticado não encontrado" },
+        { error: "Aluno não encontrado para o usuário conectado." },
         { status: 404 }
       );
     }
 
-    const body = await request.json().catch(() => ({}));
-    const contentId =
-      typeof body.contentId === "string" ? body.contentId.trim() : "";
+    const body = await request.json().catch(() => null);
+    const contentId = String(body?.contentId || "").trim();
 
     if (!contentId) {
       return NextResponse.json(
-        { error: "contentId é obrigatório" },
+        { error: "Conteúdo não informado." },
         { status: 400 }
       );
     }
@@ -125,51 +124,44 @@ export async function POST(request: NextRequest) {
         id: contentId,
         active: true,
       },
-      select: { id: true },
+      select: {
+        id: true,
+      },
     });
 
     if (!content) {
       return NextResponse.json(
-        { error: "Conteúdo não encontrado ou inativo" },
+        { error: "Conteúdo não encontrado ou inativo." },
         { status: 404 }
       );
     }
 
-    const previousDelivery = await prisma.didYouKnowDelivery.findFirst({
+    await prisma.didYouKnowDelivery.upsert({
       where: {
-        studentId: auth.student.id,
-        contentId,
+        studentId_weekKey: {
+          studentId: student.id,
+          weekKey: `CARD:${content.id}`,
+        },
       },
-      select: { id: true },
+      update: {
+        contentId: content.id,
+        channel: "CARD_ENTENDI",
+        sentAt: new Date(),
+      },
+      create: {
+        studentId: student.id,
+        contentId: content.id,
+        weekKey: `CARD:${content.id}`,
+        channel: "CARD_ENTENDI",
+      },
     });
 
-    if (!previousDelivery) {
-      await prisma.didYouKnowDelivery.create({
-        data: {
-          studentId: auth.student.id,
-          contentId,
-          weekKey: `DASHBOARD:${contentId}`,
-          channel: "DASHBOARD",
-        },
-      });
-    }
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Erro ao confirmar conteúdo Você Sabia:", error);
 
-    const nextContent = await findNextContent(auth.student.id);
-
-    return NextResponse.json({ success: true, content: nextContent });
-  } catch (error: any) {
-    if (error?.code === "P2002") {
-      const auth = await getAuthenticatedStudent();
-
-      if (auth.student) {
-        const nextContent = await findNextContent(auth.student.id);
-        return NextResponse.json({ success: true, content: nextContent });
-      }
-    }
-
-    console.error("POST /api/student/did-you-know error:", error);
     return NextResponse.json(
-      { error: "Erro ao registrar o conteúdo Você Sabia" },
+      { error: "Não foi possível registrar a confirmação da dica." },
       { status: 500 }
     );
   }
