@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { StudentDashboardStatusCard } from "@/components/aluno/StudentDashboardStatusCard";
+import { StudentDidYouKnowCard } from "@/components/aluno/StudentDidYouKnowCard";
 import { getStudentDashboardSummaryForSessionUser } from "@/lib/student-dashboard-summary";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,7 @@ export default async function AlunoDashboardPage() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
       <StudentDashboardStatusCard summary={summary} />
+      <StudentDidYouKnowCard />
     </main>
   );
 }
