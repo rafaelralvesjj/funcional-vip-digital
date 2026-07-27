@@ -100,6 +100,12 @@ export default function AlunoPage() {
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [message, setMessage] = useState<{ type: string; text: string } | null>(null);
+  const [completionSummary, setCompletionSummary] = useState<{
+    partial: boolean;
+    done: number;
+    skipped: number;
+    skippedDetails: string[];
+  } | null>(null);
   const [completing, setCompleting] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -523,7 +529,7 @@ export default function AlunoPage() {
   async function markAsComplete(options?: {
     careEventType?: string;
     careEventDescription?: string | null;
-    completionStatus?: "CONCLUIDO" | "NAO_CONCLUIDO_COM_RELATO" | "INTERROMPIDO_CUIDADO";
+    completionStatus?: "CONCLUIDO" | "CONCLUIDO_PARCIALMENTE" | "NAO_CONCLUIDO_COM_RELATO" | "INTERROMPIDO_CUIDADO";
   }) {
     if (!selectedPlan || !studentId || selectedDay === null) return;
 
@@ -595,9 +601,24 @@ export default function AlunoPage() {
           text:
             data?.message ||
             (completionStatus === "CONCLUIDO"
-              ? "Treino concluído!"
-              : "Treino encerrado com relato enviado ao professor."),
+              ? "Treino concluído! Todos os exercícios foram realizados."
+              : completionStatus === "CONCLUIDO_PARCIALMENTE"
+                ? "Treino concluído parcialmente e contabilizado. Seu relato foi enviado ao professor."
+                : "Treino encerrado com relato enviado ao professor."),
         });
+
+        if (completionStatus === "CONCLUIDO" || completionStatus === "CONCLUIDO_PARCIALMENTE") {
+          const totals = getExerciseTotals();
+          const skippedDetails = (selectedPlan.exercises || [])
+            .filter((exercise: any) => exerciseProgress[exercise.id]?.status === "PULADO")
+            .map((exercise: any) => `${exercise.name}: ${exerciseProgress[exercise.id]?.skipReason || "motivo informado"}`);
+          setCompletionSummary({
+            partial: completionStatus === "CONCLUIDO_PARCIALMENTE",
+            done: totals.done,
+            skipped: totals.skipped,
+            skippedDetails,
+          });
+        }
 
         await fetchWorkouts(studentId);
         await fetchNotices(studentId);
@@ -650,7 +671,7 @@ export default function AlunoPage() {
 
   async function reportCareEvent(
     eventType: string,
-    completionStatus: "CONCLUIDO" | "NAO_CONCLUIDO_COM_RELATO" | "INTERROMPIDO_CUIDADO" = "NAO_CONCLUIDO_COM_RELATO"
+    completionStatus: "CONCLUIDO" | "CONCLUIDO_PARCIALMENTE" | "NAO_CONCLUIDO_COM_RELATO" | "INTERROMPIDO_CUIDADO" = "CONCLUIDO_PARCIALMENTE"
   ) {
     if (!studentId || !selectedPlan) return;
 
@@ -1028,20 +1049,29 @@ export default function AlunoPage() {
     const d = new Date();
     return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
   }
-  function isCompleted(day: number) {
+  function getWorkoutStatusForDay(day: number): string | null {
     const selectedDate = new Date(currentYear, currentMonth, day);
     selectedDate.setHours(0, 0, 0, 0);
 
-    if (selectedDate >= getStudentPlanVisibilityLimit()) {
-      return false;
-    }
+    if (selectedDate >= getStudentPlanVisibilityLimit()) return null;
 
     const ds = currentYear + "-" + String(currentMonth + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
-    return workouts.some((w: any) => {
+    const workout = workouts.find((w: any) => {
       const workoutDate = new Date(w.date);
       const workoutStr = workoutDate.getUTCFullYear() + "-" + String(workoutDate.getUTCMonth() + 1).padStart(2, "0") + "-" + String(workoutDate.getUTCDate()).padStart(2, "0");
-      return workoutStr === ds && w.status === "CONCLUIDO";
+      return workoutStr === ds;
     });
+
+    return workout ? String(workout.status || "").toUpperCase() : null;
+  }
+
+  function isCompleted(day: number) {
+    const status = getWorkoutStatusForDay(day);
+    return status === "CONCLUIDO" || status === "CONCLUIDO_PARCIALMENTE";
+  }
+
+  function isPartiallyCompleted(day: number) {
+    return getWorkoutStatusForDay(day) === "CONCLUIDO_PARCIALMENTE";
   }
   function hasPlan(day: number): boolean {
     return getPlanForDay(day) !== null;
@@ -1291,6 +1321,7 @@ export default function AlunoPage() {
                   const hoje = isToday(day);
                   const sel = selectedDay === day;
                   const done = isCompleted(day);
+                  const partial = isPartiallyCompleted(day);
                   const plan = hasPlan(day);
                   const dayDate = new Date(currentYear, currentMonth, day);
                   dayDate.setHours(0, 0, 0, 0);
@@ -1303,7 +1334,8 @@ export default function AlunoPage() {
                          "text-[#a1a1a1] hover:bg-white/5")}>
                       <span>{day}</span>
                       <div className="flex gap-px mt-px">
-                        {done && <div className="w-[3px] h-[3px] rounded-full bg-green-500" />}
+                        {done && !partial && <div className="w-[3px] h-[3px] rounded-full bg-green-500" />}
+                        {partial && <div className="w-[3px] h-[3px] rounded-full bg-emerald-300" />}
                         {plan && !done && canValidateWorkoutDay(day) && (
                           <div className="w-[3px] h-[3px] rounded-full bg-[#F97316]" />
                         )}
@@ -1322,6 +1354,9 @@ export default function AlunoPage() {
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[8px] text-[#a1a1a1]">
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-green-500" /> Concluído
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-300" /> Concluído parcialmente
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-[#F97316]" /> Disponível
@@ -1576,6 +1611,49 @@ export default function AlunoPage() {
               <button type="button" onClick={() => { setSkipExercise(null); setSkipReason(""); }} className="flex-1 rounded-lg border border-[#ffffff10] py-2 text-[11px] text-[#a1a1a1]">Cancelar</button>
               <button type="button" disabled={!skipReason || savingExerciseId === skipExercise.id} onClick={() => saveExerciseProgress(skipExercise, "PULADO", { skipReason })} className="flex-1 rounded-lg bg-amber-500 py-2 text-[11px] font-semibold text-black disabled:opacity-40">Registrar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {completionSummary && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-[#ffffff15] bg-[#111] p-5 shadow-2xl">
+            <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${completionSummary.partial ? "bg-emerald-300/20 text-emerald-300" : "bg-green-500/20 text-green-400"}`}>
+              ✓
+            </div>
+            <h2 className="text-lg font-bold text-[#f5f5f5]">
+              {completionSummary.partial ? "Treino concluído parcialmente!" : "Treino concluído!"}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-[#cfcfcf]">
+              {completionSummary.partial
+                ? "Este treino foi contabilizado como concluído. O professor recebeu seu relato e vai considerar os ajustes necessários."
+                : "Todos os exercícios foram realizados e o treino foi contabilizado como concluído."}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-3">
+                <p className="text-[10px] text-green-300">Exercícios feitos</p>
+                <p className="mt-1 text-xl font-bold text-green-300">{completionSummary.done}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3">
+                <p className="text-[10px] text-emerald-200">Não realizados</p>
+                <p className="mt-1 text-xl font-bold text-emerald-200">{completionSummary.skipped}</p>
+              </div>
+            </div>
+            {completionSummary.skippedDetails.length > 0 && (
+              <div className="mt-4 rounded-xl border border-[#D4A373]/20 bg-[#D4A373]/10 p-3">
+                <p className="text-[10px] font-semibold text-[#D4A373]">Relatos enviados ao professor</p>
+                {completionSummary.skippedDetails.map((item) => (
+                  <p key={item} className="mt-1 text-[11px] text-[#e5e5e5]">• {item}</p>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setCompletionSummary(null)}
+              className={`mt-5 w-full rounded-lg py-3 text-xs font-bold ${completionSummary.partial ? "bg-emerald-300 text-[#062a20]" : "bg-green-500 text-white"}`}
+            >
+              Fechar resumo
+            </button>
           </div>
         </div>
       )}
@@ -1845,7 +1923,7 @@ export default function AlunoPage() {
                         <button
                           type="button"
                           disabled={sendingCareEvent || completing}
-                          onClick={() => reportCareEvent("FALTA_TEMPO", "NAO_CONCLUIDO_COM_RELATO")}
+                          onClick={() => reportCareEvent("FALTA_TEMPO", "CONCLUIDO_PARCIALMENTE")}
                           className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Não consegui concluir por falta de tempo
@@ -1854,7 +1932,7 @@ export default function AlunoPage() {
                         <button
                           type="button"
                           disabled={sendingCareEvent || completing}
-                          onClick={() => reportCareEvent("EXERCICIO_DIFICIL", "NAO_CONCLUIDO_COM_RELATO")}
+                          onClick={() => reportCareEvent("EXERCICIO_DIFICIL", "CONCLUIDO_PARCIALMENTE")}
                           className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Não consegui concluir: exercício difícil
@@ -1863,7 +1941,7 @@ export default function AlunoPage() {
                         <button
                           type="button"
                           disabled={sendingCareEvent || completing}
-                          onClick={() => reportCareEvent("NAO_ENTENDI", "NAO_CONCLUIDO_COM_RELATO")}
+                          onClick={() => reportCareEvent("NAO_ENTENDI", "CONCLUIDO_PARCIALMENTE")}
                           className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Não entendi e não concluí
@@ -1872,7 +1950,7 @@ export default function AlunoPage() {
                         <button
                           type="button"
                           disabled={sendingCareEvent || completing}
-                          onClick={() => reportCareEvent("DESMOTIVACAO", "NAO_CONCLUIDO_COM_RELATO")}
+                          onClick={() => reportCareEvent("DESMOTIVACAO", "CONCLUIDO_PARCIALMENTE")}
                           className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Não concluí por desmotivação
@@ -1899,7 +1977,7 @@ export default function AlunoPage() {
                         <button
                           type="button"
                           disabled={sendingCareEvent || completing}
-                          onClick={() => reportCareEvent("OUTRO", "NAO_CONCLUIDO_COM_RELATO")}
+                          onClick={() => reportCareEvent("OUTRO", "CONCLUIDO_PARCIALMENTE")}
                           className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#D4A373]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Outro motivo / não concluí
@@ -1925,7 +2003,7 @@ export default function AlunoPage() {
                             const skippedItems = (selectedPlan.exercises || []).filter((ex: any) => exerciseProgress[ex.id]?.status === "PULADO");
                             const detail = skippedItems.map((ex: any) => `${ex.name}: ${exerciseProgress[ex.id]?.skipReason}`).join(" | ");
                             setCareEventDetail(detail);
-                            return markAsComplete({ careEventType: "OUTRO", careEventDescription: detail, completionStatus: "NAO_CONCLUIDO_COM_RELATO" });
+                            return markAsComplete({ careEventType: "OUTRO", careEventDescription: detail, completionStatus: "CONCLUIDO_PARCIALMENTE" });
                           }
                         }}
                         disabled={completing || isCompleted(selectedDay) || !allResolved}
@@ -1935,11 +2013,11 @@ export default function AlunoPage() {
                             : allDone
                               ? "bg-green-500 text-white hover:bg-green-600"
                               : allResolved
-                                ? "bg-amber-500 text-black hover:bg-amber-400"
+                                ? "bg-emerald-300 text-[#062a20] hover:bg-emerald-200"
                                 : "bg-[#242424] text-[#6b6b6b] cursor-not-allowed"
                         )}
                       >
-                        {completing ? "..." : isCompleted(selectedDay) ? "Treino Concluído ✓" : allDone ? "Concluir Treino" : allResolved ? "Encerrar treino com relato" : `Faltam ${Math.max(0, totals.total - totals.resolved)} exercício(s)`}
+                        {completing ? "..." : isCompleted(selectedDay) ? (isPartiallyCompleted(selectedDay) ? "Treino concluído parcialmente ✓" : "Treino concluído ✓") : allDone ? "Finalizar treino" : allResolved ? "Finalizar treino parcialmente" : `Faltam ${Math.max(0, totals.total - totals.resolved)} exercício(s)`}
                       </button>
                     </div>
                   );
