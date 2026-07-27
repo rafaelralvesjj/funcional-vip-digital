@@ -98,7 +98,7 @@ export function StudentDidYouKnowCard() {
   if (error && !content) {
     return (
       <section className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2.5">
-        <p className="text-[10px] font-semibold text-red-300">Você sabia?</p>
+        <p className="text-[10px] font-semibold text-red-300">Dicas do Professor</p>
         <p className="mt-0.5 text-[10px] leading-relaxed text-red-100/80">{error}</p>
       </section>
     );
@@ -115,7 +115,7 @@ export function StudentDidYouKnowCard() {
 
         <div className="min-w-0 flex-1">
           <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#D4A373]">
-            Você sabia?
+            Dicas do Professor
           </p>
           <h2 className="mt-0.5 text-[12px] font-semibold leading-snug text-[#f5f5f5]">
             {content.title}
