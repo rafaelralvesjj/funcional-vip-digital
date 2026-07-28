@@ -852,10 +852,46 @@ export async function GET(req: NextRequest) {
     }
 
     if (role === "TEACHER") {
-      // O professor acessa somente os fios que foram direcionados a ele.
-      // Isso impede que conversas de outro professor apareçam apenas porque
-      // o aluno também está ou esteve vinculado ao usuário autenticado.
-      where.teacherId = userId;
+      const linkedStudents = await prisma.student.findMany({
+        where: {
+          OR: [
+            { userId },
+            {
+              contracts: {
+                some: {
+                  professorId: userId,
+                  status: {
+                    notIn: ["CANCELADO", "CANCELLED", "FINALIZADO", "FINALIZED", "INATIVO", "ENCERRADO"],
+                  },
+                },
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const linkedStudentIds = linkedStudents.map((student) => student.id);
+
+      where.OR = [
+        {
+          teacherId: userId,
+        },
+        {
+          teacherId: {
+            not: null,
+          },
+          studentId: {
+            in: linkedStudentIds,
+          },
+        },
+      ];
+
+      if (studentId) {
+        where.studentId = studentId;
+      }
     }
 
     if (role === "STUDENT") {
