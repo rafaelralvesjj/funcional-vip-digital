@@ -198,11 +198,12 @@ export async function repairConversationProfessor({
 }): Promise<string | null> {
   if (!currentTeacherId) return null;
 
-  if (await isTeacherUserId(currentTeacherId)) {
-    return currentTeacherId;
-  }
-
+  const currentTeacherIsValid = await isTeacherUserId(currentTeacherId);
   const resolvedProfessorId = await resolveStudentProfessorId(studentId);
+
+  if (!resolvedProfessorId) {
+    return currentTeacherIsValid ? currentTeacherId : null;
+  }
 
   if (resolvedProfessorId === currentTeacherId) {
     return currentTeacherId;
