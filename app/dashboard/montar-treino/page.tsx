@@ -38,7 +38,6 @@ interface LibraryExercise {
   commonMistakes?: string | null;
   substitutions?: string | null;
   contraindications?: string | null;
-  muscleGroup?: string | null;
 }
 
 interface WorkoutPlanSummary {
@@ -122,6 +121,7 @@ interface ExerciseItem {
   safetyGuidance?: string | null;
   commonMistakes?: string | null;
   contraindications?: string | null;
+  muscleGroup?: string | null;
 }
 
 interface AiWorkoutDraft {
