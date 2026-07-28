@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { calculateAgeYears, formatBirthDateInput, formatBirthDatePtBr } from "@/lib/student-age";
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
+import { isStudentAssignedToProfessor, resolveStudentProfessor } from "@/lib/student-professor";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -17,7 +18,6 @@ function normalizeRole(role?: string | null): string {
 
 function formatDate(value?: Date | string | null): string {
   if (!value) return "não informado";
-
   return new Date(value).toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -101,7 +101,6 @@ function getNextWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: 
 
   return { startOfWeek, endOfWeek };
 }
-
 function getStatusLabel(status?: string | null): string {
   const value = String(status || "").toUpperCase();
 
@@ -227,7 +226,6 @@ function extractFromNotes(notes: string | null | undefined, labels: string[]): s
 
   return "";
 }
-
 function buildCadastroNotes(notes?: string | null): string {
   const lines = extractNotesLines(notes);
 
@@ -542,7 +540,6 @@ function getEvolutionDecisionStatus({
       reviewAlerts,
     };
   }
-
   if (hasInjuryCare || hasOpenPainQuestion || openQuestionsCount > 0 || openCareEventsCount > 0) {
     if (hasInjuryCare) reviewAlerts.push("Existe relato/evento de dor ou desconforto em aberto.");
     if (hasOpenPainQuestion) reviewAlerts.push("Existe dúvida aberta do aluno com relato de dor/desconforto. Revisão humana obrigatória antes de evoluir treino.");
@@ -584,7 +581,6 @@ function getEvolutionDecisionStatus({
   if (overdueWorkoutsCount >= 3 || currentWeekCompleted < currentWeekWorkoutsCount) {
     if (overdueWorkoutsCount >= 3) reviewAlerts.push("Há vários treinos vencidos/não concluídos no histórico.");
     if (currentWeekCompleted < currentWeekWorkoutsCount) reviewAlerts.push("Nem todos os treinos da semana atual foram concluídos.");
-
     return {
       status: "RETOMADA_REPETICAO_ADAPTADA",
       reason: "A adesão não sustenta progressão automática. Priorizar retomada, simplicidade e consistência.",
@@ -668,7 +664,6 @@ function buildAiPrompt(summaryText: string): string {
     summaryText,
   ].join("\n");
 }
-
 async function canAccessStudent({
   userId,
   role,
@@ -677,11 +672,14 @@ async function canAccessStudent({
   userId: string;
   role: string;
   student: {
+    id: string;
     userId: string | null;
   };
 }) {
   if (role === "GESTOR" || role === "ADMIN") return true;
-  if (role === "TEACHER") return student.userId === userId;
+  if (role === "TEACHER") {
+    return isStudentAssignedToProfessor(student.id, userId);
+  }
 
   return false;
 }
@@ -749,11 +747,11 @@ export async function GET(
       role,
       student,
     });
-
     if (!hasAccess) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
+    const professor = await resolveStudentProfessor(student.id);
     const birthDate = student.userAuth?.birthDate || null;
     const birthDateInput = formatBirthDateInput(birthDate);
     const ageYears = calculateAgeYears(birthDate);
@@ -769,7 +767,6 @@ export async function GET(
         { status: 409 }
       );
     }
-
     const onboardingProfile = getOnboardingProfile(student.notes);
     const cadastroNotes = buildCadastroNotes(student.notes);
 
@@ -1042,7 +1039,6 @@ export async function GET(
           return `${exercise.order || 0}. ${exercise.name} — ${exercise.series || "-"} séries x ${exercise.reps || "-"} reps, carga: ${exercise.weight || "não informada"}, descanso: ${exercise.restTime || "não informado"}`;
         })
         .join("\n      ");
-
       const statusLine = plan.workouts.length
         ? plan.workouts.map((workout) => `${formatDate(workout.date)}: ${getStatusLabel(workout.status)}`).join("; ")
         : "sem execução registrada";
@@ -1105,7 +1101,6 @@ export async function GET(
     const engagementLines = engagementNotifications.slice(0, 10).map((item) => {
       return `- ${formatDate(item.sentAt)} | ${item.eventType} | canal: ${item.channel}`;
     });
-
     const careLines = careEvents.slice(0, 12).map((event) => {
       return [
         `- ${formatDate(event.createdAt)} | ${event.title} | tipo: ${event.eventType} | severidade: ${event.severity} | status: ${event.status}`,
@@ -1244,7 +1239,7 @@ export async function GET(
       `Status: ${student.active ? "ativo" : "inativo"}`,
       `Cadastro em: ${formatDate(student.createdAt)}`,
       `Onboarding/bioimpedância inicial completa: ${student.onboardingCompleto ? "sim" : "não"}`,
-      `Professor responsável: ${student.user?.name || "não vinculado"} (${student.user?.email || "sem e-mail"})`,
+      `Professor responsável: ${professor?.name || "não vinculado"} (${professor?.email || "sem e-mail"})`,
       `Treinos contratados/mês: ${student.contractedTrainingDaysPerMonth || "não informado"}`,
       `Meta semanal estimada: ${weeklyLimit ? `${weeklyLimit} treino(s)/semana` : "não configurada"}`,
       `Observações cadastrais: ${cadastroNotes}`,
@@ -1423,7 +1418,7 @@ export async function GET(
         birthDate: birthDateInput,
         ageYears,
         isMinor,
-        professorName: student.user?.name || null,
+        professorName: professor?.name || null,
         weeklyLimit,
       },
       metrics: {
