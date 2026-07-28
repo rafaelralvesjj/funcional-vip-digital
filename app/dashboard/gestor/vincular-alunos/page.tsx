@@ -296,11 +296,21 @@ export default function VincularAlunosPage() {
       const data = await res.json().catch(() => null);
 
       if (res.ok) {
+        const recipientName =
+          data?.professorNotification?.recipientName || data?.student?.professorName || "o professor";
+        const recipientEmail =
+          data?.professorNotification?.recipientEmail || data?.student?.professorEmail || null;
+        const emailConfirmation = data?.professorNotification?.emailSent
+          ? ` Destinatário confirmado: ${recipientName}${recipientEmail ? ` (${recipientEmail})` : ""}.`
+          : "";
+
         setMessage({
           type: "success",
           text:
-            data?.message ||
-            "Professor vinculado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro.",
+            `${
+              data?.message ||
+              "Professor vinculado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro."
+            }${emailConfirmation}`,
         });
         await loadData();
         setViewMode("pending");
