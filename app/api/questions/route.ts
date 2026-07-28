@@ -3,6 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
+import {
+  isStudentAssignedToProfessor,
+  isTeacherUserId,
+  repairConversationProfessor,
+  repairInvalidConversationProfessors,
+  resolveStudentProfessorId,
+} from "@/lib/student-professor";
 
 type SenderRole = "GESTOR" | "TEACHER" | "STUDENT";
 
@@ -596,6 +603,7 @@ async function validateTeacher(teacherId: string) {
   return prisma.user.findFirst({
     where: {
       id: teacherId,
+      active: true,
       role: {
         in: ["PROFESSOR", "TEACHER"],
       },
@@ -609,38 +617,7 @@ async function validateTeacher(teacherId: string) {
 }
 
 async function isStudentLinkedToTeacher(studentId: string, teacherId: string): Promise<boolean> {
-  const linkedStudent = await prisma.student.findFirst({
-    where: {
-      id: studentId,
-      OR: [
-        {
-          userId: teacherId,
-        },
-        {
-          contracts: {
-            some: {
-              professorId: teacherId,
-              status: {
-                notIn: [
-                  "CANCELADO",
-                  "CANCELLED",
-                  "FINALIZADO",
-                  "FINALIZED",
-                  "INATIVO",
-                  "ENCERRADO",
-                ],
-              },
-            },
-          },
-        },
-      ],
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  return Boolean(linkedStudent);
+  return isStudentAssignedToProfessor(studentId, teacherId);
 }
 
 async function findActiveContractIdForCareEvent(studentId: string): Promise<string | null> {
@@ -757,7 +734,10 @@ async function maybeCreateCareEventFromQuestion({
     },
   });
 
-  const effectiveProfessorId = professorId || student?.userId || null;
+  const effectiveProfessorId =
+    professorId && (await isTeacherUserId(professorId))
+      ? professorId
+      : await resolveStudentProfessorId(studentId);
   const { startOfWeek, endOfWeek } = getWeekRange(firstCareMessage.createdAt || new Date());
   const contractId = await findActiveContractIdForCareEvent(studentId);
   const title = careClassification.requiresTrainingPause
@@ -843,6 +823,12 @@ export async function GET(req: NextRequest) {
 
     if (!sessionUser.id) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    try {
+      await repairInvalidConversationProfessors();
+    } catch (repairError) {
+      console.error("Erro ao corrigir destinatários antigos das conversas:", repairError);
     }
 
     const { searchParams } = new URL(req.url);
@@ -1059,8 +1045,15 @@ export async function POST(req: NextRequest) {
       }
 
       parentId = rootQuestion.id;
-      studentId = studentId || rootQuestion.studentId || null;
-      teacherId = teacherId || rootQuestion.teacherId || null;
+      studentId = rootQuestion.studentId || studentId || null;
+      teacherId =
+        rootQuestion.teacherId && rootQuestion.studentId
+          ? await repairConversationProfessor({
+              rootQuestionId: rootQuestion.id,
+              studentId: rootQuestion.studentId,
+              currentTeacherId: rootQuestion.teacherId,
+            })
+          : rootQuestion.teacherId || null;
     }
 
     /*
@@ -1121,8 +1114,15 @@ export async function POST(req: NextRequest) {
         // Em conversa professor-aluno, o professor autenticado é sempre o teacherId.
         // Isso evita que o cliente informe outro professor e mantém a segurança do vínculo.
         teacherId = userId;
-      } else if (!teacherId) {
-        teacherId = validatedStudent.userId || null;
+      } else if (loggedRole === "STUDENT" && !teacherId) {
+        teacherId = await resolveStudentProfessorId(studentId);
+
+        if (!teacherId) {
+          return NextResponse.json(
+            { error: "Aluno sem professor vinculado" },
+            { status: 400 }
+          );
+        }
       }
     }
 
