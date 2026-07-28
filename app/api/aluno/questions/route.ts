@@ -4,6 +4,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 import {
+  isTeacherUserId,
+  repairConversationProfessor,
+  repairInvalidConversationProfessors,
+  resolveStudentProfessorId,
+} from "@/lib/student-professor";
+import {
   classifyCareSignal,
   registerTrainingPreferenceFromStudentMessage,
 } from "@/lib/student-training-preferences";
@@ -105,9 +111,13 @@ async function notifyNewStudentQuestionByEmail({
   let recipients: StudentQuestionEmailRecipient[] = [];
 
   if (teacherId) {
-    const teacher = await prisma.user.findUnique({
+    const teacher = await prisma.user.findFirst({
       where: {
         id: teacherId,
+        active: true,
+        role: {
+          in: ["PROFESSOR", "TEACHER"],
+        },
       },
       select: {
         id: true,
@@ -534,7 +544,10 @@ async function maybeCreateCareEventFromStudentQuestion({
     },
   });
 
-  const effectiveProfessorId = professorId || student?.userId || null;
+  const effectiveProfessorId =
+    professorId && (await isTeacherUserId(professorId))
+      ? professorId
+      : await resolveStudentProfessorId(studentId);
   const { startOfWeek, endOfWeek } = getWeekRange(firstCareMessage.createdAt || new Date());
   const contractId = await findActiveContractIdForCareEvent(studentId);
   const title = careClassification.requiresTrainingPause
@@ -656,6 +669,12 @@ export async function GET(req: NextRequest) {
 
     if (!student) {
       return NextResponse.json([]);
+    }
+
+    try {
+      await repairInvalidConversationProfessors();
+    } catch (repairError) {
+      console.error("Erro ao corrigir destinatários antigos das conversas do aluno:", repairError);
     }
 
     const questions = await prisma.question.findMany({
@@ -800,17 +819,32 @@ export async function POST(req: NextRequest) {
       target === "GESTOR" ||
       target === "MANAGEMENT";
 
-    const teacherId = rootQuestion
-      ? rootQuestion.teacherId
-      : sendToGestao
-        ? null
-        : student.userId;
+    let teacherId: string | null = null;
 
-    if (!rootQuestion && !sendToGestao && !teacherId) {
-      return NextResponse.json(
-        { error: "Aluno sem professor vinculado" },
-        { status: 400 }
-      );
+    if (rootQuestion) {
+      teacherId = rootQuestion.teacherId
+        ? await repairConversationProfessor({
+            rootQuestionId: rootQuestion.id,
+            studentId: student.id,
+            currentTeacherId: rootQuestion.teacherId,
+          })
+        : null;
+
+      if (rootQuestion.teacherId && !teacherId) {
+        return NextResponse.json(
+          { error: "Esta conversa está sem um professor válido. Peça à gestão para revisar o vínculo." },
+          { status: 400 }
+        );
+      }
+    } else if (!sendToGestao) {
+      teacherId = await resolveStudentProfessorId(student.id);
+
+      if (!teacherId) {
+        return NextResponse.json(
+          { error: "Aluno sem professor vinculado" },
+          { status: 400 }
+        );
+      }
     }
 
     const question = await prisma.question.create({
@@ -965,12 +999,20 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    const resolvedTeacherId =
+      rootQuestion.teacherId && rootQuestion.studentId
+        ? await repairConversationProfessor({
+            rootQuestionId: rootQuestion.id,
+            studentId: rootQuestion.studentId,
+            currentTeacherId: rootQuestion.teacherId,
+          })
+        : null;
+
     const canAnswerAsTeacher =
-      role === "TEACHER" &&
-      (rootQuestion.teacherId === userId || rootQuestion.student?.userId === userId);
+      role === "TEACHER" && resolvedTeacherId === userId;
 
     const canAnswerAsGestor =
-      (role === "GESTOR" || role === "ADMIN") && !rootQuestion.teacherId;
+      (role === "GESTOR" || role === "ADMIN") && !resolvedTeacherId;
 
     if (!canAnswerAsTeacher && !canAnswerAsGestor) {
       return NextResponse.json(
@@ -990,7 +1032,7 @@ export async function PUT(req: NextRequest) {
         answeredById: userId,
         parentId: rootQuestion.id,
         studentId: rootQuestion.studentId,
-        teacherId: rootQuestion.teacherId,
+        teacherId: resolvedTeacherId,
         senderRole,
       },
     });
