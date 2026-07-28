@@ -652,19 +652,29 @@ export default async function DashboardPage() {
   });
 
   const unansweredQuestions = await prisma.question.findMany({
-    where: {
-      parentId: null,
-      senderRole: 'STUDENT',
-      ...(isTeacher
-        ? {
-            teacherId: userId,
-          }
-        : {
-            teacherId: {
-              not: null,
+    where: isTeacher
+      ? {
+          parentId: null,
+          senderRole: 'STUDENT',
+          OR: [
+            {
+              teacherId: userId,
             },
-          }),
-    },
+            {
+              teacherId: {
+                not: null,
+              },
+              studentId: {
+                in: myStudentIds,
+              },
+            },
+          ],
+        }
+      : {
+          id: {
+            in: [],
+          },
+        },
     select: {
       id: true,
       studentId: true,
@@ -1123,10 +1133,10 @@ export default async function DashboardPage() {
     answeredById: question.answeredById || null,
     openedById: question.answeredById || null,
     authorName: question.student?.name || 'Aluno',
-    targetLabel: question.teacher?.name
-      ? `Professor: ${question.teacher.name}`
-      : isTeacher
-        ? `Professor: ${userName}`
+    targetLabel: isTeacher
+      ? `Professor: ${userName}`
+      : question.teacher?.name
+        ? `Professor: ${question.teacher.name}`
         : 'Professor',
     adjustmentRequest: preference
       ? {
@@ -1438,11 +1448,15 @@ export default async function DashboardPage() {
       label: labels.pendingWorkoutsCard,
       value: pendingWorkouts.length,
     },
-    {
-      id: 'unanswered-questions',
-      label: labels.unansweredQuestionsCard,
-      value: questionsWithoutAnswer.length,
-    },
+    ...(isTeacher
+      ? [
+          {
+            id: 'unanswered-questions',
+            label: labels.unansweredQuestionsCard,
+            value: questionsWithoutAnswer.length,
+          },
+        ]
+      : []),
     {
       id: 'care-events',
       label: labels.careEventsCard,
@@ -2026,19 +2040,21 @@ export default async function DashboardPage() {
             )}
           </div>
 
-          <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
-            <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
-              {labels.unansweredQuestionsList}
-            </h2>
+          {isTeacher && (
+            <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
+              <h2 className="text-xl font-semibold text-[#f5f5f5] mb-4">
+                {labels.unansweredQuestionsList}
+              </h2>
 
-            <DashboardConversationList
-              conversations={unansweredQuestionConversationItems}
-              currentUserId={userId}
-              currentRole={isGestor ? 'GESTOR' : 'TEACHER'}
-              emptyMessage="Nenhuma dúvida aguardando resposta."
-              allowReply={isTeacher}
-            />
-          </div>
+              <DashboardConversationList
+                conversations={unansweredQuestionConversationItems}
+                currentUserId={userId}
+                currentRole="TEACHER"
+                emptyMessage="Nenhuma dúvida aguardando resposta."
+                allowReply={true}
+              />
+            </div>
+          )}
 
           <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-6 md:p-8">
             <h2 className="text-xl font-semibold text-[#f5f5f5] mb-2">
