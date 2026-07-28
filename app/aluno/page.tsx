@@ -1,4 +1,5 @@
 "use client";
+import WorkoutMuscleMap from "@/components/WorkoutMuscleMap";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { signOut } from "next-auth/react";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
@@ -2071,6 +2072,12 @@ export default function AlunoPage() {
                   )}
                 </div>
               )}
+
+              <WorkoutMuscleMap
+                exercises={Array.isArray(selectedPlan.exercises) ? selectedPlan.exercises : []}
+                compact
+                title="Músculos deste treino"
+              />
 
               {(() => {
                 const totals = getExerciseTotals();
