@@ -5,7 +5,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 
 function normalizeRole(role?: string | null): string {
-  const value = String(role || "").toUpperCase();
+  const value = String(role || "").trim().toUpperCase();
 
   if (value === "PROFESSOR") return "TEACHER";
   if (value === "ALUNO") return "STUDENT";
@@ -33,6 +33,11 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function normalizeEmail(value?: string | null): string | null {
+  const email = String(value || "").trim().toLowerCase();
+  return email || null;
 }
 
 function buildProfessorAssignmentContent({
@@ -78,15 +83,11 @@ function buildProfessorAssignmentContent({
 
 async function notifyProfessorAssignment({
   authorId,
-  professor,
+  professorId,
   student,
 }: {
   authorId: string;
-  professor: {
-    id: string;
-    name?: string | null;
-    email?: string | null;
-  };
+  professorId: string;
   student: {
     id: string;
     name: string;
@@ -94,6 +95,34 @@ async function notifyProfessorAssignment({
     commercialStatus?: string | null;
   };
 }) {
+  /*
+   * A busca é repetida aqui de propósito. O e-mail de vínculo nunca pode usar
+   * o autor da ação, um gestor ou qualquer vínculo legado do aluno como
+   * destinatário. Somente um usuário ativo com papel de professor é aceito.
+   */
+  const professor = await prisma.user.findFirst({
+    where: {
+      id: professorId,
+      active: true,
+      role: {
+        in: ["PROFESSOR", "TEACHER"],
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+  });
+
+  if (!professor || normalizeRole(professor.role) !== "TEACHER") {
+    throw new Error(
+      "O destinatário do aviso de vínculo não é um professor ativo. O e-mail não foi enviado."
+    );
+  }
+
+  const recipientEmail = normalizeEmail(professor.email);
   const title = "Um novo aluno chegou ao seu acompanhamento";
   const content = buildProfessorAssignmentContent({
     professorName: professor.name,
@@ -129,11 +158,14 @@ async function notifyProfessorAssignment({
     });
   }
 
-  if (!professor.email) {
+  if (!recipientEmail) {
     return {
       noticeCreated: !existingNotice,
       emailSent: false,
       emailSkippedReason: "Professor sem e-mail cadastrado.",
+      recipientId: professor.id,
+      recipientName: professor.name || "Professor",
+      recipientEmail: null,
     };
   }
 
@@ -143,7 +175,7 @@ async function notifyProfessorAssignment({
   const safeStudentEmail = escapeHtml(student.email || "Não informado");
 
   await sendEmail({
-    to: professor.email,
+    to: recipientEmail,
     subject: title,
     text: `${content}\n\nAcessar o painel: ${loginUrl}`,
     html: `
@@ -170,6 +202,9 @@ async function notifyProfessorAssignment({
     noticeCreated: !existingNotice,
     emailSent: true,
     emailSkippedReason: null,
+    recipientId: professor.id,
+    recipientName: professor.name || "Professor",
+    recipientEmail,
   };
 }
 
@@ -213,9 +248,13 @@ export async function PUT(request: NextRequest) {
           commercialStatus: true,
         },
       }),
-      prisma.user.findUnique({
+      prisma.user.findFirst({
         where: {
           id: professorId,
+          active: true,
+          role: {
+            in: ["PROFESSOR", "TEACHER"],
+          },
         },
         select: {
           id: true,
@@ -231,21 +270,18 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Aluno não encontrado." }, { status: 404 });
     }
 
-    if (!professor || professor.active === false) {
-      return NextResponse.json({ error: "Professor não encontrado ou inativo." }, { status: 404 });
-    }
-
-    const professorRole = normalizeRole(professor.role);
-
-    if (professorRole !== "TEACHER" && professorRole !== "GESTOR" && professorRole !== "ADMIN") {
+    if (!professor || normalizeRole(professor.role) !== "TEACHER") {
       return NextResponse.json(
-        { error: "O usuário selecionado não pode ser responsável por aluno." },
+        {
+          error:
+            "O usuário selecionado não é um professor ativo. Gestores e administradores não podem receber vínculo de aluno como professor.",
+        },
         { status: 400 }
       );
     }
 
     const previousProfessorId = student.userId || null;
-    const isNewProfessorAssignment = previousProfessorId !== professorId;
+    const isNewProfessorAssignment = previousProfessorId !== professor.id;
 
     const result = await prisma.$transaction(async (tx) => {
       const updatedStudent = await tx.student.update({
@@ -253,7 +289,7 @@ export async function PUT(request: NextRequest) {
           id: studentId,
         },
         data: {
-          userId: professorId,
+          userId: professor.id,
         },
         select: {
           id: true,
@@ -267,32 +303,45 @@ export async function PUT(request: NextRequest) {
               name: true,
               email: true,
               role: true,
+              active: true,
             },
           },
         },
       });
 
-      /*
-       * Se já existir contrato ativo, também atualizamos o professor do ciclo atual.
-       * Isso mantém treino, financeiro e dashboard falando a mesma língua.
-       */
       await tx.studentContract.updateMany({
         where: {
           studentId,
-          status: "ACTIVE",
+          status: {
+            in: ["ACTIVE", "ATIVO"],
+          },
         },
         data: {
-          professorId,
+          professorId: professor.id,
         },
       });
 
       return updatedStudent;
     });
 
+    if (
+      !result.user ||
+      result.user.active === false ||
+      normalizeRole(result.user.role) !== "TEACHER" ||
+      result.user.id !== professor.id
+    ) {
+      throw new Error(
+        "O vínculo foi salvo com um destinatário inválido. A notificação foi interrompida para proteger o envio."
+      );
+    }
+
     let professorNotification: {
       noticeCreated: boolean;
       emailSent: boolean;
       emailSkippedReason?: string | null;
+      recipientId?: string | null;
+      recipientName?: string | null;
+      recipientEmail?: string | null;
       error?: string | null;
     } | null = null;
 
@@ -300,11 +349,7 @@ export async function PUT(request: NextRequest) {
       try {
         professorNotification = await notifyProfessorAssignment({
           authorId: String(user.id),
-          professor: {
-            id: professor.id,
-            name: professor.name,
-            email: professor.email,
-          },
+          professorId: result.user.id,
           student: {
             id: result.id,
             name: result.name,
@@ -318,21 +363,37 @@ export async function PUT(request: NextRequest) {
         professorNotification = {
           noticeCreated: false,
           emailSent: false,
+          recipientId: result.user.id,
+          recipientName: result.user.name,
+          recipientEmail: normalizeEmail(result.user.email),
           error: notificationError?.message || "Erro ao notificar professor.",
         };
       }
     }
 
+    const emailResultText = isNewProfessorAssignment
+      ? professorNotification?.emailSent
+        ? ` E-mail enviado exclusivamente para ${professorNotification.recipientName || "o professor"}.`
+        : professorNotification?.emailSkippedReason
+          ? ` ${professorNotification.emailSkippedReason}`
+          : professorNotification?.error
+            ? ` O vínculo foi salvo, mas o e-mail não foi enviado: ${professorNotification.error}`
+            : ""
+      : "";
+
+    const baseMessage =
+      result.commercialStatus === "CONTRATO_ATIVO" ||
+      result.commercialStatus === "EXPERIENCIA_ATIVA"
+        ? isNewProfessorAssignment
+          ? "Professor vinculado ao aluno e ao contrato ativo."
+          : "Professor já estava vinculado ao aluno e ao contrato ativo."
+        : isNewProfessorAssignment
+          ? "Professor vinculado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro."
+          : "Professor já estava vinculado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro.";
+
     return NextResponse.json({
       ok: true,
-      message:
-        result.commercialStatus === "CONTRATO_ATIVO" || result.commercialStatus === "EXPERIENCIA_ATIVA"
-          ? isNewProfessorAssignment
-            ? "Professor vinculado ao aluno e ao contrato ativo. Professor notificado no mural e por e-mail, quando houver e-mail cadastrado."
-            : "Professor já estava vinculado ao aluno e ao contrato ativo."
-          : isNewProfessorAssignment
-            ? "Professor vinculado e notificado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro."
-            : "Professor já estava vinculado. Para liberar treinos, crie uma experiência grátis ou contrato no Financeiro.",
+      message: `${baseMessage}${emailResultText}`,
       professorNotification,
       student: {
         id: result.id,
@@ -340,9 +401,9 @@ export async function PUT(request: NextRequest) {
         email: result.email,
         commercialStatus: result.commercialStatus,
         contractedTrainingDaysPerMonth: result.contractedTrainingDaysPerMonth,
-        professorId: result.user?.id || null,
-        professorName: result.user?.name || null,
-        professorEmail: result.user?.email || null,
+        professorId: result.user.id,
+        professorName: result.user.name,
+        professorEmail: normalizeEmail(result.user.email),
       },
     });
   } catch (error: any) {
