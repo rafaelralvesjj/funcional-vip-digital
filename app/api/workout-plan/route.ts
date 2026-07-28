@@ -1323,6 +1323,11 @@ export async function POST(req: NextRequest) {
         include: {
           exercises: {
             orderBy: { order: "asc" },
+            include: {
+              libraryExercise: {
+                select: { muscleGroup: true },
+              },
+            },
           },
           workouts: {
             select: {
@@ -1436,6 +1441,11 @@ export async function GET(req: NextRequest) {
         include: {
           exercises: {
             orderBy: { order: "asc" },
+            include: {
+              libraryExercise: {
+                select: { muscleGroup: true },
+              },
+            },
           },
           workouts: {
             select: {
@@ -1514,6 +1524,11 @@ export async function GET(req: NextRequest) {
         include: {
           exercises: {
             orderBy: { order: "asc" },
+            include: {
+              libraryExercise: {
+                select: { muscleGroup: true },
+              },
+            },
           },
           workouts: {
             select: {
@@ -1805,6 +1820,11 @@ export async function PUT(req: NextRequest) {
         include: {
           exercises: {
             orderBy: { order: "asc" },
+            include: {
+              libraryExercise: {
+                select: { muscleGroup: true },
+              },
+            },
           },
         },
       });
