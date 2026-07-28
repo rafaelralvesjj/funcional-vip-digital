@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import WorkoutMuscleMap from "@/components/WorkoutMuscleMap";
 
 interface Student {
   id: string;
@@ -37,6 +38,7 @@ interface LibraryExercise {
   commonMistakes?: string | null;
   substitutions?: string | null;
   contraindications?: string | null;
+  muscleGroup?: string | null;
 }
 
 interface WorkoutPlanSummary {
@@ -470,6 +472,7 @@ export default function MontarTreinoPage() {
       safetyGuidance: String((exercise as any)?.safetyGuidance || buildExerciseSafetyGuidance(libraryExercise) || ""),
       commonMistakes: String((exercise as any)?.commonMistakes || libraryExercise?.commonMistakes || "") || null,
       contraindications: String((exercise as any)?.contraindications || libraryExercise?.contraindications || "") || null,
+      muscleGroup: String((exercise as any)?.muscleGroup || libraryExercise?.muscleGroup || "") || null,
     };
   }
 
@@ -873,6 +876,7 @@ export default function MontarTreinoPage() {
       safetyGuidance: buildExerciseSafetyGuidance(ex),
       commonMistakes: ex.commonMistakes || null,
       contraindications: ex.contraindications || null,
+      muscleGroup: ex.muscleGroup || null,
     };
     setExercises([...exercises, newExercise]);
     setShowLibrary(false);
@@ -2001,6 +2005,13 @@ export default function MontarTreinoPage() {
             </div>
           </div>
         </div>
+
+        {exercises.length > 0 && (
+          <WorkoutMuscleMap
+            exercises={exercises}
+            title="Distribuição muscular antes de liberar"
+          />
+        )}
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
