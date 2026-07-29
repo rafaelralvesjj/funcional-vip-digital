@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { buildWorkoutMuscleSummary, MuscleKey, MuscleMapExercise } from "@/lib/workout-muscles";
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
 }
 
 type Region = { key: MuscleKey; el: ReactElement };
+type FocusFilter = "major" | "moderate" | "auxiliary" | null;
 
 const FRONT: Region[] = [
   { key: "shoulders", el: <><path d="M56 75 C48 76 43 83 43 93 C50 91 57 88 63 84 C66 81 66 77 64 74 Z"/><path d="M144 75 C152 76 157 83 157 93 C150 91 143 88 137 84 C134 81 134 77 136 74 Z"/></> },
@@ -37,13 +38,18 @@ const BACK: Region[] = [
   { key: "calves", el: <><path d="M72 294 C65 311 65 340 72 359 C78 364 84 359 86 349 C88 327 86 306 81 295 Z"/><path d="M128 294 C135 311 135 340 128 359 C122 364 116 359 114 349 C112 327 114 306 119 295 Z"/></> },
 ];
 
-function Body({ side, levels }: { side: "front" | "back"; levels: Map<MuscleKey, number> }) {
+function Body({ side, levels, activeFilter }: { side: "front" | "back"; levels: Map<MuscleKey, number>; activeFilter: FocusFilter }) {
   const regions = side === "front" ? FRONT : BACK;
   const fill = (key: MuscleKey) => {
     const value = levels.get(key) || 0;
     if (!value) return "#ECECEC";
-    if (value >= 0.78) return "#FF6A00";
-    if (value >= 0.48) return "#D79B68";
+
+    const category: Exclude<FocusFilter, null> =
+      value >= 0.78 ? "major" : value >= 0.48 ? "moderate" : "auxiliary";
+
+    if (activeFilter && category !== activeFilter) return "#E7E7E7";
+    if (category === "major") return "#FF6A00";
+    if (category === "moderate") return "#D79B68";
     return "#8A6545";
   };
 
@@ -89,6 +95,7 @@ function Body({ side, levels }: { side: "front" | "back"; levels: Map<MuscleKey,
 }
 
 export default function WorkoutMuscleMap({ exercises, compact = false, title = "Músculos trabalhados", className = "" }: Props) {
+  const [activeFilter, setActiveFilter] = useState<FocusFilter>(null);
   const summary = buildWorkoutMuscleSummary(exercises || []);
   if (!exercises?.length) return null;
   const levels = new Map(summary.muscles.map((item) => [item.key, item.normalizedScore]));
@@ -101,14 +108,36 @@ export default function WorkoutMuscleMap({ exercises, compact = false, title = "
         <p className="mt-1 text-[10px] leading-relaxed text-[#8d8d8d]">A intensidade da cor considera os músculos principais, auxiliares e o volume previsto de cada exercício.</p>
       </div>
       <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-gradient-to-b from-[#171717] to-[#101010] p-2 sm:p-3">
-        <Body side="front" levels={levels} />
-        <Body side="back" levels={levels} />
+        <Body side="front" levels={levels} activeFilter={activeFilter} />
+        <Body side="back" levels={levels} activeFilter={activeFilter} />
       </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-[9px]">
-        <span className="rounded-full border border-orange-500/30 bg-orange-500/15 px-2 py-1 text-orange-300">Foco maior</span>
-        <span className="rounded-full border border-[#D79B68]/30 bg-[#D79B68]/15 px-2 py-1 text-[#efbd91]">Foco moderado</span>
-        <span className="rounded-full border border-[#8A6545]/30 bg-[#8A6545]/15 px-2 py-1 text-[#c39a77]">Participação auxiliar</span>
+      <div className="mt-3 flex flex-wrap gap-2 text-[9px]" aria-label="Filtros do mapa muscular">
+        <button
+          type="button"
+          aria-pressed={activeFilter === "major"}
+          onClick={() => setActiveFilter((current) => current === "major" ? null : "major")}
+          className={`rounded-full border px-2.5 py-1.5 transition-all ${activeFilter === "major" ? "border-orange-400 bg-orange-500/30 text-orange-200 ring-1 ring-orange-400/50" : "border-orange-500/30 bg-orange-500/15 text-orange-300 hover:bg-orange-500/25"}`}
+        >
+          Foco maior
+        </button>
+        <button
+          type="button"
+          aria-pressed={activeFilter === "moderate"}
+          onClick={() => setActiveFilter((current) => current === "moderate" ? null : "moderate")}
+          className={`rounded-full border px-2.5 py-1.5 transition-all ${activeFilter === "moderate" ? "border-[#E8B78C] bg-[#D79B68]/30 text-[#ffd5b0] ring-1 ring-[#D79B68]/50" : "border-[#D79B68]/30 bg-[#D79B68]/15 text-[#efbd91] hover:bg-[#D79B68]/25"}`}
+        >
+          Foco moderado
+        </button>
+        <button
+          type="button"
+          aria-pressed={activeFilter === "auxiliary"}
+          onClick={() => setActiveFilter((current) => current === "auxiliary" ? null : "auxiliary")}
+          className={`rounded-full border px-2.5 py-1.5 transition-all ${activeFilter === "auxiliary" ? "border-[#B98A63] bg-[#8A6545]/35 text-[#e1b48f] ring-1 ring-[#8A6545]/60" : "border-[#8A6545]/30 bg-[#8A6545]/15 text-[#c39a77] hover:bg-[#8A6545]/25"}`}
+        >
+          Participação auxiliar
+        </button>
       </div>
+      <p className="mt-2 text-[9px] text-[#777]">Toque em uma categoria para destacar somente aquele nível. Toque novamente para mostrar todos.</p>
       <div className="mt-3 space-y-2">
         <div className="rounded-lg border border-white/5 bg-[#111] p-2.5">
           <p className="text-[9px] text-[#777]">Foco principal</p>
