@@ -1330,6 +1330,10 @@ export default function AlunoPage() {
     const uiState = getCommercialUiState();
 
     if (activePauseCareEvent || uiState === "PAUSA_POR_CUIDADO") {
+      if (isLowAdherencePause) {
+        return hasRequestedCareReturn ? "Retomada em análise" : "Seus treinos estão temporariamente pausados";
+      }
+
       return String(activePauseCareEvent?.status || "").toUpperCase() === "EM_REVISAO"
         ? "Retomada em revisão"
         : "Treinos pausados por cuidado";
@@ -1351,6 +1355,14 @@ export default function AlunoPage() {
 
     if (activePauseCareEvent || uiState === "PAUSA_POR_CUIDADO") {
       const status = String(activePauseCareEvent?.status || "").toUpperCase();
+
+      if (isLowAdherencePause) {
+        if (status === "EM_REVISAO") {
+          return "Seu pedido foi enviado ao professor. Ele vai conversar com você e preparar uma retomada adequada antes de liberar novos treinos.";
+        }
+
+        return "Percebemos que os últimos treinos não foram realizados. Para evitar novas programações sem considerar sua rotina, seu acompanhamento foi pausado. Você continua com acesso ao chat e pode pedir a retomada quando estiver pronto.";
+      }
 
       if (status === "EM_REVISAO") {
         return "Você já avisou que se sente apto(a) para retomar. Agora o professor precisa revisar e liberar sua retomada com segurança.";
@@ -1378,9 +1390,11 @@ export default function AlunoPage() {
     const eventType = String(event?.eventType || "").toUpperCase();
     const status = String(event?.status || "").toUpperCase();
 
-    return eventType === "PAUSA_POR_CUIDADO" && status !== "RESOLVIDO";
+    return ["PAUSA_POR_CUIDADO", "PAUSA_BAIXA_ADERENCIA"].includes(eventType) && status !== "RESOLVIDO";
   }) || null;
   const activePauseStatus = String(activePauseCareEvent?.status || "").toUpperCase();
+  const activePauseEventType = String(activePauseCareEvent?.eventType || "").toUpperCase();
+  const isLowAdherencePause = activePauseEventType === "PAUSA_BAIXA_ADERENCIA";
   const hasRequestedCareReturn = activePauseStatus === "EM_REVISAO";
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -1437,12 +1451,18 @@ export default function AlunoPage() {
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 space-y-3">
           <div>
             <p className="text-sm font-semibold text-red-300">
-              {hasRequestedCareReturn ? "Retomada em revisão pelo professor" : "Treinos pausados por cuidado"}
+              {isLowAdherencePause
+                ? (hasRequestedCareReturn ? "Seu pedido de retomada foi enviado" : "Seus treinos estão temporariamente pausados")
+                : (hasRequestedCareReturn ? "Retomada em revisão pelo professor" : "Treinos pausados por cuidado")}
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-red-100/80">
-              {hasRequestedCareReturn
-                ? "Recebemos sua sinalização de retomada. Aguarde o professor revisar e liberar com segurança antes de voltar aos treinos."
-                : "Existe uma pausa por cuidado aberta. Se você ainda sente dor, limitação ou tem orientação médica pendente, não retome o treino. Quando se sentir apto(a), avise seu professor pelo botão abaixo."}
+              {isLowAdherencePause
+                ? (hasRequestedCareReturn
+                    ? "Recebemos seu pedido. O professor foi avisado e vai combinar com você uma retomada possível antes de liberar novos treinos."
+                    : "Percebemos que os últimos treinos não foram realizados. Isso não é uma punição. Pausamos novas programações para entender sua rotina e evitar treinos acumulados. Você continua podendo falar com o professor pelo chat.")
+                : (hasRequestedCareReturn
+                    ? "Recebemos sua sinalização de retomada. Aguarde o professor revisar e liberar com segurança antes de voltar aos treinos."
+                    : "Existe uma pausa por cuidado aberta. Se você ainda sente dor, limitação ou tem orientação médica pendente, não retome o treino. Quando se sentir apto(a), avise seu professor pelo botão abaixo.")}
             </p>
             {activePauseCareEvent.description && (
               <p className="mt-2 text-[10px] leading-relaxed text-red-100/60">
@@ -1458,7 +1478,11 @@ export default function AlunoPage() {
               disabled={sendingCareReturn || loadingCareEvents}
               className="inline-flex rounded-lg bg-red-400 px-3 py-2 text-[11px] font-semibold text-[#0a0a0a] hover:bg-red-300 transition disabled:opacity-50"
             >
-              {sendingCareReturn ? "Enviando..." : "Estou apto para retomar os treinos"}
+              {sendingCareReturn
+                ? "Enviando..."
+                : isLowAdherencePause
+                  ? "Quero retomar meus treinos"
+                  : "Estou apto para retomar os treinos"}
             </button>
           )}
         </div>

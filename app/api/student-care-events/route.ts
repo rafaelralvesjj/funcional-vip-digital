@@ -251,6 +251,7 @@ function normalizeEventType(value?: string | null): string {
     "NAO_ENTENDI",
     "DESMOTIVACAO",
     "BAIXA_ADERENCIA",
+    "PAUSA_BAIXA_ADERENCIA",
     "OUTRO",
   ]);
 
@@ -1137,9 +1138,9 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
       }
 
-      if (existing.eventType !== "PAUSA_POR_CUIDADO") {
+      if (!["PAUSA_POR_CUIDADO", "PAUSA_BAIXA_ADERENCIA"].includes(existing.eventType)) {
         return NextResponse.json(
-          { error: "A retomada só pode ser solicitada para eventos de pausa por cuidado." },
+          { error: "A retomada só pode ser solicitada para eventos de pausa ativa." },
           { status: 400 }
         );
       }
@@ -1153,7 +1154,9 @@ export async function PUT(request: NextRequest) {
 
       const returnMessage = String(
         body?.returnMessage ||
-          "Confirmo que me sinto apto(a) para retomar os treinos. Entendo que, caso ainda exista dor, limitação ou orientação médica pendente, devo informar o professor antes de voltar."
+          (existing.eventType === "PAUSA_BAIXA_ADERENCIA"
+            ? "Quero retomar meus treinos e estou disponível para combinar com o professor uma programação possível para minha rotina."
+            : "Confirmo que me sinto apto(a) para retomar os treinos. Entendo que, caso ainda exista dor, limitação ou orientação médica pendente, devo informar o professor antes de voltar.")
       ).trim();
       const now = new Date();
       const noteToAdd = `[${formatDatePtBr(now)}] Aluno sinalizou aptidão de retomada: ${returnMessage}`;
@@ -1223,9 +1226,13 @@ export async function PUT(request: NextRequest) {
       const professorContent = [
         `Olá, ${professorName}!`,
         "",
-        `${studentName} informou que se sente apto(a) para retomar os treinos e pediu uma nova avaliação do acompanhamento.`,
+        existing.eventType === "PAUSA_BAIXA_ADERENCIA"
+          ? `${studentName} pediu para retomar os treinos após uma pausa por baixa adesão.`
+          : `${studentName} informou que se sente apto(a) para retomar os treinos e pediu uma nova avaliação do acompanhamento.`,
         "",
-        "A retomada não é liberada automaticamente. Revise o evento de cuidado, converse com o aluno pelo chat e confirme se a programação pode voltar com segurança. Resolva o evento somente depois dessa revisão.",
+        existing.eventType === "PAUSA_BAIXA_ADERENCIA"
+          ? "A retomada não é liberada automaticamente. Converse com o aluno pelo chat, entenda as barreiras e combine uma semana de retorno possível. Resolva o evento somente quando estiver pronto para voltar a montar os treinos."
+          : "A retomada não é liberada automaticamente. Revise o evento de cuidado, converse com o aluno pelo chat e confirme se a programação pode voltar com segurança. Resolva o evento somente depois dessa revisão.",
         "",
         `Mensagem do aluno: ${returnMessage}`,
       ].join("\n");

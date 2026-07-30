@@ -1186,6 +1186,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const lowAdherencePause = await prisma.studentCareEvent.findFirst({
+      where: {
+        studentId,
+        eventType: "PAUSA_BAIXA_ADERENCIA",
+        status: { not: "RESOLVIDO" },
+      },
+      select: { id: true, status: true },
+    });
+
+    if (lowAdherencePause) {
+      return NextResponse.json(
+        {
+          error: "Os treinos deste aluno estão pausados por baixa adesão. Aguarde o pedido de retomada e resolva o evento na Central de Cuidado antes de montar uma nova programação.",
+          code: "LOW_ADHERENCE_PAUSE",
+        },
+        { status: 409 }
+      );
+    }
+
     const studentAgeYears = calculateAgeYears(studentExists.userAuth?.birthDate);
 
     if (!studentExists.userAuth?.birthDate || studentAgeYears === null) {

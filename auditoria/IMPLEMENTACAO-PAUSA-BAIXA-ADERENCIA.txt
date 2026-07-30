@@ -1,0 +1,29 @@
+FUNCIONAL UP DIGITAL — PAUSA AUTOMÁTICA POR BAIXA ADESÃO
+
+REGRA IMPLEMENTADA
+- 1 treino consecutivo não realizado: aluno recebe comunicação de retomada.
+- 2 treinos consecutivos não realizados: aluno e professor são avisados.
+- 3 treinos consecutivos não realizados: o sistema cria uma pausa automática por baixa adesão.
+
+CONTAGEM
+- A sequência é interrompida quando existe treino CONCLUIDO ou CONCLUIDO_PARCIALMENTE.
+- CANCELADO, SUBSTITUIDO e INTERROMPIDO_CUIDADO não entram como falta.
+- A análise considera os últimos 45 dias, mas conta somente a sequência mais recente.
+
+EFEITOS DA PAUSA
+- Impede a criação de novos treinos pela rota de montagem.
+- Impede a liberação automática semanal de treinos.
+- Bloqueia abertura e conclusão dos treinos na área do aluno.
+- Mantém chat, avisos, histórico e acompanhamento acessíveis.
+- Evita novos disparos repetidos de baixa adesão enquanto a pausa estiver ativa.
+
+RETOMADA
+- Aluno toca em “Quero retomar meus treinos”.
+- Evento muda para EM_REVISAO.
+- Professor recebe aviso e e-mail.
+- Professor conversa com o aluno e resolve o evento na Central de Cuidado.
+- Ao resolver, a montagem e a liberação de novos treinos voltam a funcionar.
+
+BANCO DE DADOS
+- Não exige alteração do schema Prisma nem SQL.
+- A pausa usa o modelo StudentCareEvent existente com eventType PAUSA_BAIXA_ADERENCIA.

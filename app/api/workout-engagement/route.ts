@@ -757,6 +757,51 @@ async function notifyMissedWorkoutLevel({
   };
 }
 
+async function ensureLowAdherencePause({
+  student,
+  consecutiveMissedWorkouts,
+  managementAuthorId,
+}: {
+  student: StudentForEngagement;
+  consecutiveMissedWorkouts: WorkoutForEngagement[];
+  managementAuthorId: string;
+}) {
+  if (consecutiveMissedWorkouts.length < 3) return null;
+
+  const existing = await prisma.studentCareEvent.findFirst({
+    where: {
+      studentId: student.id,
+      eventType: "PAUSA_BAIXA_ADERENCIA",
+      status: { not: "RESOLVIDO" },
+    },
+    select: { id: true },
+  });
+
+  if (existing) return existing;
+
+  const latest = consecutiveMissedWorkouts[0];
+  const professorId = student.user?.id || null;
+  const description = `${consecutiveMissedWorkouts.length} treinos consecutivos não realizados. Pausa automática criada para interromper novas liberações até o aluno solicitar retomada e o professor revisar.`;
+
+  return prisma.studentCareEvent.create({
+    data: {
+      studentId: student.id,
+      professorId,
+      authorId: managementAuthorId,
+      eventType: "PAUSA_BAIXA_ADERENCIA",
+      severity: "ATENCAO",
+      status: "REQUER_REVISAO",
+      source: "AUTOMACAO_ADERENCIA",
+      title: "Treinos pausados por baixa adesão",
+      description,
+      studentMessage: "Seus treinos foram temporariamente pausados para evitar novas programações sem considerar o que está acontecendo na sua rotina. Quando estiver pronto para voltar, solicite a retomada pelo botão disponível na sua área.",
+      professorMessage: `${student.name} chegou a ${consecutiveMissedWorkouts.length} treinos consecutivos não realizados. Converse pelo chat, entenda as barreiras e libere a retomada somente depois de combinar um plano possível.`,
+      relatedWorkoutId: latest?.id || null,
+    },
+    select: { id: true },
+  });
+}
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
@@ -827,14 +872,11 @@ export async function GET(request: NextRequest) {
     },
   })) as WorkoutForEngagement[];
 
-  const missedWorkouts = (await prisma.workout.findMany({
+  const recentPastWorkouts = (await prisma.workout.findMany({
     where: {
       date: {
         gte: lookbackStart,
         lt: todayStart,
-      },
-      status: {
-        not: "CONCLUIDO",
       },
       student: {
         active: true,
@@ -902,14 +944,39 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const missedByStudent = new Map<string, WorkoutForEngagement[]>();
+  const recentByStudent = new Map<string, WorkoutForEngagement[]>();
 
-  for (const workout of missedWorkouts) {
-    if (!missedByStudent.has(workout.studentId)) {
-      missedByStudent.set(workout.studentId, []);
+  for (const workout of recentPastWorkouts) {
+    if (!recentByStudent.has(workout.studentId)) {
+      recentByStudent.set(workout.studentId, []);
     }
 
-    missedByStudent.get(workout.studentId)!.push(workout);
+    recentByStudent.get(workout.studentId)!.push(workout);
+  }
+
+  const missedByStudent = new Map<string, WorkoutForEngagement[]>();
+
+  for (const [studentId, workouts] of Array.from(recentByStudent.entries())) {
+    const ordered = workouts.slice().sort((a, b) => b.date.getTime() - a.date.getTime());
+    const consecutiveMissed: WorkoutForEngagement[] = [];
+
+    for (const workout of ordered) {
+      const status = String(workout.status || "").toUpperCase();
+
+      if (status === "CONCLUIDO" || status === "CONCLUIDO_PARCIALMENTE") {
+        break;
+      }
+
+      if (["CANCELADO", "SUBSTITUIDO", "INTERROMPIDO_CUIDADO"].includes(status)) {
+        continue;
+      }
+
+      consecutiveMissed.push(workout);
+    }
+
+    if (consecutiveMissed.length > 0) {
+      missedByStudent.set(studentId, consecutiveMissed);
+    }
   }
 
   for (const [studentId, workouts] of Array.from(missedByStudent.entries())) {
@@ -917,6 +984,27 @@ export async function GET(request: NextRequest) {
       const student = workouts[0].student;
       const missedCount = workouts.length;
       const level: 1 | 2 | 3 = missedCount >= 3 ? 3 : missedCount === 2 ? 2 : 1;
+      const existingLowAdherencePause = await prisma.studentCareEvent.findFirst({
+        where: {
+          studentId,
+          eventType: "PAUSA_BAIXA_ADERENCIA",
+          status: { not: "RESOLVIDO" },
+        },
+        select: { id: true },
+      });
+
+      if (existingLowAdherencePause) {
+        missedResults.push({
+          studentId,
+          studentName: student.name,
+          missedCount,
+          level,
+          pausedForLowAdherence: true,
+          sent: false,
+          reason: "Aluno já está com pausa ativa por baixa adesão",
+        });
+        continue;
+      }
 
       const result = await notifyMissedWorkoutLevel({
         student,
@@ -925,11 +1013,18 @@ export async function GET(request: NextRequest) {
         managementAuthorId,
       });
 
+      const pauseEvent = await ensureLowAdherencePause({
+        student,
+        consecutiveMissedWorkouts: workouts,
+        managementAuthorId,
+      });
+
       missedResults.push({
         studentId,
         studentName: student.name,
         missedCount,
         level,
+        pausedForLowAdherence: Boolean(pauseEvent),
         ...result,
       });
     } catch (error: any) {

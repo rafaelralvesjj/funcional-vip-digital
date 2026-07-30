@@ -378,6 +378,24 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
+      const lowAdherencePause = await prisma.studentCareEvent.findFirst({
+        where: {
+          studentId: student.id,
+          eventType: "PAUSA_BAIXA_ADERENCIA",
+          status: { not: "RESOLVIDO" },
+        },
+        select: { id: true, status: true },
+      });
+
+      if (lowAdherencePause) {
+        skipped.push({
+          studentId: student.id,
+          studentName: student.name,
+          reason: "Treinos pausados por baixa adesão; aguardando retomada e liberação do professor",
+        });
+        continue;
+      }
+
       const plansThisWeek = await prisma.workoutPlan.findMany({
         where: {
           studentId: student.id,

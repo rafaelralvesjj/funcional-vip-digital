@@ -70,6 +70,7 @@ function getEventTypeLabel(type: string): string {
     DOR_DESCONFORTO: "Dor/desconforto",
     RELATO_DOR_DUVIDA: "Relato de dor no chat/dúvidas",
     PAUSA_POR_CUIDADO: "Pausa por cuidado",
+    PAUSA_BAIXA_ADERENCIA: "Pausa por baixa adesão",
     NAO_ENTENDI: "Não entendi",
     DESMOTIVACAO: "Desmotivação",
     BAIXA_ADERENCIA: "Baixa aderência",
@@ -91,8 +92,12 @@ function getStatusLabel(status: string): string {
 }
 
 function getCareEventStatusLabel(event: CareEvent): string {
-  if (event.eventType === "PAUSA_POR_CUIDADO" && event.status === "EM_REVISAO") {
+  if (["PAUSA_POR_CUIDADO", "PAUSA_BAIXA_ADERENCIA"].includes(event.eventType) && event.status === "EM_REVISAO") {
     return "Retomada solicitada";
+  }
+
+  if (event.eventType === "PAUSA_BAIXA_ADERENCIA" && event.status === "REQUER_REVISAO") {
+    return "Aguardando pedido de retomada";
   }
 
   if (event.eventType === "PAUSA_POR_CUIDADO" && event.status === "REQUER_REVISAO") {
@@ -548,9 +553,11 @@ export default function CuidadoAlunoPage() {
                     Professor: {event.professorName || "Não informado"} · Criado em {formatDate(event.createdAt)}
                   </p>
 
-                  {event.eventType === "PAUSA_POR_CUIDADO" && event.status === "EM_REVISAO" && (
+                  {["PAUSA_POR_CUIDADO", "PAUSA_BAIXA_ADERENCIA"].includes(event.eventType) && event.status === "EM_REVISAO" && (
                     <p className="text-xs text-green-300 mt-2 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
-                      Aluno sinalizou aptidão para retomar. Revise e resolva o evento somente quando puder liberar a retomada com segurança.
+                      {event.eventType === "PAUSA_BAIXA_ADERENCIA"
+                        ? "Aluno pediu para voltar. Converse pelo chat, combine uma programação possível e resolva o evento quando estiver pronto para montar a retomada."
+                        : "Aluno sinalizou aptidão para retomar. Revise e resolva o evento somente quando puder liberar a retomada com segurança."}
                     </p>
                   )}
 
@@ -606,7 +613,9 @@ export default function CuidadoAlunoPage() {
                       onClick={() => updateEvent(event, "RESOLVIDO")}
                       className="text-xs px-3 py-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20"
                     >
-                      {event.eventType === "PAUSA_POR_CUIDADO" ? "Resolver e liberar retomada" : "Resolver"}
+                      {["PAUSA_POR_CUIDADO", "PAUSA_BAIXA_ADERENCIA"].includes(event.eventType)
+                        ? "Resolver e liberar retomada"
+                        : "Resolver"}
                     </button>
                   )}
 
