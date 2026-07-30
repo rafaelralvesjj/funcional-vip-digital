@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
+import { resolveStudentProfessor } from "@/lib/student-professor";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -764,7 +765,8 @@ export async function POST(request: NextRequest) {
 
     const week = getWeekRange(referenceDate);
     const authorId = await getNoticeAuthorId(userId);
-    const professorId = student.userId || null;
+    const resolvedProfessor = await resolveStudentProfessor(studentId);
+    const professorId = resolvedProfessor?.id || null;
 
     const activeContract = await prisma.studentContract.findFirst({
       where: {
@@ -811,7 +813,7 @@ export async function POST(request: NextRequest) {
     let studentEmailSentAt: Date | null = null;
     let professorEmailSentAt: Date | null = null;
 
-    const professorName = student.user?.name || "seu professor";
+    const professorName = resolvedProfessor?.name || "seu professor";
     const studentNoticeContent = [
       `Oi, ${student.name}!`,
       "",
@@ -916,15 +918,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (copy.shouldEmailProfessor && student.user?.email) {
+    if (copy.shouldEmailProfessor && resolvedProfessor?.email) {
       await sendEmail({
-        to: student.user.email,
+        to: resolvedProfessor.email,
         subject:
           copy.severity === "CUIDADO"
             ? `Atenção prioritária: ${student.name}`
             : `Revisão necessária: ${student.name}`,
         text: [
-          `Olá, ${student.user?.name || "professor(a)"}!`,
+          `Olá, ${resolvedProfessor.name || "professor(a)"}!`,
           "",
           copy.professorMessage,
           "",
@@ -938,7 +940,7 @@ export async function POST(request: NextRequest) {
           <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
             <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
               <h2 style="color:#00A19C;margin:0 0 16px;">Acompanhamento de ${escapeHtml(student.name)}</h2>
-              <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Olá, ${escapeHtml(student.user?.name || "professor(a)")}!</p>
+              <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Olá, ${escapeHtml(resolvedProfessor.name || "professor(a)")}!</p>
               <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(copy.professorMessage).replaceAll("\n", "<br />")}</p>
               <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Revise o contexto antes de liberar ou evoluir a programação e registre sua orientação pelo chat.</p>
               <a href="${getAppCareUrl()}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir Central de Cuidado</a>
@@ -1213,9 +1215,10 @@ export async function PUT(request: NextRequest) {
         },
       });
 
-      const professorId = existing.professorId || existing.student.userId || null;
-      const professorEmail = existing.professor?.email || existing.student.user?.email || null;
-      const professorName = existing.professor?.name || existing.student.user?.name || "professor(a)";
+      const currentProfessor = await resolveStudentProfessor(existing.studentId);
+      const professorId = currentProfessor?.id || null;
+      const professorEmail = currentProfessor?.email || null;
+      const professorName = currentProfessor?.name || "professor(a)";
       const studentName = existing.student.name || "Aluno";
       const professorContent = [
         `Olá, ${professorName}!`,

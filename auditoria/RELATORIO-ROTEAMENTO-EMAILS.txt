@@ -1,0 +1,44 @@
+VARREDURA DE ROTEAMENTO DE E-MAILS — FUNCIONAL UP DIGITAL
+Data: 30/07/2026
+
+OBJETIVO
+Revisar os pontos do sistema que enviam e-mails e impedir que mensagens destinadas ao professor sejam encaminhadas para a gestão.
+
+PRINCIPAL RISCO ENCONTRADO
+O fluxo de nova mensagem do aluno usava a ausência de teacherId como sinal para enviar o e-mail à gestão. Essa lógica permitia que um problema de vínculo, uma conversa antiga ou um professor inválido fosse interpretado como mensagem para a gestão.
+
+CORREÇÃO IMPLEMENTADA
+1. O destino do chat agora é explícito: PROFESSOR ou GESTAO.
+2. Quando o aluno escolhe PROFESSOR:
+   - o sistema resolve novamente o professor atual do aluno;
+   - valida se o usuário está ativo;
+   - valida se o papel é PROFESSOR/TEACHER;
+   - valida se existe e-mail;
+   - nunca redireciona silenciosamente para a gestão.
+3. Quando o aluno escolhe GESTAO:
+   - somente usuários ativos com papel GESTOR/ADMIN recebem o aviso.
+4. Os e-mails da Central de Cuidado passaram a resolver o professor atual pelo vínculo/contrato antes do envio.
+5. Solicitações de retomada também passam a ser enviadas ao professor atual validado.
+
+FLUXOS REVISADOS
+- Nova mensagem do aluno para professor.
+- Nova mensagem do aluno para gestão.
+- Conversas entre professor, aluno e gestão.
+- Eventos de dor, cuidado e revisão.
+- Solicitação de retomada de treino.
+- Liberação e conclusão de treino.
+- Engajamento e lembretes automáticos.
+- Avaliação inicial e aviso de aluno pronto para vínculo.
+- Vínculo de aluno ao professor.
+- Pagamentos, contratos e avisos comerciais.
+- Pesquisas e feedbacks de evolução.
+
+ARQUIVOS ALTERADOS
+- app/api/aluno/questions/route.ts
+- app/api/student-care-events/route.ts
+
+ARQUIVO DE DIAGNÓSTICO
+- auditoria/auditar-roteamento-emails.sql
+
+OBSERVAÇÃO
+O SQL de auditoria é somente leitura. Ele identifica vínculos inválidos, conversas ligadas a usuários que não são professores e eventos de cuidado com professor incorreto.

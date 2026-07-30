@@ -93,9 +93,11 @@ type StudentQuestionEmailRecipient = {
 async function notifyNewStudentQuestionByEmail({
   studentId,
   teacherId,
+  target,
 }: {
   studentId: string;
   teacherId: string | null;
+  target: "PROFESSOR" | "GESTAO";
 }) {
   const student = await prisma.student.findUnique({
     where: {
@@ -110,13 +112,23 @@ async function notifyNewStudentQuestionByEmail({
   const senderLabel = student?.name || "um aluno";
   let recipients: StudentQuestionEmailRecipient[] = [];
 
-  if (teacherId) {
+  if (target === "PROFESSOR") {
+    const resolvedTeacherId = teacherId || (await resolveStudentProfessorId(studentId));
+
+    if (!resolvedTeacherId) {
+      console.warn("E-mail de chat não enviado: aluno sem professor válido", { studentId });
+      return;
+    }
+
     const teacher = await prisma.user.findFirst({
       where: {
-        id: teacherId,
+        id: resolvedTeacherId,
         active: true,
         role: {
           in: ["PROFESSOR", "TEACHER"],
+        },
+        email: {
+          not: null,
         },
       },
       select: {
@@ -126,12 +138,19 @@ async function notifyNewStudentQuestionByEmail({
       },
     });
 
-    if (teacher) {
-      recipients = [{ ...teacher, panelKind: "TEACHER" }];
+    if (!teacher) {
+      console.warn("E-mail de chat não enviado: professor inválido ou sem e-mail", {
+        studentId,
+        teacherId: resolvedTeacherId,
+      });
+      return;
     }
+
+    recipients = [{ ...teacher, panelKind: "TEACHER" }];
   } else {
     const gestores = await prisma.user.findMany({
       where: {
+        active: true,
         role: {
           in: ["GESTOR", "ADMIN"],
         },
@@ -893,6 +912,7 @@ export async function POST(req: NextRequest) {
         await notifyNewStudentQuestionByEmail({
           studentId: student.id,
           teacherId,
+          target: sendToGestao ? "GESTAO" : "PROFESSOR",
         });
       } catch (emailError) {
         console.error("Erro ao enviar e-mail de nova dúvida do aluno:", emailError);
