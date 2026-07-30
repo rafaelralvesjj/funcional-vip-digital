@@ -208,7 +208,7 @@ async function notifyStudentAboutConversion({
       ? `
         <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
           <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-            <h2 style="color:#22D3EE; margin:0 0 16px;">${safeTitle}</h2>
+            <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
             <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Temos uma boa notícia.</p>
             <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Sua experiência foi convertida para o plano <strong style="color:#f5f5f5;">${safePlanName}</strong>, e seu contrato já está ativo.</p>
             <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
@@ -216,7 +216,7 @@ async function notifyStudentAboutConversion({
               <p style="color:#d4d4d4; font-size:13px; margin:0;">Programação: <strong style="color:#f5f5f5;">${paidContract.workoutsPerWeek} treino(s) por semana</strong></p>
             </div>
             <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Seu histórico, suas conversas e sua evolução continuam salvos. Para dúvidas de treino, use o chat da plataforma.</p>
-            <a href="${safeAlunoUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meu painel</a>
+            <a href="${safeAlunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meu painel</a>
             <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional UP Digital</p>
             <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de confirmação enviada pela plataforma.</p>
           </div>
@@ -225,7 +225,7 @@ async function notifyStudentAboutConversion({
       : `
         <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
           <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-            <h2 style="color:#22D3EE; margin:0 0 16px;">${safeTitle}</h2>
+            <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
             <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
             <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">A gestão deixou seu plano <strong style="color:#f5f5f5;">${safePlanName}</strong> preparado para continuar o acompanhamento.</p>
             <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
@@ -234,9 +234,9 @@ async function notifyStudentAboutConversion({
               <p style="color:#d4d4d4; font-size:13px; margin:0;">Valor: <strong style="color:#f5f5f5;">${formatMoneyPtBr(payment?.amountCents)}</strong></p>
             </div>
             <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Assim que o pagamento for confirmado, o contrato será ativado. Se você já pagou, pode desconsiderar este lembrete e aguardar a atualização.</p>
-            ${safePaymentLinkUrl ? `<a href="${safePaymentLinkUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-bottom:12px;">Abrir pagamento</a>` : ""}
+            ${safePaymentLinkUrl ? `<a href="${safePaymentLinkUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-bottom:12px;">Abrir pagamento</a>` : ""}
             <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se precisar de apoio financeiro, fale com a gestão. Para dúvidas de treino, use o chat da plataforma.</p>
-            <a href="${safeAlunoUrl}" style="display:inline-block; color:#22D3EE; font-weight:bold; font-size:13px; margin-top:8px;">Acessar meu painel</a>
+            <a href="${safeAlunoUrl}" style="display:inline-block; color:#00A19C; font-weight:bold; font-size:13px; margin-top:8px;">Acessar meu painel</a>
             <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional UP Digital</p>
             <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de acompanhamento comercial enviada pela plataforma.</p>
           </div>

@@ -891,7 +891,7 @@ export async function POST(request: NextRequest) {
           html: `
             <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
               <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-                <h2 style="color:#22D3EE;margin:0 0 16px;">${escapeHtml(copy.title)}</h2>
+                <h2 style="color:#00A19C;margin:0 0 16px;">${escapeHtml(copy.title)}</h2>
                 <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(student.name)}</strong>!</p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(copy.studentMessage)}</p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
@@ -900,7 +900,7 @@ export async function POST(request: NextRequest) {
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
                   Para manter as orientações registradas, use o chat para falar sobre treino e cuidado. O WhatsApp fica reservado para contatos específicos da gestão.
                 </p>
-                <a href="${getAppAlunoUrl()}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir meu acompanhamento</a>
+                <a href="${getAppAlunoUrl()}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir meu acompanhamento</a>
                 <p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
                   Em caso de dor persistente, piora ou limitação de movimento, procure avaliação de um profissional de saúde habilitado.
                 </p>
@@ -937,11 +937,11 @@ export async function POST(request: NextRequest) {
         html: `
           <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
             <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-              <h2 style="color:#22D3EE;margin:0 0 16px;">Acompanhamento de ${escapeHtml(student.name)}</h2>
+              <h2 style="color:#00A19C;margin:0 0 16px;">Acompanhamento de ${escapeHtml(student.name)}</h2>
               <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Olá, ${escapeHtml(student.user?.name || "professor(a)")}!</p>
               <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(copy.professorMessage).replaceAll("\n", "<br />")}</p>
               <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Revise o contexto antes de liberar ou evoluir a programação e registre sua orientação pelo chat.</p>
-              <a href="${getAppCareUrl()}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir Central de Cuidado</a>
+              <a href="${getAppCareUrl()}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir Central de Cuidado</a>
               <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Mensagem automática de acompanhamento enviada ao professor responsável.</p>
             </div>
           </div>
@@ -1277,9 +1277,9 @@ export async function PUT(request: NextRequest) {
             html: `
               <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
                 <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-                  <h2 style="color:#22D3EE;margin:0 0 16px;">Pedido de retomada de ${escapeHtml(studentName)}</h2>
+                  <h2 style="color:#00A19C;margin:0 0 16px;">Pedido de retomada de ${escapeHtml(studentName)}</h2>
                   <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(professorContent).replaceAll("\n", "<br />")}</p>
-                  <a href="${getAppCareUrl()}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Revisar retomada</a>
+                  <a href="${getAppCareUrl()}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Revisar retomada</a>
                   <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Mensagem automática de acompanhamento enviada ao professor responsável.</p>
                 </div>
               </div>

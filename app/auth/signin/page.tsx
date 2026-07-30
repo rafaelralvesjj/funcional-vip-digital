@@ -41,12 +41,12 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="min-h-screen w-full bg-[#05070a] flex items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md bg-[#0b0f14] border border-[#1f2a37] rounded-xl p-6 sm:p-8 shadow-2xl">
-        <div className="mb-6 flex justify-center">
+    <main className="min-h-screen w-full bg-[#0a0a0a] flex items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+      <div className="w-full max-w-md bg-[#111111] border border-[#ffffff10] rounded-xl p-6 sm:p-8 shadow-2xl">
+        <div className="mb-4 flex justify-center">
           <BrandLogo variant="full" size="lg" priority />
         </div>
-        <h1 className="text-center text-2xl sm:text-3xl font-bold text-[#18d7f5] mb-2">
+        <h1 className="text-center text-2xl sm:text-3xl font-bold text-[#00A19C] mb-2">
           Funcional UP Digital
         </h1>
         <p className="text-center text-[#a1a1a1] text-sm sm:text-base mb-6">
@@ -65,7 +65,7 @@ export default function SignInPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full rounded-lg border border-[#1f2a37] bg-[#111827] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none transition focus:border-[#18d7f5] focus:ring-1 focus:ring-[#18d7f5]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none transition focus:border-[#00A19C] focus:ring-1 focus:ring-[#00A19C]"
             />
           </div>
 
@@ -80,7 +80,7 @@ export default function SignInPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full rounded-lg border border-[#1f2a37] bg-[#111827] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none transition focus:border-[#18d7f5] focus:ring-1 focus:ring-[#18d7f5]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none transition focus:border-[#00A19C] focus:ring-1 focus:ring-[#00A19C]"
             />
           </div>
 
@@ -91,7 +91,7 @@ export default function SignInPage() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 w-full rounded-lg bg-[#18d7f5] px-4 py-3 text-sm font-bold text-[#0a0a0a] transition hover:bg-[#3fe3ff] disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-2 w-full rounded-lg bg-[#00A19C] px-4 py-3 text-sm font-bold text-[#0a0a0a] transition hover:bg-[#007D79] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>
@@ -100,7 +100,7 @@ export default function SignInPage() {
         <div className="mt-6 flex flex-col items-center gap-2 text-sm">
           <Link
             href="/auth/aluno-registro"
-            className="text-[#18d7f5] transition hover:underline font-medium"
+            className="text-[#00A19C] transition hover:underline font-medium"
           >
             Não tenho conta! Novo aluno
           </Link>

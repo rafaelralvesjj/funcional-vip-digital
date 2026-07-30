@@ -788,10 +788,10 @@ export default function FinanceiroPage() {
   return (
     <main className="p-6 space-y-6 bg-[#0a0a0a] min-h-screen text-[#f5f5f5]">
       <div>
-        <p className="text-xs uppercase tracking-[0.35em] text-[#22D3EE] mb-2">
+        <p className="text-xs uppercase tracking-[0.35em] text-[#00A19C] mb-2">
           Contratos, ciclos e pagamentos
         </p>
-        <h1 className="text-3xl font-bold text-[#22D3EE]">Financeiro</h1>
+        <h1 className="text-3xl font-bold text-[#00A19C]">Financeiro</h1>
         <p className="text-sm text-[#a1a1a1] mt-2 max-w-5xl">
           Controle manual de contratos, experiência gratuita, vencimentos e pagamentos. Nesta fase,
           você registra quando o aluno pagou e o sistema ativa o contrato/ciclo correspondente.
@@ -831,10 +831,10 @@ export default function FinanceiroPage() {
 
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
           <p className="text-xs uppercase text-[#6b6b6b]">Interesses em continuar</p>
-          <p className="text-2xl font-bold text-[#22D3EE]">{metrics?.openTrialContinuationRequests ?? 0}</p>
+          <p className="text-2xl font-bold text-[#00A19C]">{metrics?.openTrialContinuationRequests ?? 0}</p>
           <a
             href="/dashboard/gestor/interesses-experiencia"
-            className="text-[11px] text-[#22D3EE] underline mt-1 inline-block"
+            className="text-[11px] text-[#00A19C] underline mt-1 inline-block"
           >
             Abrir fila
           </a>
@@ -842,7 +842,7 @@ export default function FinanceiroPage() {
 
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
           <p className="text-xs uppercase text-[#6b6b6b]">Taxa de conversão</p>
-          <p className="text-2xl font-bold text-[#22D3EE]">{formatPercent(metrics?.trialConversionRatePercent)}</p>
+          <p className="text-2xl font-bold text-[#00A19C]">{formatPercent(metrics?.trialConversionRatePercent)}</p>
           <p className="text-[11px] text-[#6b6b6b] mt-1">Convertidos: {metrics?.convertedFromTrialContracts ?? 0}</p>
         </div>
 
@@ -866,14 +866,14 @@ export default function FinanceiroPage() {
 
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
           <p className="text-xs uppercase text-[#6b6b6b]">Sem contrato ativo</p>
-          <p className="text-2xl font-bold text-[#22D3EE]">{metrics?.noContractStudents || 0}</p>
+          <p className="text-2xl font-bold text-[#00A19C]">{metrics?.noContractStudents || 0}</p>
           <p className="text-[11px] text-[#6b6b6b] mt-1">Acompanhar para não perder aluno</p>
         </div>
       </div>
 
       <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-[#22D3EE]">Visão executiva do funil</h2>
+          <h2 className="text-lg font-semibold text-[#00A19C]">Visão executiva do funil</h2>
           <p className="text-xs text-[#a1a1a1] mt-1">
             Leitura rápida da jornada: experiência, interesse, conversão e pagamento.
           </p>
@@ -896,13 +896,13 @@ export default function FinanceiroPage() {
           <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
             <p className="text-xs uppercase text-[#6b6b6b]">Conversão</p>
             <p className="text-sm text-[#f5f5f5] mt-2">
-              Interessados: <strong className="text-[#22D3EE]">{metrics?.openTrialContinuationRequests ?? 0}</strong>
+              Interessados: <strong className="text-[#00A19C]">{metrics?.openTrialContinuationRequests ?? 0}</strong>
             </p>
             <p className="text-sm text-[#f5f5f5] mt-1">
               Convertidos: <strong className="text-green-300">{metrics?.convertedFromTrialContracts ?? 0}</strong>
             </p>
             <p className="text-sm text-[#f5f5f5] mt-1">
-              Taxa simples: <strong className="text-[#22D3EE]">{formatPercent(metrics?.trialConversionRatePercent)}</strong>
+              Taxa simples: <strong className="text-[#00A19C]">{formatPercent(metrics?.trialConversionRatePercent)}</strong>
             </p>
           </div>
 
@@ -923,13 +923,13 @@ export default function FinanceiroPage() {
 
       <section id="converter-experiencia" className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4 scroll-mt-6">
         <div>
-          <h2 className="text-lg font-semibold text-[#22D3EE]">Converter experiência para plano pago</h2>
+          <h2 className="text-lg font-semibold text-[#00A19C]">Converter experiência para plano pago</h2>
           <p className="text-xs text-[#a1a1a1] mt-1">
             Use quando o aluno em experiência decidiu continuar. Se já pagou, marque como Pago para ativar o contrato imediatamente.
           </p>
 
           {pendingStudentIdFromUrl && (
-            <div className="mt-3 rounded-xl bg-[#22D3EE]/10 border border-[#22D3EE]/20 p-3 text-xs text-[#f5f5f5]">
+            <div className="mt-3 rounded-xl bg-[#00A19C]/10 border border-[#00A19C]/20 p-3 text-xs text-[#f5f5f5]">
               Você veio da fila de alunos interessados em continuar. Quando houver uma experiência ativa para esse aluno, ela já fica selecionada aqui.
             </div>
           )}
@@ -942,7 +942,7 @@ export default function FinanceiroPage() {
               <select
                 value={conversionTrialContractId}
                 onChange={(event) => setConversionTrialContractId(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="">Selecione...</option>
                 {activeTrialContracts.map((contract) => (
@@ -958,7 +958,7 @@ export default function FinanceiroPage() {
               <select
                 value={conversionPlanId}
                 onChange={(event) => setConversionPlanId(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="">Selecione...</option>
                 {paidPlans.map((plan) => (
@@ -974,7 +974,7 @@ export default function FinanceiroPage() {
               <select
                 value={conversionDurationMonths}
                 onChange={(event) => setConversionDurationMonths(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 {[1, 2, 3, 6, 12].map((month) => (
                   <option key={month} value={month}>
@@ -990,7 +990,7 @@ export default function FinanceiroPage() {
                 type="date"
                 value={conversionStartDate}
                 onChange={(event) => setConversionStartDate(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
 
@@ -1000,7 +1000,7 @@ export default function FinanceiroPage() {
                 type="date"
                 value={conversionDueDate}
                 onChange={(event) => setConversionDueDate(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
 
@@ -1010,7 +1010,7 @@ export default function FinanceiroPage() {
                 value={conversionPriceReais}
                 onChange={(event) => setConversionPriceReais(event.target.value)}
                 placeholder="Ex.: 297,00"
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
 
@@ -1019,7 +1019,7 @@ export default function FinanceiroPage() {
               <select
                 value={conversionPaymentMethod}
                 onChange={(event) => setConversionPaymentMethod(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="PIX">Pix</option>
                 <option value="CARTAO">Cartão</option>
@@ -1034,7 +1034,7 @@ export default function FinanceiroPage() {
               <select
                 value={conversionPaymentStatus}
                 onChange={(event) => setConversionPaymentStatus(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="EM_ABERTO">Em aberto</option>
                 <option value="PAGO">Pago</option>
@@ -1048,7 +1048,7 @@ export default function FinanceiroPage() {
                 value={conversionPaymentLinkUrl}
                 onChange={(event) => setConversionPaymentLinkUrl(event.target.value)}
                 placeholder="Cole o link, se houver"
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
           </div>
@@ -1057,7 +1057,7 @@ export default function FinanceiroPage() {
             value={conversionNotes}
             onChange={(event) => setConversionNotes(event.target.value)}
             placeholder="Observações da conversão..."
-            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
           />
 
           <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-xs text-[#a1a1a1]">
@@ -1068,7 +1068,7 @@ export default function FinanceiroPage() {
           <button
             type="submit"
             disabled={convertingTrial || activeTrialContracts.length === 0}
-            className="bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#06B6D4] transition disabled:opacity-50"
+            className="bg-[#00A19C] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#008B87] transition disabled:opacity-50"
           >
             {convertingTrial ? "Convertendo..." : "Converter experiência"}
           </button>
@@ -1077,7 +1077,7 @@ export default function FinanceiroPage() {
 
       <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-[#22D3EE]">Criar contrato / ciclo</h2>
+          <h2 className="text-lg font-semibold text-[#00A19C]">Criar contrato / ciclo</h2>
           <p className="text-xs text-[#a1a1a1] mt-1">
             Para plano pago, deixe desmarcado “Ativar agora” quando ainda estiver aguardando pagamento.
           </p>
@@ -1090,7 +1090,7 @@ export default function FinanceiroPage() {
               <select
                 value={studentId}
                 onChange={(event) => setStudentId(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="">Selecione...</option>
                 {(contractsData?.students || []).map((student) => (
@@ -1106,7 +1106,7 @@ export default function FinanceiroPage() {
               <select
                 value={planId}
                 onChange={(event) => setPlanId(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="">Selecione...</option>
                 {(contractsData?.plans || []).map((plan) => (
@@ -1126,7 +1126,7 @@ export default function FinanceiroPage() {
                   setType(nextType);
                   setActivateNow(nextType === "TRIAL");
                 }}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="PAID">Pago</option>
                 <option value="TRIAL">Experiência grátis</option>
@@ -1138,7 +1138,7 @@ export default function FinanceiroPage() {
               <select
                 value={durationMonths}
                 onChange={(event) => setDurationMonths(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 {[1, 2, 3, 6, 12].map((month) => (
                   <option key={month} value={month}>
@@ -1154,7 +1154,7 @@ export default function FinanceiroPage() {
                 type="date"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
 
@@ -1164,14 +1164,14 @@ export default function FinanceiroPage() {
                 value={priceReais}
                 onChange={(event) => setPriceReais(event.target.value)}
                 placeholder="Ex.: 297,00"
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
           </div>
 
           {calculatedPreview && (
             <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-sm text-[#d6d6d6]">
-              <strong className="text-[#22D3EE]">Prévia:</strong>{" "}
+              <strong className="text-[#00A19C]">Prévia:</strong>{" "}
               {calculatedPreview.workoutsPerWeek} treino(s)/semana · {calculatedPreview.workoutsPerMonth} treino(s)/mês · total de{" "}
               {calculatedPreview.total} treino(s) · fim em {formatDate(calculatedPreview.endDate)}
             </div>
@@ -1181,7 +1181,7 @@ export default function FinanceiroPage() {
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             placeholder="Observações internas..."
-            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
           />
 
           <label className="flex items-start gap-2 text-xs text-[#a1a1a1]">
@@ -1189,7 +1189,7 @@ export default function FinanceiroPage() {
               type="checkbox"
               checked={activateNow}
               onChange={(event) => setActivateNow(event.target.checked)}
-              className="mt-0.5 accent-[#22D3EE]"
+              className="mt-0.5 accent-[#00A19C]"
             />
             <span>
               Ativar contrato agora. Para contrato pago, marque apenas se o pagamento já foi confirmado.
@@ -1200,7 +1200,7 @@ export default function FinanceiroPage() {
           <button
             type="submit"
             disabled={savingContract}
-            className="bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#06B6D4] transition disabled:opacity-50"
+            className="bg-[#00A19C] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#008B87] transition disabled:opacity-50"
           >
             {savingContract ? "Criando..." : "Criar contrato"}
           </button>
@@ -1209,7 +1209,7 @@ export default function FinanceiroPage() {
 
       <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-[#22D3EE]">Registrar pagamento manual</h2>
+          <h2 className="text-lg font-semibold text-[#00A19C]">Registrar pagamento manual</h2>
           <p className="text-xs text-[#a1a1a1] mt-1">
             Use quando o aluno pagar por Pix, transferência, cartão fora do sistema ou link externo.
           </p>
@@ -1222,7 +1222,7 @@ export default function FinanceiroPage() {
               <select
                 value={paymentContractId}
                 onChange={(event) => setPaymentContractId(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="">Selecione...</option>
                 {(contractsData?.contracts || []).map((contract) => (
@@ -1239,7 +1239,7 @@ export default function FinanceiroPage() {
                 value={paymentAmountReais}
                 onChange={(event) => setPaymentAmountReais(event.target.value)}
                 placeholder="Ex.: 297,00"
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
 
@@ -1249,7 +1249,7 @@ export default function FinanceiroPage() {
                 type="date"
                 value={paymentDueDate}
                 onChange={(event) => setPaymentDueDate(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
 
@@ -1258,7 +1258,7 @@ export default function FinanceiroPage() {
               <select
                 value={paymentMethod}
                 onChange={(event) => setPaymentMethod(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="PIX">Pix</option>
                 <option value="CARTAO">Cartão</option>
@@ -1273,7 +1273,7 @@ export default function FinanceiroPage() {
               <select
                 value={paymentStatus}
                 onChange={(event) => setPaymentStatus(event.target.value)}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="EM_ABERTO">Em aberto</option>
                 <option value="PAGO">Pago</option>
@@ -1289,7 +1289,7 @@ export default function FinanceiroPage() {
                 value={paymentLinkUrl}
                 onChange={(event) => setPaymentLinkUrl(event.target.value)}
                 placeholder="Cole aqui o link externo, se houver"
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
           </div>
@@ -1298,7 +1298,7 @@ export default function FinanceiroPage() {
             value={paymentNotes}
             onChange={(event) => setPaymentNotes(event.target.value)}
             placeholder="Observações do pagamento..."
-            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+            className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
           />
 
           <label className="flex items-start gap-2 text-xs text-[#a1a1a1]">
@@ -1306,7 +1306,7 @@ export default function FinanceiroPage() {
               type="checkbox"
               checked={activateContractOnPaid}
               onChange={(event) => setActivateContractOnPaid(event.target.checked)}
-              className="mt-0.5 accent-[#22D3EE]"
+              className="mt-0.5 accent-[#00A19C]"
             />
             <span>
               Se o pagamento for marcado como pago, ativar automaticamente o contrato e substituir o ciclo anterior.
@@ -1316,7 +1316,7 @@ export default function FinanceiroPage() {
           <button
             type="submit"
             disabled={savingPayment}
-            className="bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#06B6D4] transition disabled:opacity-50"
+            className="bg-[#00A19C] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#008B87] transition disabled:opacity-50"
           >
             {savingPayment ? "Registrando..." : "Registrar pagamento"}
           </button>
@@ -1326,7 +1326,7 @@ export default function FinanceiroPage() {
       <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-[#22D3EE]">Pagamentos</h2>
+            <h2 className="text-lg font-semibold text-[#00A19C]">Pagamentos</h2>
             <p className="text-xs text-[#a1a1a1] mt-1">
               Marque como pago quando confirmar o recebimento. Isso ativa o contrato vinculado.
             </p>
@@ -1340,7 +1340,7 @@ export default function FinanceiroPage() {
                 onClick={() => setPaymentFilter(item)}
                 className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
                   paymentFilter === item
-                    ? "bg-[#22D3EE] text-[#0a0a0a]"
+                    ? "bg-[#00A19C] text-[#0a0a0a]"
                     : "bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10]"
                 }`}
               >
@@ -1365,7 +1365,7 @@ export default function FinanceiroPage() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-[#f5f5f5]">{payment.studentName}</h3>
-                      <span className="rounded-full bg-[#22D3EE]/15 text-[#22D3EE] px-2 py-1 text-[11px] font-semibold">
+                      <span className="rounded-full bg-[#00A19C]/15 text-[#00A19C] px-2 py-1 text-[11px] font-semibold">
                         {paymentStatusLabel(payment.status)}
                       </span>
                     </div>
@@ -1381,7 +1381,7 @@ export default function FinanceiroPage() {
                         href={payment.paymentLinkUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs text-[#22D3EE] underline mt-1 inline-block"
+                        className="text-xs text-[#00A19C] underline mt-1 inline-block"
                       >
                         Abrir link de pagamento
                       </a>
@@ -1389,7 +1389,7 @@ export default function FinanceiroPage() {
                   </div>
 
                   <div className="text-left lg:text-right">
-                    <p className="text-xl font-bold text-[#22D3EE]">{formatMoney(payment.amountCents)}</p>
+                    <p className="text-xl font-bold text-[#00A19C]">{formatMoney(payment.amountCents)}</p>
                     <p className="text-xs text-[#6b6b6b]">{payment.contractNumber || "Sem número"}</p>
                   </div>
                 </div>
@@ -1440,7 +1440,7 @@ export default function FinanceiroPage() {
       <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-[#22D3EE]">Contratos e ciclos</h2>
+            <h2 className="text-lg font-semibold text-[#00A19C]">Contratos e ciclos</h2>
             <p className="text-xs text-[#a1a1a1] mt-1">
               Acompanhe experiências, contratos pagos, vencimentos e suspensões.
             </p>
@@ -1454,7 +1454,7 @@ export default function FinanceiroPage() {
                 onClick={() => setFilter(item)}
                 className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
                   filter === item
-                    ? "bg-[#22D3EE] text-[#0a0a0a]"
+                    ? "bg-[#00A19C] text-[#0a0a0a]"
                     : "bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10]"
                 }`}
               >
@@ -1479,7 +1479,7 @@ export default function FinanceiroPage() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-[#f5f5f5]">{contract.studentName}</h3>
-                      <span className="rounded-full bg-[#22D3EE]/15 text-[#22D3EE] px-2 py-1 text-[11px] font-semibold">
+                      <span className="rounded-full bg-[#00A19C]/15 text-[#00A19C] px-2 py-1 text-[11px] font-semibold">
                         {statusLabel(contract.status)}
                       </span>
                       <span className="rounded-full bg-[#ffffff08] text-[#a1a1a1] px-2 py-1 text-[11px]">
@@ -1495,7 +1495,7 @@ export default function FinanceiroPage() {
                   </div>
 
                   <div className="text-left lg:text-right">
-                    <p className="text-xl font-bold text-[#22D3EE]">{formatMoney(contract.priceCents)}</p>
+                    <p className="text-xl font-bold text-[#00A19C]">{formatMoney(contract.priceCents)}</p>
                     <p className="text-xs text-[#6b6b6b]">{contract.contractNumber || "Sem número"}</p>
                   </div>
                 </div>
@@ -1545,7 +1545,7 @@ export default function FinanceiroPage() {
                       setPaymentDueDate(todayIso());
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
-                    className="rounded-xl bg-[#1a1a1a] border border-[#22D3EE]/30 text-[#22D3EE] px-3 py-2 text-xs font-semibold"
+                    className="rounded-xl bg-[#1a1a1a] border border-[#00A19C]/30 text-[#00A19C] px-3 py-2 text-xs font-semibold"
                   >
                     Registrar pagamento
                   </button>

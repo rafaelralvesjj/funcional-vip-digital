@@ -104,19 +104,19 @@ export default function StudentsPage() {
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-[#22D3EE] mb-2">
+            <p className="text-xs uppercase tracking-[0.3em] text-[#00A19C] mb-2">
               Área do professor
             </p>
-            <h1 className="text-2xl font-bold text-[#22D3EE]">Meus alunos</h1>
+            <h1 className="text-2xl font-bold text-[#00A19C]">Meus alunos</h1>
             <p className="text-sm text-[#a1a1a1] mt-2 max-w-2xl">
-              Selecione um aluno para ver avisos, treinos, dúvidas e resumo do ciclo dentro do Funcional Vip Digital.
+              Selecione um aluno para ver avisos, treinos, dúvidas e resumo do ciclo dentro do Funcional UP Digital.
             </p>
           </div>
 
           <button
             type="button"
             onClick={fetchStudents}
-            className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 text-sm font-semibold hover:border-[#22D3EE]/40 transition"
+            className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 text-sm font-semibold hover:border-[#00A19C]/40 transition"
           >
             Atualizar lista
           </button>
@@ -128,7 +128,7 @@ export default function StudentsPage() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Digite nome, e-mail, telefone ou status..."
-            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
           />
         </div>
 
@@ -155,10 +155,10 @@ export default function StudentsPage() {
                 <Link
                   key={student.id}
                   href={`/dashboard/students/${student.id}`}
-                  className="block bg-[#111111] border border-[#ffffff10] rounded-2xl p-4 transition hover:border-[#22D3EE]/50 hover:bg-[#1a1a1a]"
+                  className="block bg-[#111111] border border-[#ffffff10] rounded-2xl p-4 transition hover:border-[#00A19C]/50 hover:bg-[#1a1a1a]"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 shrink-0 rounded-full bg-[#22D3EE]/20 flex items-center justify-center text-lg font-bold text-[#22D3EE]">
+                    <div className="w-12 h-12 shrink-0 rounded-full bg-[#00A19C]/20 flex items-center justify-center text-lg font-bold text-[#00A19C]">
                       {student.name?.charAt(0)?.toUpperCase() || "A"}
                     </div>
 
@@ -177,7 +177,7 @@ export default function StudentsPage() {
                         {student.phone ? ` · ${student.phone}` : ""}
                       </p>
 
-                      <p className={"text-xs mt-2 " + (student.ageYears === null || student.ageYears === undefined ? "text-red-400" : "text-[#22D3EE]")}>
+                      <p className={"text-xs mt-2 " + (student.ageYears === null || student.ageYears === undefined ? "text-red-400" : "text-[#00A19C]")}>
                         {student.ageYears === null || student.ageYears === undefined
                           ? "Data de nascimento não informada"
                           : `Idade: ${student.ageYears} ano(s)${student.isMinor ? " · menor de idade" : ""}`}
@@ -188,7 +188,7 @@ export default function StudentsPage() {
                       </p>
                     </div>
 
-                    <span className="text-[#22D3EE] text-sm pt-1">→</span>
+                    <span className="text-[#00A19C] text-sm pt-1">→</span>
                   </div>
                 </Link>
               );

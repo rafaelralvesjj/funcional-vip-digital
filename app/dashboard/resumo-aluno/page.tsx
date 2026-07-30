@@ -1053,7 +1053,7 @@ export default function ResumoAlunoPage() {
     <div className="p-4 md:p-8 space-y-6">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
-          <p className="text-xs text-[#22D3EE] uppercase tracking-[0.3em] mb-2">
+          <p className="text-xs text-[#00A19C] uppercase tracking-[0.3em] mb-2">
             Apoio inteligente
           </p>
           <h1 className="text-2xl md:text-3xl font-bold text-[#f5f5f5]">
@@ -1067,7 +1067,7 @@ export default function ResumoAlunoPage() {
 
         <Link
           href={backToWorkoutBuilderHref}
-          className="inline-flex items-center justify-center rounded-xl bg-[#1a1a1a] border border-[#22D3EE]/30 text-[#22D3EE] px-4 py-3 text-sm font-semibold hover:border-[#22D3EE] transition"
+          className="inline-flex items-center justify-center rounded-xl bg-[#1a1a1a] border border-[#00A19C]/30 text-[#00A19C] px-4 py-3 text-sm font-semibold hover:border-[#00A19C] transition"
         >
           ← Fechar IA e voltar para montagem manual
         </Link>
@@ -1100,7 +1100,7 @@ export default function ResumoAlunoPage() {
                 setSummary(null);
               }}
               disabled={loadingStudents}
-              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE] disabled:opacity-60"
+              className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C] disabled:opacity-60"
             >
               {students.length === 0 ? (
                 <option value="">Nenhum aluno encontrado</option>
@@ -1118,12 +1118,12 @@ export default function ResumoAlunoPage() {
                 <p>
                   {selectedStudent.email || "Sem e-mail"} · {selectedStudent.contractedTrainingDaysPerMonth || "-"} treino(s)/mês
                 </p>
-                <p className={selectedStudentMissingBirthDate ? "text-red-400" : "text-[#22D3EE]"}>
+                <p className={selectedStudentMissingBirthDate ? "text-red-400" : "text-[#00A19C]"}>
                   {selectedStudentMissingBirthDate
                     ? "Data de nascimento não informada — geração bloqueada"
                     : `Idade: ${selectedStudent.ageYears} ano(s)${selectedStudent.isMinor ? " · menor de idade" : ""}`}
                 </p>
-                <p className="text-[#22D3EE]">
+                <p className="text-[#00A19C]">
                   Semana alvo da IA: {displayWeekStart} a {displayWeekEnd}
                 </p>
                 {displaySchedule.length > 0 && (
@@ -1143,7 +1143,7 @@ export default function ResumoAlunoPage() {
           <button
             onClick={generateSummary}
             disabled={loadingStudents || loadingSummary || loadingExerciseLibrary || !selectedStudentId || exerciseLibrary.length === 0 || selectedStudentMissingBirthDate}
-            className="bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#06B6D4] transition disabled:opacity-50"
+            className="bg-[#00A19C] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#008B87] transition disabled:opacity-50"
           >
             {loadingSummary
               ? "Gerando..."
@@ -1157,8 +1157,8 @@ export default function ResumoAlunoPage() {
           </button>
         </div>
 
-        <div className="rounded-xl bg-[#22D3EE]/10 border border-[#22D3EE]/20 p-4">
-          <p className="text-sm text-[#22D3EE] font-semibold mb-1">
+        <div className="rounded-xl bg-[#00A19C]/10 border border-[#00A19C]/20 p-4">
+          <p className="text-sm text-[#00A19C] font-semibold mb-1">
             Fluxo recomendado
           </p>
           <p className="text-xs text-[#a1a1a1] leading-relaxed">
@@ -1176,7 +1176,7 @@ export default function ResumoAlunoPage() {
               <h2 className="text-lg font-bold text-[#f5f5f5]">
                 {summary.student.name}
               </h2>
-              <p className="mt-1 text-xs font-semibold text-[#22D3EE]">
+              <p className="mt-1 text-xs font-semibold text-[#00A19C]">
                 Idade considerada pela IA: {summary.student.ageYears ?? "-"} ano(s)
                 {summary.student.isMinor ? " · menor de idade" : ""}
               </p>
@@ -1200,7 +1200,7 @@ export default function ResumoAlunoPage() {
                 className={
                   "px-3 py-2 rounded-lg text-xs transition " +
                   (viewMode === "jsonPrompt"
-                    ? "bg-[#22D3EE] text-[#0a0a0a] font-semibold"
+                    ? "bg-[#00A19C] text-[#0a0a0a] font-semibold"
                     : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
                 }
               >
@@ -1212,7 +1212,7 @@ export default function ResumoAlunoPage() {
                 className={
                   "px-3 py-2 rounded-lg text-xs transition " +
                   (viewMode === "prompt"
-                    ? "bg-[#22D3EE] text-[#0a0a0a] font-semibold"
+                    ? "bg-[#00A19C] text-[#0a0a0a] font-semibold"
                     : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
                 }
               >
@@ -1224,7 +1224,7 @@ export default function ResumoAlunoPage() {
                 className={
                   "px-3 py-2 rounded-lg text-xs transition " +
                   (viewMode === "summary"
-                    ? "bg-[#22D3EE] text-[#0a0a0a] font-semibold"
+                    ? "bg-[#00A19C] text-[#0a0a0a] font-semibold"
                     : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
                 }
               >
@@ -1263,7 +1263,7 @@ export default function ResumoAlunoPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="bg-[#1a1a1a] rounded-xl p-3">
               <p className="text-[10px] text-[#6b6b6b] uppercase">Treinos</p>
-              <p className="text-xl text-[#22D3EE] font-bold">{summary.metrics.workouts || 0}</p>
+              <p className="text-xl text-[#00A19C] font-bold">{summary.metrics.workouts || 0}</p>
             </div>
 
             <div className="bg-[#1a1a1a] rounded-xl p-3">
@@ -1295,7 +1295,7 @@ export default function ResumoAlunoPage() {
 
           <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-4 space-y-3">
             <div>
-              <h3 className="text-sm font-semibold text-[#22D3EE]">
+              <h3 className="text-sm font-semibold text-[#00A19C]">
                 Importar JSON do arquivo .txt gerado pela IA
               </h3>
               <p className="text-xs text-[#a1a1a1] mt-1">
@@ -1320,7 +1320,7 @@ export default function ResumoAlunoPage() {
                   ? "Importação bloqueada: aluno em pausa por cuidado."
                   : 'Cole aqui o JSON gerado pela IA, começando com {"studentId": "...", "workouts": [...]}'
               }
-              className="w-full min-h-[220px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-xs md:text-sm text-[#e5e5e5] font-mono leading-relaxed outline-none focus:border-[#22D3EE] disabled:opacity-50"
+              className="w-full min-h-[220px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-xs md:text-sm text-[#e5e5e5] font-mono leading-relaxed outline-none focus:border-[#00A19C] disabled:opacity-50"
             />
 
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -1332,7 +1332,7 @@ export default function ResumoAlunoPage() {
                 type="button"
                 onClick={openJsonInWorkoutBuilder}
                 disabled={hasCarePauseBlock || !aiJsonText.trim()}
-                className="bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#06B6D4] transition disabled:opacity-50"
+                className="bg-[#00A19C] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#008B87] transition disabled:opacity-50"
               >
                 Abrir em Montar Treino
               </button>

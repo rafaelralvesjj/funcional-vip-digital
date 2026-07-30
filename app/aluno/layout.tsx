@@ -27,7 +27,7 @@ export default async function AlunoLayout({
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BrandLogo href="/aluno" variant="symbol" size="sm" priority />
-            <Link href="/aluno" className="text-[#22D3EE] font-bold text-sm sm:text-base">
+            <Link href="/aluno" className="text-[#00A19C] font-bold text-sm sm:text-base">
               Funcional UP Digital
             </Link>
           </div>

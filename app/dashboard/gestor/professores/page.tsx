@@ -291,10 +291,10 @@ export default function GerenciarProfessorPage() {
     <div className="p-4 md:p-8 space-y-6">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
-          <p className="text-xs text-[#22D3EE] uppercase tracking-[0.3em] mb-2">
+          <p className="text-xs text-[#00A19C] uppercase tracking-[0.3em] mb-2">
             Gestão de acessos
           </p>
-          <h1 className="text-2xl md:text-3xl font-bold text-[#22D3EE]">
+          <h1 className="text-2xl md:text-3xl font-bold text-[#00A19C]">
             Gerenciar Professores
           </h1>
           <p className="text-sm text-[#a1a1a1] mt-2">
@@ -304,7 +304,7 @@ export default function GerenciarProfessorPage() {
 
         <button
           onClick={openCreateModal}
-          className="bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#06B6D4] transition"
+          className="bg-[#00A19C] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#008B87] transition"
         >
           + Cadastrar Professor
         </button>
@@ -329,7 +329,7 @@ export default function GerenciarProfessorPage() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar por nome, e-mail, telefone, documento, registro ou especialidade..."
-            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
           />
 
           <label className="flex items-center gap-2 text-xs text-[#a1a1a1]">
@@ -337,7 +337,7 @@ export default function GerenciarProfessorPage() {
               type="checkbox"
               checked={showInactive}
               onChange={(event) => setShowInactive(event.target.checked)}
-              className="accent-[#22D3EE]"
+              className="accent-[#00A19C]"
             />
             Mostrar inativos
           </label>
@@ -365,7 +365,7 @@ export default function GerenciarProfessorPage() {
 
           <div className="bg-[#1a1a1a] rounded-xl p-4">
             <p className="text-[10px] uppercase text-[#6b6b6b]">Exibidos</p>
-            <p className="text-2xl font-bold text-[#22D3EE]">{filteredUsers.length}</p>
+            <p className="text-2xl font-bold text-[#00A19C]">{filteredUsers.length}</p>
           </div>
         </div>
       </div>
@@ -402,7 +402,7 @@ export default function GerenciarProfessorPage() {
                       </span>
 
                       {user.cref && (
-                        <span className="text-[10px] px-2 py-1 rounded-full bg-[#22D3EE]/10 text-[#22D3EE]">
+                        <span className="text-[10px] px-2 py-1 rounded-full bg-[#00A19C]/10 text-[#00A19C]">
                           {user.cref}
                         </span>
                       )}
@@ -505,7 +505,7 @@ export default function GerenciarProfessorPage() {
                     value={form.name}
                     onChange={(event) => updateField("name", event.target.value)}
                     placeholder="Nome completo"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -518,7 +518,7 @@ export default function GerenciarProfessorPage() {
                     onChange={(event) => updateField("email", event.target.value)}
                     placeholder="email@exemplo.com"
                     type="email"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -531,7 +531,7 @@ export default function GerenciarProfessorPage() {
                     onChange={(event) => updateField("password", event.target.value)}
                     placeholder={isEditing ? "Deixe em branco para manter a senha atual" : "Mínimo 6 caracteres"}
                     type="password"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -543,7 +543,7 @@ export default function GerenciarProfessorPage() {
                     value={form.phone}
                     onChange={(event) => updateField("phone", event.target.value)}
                     placeholder="(00) 00000-0000"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -555,7 +555,7 @@ export default function GerenciarProfessorPage() {
                     value={form.document}
                     onChange={(event) => updateField("document", event.target.value)}
                     placeholder="CPF ou documento"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -567,7 +567,7 @@ export default function GerenciarProfessorPage() {
                     value={form.birthDate}
                     onChange={(event) => updateField("birthDate", event.target.value)}
                     type="date"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -579,7 +579,7 @@ export default function GerenciarProfessorPage() {
                     value={form.cref}
                     onChange={(event) => updateField("cref", event.target.value)}
                     placeholder="Ex.: CREF 000000-G/DF"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -591,7 +591,7 @@ export default function GerenciarProfessorPage() {
                     value={form.specialty}
                     onChange={(event) => updateField("specialty", event.target.value)}
                     placeholder="Ex.: musculação, corrida, funcional, reabilitação"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -603,7 +603,7 @@ export default function GerenciarProfessorPage() {
                     value={form.education}
                     onChange={(event) => updateField("education", event.target.value)}
                     placeholder="Ex.: Educação Física, pós-graduação, cursos relevantes"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -616,7 +616,7 @@ export default function GerenciarProfessorPage() {
                       type="checkbox"
                       checked={form.active}
                       onChange={(event) => updateField("active", event.target.checked)}
-                      className="accent-[#22D3EE]"
+                      className="accent-[#00A19C]"
                     />
                     Cadastro ativo
                   </label>
@@ -630,7 +630,7 @@ export default function GerenciarProfessorPage() {
                     value={form.experience}
                     onChange={(event) => updateField("experience", event.target.value)}
                     placeholder="Ex.: 5 anos com treinamento funcional e emagrecimento"
-                    className="w-full min-h-[90px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full min-h-[90px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
 
@@ -642,13 +642,13 @@ export default function GerenciarProfessorPage() {
                     value={form.bio}
                     onChange={(event) => updateField("bio", event.target.value)}
                     placeholder="Observações internas sobre perfil, disponibilidade, pontos de atenção ou preferências de atuação."
-                    className="w-full min-h-[110px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full min-h-[110px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   />
                 </div>
               </div>
 
-              <div className="rounded-xl bg-[#22D3EE]/10 border border-[#22D3EE]/20 p-4">
-                <p className="text-xs text-[#22D3EE] font-semibold mb-1">
+              <div className="rounded-xl bg-[#00A19C]/10 border border-[#00A19C]/20 p-4">
+                <p className="text-xs text-[#00A19C] font-semibold mb-1">
                   Boa prática
                 </p>
                 <p className="text-xs text-[#a1a1a1] leading-relaxed">
@@ -669,7 +669,7 @@ export default function GerenciarProfessorPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#06B6D4] transition disabled:opacity-50"
+                  className="bg-[#00A19C] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#008B87] transition disabled:opacity-50"
                 >
                   {saving ? "Salvando..." : isEditing ? "Salvar alterações" : "Cadastrar"}
                 </button>

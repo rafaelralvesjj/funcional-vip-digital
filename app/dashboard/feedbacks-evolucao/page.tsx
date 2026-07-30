@@ -184,7 +184,7 @@ export default function FeedbacksEvolucaoPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs text-[#22D3EE] uppercase tracking-[0.3em] mb-2">
+        <p className="text-xs text-[#00A19C] uppercase tracking-[0.3em] mb-2">
           Acompanhamento
         </p>
         <h1 className="text-2xl md:text-3xl font-bold text-[#f5f5f5]">
@@ -212,15 +212,15 @@ export default function FeedbacksEvolucaoPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <button
           onClick={() => setFilter("PRONTO_REVISAO")}
-          className="bg-[#111] border border-[#ffffff10] rounded-xl p-4 text-left hover:border-[#22D3EE]/40 transition"
+          className="bg-[#111] border border-[#ffffff10] rounded-xl p-4 text-left hover:border-[#00A19C]/40 transition"
         >
           <p className="text-xs text-[#a1a1a1]">Para revisar</p>
-          <p className="text-2xl font-bold text-[#22D3EE]">{counters.ready}</p>
+          <p className="text-2xl font-bold text-[#00A19C]">{counters.ready}</p>
         </button>
 
         <button
           onClick={() => setFilter("AGUARDANDO_BIOIMPEDANCIA")}
-          className="bg-[#111] border border-[#ffffff10] rounded-xl p-4 text-left hover:border-[#22D3EE]/40 transition"
+          className="bg-[#111] border border-[#ffffff10] rounded-xl p-4 text-left hover:border-[#00A19C]/40 transition"
         >
           <p className="text-xs text-[#a1a1a1]">Aguardando bio</p>
           <p className="text-2xl font-bold text-amber-400">{counters.waitingBio}</p>
@@ -228,7 +228,7 @@ export default function FeedbacksEvolucaoPage() {
 
         <button
           onClick={() => setFilter("ENVIADO")}
-          className="bg-[#111] border border-[#ffffff10] rounded-xl p-4 text-left hover:border-[#22D3EE]/40 transition"
+          className="bg-[#111] border border-[#ffffff10] rounded-xl p-4 text-left hover:border-[#00A19C]/40 transition"
         >
           <p className="text-xs text-[#a1a1a1]">Enviados</p>
           <p className="text-2xl font-bold text-blue-400">{counters.sent}</p>
@@ -236,7 +236,7 @@ export default function FeedbacksEvolucaoPage() {
 
         <button
           onClick={() => setFilter("TODOS")}
-          className="bg-[#111] border border-[#ffffff10] rounded-xl p-4 text-left hover:border-[#22D3EE]/40 transition"
+          className="bg-[#111] border border-[#ffffff10] rounded-xl p-4 text-left hover:border-[#00A19C]/40 transition"
         >
           <p className="text-xs text-[#a1a1a1]">Total</p>
           <p className="text-2xl font-bold text-[#f5f5f5]">{counters.total}</p>
@@ -264,7 +264,7 @@ export default function FeedbacksEvolucaoPage() {
                     <span className={"text-[10px] px-2 py-1 rounded-full " + getStatusClass(feedback.status)}>
                       {getStatusLabel(feedback.status)}
                     </span>
-                    <span className="text-[10px] px-2 py-1 rounded-full bg-[#22D3EE]/10 text-[#22D3EE] border border-[#22D3EE]/20">
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-[#00A19C]/10 text-[#00A19C] border border-[#00A19C]/20">
                       {feedback.milestone} treinos
                     </span>
                   </div>
@@ -287,7 +287,7 @@ export default function FeedbacksEvolucaoPage() {
               {(feedback.baselineAvaliacao || feedback.currentAvaliacao) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                   <div className="bg-[#1a1a1a] border border-[#ffffff08] rounded-xl p-3">
-                    <p className="text-xs text-[#22D3EE] font-semibold mb-2">
+                    <p className="text-xs text-[#00A19C] font-semibold mb-2">
                       Avaliação anterior
                     </p>
                     <p className="text-xs text-[#a1a1a1]">
@@ -302,7 +302,7 @@ export default function FeedbacksEvolucaoPage() {
                   </div>
 
                   <div className="bg-[#1a1a1a] border border-[#ffffff08] rounded-xl p-3">
-                    <p className="text-xs text-[#22D3EE] font-semibold mb-2">
+                    <p className="text-xs text-[#00A19C] font-semibold mb-2">
                       Avaliação atual
                     </p>
                     <p className="text-xs text-[#a1a1a1]">
@@ -338,7 +338,7 @@ export default function FeedbacksEvolucaoPage() {
                       }))
                     }
                     disabled={feedback.status === "ENVIADO"}
-                    className="w-full min-h-[260px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE] disabled:opacity-70"
+                    className="w-full min-h-[260px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C] disabled:opacity-70"
                   />
 
                   {feedback.status !== "ENVIADO" && (
@@ -346,7 +346,7 @@ export default function FeedbacksEvolucaoPage() {
                       <button
                         onClick={() => saveFeedback(feedback.id)}
                         disabled={savingId === feedback.id}
-                        className="px-4 py-2 rounded-lg border border-[#ffffff15] text-[#a1a1a1] text-sm hover:text-white hover:border-[#22D3EE]/40 transition disabled:opacity-50"
+                        className="px-4 py-2 rounded-lg border border-[#ffffff15] text-[#a1a1a1] text-sm hover:text-white hover:border-[#00A19C]/40 transition disabled:opacity-50"
                       >
                         {savingId === feedback.id ? "Salvando..." : "Salvar rascunho"}
                       </button>
@@ -354,7 +354,7 @@ export default function FeedbacksEvolucaoPage() {
                       <button
                         onClick={() => sendFeedback(feedback.id)}
                         disabled={savingId === feedback.id || !(drafts[feedback.id] || "").trim()}
-                        className="px-4 py-2 rounded-lg bg-[#22D3EE] text-[#0a0a0a] font-semibold text-sm hover:bg-[#06B6D4] transition disabled:opacity-50"
+                        className="px-4 py-2 rounded-lg bg-[#00A19C] text-[#0a0a0a] font-semibold text-sm hover:bg-[#008B87] transition disabled:opacity-50"
                       >
                         {savingId === feedback.id ? "Enviando..." : "Enviar feedback ao aluno"}
                       </button>

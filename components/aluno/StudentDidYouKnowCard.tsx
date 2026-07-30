@@ -107,14 +107,14 @@ export function StudentDidYouKnowCard() {
   if (!content) return null;
 
   return (
-    <section className="rounded-xl border border-[#22D3EE]/35 bg-[#111] px-3 py-3">
+    <section className="rounded-xl border border-[#00A19C]/35 bg-[#111] px-3 py-3">
       <div className="flex items-start gap-2.5">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#22D3EE] text-base text-[#0a0a0a]">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#00A19C] text-base text-[#0a0a0a]">
           💡
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#22D3EE]">
+          <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#00A19C]">
             Dicas do Professor
           </p>
           <h2 className="mt-0.5 text-[12px] font-semibold leading-snug text-[#f5f5f5]">
@@ -129,7 +129,7 @@ export function StudentDidYouKnowCard() {
             <button
               type="button"
               onClick={handleGoToChat}
-              className="rounded-lg bg-[#22D3EE] px-3 py-1.5 text-[10px] font-bold text-[#0a0a0a] transition hover:bg-[#e2b583]"
+              className="rounded-lg bg-[#00A19C] px-3 py-1.5 text-[10px] font-bold text-[#0a0a0a] transition hover:bg-[#55D4CF]"
             >
               {content.actionLabel || "Falar com meu professor"}
             </button>
@@ -138,7 +138,7 @@ export function StudentDidYouKnowCard() {
               type="button"
               onClick={handleNextTip}
               disabled={confirming}
-              className="rounded-lg border border-[#ffffff18] bg-[#1a1a1a] px-3 py-1.5 text-[10px] font-semibold text-[#d4d4d4] transition hover:border-[#22D3EE]/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-[#ffffff18] bg-[#1a1a1a] px-3 py-1.5 text-[10px] font-semibold text-[#d4d4d4] transition hover:border-[#00A19C]/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {confirming ? "Carregando..." : "Ver próxima dica"}
             </button>

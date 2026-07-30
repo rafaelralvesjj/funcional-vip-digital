@@ -942,7 +942,7 @@ export async function POST(req: NextRequest) {
         html: `
           <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
             <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-              <h2 style="color:#22D3EE; margin:0 0 16px;">${escapeHtml(title)}</h2>
+              <h2 style="color:#00A19C; margin:0 0 16px;">${escapeHtml(title)}</h2>
               <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeName}</strong>! Que bom ter você com a gente.</p>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
                 ${result.shiftedToNextWeek
@@ -959,11 +959,11 @@ export async function POST(req: NextRequest) {
               </div>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.</p>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Depois do vínculo, use o chat da plataforma para dúvidas de treino. Assim, o acompanhamento fica registrado e organizado. O WhatsApp fica reservado para contatos específicos da gestão.</p>
-              <div style="background:#071A22; border:1px solid #155E75; border-radius:12px; padding:14px; margin:16px 0;">
-                <p style="color:#22D3EE; font-size:14px; font-weight:bold; margin:0 0 8px;">Não perca os próximos avisos</p>
+              <div style="background:#071413; border:1px solid #005D5A; border-radius:12px; padding:14px; margin:16px 0;">
+                <p style="color:#00A19C; font-size:14px; font-weight:bold; margin:0 0 8px;">Não perca os próximos avisos</p>
                 <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin:0;">Mantenha as notificações do aplicativo de e-mail ativas no celular. Confira também as pastas Spam, Lixo eletrônico e Promoções e marque nossas mensagens como confiáveis. Liberações de treino, avisos da gestão e outras atualizações importantes serão enviadas para este endereço.</p>
               </div>
-              <a href="${safeLoginUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
+              <a href="${safeLoginUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
               <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">Gestão do Funcional UP Digital</p>
               <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">Mensagem automática de boas-vindas enviada pela plataforma.</p>
             </div>
@@ -1019,7 +1019,7 @@ export async function POST(req: NextRequest) {
           const html = `
             <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
               <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-                <h2 style="color:#22D3EE;margin:0 0 16px;">Novo aluno para vínculo</h2>
+                <h2 style="color:#00A19C;margin:0 0 16px;">Novo aluno para vínculo</h2>
                 <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${safeManagementName}</strong>!</p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">${safeStudentName}</strong> concluiu o cadastro para a experiência gratuita.</p>
                 <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:14px;margin:16px 0;">
@@ -1041,7 +1041,7 @@ export async function POST(req: NextRequest) {
                   }
                 </p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">Próxima ação:</strong> revisar o cadastro e vincular um professor responsável.</p>
-                <a href="${safeManagementLinkUrl}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Organizar vínculo</a>
+                <a href="${safeManagementLinkUrl}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Organizar vínculo</a>
                 <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Aviso automático de pendência operacional para a gestão.</p>
               </div>
             </div>

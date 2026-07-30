@@ -186,7 +186,7 @@ export default function ManagementNoticeModalList({
 
               <p className="text-xs text-[#a1a1a1] mb-3">
                 Para:{" "}
-                <span className="text-[#22D3EE]">
+                <span className="text-[#00A19C]">
                   {notice.targetLabel || "Não informado"}
                 </span>
               </p>
@@ -202,7 +202,7 @@ export default function ManagementNoticeModalList({
                   </span>
                 )}
 
-                <span className="text-xs text-[#22D3EE]">
+                <span className="text-xs text-[#00A19C]">
                   Abrir aviso
                 </span>
               </div>
@@ -242,7 +242,7 @@ export default function ManagementNoticeModalList({
 
                 <p className="text-xs text-[#a1a1a1] mt-2">
                   Para:{" "}
-                  <span className="text-[#22D3EE]">
+                  <span className="text-[#00A19C]">
                     {selectedNotice.targetLabel || "Não informado"}
                   </span>
                 </p>
@@ -282,7 +282,7 @@ export default function ManagementNoticeModalList({
                 type="button"
                 onClick={closeModal}
                 disabled={closing}
-                className="w-full bg-[#22D3EE] text-black font-bold py-2 rounded-lg hover:bg-[#0891B2] transition-colors disabled:opacity-50"
+                className="w-full bg-[#00A19C] text-black font-bold py-2 rounded-lg hover:bg-[#007D79] transition-colors disabled:opacity-50"
               >
                 {closing ? "Fechando..." : "Fechar"}
               </button>

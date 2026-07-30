@@ -317,7 +317,7 @@ export default function GerenciarAlunosPage() {
           value={form.name}
           onChange={(e) => onChange("name", e.target.value)}
           placeholder="Nome completo"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE]"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
         />
 
         <div>
@@ -330,7 +330,7 @@ export default function GerenciarAlunosPage() {
             placeholder="Ex.: Rafa, Dê, João..."
             maxLength={40}
             autoComplete="nickname"
-            className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE]"
+            className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
           />
           <p className="mt-1 text-[11px] leading-relaxed text-[#6b6b6b]">
             Esse nome será usado nas saudações e comunicações com o aluno. O nome completo continua preservado no cadastro.
@@ -342,14 +342,14 @@ export default function GerenciarAlunosPage() {
           onChange={(e) => onChange("email", e.target.value)}
           placeholder="E-mail"
           type="email"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE]"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
         />
 
         <input
           value={form.phone}
           onChange={(e) => onChange("phone", e.target.value)}
           placeholder="Telefone"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE]"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
         />
 
         <div>
@@ -361,10 +361,10 @@ export default function GerenciarAlunosPage() {
             onChange={(e) => onChange("birthDate", e.target.value)}
             type="date"
             max={todayDateInput}
-            className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE]"
+            className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
           />
           {form.birthDate && calculateAgeYears(form.birthDate) !== null && (
-            <p className="mt-1 text-[11px] text-[#22D3EE]">
+            <p className="mt-1 text-[11px] text-[#00A19C]">
               Idade calculada: {calculateAgeYears(form.birthDate)} ano(s)
               {Number(calculateAgeYears(form.birthDate)) < 18 ? " · menor de idade" : ""}
             </p>
@@ -376,13 +376,13 @@ export default function GerenciarAlunosPage() {
           onChange={(e) => onChange("password", e.target.value)}
           placeholder={isEdit ? "Nova senha, se quiser alterar" : "Senha inicial"}
           type="password"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE]"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
         />
 
         <select
           value={form.professorId}
           onChange={(e) => onChange("professorId", e.target.value)}
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE]"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
         >
           <option value="">Sem professor definido</option>
           {teacherOptions.map((teacher) => (
@@ -398,14 +398,14 @@ export default function GerenciarAlunosPage() {
           placeholder="Dias contratados por mês. Ex.: 8, 12, 16, 20"
           type="number"
           min="0"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE]"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
         />
 
         <input
           value={form.image}
           onChange={(e) => onChange("image", e.target.value)}
           placeholder="URL da foto/imagem, se houver"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE]"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
         />
 
         <textarea
@@ -413,7 +413,7 @@ export default function GerenciarAlunosPage() {
           onChange={(e) => onChange("notes", e.target.value)}
           placeholder="Observações"
           rows={3}
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#22D3EE] resize-none"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C] resize-none"
         />
 
         <label className="flex items-center gap-2 text-sm text-[#a1a1a1]">
@@ -421,7 +421,7 @@ export default function GerenciarAlunosPage() {
             type="checkbox"
             checked={form.active}
             onChange={(e) => onChange("active", e.target.checked)}
-            className="accent-[#22D3EE]"
+            className="accent-[#00A19C]"
           />
           Aluno ativo
         </label>
@@ -432,7 +432,7 @@ export default function GerenciarAlunosPage() {
   return (
     <div className="p-4 md:p-6 w-full max-w-none mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#22D3EE]">Gerenciar Alunos</h1>
+        <h1 className="text-2xl font-bold text-[#00A19C]">Gerenciar Alunos</h1>
         <p className="text-[#a1a1a1] mt-1">
           Cadastre, edite e exclua alunos do sistema
         </p>
@@ -447,7 +447,7 @@ export default function GerenciarAlunosPage() {
       <div className="mb-4">
         <button
           onClick={openAddModal}
-          className="bg-[#22D3EE] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#06B6D4]"
+          className="bg-[#00A19C] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#008B87]"
         >
           + Cadastrar Aluno
         </button>
@@ -468,7 +468,7 @@ export default function GerenciarAlunosPage() {
             >
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex items-center gap-3 min-w-0 xl:w-[190px] xl:shrink-0">
-                  <div className="w-9 h-9 rounded-full bg-[#22D3EE]/20 text-[#22D3EE] flex items-center justify-center font-bold text-sm shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-[#00A19C]/20 text-[#00A19C] flex items-center justify-center font-bold text-sm shrink-0">
                     {(student.name || "?").charAt(0).toUpperCase()}
                   </div>
 
@@ -477,7 +477,7 @@ export default function GerenciarAlunosPage() {
                       {student.name}
                     </p>
                     {student.preferredName && (
-                      <p className="text-[10px] text-[#22D3EE] truncate">
+                      <p className="text-[10px] text-[#00A19C] truncate">
                         Chamar de {student.preferredName}
                       </p>
                     )}
@@ -553,7 +553,7 @@ export default function GerenciarAlunosPage() {
 
                   <button
                     onClick={() => abrirEditar(student)}
-                    className="text-[#22D3EE] hover:text-[#06B6D4] text-xs px-2 py-1 rounded-lg hover:bg-[#22D3EE]/5 transition"
+                    className="text-[#00A19C] hover:text-[#008B87] text-xs px-2 py-1 rounded-lg hover:bg-[#00A19C]/5 transition"
                   >
                     Editar
                   </button>
@@ -607,7 +607,7 @@ export default function GerenciarAlunosPage() {
               <button
                 onClick={salvarEdicao}
                 disabled={savingEdit}
-                className="text-xs bg-[#22D3EE] hover:bg-[#06B6D4] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50"
+                className="text-xs bg-[#00A19C] hover:bg-[#008B87] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50"
               >
                 {savingEdit ? "Salvando..." : "Salvar"}
               </button>
@@ -637,7 +637,7 @@ export default function GerenciarAlunosPage() {
               <button
                 onClick={handleAddAluno}
                 disabled={savingAdd}
-                className="text-xs bg-[#22D3EE] hover:bg-[#06B6D4] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50"
+                className="text-xs bg-[#00A19C] hover:bg-[#008B87] text-black px-4 py-1.5 rounded transition-colors disabled:opacity-50"
               >
                 {savingAdd ? "Cadastrando..." : "Cadastrar"}
               </button>

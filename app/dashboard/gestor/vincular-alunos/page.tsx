@@ -342,10 +342,10 @@ export default function VincularAlunosPage() {
   return (
     <div className="p-4 md:p-8 space-y-6">
       <div>
-        <p className="text-xs text-[#22D3EE] uppercase tracking-[0.3em] mb-2">
+        <p className="text-xs text-[#00A19C] uppercase tracking-[0.3em] mb-2">
           Gestão de vínculos
         </p>
-        <h1 className="text-2xl md:text-3xl font-bold text-[#22D3EE]">
+        <h1 className="text-2xl md:text-3xl font-bold text-[#00A19C]">
           Vincular Alunos a Professores
         </h1>
         <p className="text-sm text-[#a1a1a1] mt-2">
@@ -378,7 +378,7 @@ export default function VincularAlunosPage() {
               className={
                 "px-4 py-2 rounded-xl text-sm font-medium transition " +
                 (viewMode === "pending"
-                  ? "bg-[#22D3EE] text-[#0a0a0a]"
+                  ? "bg-[#00A19C] text-[#0a0a0a]"
                   : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
               }
             >
@@ -391,7 +391,7 @@ export default function VincularAlunosPage() {
               className={
                 "px-4 py-2 rounded-xl text-sm font-medium transition " +
                 (viewMode === "linked"
-                  ? "bg-[#22D3EE] text-[#0a0a0a]"
+                  ? "bg-[#00A19C] text-[#0a0a0a]"
                   : "bg-[#1a1a1a] text-[#a1a1a1] hover:text-white")
               }
             >
@@ -413,7 +413,7 @@ export default function VincularAlunosPage() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Buscar por aluno, e-mail, telefone ou professor..."
-          className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+          className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
         />
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -434,7 +434,7 @@ export default function VincularAlunosPage() {
 
           <div className="bg-[#1a1a1a] rounded-xl p-4">
             <p className="text-[10px] uppercase text-[#6b6b6b]">Professores ativos</p>
-            <p className="text-2xl font-bold text-[#22D3EE]">{teachers.length}</p>
+            <p className="text-2xl font-bold text-[#00A19C]">{teachers.length}</p>
           </div>
         </div>
       </div>
@@ -463,7 +463,7 @@ export default function VincularAlunosPage() {
               >
                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-11 h-11 rounded-full bg-[#22D3EE]/20 text-[#22D3EE] flex items-center justify-center text-sm font-bold shrink-0">
+                    <div className="w-11 h-11 rounded-full bg-[#00A19C]/20 text-[#00A19C] flex items-center justify-center text-sm font-bold shrink-0">
                       {getInitials(student.name)}
                     </div>
 
@@ -488,7 +488,7 @@ export default function VincularAlunosPage() {
                       <p className="text-xs text-[#6b6b6b] truncate">
                         {student.email || "Sem e-mail"}
                       </p>
-                      <p className={"mt-1 text-[11px] " + (student.ageYears === null || student.ageYears === undefined ? "text-red-400" : "text-[#22D3EE]")}>
+                      <p className={"mt-1 text-[11px] " + (student.ageYears === null || student.ageYears === undefined ? "text-red-400" : "text-[#00A19C]")}>
                         {student.ageYears === null || student.ageYears === undefined
                           ? "Nascimento pendente"
                           : `${student.ageYears} ano(s)${student.isMinor ? " · menor" : ""}`}
@@ -514,7 +514,7 @@ export default function VincularAlunosPage() {
                     <select
                       value={selectedProfessor}
                       onChange={(event) => updateProfessor(student.id, event.target.value)}
-                      className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                      className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                     >
                       <option value="">Selecione um professor...</option>
 
@@ -532,7 +532,7 @@ export default function VincularAlunosPage() {
                     <label className="block text-xs text-[#a1a1a1] mb-1">
                       Status comercial
                     </label>
-                    <div className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#22D3EE]">
+                    <div className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2.5 text-sm text-[#00A19C]">
                       {commercialStatusLabel(student)}
                     </div>
                   </div>
@@ -542,7 +542,7 @@ export default function VincularAlunosPage() {
                       type="button"
                       onClick={() => handleAssign(student)}
                       disabled={isSaving || teachers.length === 0}
-                      className="w-full lg:w-auto bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-2.5 font-semibold text-sm hover:bg-[#06B6D4] transition disabled:opacity-50"
+                      className="w-full lg:w-auto bg-[#00A19C] text-[#0a0a0a] rounded-xl px-5 py-2.5 font-semibold text-sm hover:bg-[#008B87] transition disabled:opacity-50"
                     >
                       {isSaving ? "Salvando..." : isPending ? "Vincular professor" : "Trocar professor"}
                     </button>
@@ -550,7 +550,7 @@ export default function VincularAlunosPage() {
                     <button
                       type="button"
                       onClick={() => goToFinanceiro(student)}
-                      className="w-full lg:w-auto bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] rounded-xl px-5 py-2.5 font-semibold text-sm hover:border-[#22D3EE] transition"
+                      className="w-full lg:w-auto bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] rounded-xl px-5 py-2.5 font-semibold text-sm hover:border-[#00A19C] transition"
                     >
                       Criar contrato
                     </button>

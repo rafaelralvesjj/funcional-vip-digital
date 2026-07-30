@@ -184,11 +184,11 @@ async function notifyNewStudentQuestionByEmail({
         const html = `
           <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
             <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-              <h2 style="color:#22D3EE;margin:0 0 16px;">Nova mensagem de aluno</h2>
+              <h2 style="color:#00A19C;margin:0 0 16px;">Nova mensagem de aluno</h2>
               <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(recipientName)}</strong>!</p>
               <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">${safeSenderLabel}</strong> enviou uma nova mensagem pelo chat do Funcional UP Digital.</p>
               <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(actionText)}</p>
-              <a href="${loginUrl}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir conversa</a>
+              <a href="${loginUrl}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir conversa</a>
               <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Aviso automático sobre uma mensagem real enviada pelo aluno.</p>
             </div>
           </div>

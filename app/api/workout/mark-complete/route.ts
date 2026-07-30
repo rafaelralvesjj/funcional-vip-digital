@@ -480,11 +480,11 @@ async function createWorkoutCareEvent({
         html: `
           <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
             <div style="max-width:620px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-              <h2 style="color:#22D3EE;margin:0 0 16px;">Ação de cuidado necessária</h2>
+              <h2 style="color:#00A19C;margin:0 0 16px;">Ação de cuidado necessária</h2>
               <p style="color:#f5f5f5;">Oi, <strong>${escapeHtml(student.user?.name || "professor(a)")}</strong>.</p>
               <p style="color:#d4d4d4;line-height:1.6;">${escapeHtml(copy.professorMessage).replaceAll("\n", "<br />")}</p>
               <p style="color:#d4d4d4;line-height:1.6;">Abra a Central de Cuidado, revise o relato e registre o encaminhamento antes de montar ou liberar novo treino.</p>
-              <p><a href="${getAppCareUrl()}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Abrir Central de Cuidado</a></p>
+              <p><a href="${getAppCareUrl()}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Abrir Central de Cuidado</a></p>
               <p style="color:#6b6b6b;font-size:11px;margin-top:20px;">Mensagem automática de segurança e acompanhamento.</p>
             </div>
           </div>
@@ -696,15 +696,15 @@ async function sendStudentEmail({
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <h2 style="color:#22D3EE; margin:0 0 16px;">${safeTitle}</h2>
+        <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">${safeContent}</p>
-        <div style="background:#071A22; border:1px solid #155E75; border-radius:12px; padding:14px; margin:14px 0;">
-          <p style="color:#22D3EE; font-size:14px; font-weight:bold; margin:0 0 8px;">Seu relato orienta o próximo treino</p>
+        <div style="background:#071413; border:1px solid #005D5A; border-radius:12px; padding:14px; margin:14px 0;">
+          <p style="color:#00A19C; font-size:14px; font-weight:bold; margin:0 0 8px;">Seu relato orienta o próximo treino</p>
           <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin:0;">Ao concluir cada treino, registre no próprio treino qualquer incômodo, dor ou desconforto, mesmo que pareça leve. Se precisar falar antes, tiver dúvida sobre continuar ou não conseguir finalizar, use o chat da plataforma para falar com <strong>${safeProfessorName}</strong>. Esse relato influencia diretamente a montagem dos próximos treinos.</p>
         </div>
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Para assuntos de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.</p>
-        <a href="${alunoUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
+        <a href="${alunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Acessar minha área</a>
         <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional UP Digital</p>
         <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de acompanhamento enviada em nome do seu professor.</p>
       </div>
@@ -1191,11 +1191,11 @@ async function notifyEvolutionFeedbackMilestone({
         html: `
           <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
             <div style="max-width:620px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-              <h2 style="color:#22D3EE;margin:0 0 16px;">Devolutiva de evolução para revisar</h2>
+              <h2 style="color:#00A19C;margin:0 0 16px;">Devolutiva de evolução para revisar</h2>
               <p style="color:#f5f5f5;">Oi, <strong>${escapeHtml(student.user?.name || "professor(a)")}</strong>.</p>
               <p style="color:#d4d4d4;line-height:1.6;"><strong>${escapeHtml(student.name)}</strong> chegou ao marco de <strong>${milestone} treinos concluídos</strong>.</p>
               <p style="color:#d4d4d4;line-height:1.6;">Revise o histórico e personalize a devolutiva antes de enviar. O aluno deve perceber que a mensagem considera sua jornada real, não apenas o número de treinos.</p>
-              <p><a href="${getAppEvolutionUrl()}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Abrir central de evolução</a></p>
+              <p><a href="${getAppEvolutionUrl()}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Abrir central de evolução</a></p>
               <p style="color:#6b6b6b;font-size:11px;margin-top:20px;">Mensagem automática de acompanhamento.</p>
             </div>
           </div>

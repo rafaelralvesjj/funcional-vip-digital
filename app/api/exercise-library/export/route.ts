@@ -357,7 +357,7 @@ export async function GET(req: NextRequest) {
     root?.file(
       "LEIA-ME.txt",
       [
-        "EXPORTAÇÃO PARA VÍDEOS — FUNCIONAL UP DIGITAL",
+        "EXPORTAÇÃO PARA VÍDEOS — FUNCIONAL VIP DIGITAL",
         "",
         `Parte: ${batch} de ${totalBatches}`,
         `Exercícios neste pacote: ${exercises.length}`,

@@ -168,16 +168,16 @@ export default function MontarTreinoPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
       <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
-        <h1 className="text-xl font-bold text-[#22D3EE]">Montar Treino</h1>
+        <h1 className="text-xl font-bold text-[#00A19C]">Montar Treino</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
-            <h2 className="text-lg font-semibold text-[#22D3EE]">Informacoes do Treino</h2>
+            <h2 className="text-lg font-semibold text-[#00A19C]">Informacoes do Treino</h2>
             <div>
               <label className="text-sm text-[#a1a1a1] block mb-1">Aluno *</label>
               <select
                 value={selectedStudent}
                 onChange={(e) => setSelectedStudent(e.target.value)}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="">Selecione um aluno...</option>
                 {students.map((s) => (
@@ -193,7 +193,7 @@ export default function MontarTreinoPage() {
                 onChange={(e) => setPlanName(e.target.value)}
                 placeholder="Ex: Treino A - Segunda"
                 required
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
               />
             </div>
             <div>
@@ -201,7 +201,7 @@ export default function MontarTreinoPage() {
               <select
                 value={weekDay}
                 onChange={(e) => setWeekDay(e.target.value)}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="">Selecione...</option>
                 {diasSemana.map((d) => (
@@ -216,17 +216,17 @@ export default function MontarTreinoPage() {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
                 placeholder="Ex: Treino focado em membros inferiores..."
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
               />
             </div>
           </div>
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[#22D3EE]">Exercicios</h2>
+              <h2 className="text-lg font-semibold text-[#00A19C]">Exercicios</h2>
               <button
                 type="button"
                 onClick={() => setShowLibrary(!showLibrary)}
-                className="bg-[#22D3EE] text-[#0a0a0a] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#06B6D4] transition"
+                className="bg-[#00A19C] text-[#0a0a0a] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#008B87] transition"
               >
                 {showLibrary ? "Fechar biblioteca" : "+ Adicionar exercicio"}
               </button>
@@ -238,7 +238,7 @@ export default function MontarTreinoPage() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Buscar exercicio por nome ou grupo muscular..."
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#111] px-4 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE] mb-3"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#111] px-4 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C] mb-3"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
                   {filteredLibrary.map((ex) => (
@@ -268,7 +268,7 @@ export default function MontarTreinoPage() {
                   <div key={index} className="bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <span className="bg-[#22D3EE]/20 text-[#22D3EE] text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">{index + 1}</span>
+                        <span className="bg-[#00A19C]/20 text-[#00A19C] text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">{index + 1}</span>
                         <span className="text-[#f5f5f5] font-medium">{ex.name}</span>
                       </div>
                       <div className="flex gap-1">
@@ -284,29 +284,29 @@ export default function MontarTreinoPage() {
                       <div>
                         <label className="text-[10px] text-[#6b6b6b] block mb-1">Series</label>
                         <input type="number" value={ex.series} onChange={(e) => updateExercise(index, "series", Number(e.target.value))}
-                          className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#22D3EE]" />
+                          className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#00A19C]" />
                       </div>
                       <div>
                         <label className="text-[10px] text-[#6b6b6b] block mb-1">Repeticoes</label>
                         <input type="text" value={ex.reps} onChange={(e) => updateExercise(index, "reps", e.target.value)}
-                          className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#22D3EE]" />
+                          className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#00A19C]" />
                       </div>
                       <div>
                         <label className="text-[10px] text-[#6b6b6b] block mb-1">Carga (kg)</label>
                         <input type="text" value={ex.weight} onChange={(e) => updateExercise(index, "weight", e.target.value)}
-                          className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#22D3EE]" />
+                          className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#00A19C]" />
                       </div>
                       <div>
                         <label className="text-[10px] text-[#6b6b6b] block mb-1">Descanso</label>
                         <input type="text" value={ex.restTime} onChange={(e) => updateExercise(index, "restTime", e.target.value)}
-                          className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#22D3EE]" />
+                          className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#00A19C]" />
                       </div>
                     </div>
                     <div className="mt-2">
                       <label className="text-[10px] text-[#6b6b6b] block mb-1">Observacoes do exercicio</label>
                       <input type="text" value={ex.notes} onChange={(e) => updateExercise(index, "notes", e.target.value)}
                         placeholder="Ex: Fazer lento..."
-                        className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]" />
+                        className="w-full rounded border border-[#ffffff10] bg-[#111] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]" />
                     </div>
                   </div>
                 ))}
@@ -314,19 +314,19 @@ export default function MontarTreinoPage() {
             )}
           </div>
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-            <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">Observacoes do Plano</h2>
+            <h2 className="text-lg font-semibold text-[#00A19C] mb-4">Observacoes do Plano</h2>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
               placeholder="Observacoes gerais para o aluno sobre este treino..."
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
             />
           </div>
           <button
             type="submit"
             disabled={saving || !selectedStudent || !planName.trim() || exercises.length === 0}
-            className="w-full bg-[#22D3EE] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#0891B2] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-[#00A19C] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#007D79] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Salvando treino..." : "Salvar e enviar treino para o aluno"}
           </button>

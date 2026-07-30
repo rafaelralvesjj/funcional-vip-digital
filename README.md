@@ -1,4 +1,4 @@
-# Funcional Vip Digital
+# Funcional UP Digital
 
 Starter web com Next.js 14 (App Router), TypeScript, Prisma, NextAuth e PostgreSQL.
 

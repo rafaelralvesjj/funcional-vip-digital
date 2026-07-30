@@ -120,7 +120,7 @@ export default function PesquisasAlunosPage() {
     <main className="min-h-screen bg-[#0a0a0a] p-6 text-[#f5f5f5]">
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="rounded-2xl border border-[#ffffff10] bg-[#111111] p-6">
-          <p className="text-xs uppercase tracking-[0.25em] text-[#22D3EE]">
+          <p className="text-xs uppercase tracking-[0.25em] text-[#00A19C]">
             Escuta do aluno
           </p>
           <h1 className="mt-2 text-2xl font-bold text-[#f5f5f5]">
@@ -134,7 +134,7 @@ export default function PesquisasAlunosPage() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <div className="rounded-2xl border border-[#ffffff10] bg-[#111111] p-4">
             <p className="text-xs uppercase text-[#6b6b6b]">Total</p>
-            <p className="mt-1 text-2xl font-bold text-[#22D3EE]">{counts.total}</p>
+            <p className="mt-1 text-2xl font-bold text-[#00A19C]">{counts.total}</p>
           </div>
           <div className="rounded-2xl border border-[#ffffff10] bg-[#111111] p-4">
             <p className="text-xs uppercase text-[#6b6b6b]">Pendentes</p>
@@ -193,7 +193,7 @@ export default function PesquisasAlunosPage() {
                       <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${getStatusClass(survey.status)}`}>
                         {getStatusLabel(survey.status)}
                       </span>
-                      <span className="rounded-full border border-[#22D3EE]/20 bg-[#22D3EE]/10 px-2 py-1 text-[10px] font-semibold text-[#22D3EE]">
+                      <span className="rounded-full border border-[#00A19C]/20 bg-[#00A19C]/10 px-2 py-1 text-[10px] font-semibold text-[#00A19C]">
                         {survey.surveyLabel}
                       </span>
                     </div>
@@ -202,7 +202,7 @@ export default function PesquisasAlunosPage() {
                       {survey.student?.name || "Aluno"}
                     </h3>
                     <p className="text-xs text-[#a1a1a1]">
-                      Professor: <span className="text-[#22D3EE]">{survey.professor?.name || "Não vinculado"}</span>
+                      Professor: <span className="text-[#00A19C]">{survey.professor?.name || "Não vinculado"}</span>
                     </p>
                     <p className="mt-1 text-[11px] text-[#6b6b6b]">
                       Criada em {formatDate(survey.createdAt)} {survey.answeredAt ? `· respondida em ${formatDate(survey.answeredAt)}` : ""}
@@ -211,7 +211,7 @@ export default function PesquisasAlunosPage() {
 
                   <Link
                     href={`/dashboard/students/${survey.studentId}`}
-                    className="inline-flex items-center justify-center rounded-lg border border-[#22D3EE]/30 bg-[#22D3EE]/10 px-3 py-2 text-xs font-semibold text-[#22D3EE] hover:bg-[#22D3EE]/20"
+                    className="inline-flex items-center justify-center rounded-lg border border-[#00A19C]/30 bg-[#00A19C]/10 px-3 py-2 text-xs font-semibold text-[#00A19C] hover:bg-[#00A19C]/20"
                   >
                     Ver ficha
                   </Link>
@@ -244,7 +244,7 @@ export default function PesquisasAlunosPage() {
                   <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                     {survey.favoritePoint && (
                       <div className="rounded-xl border border-[#ffffff10] bg-[#0a0a0a] p-3">
-                        <p className="text-[10px] font-semibold uppercase text-[#22D3EE]">Gostou</p>
+                        <p className="text-[10px] font-semibold uppercase text-[#00A19C]">Gostou</p>
                         <p className="mt-1 whitespace-pre-wrap text-xs text-[#e5e5e5]">{survey.favoritePoint}</p>
                       </div>
                     )}

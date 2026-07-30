@@ -81,9 +81,9 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
 
     return (
       <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
-        <div className="bg-gradient-to-b from-[#22D3EE]/10 to-transparent pb-8">
+        <div className="bg-gradient-to-b from-[#00A19C]/10 to-transparent pb-8">
           <div className="max-w-2xl mx-auto px-4 pt-12 text-center">
-            <div className="w-20 h-20 bg-[#22D3EE]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-20 h-20 bg-[#00A19C]/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-4xl">🏆</span>
             </div>
             <h1 className="text-2xl font-bold">📈 Seu Relatório Mensal</h1>
@@ -95,11 +95,11 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
 
         <div className="max-w-2xl mx-auto px-4 pb-16 -mt-4 space-y-4">
           {/* Score de evolução */}
-          <div className="bg-gradient-to-r from-[#22D3EE]/10 to-transparent border border-[#22D3EE]/20 rounded-xl p-6 text-center">
+          <div className="bg-gradient-to-r from-[#00A19C]/10 to-transparent border border-[#00A19C]/20 rounded-xl p-6 text-center">
             <span className="text-5xl">
               {relatorio.scoreEvolucao >= 80 ? "🔥" : relatorio.scoreEvolucao >= 50 ? "💪" : "📈"}
             </span>
-            <h2 className="text-lg font-bold text-[#22D3EE] mt-2">
+            <h2 className="text-lg font-bold text-[#00A19C] mt-2">
               {relatorio.scoreEvolucao}% de evolução positiva
             </h2>
             <p className="text-sm text-[#a1a1a1] mt-1">
@@ -175,7 +175,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
           {/* Meta */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
             <h2 className="font-semibold mb-2">🎯 Sua Meta</h2>
-            <p className="text-[#22D3EE] font-medium">
+            <p className="text-[#00A19C] font-medium">
               {relatorio.objetivo || "Não definida"}
             </p>
             {relatorio.metaEspecifica && (
@@ -186,7 +186,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
           </div>
 
           {/* Parabéns */}
-          <div className="bg-gradient-to-r from-[#22D3EE]/10 to-transparent border border-[#22D3EE]/20 rounded-xl p-6 text-center">
+          <div className="bg-gradient-to-r from-[#00A19C]/10 to-transparent border border-[#00A19C]/20 rounded-xl p-6 text-center">
             <p className="text-[#e5e5e5]">
               {relatorio.scoreEvolucao >= 80
                 ? "🔥 Parabéns! Você teve um mês incrível! Continue com essa consistência que os resultados só vão melhorar!"
@@ -199,7 +199,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
           {/* Botão voltar */}
           <button
             onClick={() => router.push(`/dashboard/aluno/${params.id}`)}
-            className="w-full bg-[#22D3EE] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#0891B2]"
+            className="w-full bg-[#00A19C] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#007D79]"
           >
             🏠 Voltar ao Dashboard
           </button>
@@ -211,10 +211,10 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
   // Formulário de avaliação mensal
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
-      <div className="bg-gradient-to-b from-[#22D3EE]/10 to-transparent pb-8">
+      <div className="bg-gradient-to-b from-[#00A19C]/10 to-transparent pb-8">
         <div className="max-w-2xl mx-auto px-4 pt-12">
           <div className="text-center mb-4">
-            <div className="w-16 h-16 bg-[#22D3EE]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-[#00A19C]/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-3xl">📊</span>
             </div>
             <h1 className="text-2xl font-bold">Avaliação do Mês</h1>
@@ -229,7 +229,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Medidas */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-            <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">📏 Atualize suas medidas</h2>
+            <h2 className="text-lg font-semibold text-[#00A19C] mb-4">📏 Atualize suas medidas</h2>
             <p className="text-sm text-[#a1a1a1] mb-4">
               Tire as medidas novamente com a fita métrica para compararmos com o início do mês.
             </p>
@@ -242,7 +242,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
                   value={form.peso}
                   onChange={(e) => setForm({ ...form, peso: e.target.value })}
                   required
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                   placeholder="Ex: 74"
                 />
               </div>
@@ -253,7 +253,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
                   step="0.5"
                   value={form.abdomen}
                   onChange={(e) => setForm({ ...form, abdomen: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                   placeholder="Ex: 84"
                 />
               </div>
@@ -264,7 +264,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
                   step="0.5"
                   value={form.gluteo}
                   onChange={(e) => setForm({ ...form, gluteo: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                   placeholder="Ex: 99"
                 />
               </div>
@@ -275,7 +275,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
                   step="0.5"
                   value={form.braco}
                   onChange={(e) => setForm({ ...form, braco: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                   placeholder="Ex: 33"
                 />
               </div>
@@ -286,7 +286,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
                   step="0.5"
                   value={form.coxa}
                   onChange={(e) => setForm({ ...form, coxa: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                   placeholder="Ex: 54"
                 />
               </div>
@@ -297,7 +297,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
                   step="0.5"
                   value={form.quadril}
                   onChange={(e) => setForm({ ...form, quadril: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                   placeholder="Ex: 101"
                 />
               </div>
@@ -306,7 +306,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
 
           {/* Foto */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-            <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">📸 Foto do mês</h2>
+            <h2 className="text-lg font-semibold text-[#00A19C] mb-4">📸 Foto do mês</h2>
             <p className="text-sm text-[#a1a1a1] mb-3">
               Tire uma foto nova para compararmos com a do início. <span className="text-[#525252]">(opcional)</span>
             </p>
@@ -314,9 +314,9 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
               type="file"
               accept="image/png,image/jpeg,image/webp"
               onChange={handleImageUpload}
-              className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#22D3EE] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#0891B2]"
+              className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#00A19C] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#007D79]"
             />
-            {uploading && <p className="text-xs text-[#22D3EE] mt-2">Enviando foto...</p>}
+            {uploading && <p className="text-xs text-[#00A19C] mt-2">Enviando foto...</p>}
             {form.fotoUrl && !uploading && <p className="text-xs text-green-500 mt-2">✅ Foto enviada!</p>}
           </div>
 
@@ -324,7 +324,7 @@ export default function AvaliacaoMensalPage({ params }: { params: { id: string }
           <button
             type="submit"
             disabled={loading || uploading}
-            className="w-full bg-[#22D3EE] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#0891B2] disabled:opacity-70"
+            className="w-full bg-[#00A19C] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#007D79] disabled:opacity-70"
           >
             {loading ? "Gerando relatório..." : "📊 Gerar Relatório do Mês"}
           </button>

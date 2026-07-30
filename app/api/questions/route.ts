@@ -392,12 +392,12 @@ async function sendNewConversationEmail({
               ? "seu painel do professor"
               : "seu painel da gestão";
 
-        const subject = "Nova mensagem no Funcional Vip Digital";
+        const subject = "Nova mensagem no Funcional UP Digital";
 
         const text = [
           `Olá, ${recipientName}!`,
           "",
-          `Você recebeu uma nova mensagem de ${senderLabel} no Funcional Vip Digital.`,
+          `Você recebeu uma nova mensagem de ${senderLabel} no Funcional UP Digital.`,
           "",
           `Para visualizar, acesse ${panelText}.`,
           "",
@@ -407,26 +407,26 @@ async function sendNewConversationEmail({
         const html = `
           <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
             <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-              <h2 style="color:#22D3EE; margin:0 0 16px;">Nova mensagem</h2>
+              <h2 style="color:#00A19C; margin:0 0 16px;">Nova mensagem</h2>
 
               <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
                 Olá, ${escapeHtml(recipientName)}!
               </p>
 
               <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
-                Você recebeu uma nova mensagem de <strong style="color:#f5f5f5;">${safeSenderLabel}</strong> no Funcional Vip Digital.
+                Você recebeu uma nova mensagem de <strong style="color:#f5f5f5;">${safeSenderLabel}</strong> no Funcional UP Digital.
               </p>
 
               <p style="color:#d4d4d4; font-size:14px; line-height:1.5;">
                 Para visualizar, acesse ${panelText}.
               </p>
 
-              <a href="${loginUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+              <a href="${loginUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
                 Acessar o sistema
               </a>
 
               <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">
-                Este é um aviso automático do Funcional Vip Digital.
+                Este é um aviso automático do Funcional UP Digital.
               </p>
             </div>
           </div>

@@ -12,14 +12,14 @@ const symbolSizeClasses = {
   sm: "h-9 w-9",
   md: "h-12 w-12",
   lg: "h-20 w-20",
-  xl: "h-28 w-28",
+  xl: "h-28 w-28 sm:h-32 sm:w-32",
 };
 
 const fullSizeClasses = {
   sm: "h-auto w-28",
   md: "h-auto w-36",
-  lg: "h-auto w-44",
-  xl: "h-auto w-56",
+  lg: "h-auto w-48",
+  xl: "h-auto w-64 sm:w-72",
 };
 
 export default function BrandLogo({
@@ -31,20 +31,18 @@ export default function BrandLogo({
 }: BrandLogoProps) {
   const src =
     variant === "symbol"
-      ? "/branding/icon-512.png"
-      : "/branding/logo-funcional-up-digital.png";
+      ? "/branding/icon-funcional-up.svg"
+      : "/branding/logo-funcional-up-digital.svg";
 
   const sizeClass =
-    variant === "symbol"
-      ? symbolSizeClasses[size]
-      : fullSizeClasses[size];
+    variant === "symbol" ? symbolSizeClasses[size] : fullSizeClasses[size];
 
   const image = (
     <img
       src={src}
       alt="Funcional UP Digital"
       loading={priority ? "eager" : "lazy"}
-      className={`${sizeClass} ${variant === "symbol" ? "rounded-full" : "rounded-none"} object-contain ${className}`}
+      className={`${sizeClass} object-contain ${className}`}
     />
   );
 

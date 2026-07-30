@@ -24,7 +24,7 @@ export async function sendEmail({ to, subject, text, html }: SendEmailInput) {
 
   const user = getRequiredEnv("EMAIL_USER");
   const pass = getRequiredEnv("EMAIL_PASS");
-  const from = process.env.EMAIL_FROM || `Funcional Vip Digital <${user}>`;
+  const from = process.env.EMAIL_FROM || `Funcional UP Digital <${user}>`;
 
   const transporter = nodemailer.createTransport({
     host,

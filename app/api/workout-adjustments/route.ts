@@ -120,10 +120,10 @@ function buildSenderAvatarHtml(name: string, image?: string | null): string {
     image && /^https?:\/\//i.test(image) ? escapeHtml(image) : "";
 
   if (safeImage) {
-    return `<img src="${safeImage}" alt="${safeName}" width="52" height="52" style="display:block; width:52px; height:52px; border-radius:999px; object-fit:cover; border:2px solid #22D3EE;" />`;
+    return `<img src="${safeImage}" alt="${safeName}" width="52" height="52" style="display:block; width:52px; height:52px; border-radius:999px; object-fit:cover; border:2px solid #00A19C;" />`;
   }
 
-  return `<div style="width:52px; height:52px; border-radius:999px; background:#2a2119; border:2px solid #22D3EE; color:#22D3EE; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:17px;">${escapeHtml(
+  return `<div style="width:52px; height:52px; border-radius:999px; background:#2a2119; border:2px solid #00A19C; color:#00A19C; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:17px;">${escapeHtml(
     getInitials(name)
   )}</div>`;
 }
@@ -187,12 +187,12 @@ async function sendWorkoutAdjustmentEmail({
           ${avatarHtml}
           <div>
             <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.3;">${safeProfessorName}</div>
-            <div style="color:#22D3EE; font-size:12px; margin-top:3px;">Professor · Funcional UP Digital</div>
+            <div style="color:#00A19C; font-size:12px; margin-top:3px;">Professor · Funcional UP Digital</div>
           </div>
         </div>
 
         <div style="padding:24px;">
-          <h2 style="color:#22D3EE; margin:0 0 16px; font-size:22px;">Seu treino foi ajustado</h2>
+          <h2 style="color:#00A19C; margin:0 0 16px; font-size:22px;">Seu treino foi ajustado</h2>
 
           <p style="color:#f5f5f5; font-size:15px; line-height:1.6;">
             Oi, <strong>${safeStudentName}</strong>!
@@ -202,8 +202,8 @@ async function sendWorkoutAdjustmentEmail({
             ${safeStudentMessage}
           </p>
 
-          <div style="background:#071A22; border:1px solid #155E75; border-radius:12px; padding:16px; margin:18px 0;">
-            <div style="color:#22D3EE; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">Treino atualizado</div>
+          <div style="background:#071413; border:1px solid #005D5A; border-radius:12px; padding:16px; margin:18px 0;">
+            <div style="color:#00A19C; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">Treino atualizado</div>
             <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.4;">${safeWorkoutName}</div>
             <div style="color:#b8b8b8; font-size:13px; margin-top:6px;">Data: ${safeWorkoutDate}</div>
             ${
@@ -217,7 +217,7 @@ async function sendWorkoutAdjustmentEmail({
             Acesse sua área para conferir os exercícios, séries, repetições e orientações atualizadas antes de iniciar.
           </p>
 
-          <a href="${alunoUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:4px;">
+          <a href="${alunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:4px;">
             Ver treino atualizado
           </a>
 

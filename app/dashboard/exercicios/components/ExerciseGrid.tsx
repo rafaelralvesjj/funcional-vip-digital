@@ -592,7 +592,7 @@ export default function ExerciseGrid({
               setShowForm(true);
             }
           }}
-          className="bg-[#22D3EE] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#0891B2]"
+          className="bg-[#00A19C] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#007D79]"
         >
           {showForm ? "Cancelar" : "+ Novo Exercício"}
         </button>
@@ -604,7 +604,7 @@ export default function ExerciseGrid({
           className="mb-8 bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-5"
         >
           {editingId && (
-            <p className="text-sm text-[#22D3EE] font-medium">
+            <p className="text-sm text-[#00A19C] font-medium">
               ✏️ Editando: {form.name}
             </p>
           )}
@@ -616,7 +616,7 @@ export default function ExerciseGrid({
                 value={form.name}
                 onChange={(event) => updateForm("name", event.target.value)}
                 required
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ex: Agachamento na cadeira"
               />
             </div>
@@ -631,7 +631,7 @@ export default function ExerciseGrid({
                   updateForm("muscleGroup", event.target.value)
                 }
                 required
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="">Selecione...</option>
 
@@ -662,7 +662,7 @@ export default function ExerciseGrid({
               }
               required
               rows={3}
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
               placeholder="Ex: Fortalece pernas e glúteos, melhora o padrão de sentar e levantar e ajuda na base para corrida."
             />
             <p className="text-[10px] text-[#6b6b6b] mt-1">
@@ -680,7 +680,7 @@ export default function ExerciseGrid({
                 updateForm("instructions", event.target.value)
               }
               rows={3}
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
               placeholder="Ex: apoiar antebraços e pés, manter cabeça, tronco, quadris e pernas alinhados, ativando abdômen e glúteos."
             />
           </div>
@@ -695,7 +695,7 @@ export default function ExerciseGrid({
                 updateForm("safetyNotes", event.target.value)
               }
               rows={3}
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
               placeholder="Ex: manter coluna neutra, joelhos alinhados, abdômen ativo e amplitude segura."
             />
           </div>
@@ -711,7 +711,7 @@ export default function ExerciseGrid({
                   updateForm("commonMistakes", event.target.value)
                 }
                 rows={2}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ex: Arredondar a coluna, acelerar demais, prender a respiração."
               />
             </div>
@@ -726,7 +726,7 @@ export default function ExerciseGrid({
                   updateForm("contraindications", event.target.value)
                 }
                 rows={2}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ex: Evitar em caso de dor aguda sem liberação."
               />
             </div>
@@ -742,7 +742,7 @@ export default function ExerciseGrid({
                 onChange={(event) =>
                   updateForm("objectiveTags", event.target.value)
                 }
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ex: força, corrida, funcional, emagrecimento"
               />
             </div>
@@ -756,7 +756,7 @@ export default function ExerciseGrid({
                 onChange={(event) =>
                   updateForm("restrictionTags", event.target.value)
                 }
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ex: joelho atenção, lombar atenção, baixo impacto"
               />
             </div>
@@ -768,7 +768,7 @@ export default function ExerciseGrid({
                 onChange={(event) =>
                   updateForm("locationTags", event.target.value)
                 }
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ex: casa, academia, condomínio"
               />
             </div>
@@ -782,7 +782,7 @@ export default function ExerciseGrid({
                 onChange={(event) =>
                   updateForm("equipmentTags", event.target.value)
                 }
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ex: sem equipamento, cadeira, halter"
               />
             </div>
@@ -794,7 +794,7 @@ export default function ExerciseGrid({
                 onChange={(event) =>
                   updateForm("levelTags", event.target.value)
                 }
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ex: iniciante, intermediário"
               />
             </div>
@@ -808,7 +808,7 @@ export default function ExerciseGrid({
                 onChange={(event) =>
                   updateForm("intensity", event.target.value)
                 }
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               >
                 <option value="">Selecione...</option>
                 <option value="leve">Leve</option>
@@ -827,7 +827,7 @@ export default function ExerciseGrid({
               onChange={(event) =>
                 updateForm("substitutions", event.target.value)
               }
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
               placeholder="Ex: agachamento na cadeira, leg press, ponte de glúteos"
             />
           </div>
@@ -849,12 +849,12 @@ export default function ExerciseGrid({
                   onChange={(event) =>
                     handleImageUpload(event, "imageUrl")
                   }
-                  className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#22D3EE] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#0891B2]"
+                  className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#00A19C] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#007D79]"
                 />
               </div>
 
               {uploadingMain && (
-                <p className="text-xs text-[#22D3EE]">
+                <p className="text-xs text-[#00A19C]">
                   Enviando imagem principal...
                 </p>
               )}
@@ -880,7 +880,7 @@ export default function ExerciseGrid({
                 onChange={(event) =>
                   updateForm("imageUrl", event.target.value)
                 }
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ou cole a URL da imagem principal..."
               />
             </div>
@@ -899,7 +899,7 @@ export default function ExerciseGrid({
                         Number(event.target.value)
                       )
                     }
-                    className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+                    className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
                   >
                     <option value="4">4</option>
                     <option value="5">5</option>
@@ -916,7 +916,7 @@ export default function ExerciseGrid({
                     onChange={(event) =>
                       updateForm("sequenceImageLabel", event.target.value)
                     }
-                    className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                    className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                     placeholder="Ex: Sequência de execução do agachamento"
                   />
                 </div>
@@ -932,7 +932,7 @@ export default function ExerciseGrid({
                     updateForm("sequenceImageNotes", event.target.value)
                   }
                   rows={3}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                   placeholder="Ex: Mostrar joelhos alinhados e progressão clara."
                 />
               </div>
@@ -951,12 +951,12 @@ export default function ExerciseGrid({
                   onChange={(event) =>
                     handleImageUpload(event, "sequenceImageUrl")
                   }
-                  className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#22D3EE] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#0891B2]"
+                  className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#00A19C] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#007D79]"
                 />
               </div>
 
               {uploadingSequence && (
-                <p className="text-xs text-[#22D3EE]">
+                <p className="text-xs text-[#00A19C]">
                   Enviando imagem sequencial...
                 </p>
               )}
@@ -982,7 +982,7 @@ export default function ExerciseGrid({
                 onChange={(event) =>
                   updateForm("sequenceImageUrl", event.target.value)
                 }
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                 placeholder="Ou cole a URL da imagem sequencial..."
               />
 
@@ -993,14 +993,14 @@ export default function ExerciseGrid({
                   onChange={(event) =>
                     updateForm("sequenceGeneratedByAi", event.target.checked)
                   }
-                  className="accent-[#22D3EE]"
+                  className="accent-[#00A19C]"
                 />
                 Sequência criada com apoio de IA
               </label>
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#22D3EE]/20 bg-[#0d0d0d] p-4 space-y-3">
+          <div className="rounded-xl border border-[#00A19C]/20 bg-[#0d0d0d] p-4 space-y-3">
             <div>
               <label className="text-sm text-[#e5e5e5] block mb-1">
                 Vídeo com orientação narrada
@@ -1013,12 +1013,12 @@ export default function ExerciseGrid({
                 ref={videoFileInputRef}
                 accept="video/mp4,video/webm,video/quicktime"
                 onChange={handleVideoUpload}
-                className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#22D3EE] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#0891B2]"
+                className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#00A19C] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#007D79]"
               />
             </div>
 
             {uploadingVideo && (
-              <p className="text-xs text-[#22D3EE]">Enviando vídeo...</p>
+              <p className="text-xs text-[#00A19C]">Enviando vídeo...</p>
             )}
 
             {form.videoUrl && !uploadingVideo && (
@@ -1033,7 +1033,7 @@ export default function ExerciseGrid({
             <input
               value={form.videoUrl}
               onChange={(event) => updateForm("videoUrl", event.target.value)}
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
               placeholder="Ou cole a URL do vídeo..."
             />
           </div>
@@ -1045,7 +1045,7 @@ export default function ExerciseGrid({
               onChange={(event) =>
                 updateForm("active", event.target.checked)
               }
-              className="accent-[#22D3EE]"
+              className="accent-[#00A19C]"
             />
             Exercício ativo na biblioteca
           </label>
@@ -1053,7 +1053,7 @@ export default function ExerciseGrid({
           <button
             type="submit"
             disabled={saving || uploadingMain || uploadingSequence || uploadingVideo}
-            className="bg-[#22D3EE] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#0891B2] disabled:opacity-70"
+            className="bg-[#00A19C] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#007D79] disabled:opacity-70"
           >
             {saving
               ? "Salvando..."
@@ -1066,7 +1066,7 @@ export default function ExerciseGrid({
 
       {Object.entries(groups).map(([group, groupedExercises]) => (
         <div key={group} className="mb-8">
-          <h2 className="text-lg font-semibold text-[#22D3EE] mb-3">
+          <h2 className="text-lg font-semibold text-[#00A19C] mb-3">
             {group}
           </h2>
 
@@ -1092,7 +1092,7 @@ export default function ExerciseGrid({
                         type="button"
                         onClick={() => handleDownloadImage(exercise)}
                         disabled={downloadingImageId === exercise.id}
-                        className="rounded-lg border border-[#ffffff20] bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#f5f5f5] shadow-lg backdrop-blur transition hover:border-[#22D3EE] hover:text-[#22D3EE] disabled:cursor-wait disabled:opacity-70"
+                        className="rounded-lg border border-[#ffffff20] bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#f5f5f5] shadow-lg backdrop-blur transition hover:border-[#00A19C] hover:text-[#00A19C] disabled:cursor-wait disabled:opacity-70"
                         title="Baixar imagem principal"
                       >
                         {downloadingImageId === exercise.id
@@ -1103,7 +1103,7 @@ export default function ExerciseGrid({
                       <button
                         type="button"
                         onClick={() => handleCopyPrompt(exercise, "video")}
-                        className="rounded-lg border border-[#22D3EE]/40 bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#22D3EE] shadow-lg backdrop-blur transition hover:border-[#22D3EE] hover:bg-[#22D3EE] hover:text-[#0a0a0a]"
+                        className="rounded-lg border border-[#00A19C]/40 bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#00A19C] shadow-lg backdrop-blur transition hover:border-[#00A19C] hover:bg-[#00A19C] hover:text-[#0a0a0a]"
                         title="Copiar comando do vídeo"
                       >
                         {copiedPromptKey === `${exercise.id}-video`
@@ -1114,7 +1114,7 @@ export default function ExerciseGrid({
                       <button
                         type="button"
                         onClick={() => handleCopyPrompt(exercise, "audio")}
-                        className="rounded-lg border border-[#ffffff20] bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#f5f5f5] shadow-lg backdrop-blur transition hover:border-[#22D3EE] hover:text-[#22D3EE]"
+                        className="rounded-lg border border-[#ffffff20] bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-[#f5f5f5] shadow-lg backdrop-blur transition hover:border-[#00A19C] hover:text-[#00A19C]"
                         title="Copiar texto de som e narração"
                       >
                         {copiedPromptKey === `${exercise.id}-audio`
@@ -1139,7 +1139,7 @@ export default function ExerciseGrid({
                       <button
                         type="button"
                         onClick={() => handleCopyPrompt(exercise, "video")}
-                        className="w-full rounded-lg border border-[#22D3EE]/40 bg-[#0a0a0a] px-3 py-2 text-xs font-semibold text-[#22D3EE] transition hover:border-[#22D3EE] hover:bg-[#22D3EE] hover:text-[#0a0a0a]"
+                        className="w-full rounded-lg border border-[#00A19C]/40 bg-[#0a0a0a] px-3 py-2 text-xs font-semibold text-[#00A19C] transition hover:border-[#00A19C] hover:bg-[#00A19C] hover:text-[#0a0a0a]"
                       >
                         {copiedPromptKey === `${exercise.id}-video`
                           ? "✓ Comando copiado"
@@ -1149,7 +1149,7 @@ export default function ExerciseGrid({
                       <button
                         type="button"
                         onClick={() => handleCopyPrompt(exercise, "audio")}
-                        className="w-full rounded-lg border border-[#ffffff20] bg-[#0a0a0a] px-3 py-2 text-xs font-semibold text-[#f5f5f5] transition hover:border-[#22D3EE] hover:text-[#22D3EE]"
+                        className="w-full rounded-lg border border-[#ffffff20] bg-[#0a0a0a] px-3 py-2 text-xs font-semibold text-[#f5f5f5] transition hover:border-[#00A19C] hover:text-[#00A19C]"
                       >
                         {copiedPromptKey === `${exercise.id}-audio`
                           ? "✓ Som copiado"
@@ -1164,7 +1164,7 @@ export default function ExerciseGrid({
                         {exercise.name}
                       </h3>
 
-                      <span className="inline-block mt-2 text-xs bg-[#22D3EE]/10 text-[#22D3EE] px-2 py-0.5 rounded-full">
+                      <span className="inline-block mt-2 text-xs bg-[#00A19C]/10 text-[#00A19C] px-2 py-0.5 rounded-full">
                         {exercise.muscleGroup}
                       </span>
                     </div>
@@ -1172,7 +1172,7 @@ export default function ExerciseGrid({
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition shrink-0">
                       <button
                         onClick={() => startEdit(exercise)}
-                        className="text-xs text-[#22D3EE] hover:text-[#0891B2]"
+                        className="text-xs text-[#00A19C] hover:text-[#007D79]"
                         title="Editar"
                       >
                         ✏️
@@ -1189,7 +1189,7 @@ export default function ExerciseGrid({
                   </div>
 
                   <div className="rounded-lg bg-[#1a1a1a] border border-[#ffffff08] p-3">
-                    <p className="text-[10px] uppercase tracking-wide text-[#22D3EE] font-semibold">
+                    <p className="text-[10px] uppercase tracking-wide text-[#00A19C] font-semibold">
                       Pra que serve
                     </p>
 
@@ -1230,8 +1230,8 @@ export default function ExerciseGrid({
                   )}
 
                   {exercise.videoUrl && (
-                    <div className="rounded-lg border border-[#22D3EE]/20 bg-[#22D3EE]/10 p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#22D3EE]">
+                    <div className="rounded-lg border border-[#00A19C]/20 bg-[#00A19C]/10 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#00A19C]">
                         Orientação narrada disponível
                       </p>
                       <video
@@ -1269,7 +1269,7 @@ export default function ExerciseGrid({
                     )}
 
                     {exercise.sequenceGeneratedByAi && (
-                      <span className="text-[10px] bg-[#22D3EE]/10 text-[#22D3EE] px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] bg-[#00A19C]/10 text-[#00A19C] px-2 py-0.5 rounded-full">
                         IA
                       </span>
                     )}

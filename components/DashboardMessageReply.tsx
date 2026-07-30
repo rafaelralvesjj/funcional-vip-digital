@@ -99,7 +99,7 @@ export default function DashboardMessageReply({
       <textarea
         value={content}
         onChange={(event) => setContent(event.target.value)}
-        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-3 text-sm text-[#f5f5f5] focus:outline-none focus:border-[#22D3EE] h-24 resize-none"
+        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-3 text-sm text-[#f5f5f5] focus:outline-none focus:border-[#00A19C] h-24 resize-none"
         placeholder="Escreva sua resposta..."
       />
 
@@ -118,7 +118,7 @@ export default function DashboardMessageReply({
       <button
         type="submit"
         disabled={sending}
-        className="bg-[#22D3EE] text-black text-xs font-bold px-4 py-2 rounded-lg hover:bg-[#0891B2] transition-colors disabled:opacity-50"
+        className="bg-[#00A19C] text-black text-xs font-bold px-4 py-2 rounded-lg hover:bg-[#007D79] transition-colors disabled:opacity-50"
       >
         {sending ? "Enviando..." : "Responder"}
       </button>

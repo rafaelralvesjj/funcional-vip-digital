@@ -121,7 +121,7 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
           onChange={(e) => setContent(e.target.value)}
           placeholder="Tem alguma dúvida? Pergunte aqui..."
           rows={3}
-          className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-2.5 text-sm text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#22D3EE] transition resize-none"
+          className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg px-4 py-2.5 text-sm text-[#f5f5f5] placeholder:text-[#525252] focus:outline-none focus:border-[#00A19C] transition resize-none"
         />
         <div>
           <label className="block text-xs text-[#a1a1a1] mb-1">
@@ -131,9 +131,9 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
             type="file"
             accept="image/*,video/*,.pdf,.doc,.docx,.txt"
             onChange={handleFileUpload}
-            className="w-full text-xs text-[#e5e5e5] file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#22D3EE] file:text-[#0a0a0a] file:font-semibold file:text-xs hover:file:bg-[#0891B2]"
+            className="w-full text-xs text-[#e5e5e5] file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#00A19C] file:text-[#0a0a0a] file:font-semibold file:text-xs hover:file:bg-[#007D79]"
           />
-          {uploading && <p className="text-xs text-[#22D3EE] mt-1">Enviando arquivo...</p>}
+          {uploading && <p className="text-xs text-[#00A19C] mt-1">Enviando arquivo...</p>}
           {fileUrl && !uploading && (
             <p className="text-xs text-green-500 mt-1">
               ✅ {fileType === "video" ? "📹 Vídeo" : fileType === "image" ? "📸 Foto" : "📄 Documento"} anexado: {fileName}
@@ -144,7 +144,7 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
         <button
           type="submit"
           disabled={loading || uploading || (!content.trim() && !fileUrl)}
-          className="w-full bg-[#22D3EE] text-[#0a0a0a] font-medium text-sm rounded-lg px-4 py-2.5 hover:bg-[#06B6D4] transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-[#00A19C] text-[#0a0a0a] font-medium text-sm rounded-lg px-4 py-2.5 hover:bg-[#008B87] transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Enviando..." : "Enviar dúvida"}
         </button>
@@ -152,7 +152,7 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
 
       {pendingQuestions.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs text-[#22D3EE] font-medium">
+          <p className="text-xs text-[#00A19C] font-medium">
             ⏳ Aguardando resposta ({pendingQuestions.length})
           </p>
           {pendingQuestions.map((q) => (
@@ -160,17 +160,17 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
               <p className="text-sm text-[#f5f5f5]">{q.content}</p>
               <div className="flex gap-2 mt-1">
                 {q.videoUrl && (
-                  <a href={q.videoUrl} target="_blank" className="text-xs text-[#22D3EE] hover:underline">
+                  <a href={q.videoUrl} target="_blank" className="text-xs text-[#00A19C] hover:underline">
                     📹 Ver vídeo
                   </a>
                 )}
                 {q.documentUrl && (
-                  <a href={q.documentUrl} target="_blank" className="text-xs text-[#22D3EE] hover:underline">
+                  <a href={q.documentUrl} target="_blank" className="text-xs text-[#00A19C] hover:underline">
                     📄 Ver {q.documentName || "documento"}
                   </a>
                 )}
                 {q.imageUrl && (
-                  <a href={q.imageUrl} target="_blank" className="text-xs text-[#22D3EE] hover:underline">
+                  <a href={q.imageUrl} target="_blank" className="text-xs text-[#00A19C] hover:underline">
                     📸 Ver foto
                   </a>
                 )}
@@ -191,17 +191,17 @@ export default function QuestionForm({ studentId, initialQuestions }: QuestionFo
               <p className="text-sm text-[#f5f5f5]">❓ {q.content}</p>
               <div className="flex gap-2 mt-1">
                 {q.videoUrl && (
-                  <a href={q.videoUrl} target="_blank" className="text-xs text-[#22D3EE] hover:underline">
+                  <a href={q.videoUrl} target="_blank" className="text-xs text-[#00A19C] hover:underline">
                     📹 Ver vídeo
                   </a>
                 )}
                 {q.documentUrl && (
-                  <a href={q.documentUrl} target="_blank" className="text-xs text-[#22D3EE] hover:underline">
+                  <a href={q.documentUrl} target="_blank" className="text-xs text-[#00A19C] hover:underline">
                     📄 Ver {q.documentName || "documento"}
                   </a>
                 )}
                 {q.imageUrl && (
-                  <a href={q.imageUrl} target="_blank" className="text-xs text-[#22D3EE] hover:underline">
+                  <a href={q.imageUrl} target="_blank" className="text-xs text-[#00A19C] hover:underline">
                     📸 Ver foto
                   </a>
                 )}

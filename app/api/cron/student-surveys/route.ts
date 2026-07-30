@@ -436,7 +436,7 @@ async function sendSurveyEmail(row: SurveyEmailRow, reminder = false) {
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <p style="color:#22D3EE; margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:2px; font-weight:bold;">
+        <p style="color:#00A19C; margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:2px; font-weight:bold;">
           ${safeSurveyLabel}
         </p>
         <h2 style="color:#f5f5f5; margin:0 0 16px; font-size:22px;">${safeTitle}</h2>
@@ -453,7 +453,7 @@ async function sendSurveyEmail(row: SurveyEmailRow, reminder = false) {
           Para dúvidas sobre seus treinos, use o chat da plataforma. Assim, a conversa fica registrada e pode ser acompanhada com segurança. O WhatsApp fica reservado para contatos específicos da gestão.
         </p>
 
-        <a href="${alunoUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
+        <a href="${alunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
           ${safeAction}
         </a>
 

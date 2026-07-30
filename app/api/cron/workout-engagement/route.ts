@@ -173,13 +173,13 @@ function buildEmailAvatarHtml(name: string, image?: string | null): string {
         width="48"
         height="48"
         alt="Foto de ${safeName}"
-        style="display:block; width:48px; height:48px; border-radius:999px; object-fit:cover; border:1px solid #22D3EE;"
+        style="display:block; width:48px; height:48px; border-radius:999px; object-fit:cover; border:1px solid #00A19C;"
       />
     `;
   }
 
   return `
-    <div style="width:48px; height:48px; border-radius:999px; background:#22D3EE; color:#0a0a0a; font-size:15px; font-weight:bold; line-height:48px; text-align:center;">
+    <div style="width:48px; height:48px; border-radius:999px; background:#00A19C; color:#0a0a0a; font-size:15px; font-weight:bold; line-height:48px; text-align:center;">
       ${escapeHtml(getInitials(name))}
     </div>
   `;
@@ -426,12 +426,12 @@ async function sendStudentEmail({
             <td style="vertical-align:middle; padding-right:12px;">${avatarHtml}</td>
             <td style="vertical-align:middle;">
               <div style="color:#f5f5f5; font-size:15px; font-weight:bold;">${safeSenderName}</div>
-              <div style="color:#22D3EE; font-size:12px; margin-top:3px;">${safeSenderRoleLabel} · Funcional UP Digital</div>
+              <div style="color:#00A19C; font-size:12px; margin-top:3px;">${safeSenderRoleLabel} · Funcional UP Digital</div>
             </td>
           </tr>
         </table>
 
-        <h2 style="color:#22D3EE; margin:0 0 16px;">${safeTitle}</h2>
+        <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
 
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
           Oi, <strong>${safeStudentName}</strong>!
@@ -449,7 +449,7 @@ async function sendStudentEmail({
           Para dúvidas de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.
         </p>
 
-        <a href="${alunoUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
+        <a href="${alunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
           Acessar minha área
         </a>
 
@@ -505,7 +505,7 @@ async function sendProfessorEmail({
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:620px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <h2 style="color:#22D3EE; margin:0 0 16px;">${safeTitle}</h2>
+        <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
 
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
           Oi, <strong>${safeProfessorName}</strong>.
@@ -519,7 +519,7 @@ async function sendProfessorEmail({
           Acesse o dashboard para revisar o histórico do aluno e registrar a ação realizada.
         </p>
 
-        <a href="${dashboardUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
+        <a href="${dashboardUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
           Acessar dashboard
         </a>
 

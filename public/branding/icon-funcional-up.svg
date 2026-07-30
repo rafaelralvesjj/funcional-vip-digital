@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Símbolo Funcional UP Digital">
+  <defs>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#24C7C0"/>
+      <stop offset="1" stop-color="#00A19C"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="256" cy="256" r="238" fill="#071010" stroke="#00A19C" stroke-width="12"/>
+  <circle cx="256" cy="256" r="218" fill="none" stroke="#B8BEC2" stroke-opacity=".35" stroke-width="3"/>
+  <g filter="url(#glow)" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="218" cy="118" r="34" fill="url(#teal)"/>
+    <path d="M198 160 C150 188 125 226 136 265 C147 304 191 315 225 294" fill="none" stroke="url(#teal)" stroke-width="25"/>
+    <path d="M188 182 C244 167 301 173 368 158" fill="none" stroke="url(#teal)" stroke-width="22"/>
+    <path d="M169 265 C216 238 261 244 286 278" fill="none" stroke="#00A19C" stroke-width="29"/>
+    <path d="M286 278 L218 370" fill="none" stroke="url(#teal)" stroke-width="30"/>
+    <path d="M285 278 L348 365" fill="none" stroke="#0E2E3A" stroke-width="30"/>
+    <path d="M108 385 C200 350 300 348 407 373" fill="none" stroke="url(#teal)" stroke-width="12"/>
+  </g>
+</svg>

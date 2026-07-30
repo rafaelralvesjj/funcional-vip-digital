@@ -45,8 +45,8 @@ export default function DashboardSectionSwitcher({ cards, children }: Props) {
               className={
                 "text-left bg-[#111111] border rounded-2xl p-5 transition " +
                 (isActive
-                  ? "border-[#22D3EE] shadow-[0_0_0_1px_rgba(212,163,115,0.35)]"
-                  : "border-[#ffffff10] hover:border-[#22D3EE]/40")
+                  ? "border-[#00A19C] shadow-[0_0_0_1px_rgba(0,161,156,0.35)]"
+                  : "border-[#ffffff10] hover:border-[#00A19C]/40")
               }
             >
               <div className="flex items-start justify-between gap-3">
@@ -64,7 +64,7 @@ export default function DashboardSectionSwitcher({ cards, children }: Props) {
               </div>
 
               <div className="flex items-end justify-between gap-3 mt-3">
-                <p className="text-3xl font-semibold text-[#22D3EE]">
+                <p className="text-3xl font-semibold text-[#00A19C]">
                   {card.value}
                 </p>
 
@@ -80,7 +80,7 @@ export default function DashboardSectionSwitcher({ cards, children }: Props) {
       {activeCard && (
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-[#a1a1a1]">
-            Exibindo: <span className="text-[#22D3EE]">{activeCard.label}</span>
+            Exibindo: <span className="text-[#00A19C]">{activeCard.label}</span>
           </p>
 
           <span

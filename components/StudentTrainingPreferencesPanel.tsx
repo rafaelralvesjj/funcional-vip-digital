@@ -324,7 +324,7 @@ export default function StudentTrainingPreferencesPanel() {
           <button
             type="button"
             onClick={() => setFilter("ATIVAS")}
-            className="rounded-xl bg-[#1a1a1a] p-4 text-left hover:ring-1 hover:ring-[#22D3EE]/40"
+            className="rounded-xl bg-[#1a1a1a] p-4 text-left hover:ring-1 hover:ring-[#00A19C]/40"
           >
             <p className="text-[10px] uppercase text-[#6b6b6b]">Ativas</p>
             <p className="text-2xl font-bold text-[#f5f5f5]">{counters.active}</p>
@@ -355,13 +355,13 @@ export default function StudentTrainingPreferencesPanel() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar por aluno, professor, preferência ou origem..."
-            className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#6b6b6b] focus:border-[#22D3EE]"
+            className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#6b6b6b] focus:border-[#00A19C]"
           />
 
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value as FilterMode)}
-            className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
+            className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
           >
             <option value="PENDENTES">Aguardando decisão</option>
             <option value="ATIVAS">Todas as ativas</option>
@@ -378,8 +378,8 @@ export default function StudentTrainingPreferencesPanel() {
           </button>
         </div>
 
-        <div className="rounded-xl border border-[#22D3EE]/20 bg-[#22D3EE]/10 p-4">
-          <p className="mb-1 text-xs font-semibold text-[#22D3EE]">Como usar</p>
+        <div className="rounded-xl border border-[#00A19C]/20 bg-[#00A19C]/10 p-4">
+          <p className="mb-1 text-xs font-semibold text-[#00A19C]">Como usar</p>
           <p className="text-xs leading-relaxed text-[#a1a1a1]">
             A preferência pode nascer no chat ou no relato ao concluir um treino. Quando houver outro treino PENDENTE na semana, o professor poderá abrir a conversa e adaptar somente esse treino. Sem treino pendente, a informação continua ativa e entra automaticamente no resumo usado para as próximas semanas.
           </p>
@@ -409,7 +409,7 @@ export default function StudentTrainingPreferencesPanel() {
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex min-w-0 gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#22D3EE]/30 bg-[#1a1a1a]">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#00A19C]/30 bg-[#1a1a1a]">
                       {preference.studentImage ? (
                         <img
                           src={preference.studentImage}
@@ -417,7 +417,7 @@ export default function StudentTrainingPreferencesPanel() {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <span className="text-sm font-bold text-[#22D3EE]">
+                        <span className="text-sm font-bold text-[#00A19C]">
                           {getInitials(preference.studentName)}
                         </span>
                       )}
@@ -456,7 +456,7 @@ export default function StudentTrainingPreferencesPanel() {
                     {permissions.role === "TEACHER" && (
                       <Link
                         href={`/dashboard/conversas?conversationId=${encodeURIComponent(preference.sourceConversationId)}`}
-                        className="rounded-lg bg-[#22D3EE] px-3 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#06B6D4]"
+                        className="rounded-lg bg-[#00A19C] px-3 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#008B87]"
                       >
                         {canTreatPending ? "Abrir conversa e tratar" : "Abrir conversa"}
                       </Link>
@@ -466,14 +466,14 @@ export default function StudentTrainingPreferencesPanel() {
 
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   <div className="rounded-xl border border-[#ffffff10] bg-[#0a0a0a] p-4">
-                    <p className="mb-2 text-xs font-semibold text-[#22D3EE]">Preferência estruturada</p>
+                    <p className="mb-2 text-xs font-semibold text-[#00A19C]">Preferência estruturada</p>
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#e5e5e5]">
                       {preference.summary}
                     </p>
                   </div>
 
                   <div className="rounded-xl border border-[#ffffff10] bg-[#0a0a0a] p-4">
-                    <p className="mb-2 text-xs font-semibold text-[#22D3EE]">Relato original do aluno</p>
+                    <p className="mb-2 text-xs font-semibold text-[#00A19C]">Relato original do aluno</p>
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#e5e5e5]">
                       “{preference.originalMessage}”
                     </p>

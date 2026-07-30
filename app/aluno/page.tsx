@@ -34,10 +34,10 @@ function PersonAvatar({
 
   return (
     <div
-      className={`${sizeClass} relative shrink-0 overflow-hidden rounded-full border border-[#22D3EE]/50 bg-[#22D3EE]/15 flex items-center justify-center`}
+      className={`${sizeClass} relative shrink-0 overflow-hidden rounded-full border border-[#00A19C]/50 bg-[#00A19C]/15 flex items-center justify-center`}
       aria-label={`Foto de ${name || "usuário"}`}
     >
-      <span className={`${textClass} font-bold text-[#22D3EE]`}>{initials}</span>
+      <span className={`${textClass} font-bold text-[#00A19C]`}>{initials}</span>
 
       {image && !imageFailed && (
         <img
@@ -341,7 +341,7 @@ export default function AlunoPage() {
             href={msg.documentUrl}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-[10px] text-[#22D3EE] hover:border-[#22D3EE]/40"
+            className="flex items-center gap-2 rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-3 py-2 text-[10px] text-[#00A19C] hover:border-[#00A19C]/40"
           >
             <span className="text-base">📄</span>
             <span className="min-w-0 truncate">Abrir {msg.documentName || "documento"}</span>
@@ -1099,7 +1099,7 @@ export default function AlunoPage() {
     if (role === "STUDENT") return "bg-green-500";
     if (role === "GESTOR") return "bg-amber-500";
 
-    return "bg-[#22D3EE]";
+    return "bg-[#00A19C]";
   }
 
   function getMessageAuthorClass(msg: any): string {
@@ -1108,7 +1108,7 @@ export default function AlunoPage() {
     if (role === "STUDENT") return "text-green-400";
     if (role === "GESTOR") return "text-amber-400";
 
-    return "text-[#22D3EE]";
+    return "text-[#00A19C]";
   }
 
   function shouldShowLegacyAnswer(msg: any): boolean {
@@ -1561,8 +1561,8 @@ export default function AlunoPage() {
                   return (
                     <button key={day} onClick={() => handleDayClick(day)}
                       className={"aspect-square rounded-sm flex flex-col items-center justify-center text-[7px] transition " + (isFutureHidden ? "cursor-default opacity-40 " : "cursor-pointer ") +
-                        (sel ? "bg-[#22D3EE]/20 border border-[#22D3EE] text-[#22D3EE]" :
-                         hoje ? "border border-[#22D3EE]/50 text-[#22D3EE] font-bold" :
+                        (sel ? "bg-[#00A19C]/20 border border-[#00A19C] text-[#00A19C]" :
+                         hoje ? "border border-[#00A19C]/50 text-[#00A19C] font-bold" :
                          "text-[#a1a1a1] hover:bg-white/5")}>
                       <span>{day}</span>
                       <div className="flex gap-px mt-px">
@@ -1580,7 +1580,7 @@ export default function AlunoPage() {
                 })}
               </div>
               {plans.length === 0 && (
-                <p className="text-[8px] text-[#22D3EE] mt-1">Em breve...</p>
+                <p className="text-[8px] text-[#00A19C] mt-1">Em breve...</p>
               )}
 
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[8px] text-[#a1a1a1]">
@@ -1622,7 +1622,7 @@ export default function AlunoPage() {
               <select
                 value={questionTarget}
                 onChange={(e) => setQuestionTarget(e.target.value as "PROFESSOR" | "GESTAO")}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#22D3EE] mb-1.5"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] outline-none focus:border-[#00A19C] mb-1.5"
               >
                 <option value="PROFESSOR">Meu professor</option>
                 <option value="GESTAO">Gestão</option>
@@ -1630,14 +1630,14 @@ export default function AlunoPage() {
 
               <textarea ref={questionTextAreaRef} value={newQuestion} onChange={(e) => setNewQuestion(e.target.value)}
                 placeholder={questionTarget === "GESTAO" ? "Pergunte para a gestão..." : "Pergunte para seu professor..."}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE] resize-none h-14 mb-1.5" />
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C] resize-none h-14 mb-1.5" />
               <div className="flex items-center gap-1 mb-1.5">
                 <input
                   key={questionFileInputKey}
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg,.pdf,.doc,.docx,.txt"
                   onChange={(event) => handleChatFileSelection(event, setQuestionFile)}
-                  className="min-w-0 flex-1 text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#22D3EE] file:text-[#0a0a0a]"
+                  className="min-w-0 flex-1 text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#00A19C] file:text-[#0a0a0a]"
                 />
                 {questionFile && (
                   <button
@@ -1647,7 +1647,7 @@ export default function AlunoPage() {
                       setQuestionFileInputKey((current) => current + 1);
                     }}
                     title="Remover anexo"
-                    className="max-w-[130px] truncate rounded border border-[#22D3EE]/30 px-1.5 py-0.5 text-[8px] text-[#22D3EE] hover:bg-[#22D3EE]/10"
+                    className="max-w-[130px] truncate rounded border border-[#00A19C]/30 px-1.5 py-0.5 text-[8px] text-[#00A19C] hover:bg-[#00A19C]/10"
                   >
                     {questionFile.name} ×
                   </button>
@@ -1657,7 +1657,7 @@ export default function AlunoPage() {
                 Fotos e vídeos: até 25 MB. Exames, laudos e prescrições: até 3 MB.
               </p>
               <button onClick={() => handleSendQuestion()} disabled={sendingQuestion || (!newQuestion.trim() && !questionFile)}
-                className="w-full bg-[#22D3EE] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
+                className="w-full bg-[#00A19C] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
                 {sendingQuestion ? "Enviando..." : "Enviar"}
               </button>
 
@@ -1679,7 +1679,7 @@ export default function AlunoPage() {
                           <p className="text-[10px] text-[#e5e5e5] font-medium truncate">
                             {q.content.substring(0, 50)}{q.content.length > 50 ? "..." : ""}
                           </p>
-                          <p className="text-[8px] text-[#22D3EE] mt-0.5 truncate">
+                          <p className="text-[8px] text-[#00A19C] mt-0.5 truncate">
                             Conversa com: {getQuestionTargetLabel(q)}
                           </p>
                           <div className="flex items-center gap-1 mt-0.5">
@@ -1715,7 +1715,7 @@ export default function AlunoPage() {
             <div className="flex items-center justify-between p-4 border-b border-[#ffffff10] shrink-0">
               <div>
                 <h2 className="text-sm font-bold text-[#f5f5f5]">Conversa</h2>
-                <p className="text-[9px] text-[#22D3EE] mt-0.5">
+                <p className="text-[9px] text-[#00A19C] mt-0.5">
                   Conversa com: {getQuestionTargetLabel(selectedQuestion)}
                 </p>
               </div>
@@ -1749,10 +1749,10 @@ export default function AlunoPage() {
 
                     {shouldShowLegacyAnswer(msg) && (
                       <div className="flex items-start gap-2 ml-4 mt-2">
-                        <div className="w-2 h-2 rounded-full mt-1.5 bg-[#22D3EE] shrink-0" />
-                        <div className="flex-1 bg-[#22D3EE]/5 rounded-lg p-2.5 border border-[#22D3EE]/15">
+                        <div className="w-2 h-2 rounded-full mt-1.5 bg-[#00A19C] shrink-0" />
+                        <div className="flex-1 bg-[#00A19C]/5 rounded-lg p-2.5 border border-[#00A19C]/15">
                           <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-[9px] font-semibold text-[#22D3EE]">
+                            <span className="text-[9px] font-semibold text-[#00A19C]">
                               {msg.answeredBy?.name || getQuestionTargetLabel(selectedQuestion)}
                             </span>
                             <span className="text-[8px] text-[#525252]">
@@ -1808,14 +1808,14 @@ export default function AlunoPage() {
                   if (last.answer && !selectedQuestion.resolvedAt) {
                     return (
                       <button onClick={() => handleResolveDoubt(selectedQuestion.id)}
-                        className="w-full text-[9px] bg-transparent border border-[#525252] text-[#6b6b6b] py-1.5 rounded-lg hover:border-[#22D3EE] hover:text-[#22D3EE] transition mb-1">
+                        className="w-full text-[9px] bg-transparent border border-[#525252] text-[#6b6b6b] py-1.5 rounded-lg hover:border-[#00A19C] hover:text-[#00A19C] transition mb-1">
                         Marcar como resolvida
                       </button>
                     );
                   }
                 })()}
 
-                <p className="text-[9px] text-[#22D3EE] font-medium mb-1">
+                <p className="text-[9px] text-[#00A19C] font-medium mb-1">
                   {(() => {
                     const msgs = [selectedQuestion, ...(selectedQuestion.children || [])];
                     const last = msgs[msgs.length - 1];
@@ -1826,14 +1826,14 @@ export default function AlunoPage() {
                 </p>
                 <textarea value={followUpText} onChange={(e) => setFollowUpText(e.target.value)}
                   placeholder="Digite aqui..."
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE] resize-none h-14 mb-1.5" />
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2 py-1.5 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C] resize-none h-14 mb-1.5" />
                 <div className="flex items-center gap-1 mb-1.5">
                   <input
                     key={followUpFileInputKey}
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg,.pdf,.doc,.docx,.txt"
                     onChange={(event) => handleChatFileSelection(event, setFollowUpFile)}
-                    className="min-w-0 flex-1 text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#22D3EE] file:text-[#0a0a0a]"
+                    className="min-w-0 flex-1 text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#00A19C] file:text-[#0a0a0a]"
                   />
                   {followUpFile && (
                     <button
@@ -1843,7 +1843,7 @@ export default function AlunoPage() {
                         setFollowUpFileInputKey((current) => current + 1);
                       }}
                       title="Remover anexo"
-                      className="max-w-[130px] truncate rounded border border-[#22D3EE]/30 px-1.5 py-0.5 text-[8px] text-[#22D3EE] hover:bg-[#22D3EE]/10"
+                      className="max-w-[130px] truncate rounded border border-[#00A19C]/30 px-1.5 py-0.5 text-[8px] text-[#00A19C] hover:bg-[#00A19C]/10"
                     >
                       {followUpFile.name} ×
                     </button>
@@ -1852,7 +1852,7 @@ export default function AlunoPage() {
                 <div className="flex gap-2">
                   <button onClick={() => handleSendQuestion(selectedQuestion.id)}
                     disabled={sendingFollowUp || (!followUpText.trim() && !followUpFile)}
-                    className="flex-1 bg-[#22D3EE] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
+                    className="flex-1 bg-[#00A19C] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
                     {sendingFollowUp ? "Enviando..." : "Continuar perguntando"}
                   </button>
                   <button onClick={() => { setSelectedQuestion(null); setNewQuestion(""); }}
@@ -1909,8 +1909,8 @@ export default function AlunoPage() {
               </div>
             </div>
             {completionSummary.skippedDetails.length > 0 && (
-              <div className="mt-4 rounded-xl border border-[#22D3EE]/20 bg-[#22D3EE]/10 p-3">
-                <p className="text-[10px] font-semibold text-[#22D3EE]">Relatos enviados ao professor</p>
+              <div className="mt-4 rounded-xl border border-[#00A19C]/20 bg-[#00A19C]/10 p-3">
+                <p className="text-[10px] font-semibold text-[#00A19C]">Relatos enviados ao professor</p>
                 {completionSummary.skippedDetails.map((item) => (
                   <p key={item} className="mt-1 text-[11px] text-[#e5e5e5]">• {item}</p>
                 ))}
@@ -1941,7 +1941,7 @@ export default function AlunoPage() {
                 />
 
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold text-[#22D3EE] truncate">
+                  <p className="text-[10px] font-semibold text-[#00A19C] truncate">
                     {getNoticeAuthorName(selectedNotice)} · {getNoticeAuthorRoleLabel(selectedNotice)}
                   </p>
                   <h2 className="text-sm font-bold text-[#f5f5f5] truncate">{selectedNotice.title || selectedNotice.type || "Aviso"}</h2>
@@ -1963,12 +1963,12 @@ export default function AlunoPage() {
                 <div>
                   <p className="text-[9px] text-[#6b6b6b]">Enviado por</p>
                   <p className="text-[11px] font-semibold text-[#e5e5e5]">{getNoticeAuthorName(selectedNotice)}</p>
-                  <p className="text-[9px] text-[#22D3EE]">{getNoticeAuthorRoleLabel(selectedNotice)} · Funcional UP Digital</p>
+                  <p className="text-[9px] text-[#00A19C]">{getNoticeAuthorRoleLabel(selectedNotice)} · Funcional UP Digital</p>
                 </div>
               </div>
             </div>
             <div className="p-3 border-t border-[#ffffff10]">
-              <button onClick={() => setSelectedNotice(null)} className="w-full bg-[#22D3EE] text-[#0a0a0a] text-xs font-semibold py-2 rounded-lg hover:bg-[#c4956a] transition">
+              <button onClick={() => setSelectedNotice(null)} className="w-full bg-[#00A19C] text-[#0a0a0a] text-xs font-semibold py-2 rounded-lg hover:bg-[#008B87] transition">
                 Fechar
               </button>
             </div>
@@ -1984,7 +1984,7 @@ export default function AlunoPage() {
                 <h2 className="text-sm font-bold text-[#f5f5f5]">{selectedPlan.name}</h2>
                 <p className="text-[10px] text-[#a1a1a1]">{getWeekDayName(selectedDay!)} - {selectedDay}/{currentMonth + 1}/{currentYear}</p>
                 {selectedDay !== null && (
-                  <p className="text-[9px] mt-0.5 text-[#22D3EE]">
+                  <p className="text-[9px] mt-0.5 text-[#00A19C]">
                     {canValidateWorkoutDay(selectedDay)
                       ? `Validação liberada até ${getValidationDeadlineLabel()}`
                       : "Prazo de validação encerrado. Treino disponível apenas para consulta."}
@@ -2003,9 +2003,9 @@ export default function AlunoPage() {
                 selectedPlan.estimatedCaloriesMax ||
                 selectedPlan.studentSummary ||
                 selectedPlan.safetyNote) && (
-                <div className="bg-[#0a0a0a] border border-[#22D3EE]/20 rounded-xl p-3 space-y-2">
+                <div className="bg-[#0a0a0a] border border-[#00A19C]/20 rounded-xl p-3 space-y-2">
                   <div>
-                    <p className="text-[10px] text-[#22D3EE] uppercase tracking-[0.18em] font-semibold">
+                    <p className="text-[10px] text-[#00A19C] uppercase tracking-[0.18em] font-semibold">
                       Resumo do treino
                     </p>
                     {selectedPlan.studentSummary && (
@@ -2083,13 +2083,13 @@ export default function AlunoPage() {
                 const totals = getExerciseTotals();
                 const percent = totals.total ? Math.round((totals.resolved / totals.total) * 100) : 0;
                 return totals.total ? (
-                  <div className="rounded-xl border border-[#22D3EE]/20 bg-[#0a0a0a] p-3">
+                  <div className="rounded-xl border border-[#00A19C]/20 bg-[#0a0a0a] p-3">
                     <div className="mb-2 flex items-center justify-between text-[10px]">
                       <span className="font-semibold text-[#f5f5f5]">Progresso do treino</span>
-                      <span className="text-[#22D3EE]">{totals.resolved} de {totals.total} • {percent}%</span>
+                      <span className="text-[#00A19C]">{totals.resolved} de {totals.total} • {percent}%</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-[#242424]">
-                      <div className="h-full rounded-full bg-[#22D3EE] transition-all" style={{ width: `${percent}%` }} />
+                      <div className="h-full rounded-full bg-[#00A19C] transition-all" style={{ width: `${percent}%` }} />
                     </div>
                     {totals.total - totals.resolved === 1 && <p className="mt-2 text-[10px] text-green-300">Falta só mais um exercício. Vamos terminar!</p>}
                   </div>
@@ -2105,7 +2105,7 @@ export default function AlunoPage() {
                   className={`rounded-xl p-2.5 border transition ${done ? "bg-green-500/10 border-green-500/30" : skipped ? "bg-amber-500/10 border-amber-500/30" : "bg-[#1a1a1a] border-[#ffffff08]"}`}>
                   <div className="flex items-start gap-2">
                     <div
-                      className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5 border ${done ? "bg-green-500 text-white border-green-400" : "bg-[#22D3EE]/15 text-[#22D3EE] border-[#22D3EE]/30"}`}
+                      className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5 border ${done ? "bg-green-500 text-white border-green-400" : "bg-[#00A19C]/15 text-[#00A19C] border-[#00A19C]/30"}`}
                     >
                       {done ? "✓" : idx + 1}
                     </div>
@@ -2125,7 +2125,7 @@ export default function AlunoPage() {
                           type="button"
                           disabled={savingExerciseId === ex.id}
                           onClick={() => saveExerciseProgress(ex, done ? "PENDENTE" : "CONCLUIDO")}
-                          className={`min-w-[68px] rounded-lg border px-2 py-1.5 text-[9px] font-semibold transition ${done ? "border-green-500/40 bg-green-500/15 text-green-300" : "border-[#22D3EE]/40 bg-[#22D3EE]/15 text-[#E7B785]"}`}
+                          className={`min-w-[68px] rounded-lg border px-2 py-1.5 text-[9px] font-semibold transition ${done ? "border-green-500/40 bg-green-500/15 text-green-300" : "border-[#00A19C]/40 bg-[#00A19C]/15 text-[#55D4CF]"}`}
                         >
                           {savingExerciseId === ex.id ? "Salvando..." : done ? "✓ Feito" : "Marcar feito"}
                         </button>
@@ -2149,8 +2149,8 @@ export default function AlunoPage() {
             </div>
             {selectedPlan.notes && (
               <div className="px-3 pb-3">
-                <div className="bg-[#22D3EE]/10 border border-[#22D3EE]/20 rounded-xl p-2">
-                  <p className="text-[9px] text-[#22D3EE] font-semibold mb-0.5">Observacoes</p>
+                <div className="bg-[#00A19C]/10 border border-[#00A19C]/20 rounded-xl p-2">
+                  <p className="text-[9px] text-[#00A19C] font-semibold mb-0.5">Observacoes</p>
                   <p className="text-[11px] text-[#e5e5e5]">{selectedPlan.notes}</p>
                 </div>
               </div>
@@ -2171,7 +2171,7 @@ export default function AlunoPage() {
                 {!isCompleted(selectedDay) && canValidateWorkoutDay(selectedDay) && (
                   <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-3 space-y-2">
                     <div>
-                      <p className="text-[11px] text-[#22D3EE] font-semibold">
+                      <p className="text-[11px] text-[#00A19C] font-semibold">
                         Precisa de algum ajuste ou cuidado?
                       </p>
                       <p className="text-[10px] text-[#a1a1a1] leading-relaxed mt-0.5">
@@ -2184,7 +2184,7 @@ export default function AlunoPage() {
                       value={careEventDetail}
                       onChange={(event) => setCareEventDetail(event.target.value)}
                       placeholder="Obrigatório se for encerrar com relato: explique em poucas palavras o que aconteceu."
-                      className="w-full min-h-[60px] bg-[#111] border border-[#ffffff10] rounded-lg px-3 py-2 text-[11px] text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
+                      className="w-full min-h-[60px] bg-[#111] border border-[#ffffff10] rounded-lg px-3 py-2 text-[11px] text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C]"
                     />
 
                     {careEventSentForPlanId[selectedPlan?.id] ? (
@@ -2199,7 +2199,7 @@ export default function AlunoPage() {
                           type="button"
                           disabled={sendingCareEvent || completing}
                           onClick={() => reportCareEvent("FALTA_TEMPO", "CONCLUIDO_PARCIALMENTE")}
-                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#22D3EE]/50 border border-[#ffffff10] disabled:opacity-50"
+                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#00A19C]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Não consegui concluir por falta de tempo
                         </button>
@@ -2208,7 +2208,7 @@ export default function AlunoPage() {
                           type="button"
                           disabled={sendingCareEvent || completing}
                           onClick={() => reportCareEvent("EXERCICIO_DIFICIL", "CONCLUIDO_PARCIALMENTE")}
-                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#22D3EE]/50 border border-[#ffffff10] disabled:opacity-50"
+                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#00A19C]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Não consegui concluir: exercício difícil
                         </button>
@@ -2217,7 +2217,7 @@ export default function AlunoPage() {
                           type="button"
                           disabled={sendingCareEvent || completing}
                           onClick={() => reportCareEvent("NAO_ENTENDI", "CONCLUIDO_PARCIALMENTE")}
-                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#22D3EE]/50 border border-[#ffffff10] disabled:opacity-50"
+                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#00A19C]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Não entendi e não concluí
                         </button>
@@ -2226,7 +2226,7 @@ export default function AlunoPage() {
                           type="button"
                           disabled={sendingCareEvent || completing}
                           onClick={() => reportCareEvent("DESMOTIVACAO", "CONCLUIDO_PARCIALMENTE")}
-                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#22D3EE]/50 border border-[#ffffff10] disabled:opacity-50"
+                          className="text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#00A19C]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Não concluí por desmotivação
                         </button>
@@ -2253,7 +2253,7 @@ export default function AlunoPage() {
                           type="button"
                           disabled={sendingCareEvent || completing}
                           onClick={() => reportCareEvent("OUTRO", "CONCLUIDO_PARCIALMENTE")}
-                          className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#22D3EE]/50 border border-[#ffffff10] disabled:opacity-50"
+                          className="sm:col-span-2 text-[10px] px-3 py-2 rounded-lg bg-[#1a1a1a] text-[#e5e5e5] hover:border-[#00A19C]/50 border border-[#ffffff10] disabled:opacity-50"
                         >
                           Outro motivo / não concluí
                         </button>
@@ -2351,9 +2351,9 @@ export default function AlunoPage() {
                       <button
                         type="button"
                         onClick={() => setShowExerciseVideo(true)}
-                        className="absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-[#22D3EE]/60 bg-black/80 px-4 py-2 text-[10px] font-semibold text-white shadow-xl backdrop-blur-sm transition hover:border-[#22D3EE] hover:bg-black sm:text-xs"
+                        className="absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-[#00A19C]/60 bg-black/80 px-4 py-2 text-[10px] font-semibold text-white shadow-xl backdrop-blur-sm transition hover:border-[#00A19C] hover:bg-black sm:text-xs"
                       >
-                        <svg className="h-4 w-4 shrink-0 text-[#22D3EE]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <svg className="h-4 w-4 shrink-0 text-[#00A19C]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M8 5v14l11-7z" />
                         </svg>
                         Veja o vídeo com orientação narrada
@@ -2373,9 +2373,9 @@ export default function AlunoPage() {
                     <button
                       type="button"
                       onClick={() => setShowExerciseVideo(true)}
-                      className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#22D3EE]/60 bg-black/80 px-3 py-1.5 text-[9px] font-semibold text-white"
+                      className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#00A19C]/60 bg-black/80 px-3 py-1.5 text-[9px] font-semibold text-white"
                     >
-                      <span className="text-[#22D3EE]" aria-hidden="true">▶</span>
+                      <span className="text-[#00A19C]" aria-hidden="true">▶</span>
                       Ver orientação narrada
                     </button>
                   )}
@@ -2396,19 +2396,19 @@ export default function AlunoPage() {
             <div className="p-3 space-y-2.5">
               <div className="grid grid-cols-4 gap-1.5">
                 <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
-                  <p className="text-base font-bold text-[#22D3EE]">{selectedExercise.series || '-'}</p>
+                  <p className="text-base font-bold text-[#00A19C]">{selectedExercise.series || '-'}</p>
                   <p className="text-[8px] text-[#6b6b6b]">Series</p>
                 </div>
                 <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
-                  <p className="text-base font-bold text-[#22D3EE]">{selectedExercise.reps || '-'}</p>
+                  <p className="text-base font-bold text-[#00A19C]">{selectedExercise.reps || '-'}</p>
                   <p className="text-[8px] text-[#6b6b6b]">Repeticoes</p>
                 </div>
                 <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
-                  <p className="text-base font-bold text-[#22D3EE]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
+                  <p className="text-base font-bold text-[#00A19C]">{selectedExercise.weight ? selectedExercise.weight + ' kg' : '-'}</p>
                   <p className="text-[8px] text-[#6b6b6b]">Carga</p>
                 </div>
                 <div className="bg-[#1a1a1a] rounded-lg p-2 text-center border border-[#ffffff08]">
-                  <p className="text-base font-bold text-[#22D3EE]">{selectedExercise.restTime || '-'}</p>
+                  <p className="text-base font-bold text-[#00A19C]">{selectedExercise.restTime || '-'}</p>
                   <p className="text-[8px] text-[#6b6b6b]">Descanso</p>
                 </div>
               </div>
@@ -2462,7 +2462,7 @@ export default function AlunoPage() {
 
               {getExercisePurpose(selectedExercise) && (
                 <div>
-                  <h3 className="text-[10px] font-semibold text-[#22D3EE] mb-1">
+                  <h3 className="text-[10px] font-semibold text-[#00A19C] mb-1">
                     Pra que serve este exercício
                   </h3>
                   <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
@@ -2475,7 +2475,7 @@ export default function AlunoPage() {
 
               {getExerciseInstructions(selectedExercise) && (
                 <div>
-                  <h3 className="text-[10px] font-semibold text-[#22D3EE] mb-1">
+                  <h3 className="text-[10px] font-semibold text-[#00A19C] mb-1">
                     Como executar
                   </h3>
                   <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
@@ -2501,7 +2501,7 @@ export default function AlunoPage() {
 
               {selectedExercise.notes && (
                 <div>
-                  <h3 className="text-[10px] font-semibold text-[#22D3EE] mb-1">Observacoes</h3>
+                  <h3 className="text-[10px] font-semibold text-[#00A19C] mb-1">Observacoes</h3>
                   <div className="bg-[#1a1a1a] rounded-lg p-2.5 border border-[#ffffff08]">
                     <p className="text-xs text-[#e5e5e5]">{selectedExercise.notes}</p>
                   </div>
@@ -2518,7 +2518,7 @@ export default function AlunoPage() {
                       selectedExercise,
                       exerciseProgress[selectedExercise.id]?.status === "CONCLUIDO" ? "PENDENTE" : "CONCLUIDO"
                     )}
-                    className={`w-full rounded-lg border py-3 text-[12px] font-bold transition ${exerciseProgress[selectedExercise.id]?.status === "CONCLUIDO" ? "border-green-500/40 bg-green-500/15 text-green-300" : "border-[#22D3EE] bg-[#22D3EE] text-[#0a0a0a]"}`}
+                    className={`w-full rounded-lg border py-3 text-[12px] font-bold transition ${exerciseProgress[selectedExercise.id]?.status === "CONCLUIDO" ? "border-green-500/40 bg-green-500/15 text-green-300" : "border-[#00A19C] bg-[#00A19C] text-[#0a0a0a]"}`}
                   >
                     {savingExerciseId === selectedExercise.id
                       ? "Salvando..."
@@ -2549,7 +2549,7 @@ export default function AlunoPage() {
               <button
                 type="button"
                 onClick={() => setSelectedExercise(null)}
-                className="w-full bg-[#22D3EE] text-[#0a0a0a] text-[11px] font-semibold py-2.5 rounded-lg hover:bg-[#c4956a] transition"
+                className="w-full bg-[#00A19C] text-[#0a0a0a] text-[11px] font-semibold py-2.5 rounded-lg hover:bg-[#008B87] transition"
               >
                 Voltar para os exercícios
               </button>

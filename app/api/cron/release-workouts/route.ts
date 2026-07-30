@@ -258,16 +258,16 @@ async function notifyWorkoutAvailableForCurrentWeek({
     const html = `
       <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
         <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-          <h2 style="color:#22D3EE; margin:0 0 16px;">${escapeHtml(title)}</h2>
+          <h2 style="color:#00A19C; margin:0 0 16px;">${escapeHtml(title)}</h2>
           <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
           ${introHtml}
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se surgir qualquer dúvida, use o chat da plataforma antes de executar. Esse é o canal principal entre você e o professor, porque mantém o acompanhamento registrado e organizado.</p>
-          <div style="background:#071A22; border:1px solid #155E75; border-radius:12px; padding:14px; margin:14px 0;">
-            <p style="color:#22D3EE; font-size:14px; font-weight:bold; margin:0 0 8px;">Seu relato ajuda a montar o próximo treino</p>
+          <div style="background:#071413; border:1px solid #005D5A; border-radius:12px; padding:14px; margin:14px 0;">
+            <p style="color:#00A19C; font-size:14px; font-weight:bold; margin:0 0 8px;">Seu relato ajuda a montar o próximo treino</p>
             <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin:0;">Durante ou ao finalizar o treino, nunca deixe de registrar qualquer incômodo, dor ou desconforto, mesmo que pareça leve. Use o registro do próprio treino ao concluir a sessão. Se precisar falar antes, tiver dúvida sobre continuar ou não conseguir finalizar, use o chat da plataforma. Essas informações chegam ao professor e impactam diretamente a montagem dos próximos treinos.</p>
           </div>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Para dúvidas de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.</p>
-          <a href="${loginUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meus treinos</a>
+          <a href="${loginUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meus treinos</a>
           <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional UP Digital</p>
           <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">Mensagem automática de acompanhamento enviada em nome do seu professor.<br />Último treino salvo neste pacote: ${safeLastPlanName}.</p>
         </div>
