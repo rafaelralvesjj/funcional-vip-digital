@@ -2,10 +2,10 @@ import Link from "next/link";
 
 export default function TrialContinuationDashboardShortcut() {
   return (
-    <section className="rounded-2xl border border-[#D4A373]/20 bg-[#111111] p-5 md:p-6">
+    <section className="rounded-2xl border border-[#22D3EE]/20 bg-[#111111] p-5 md:p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D4A373]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#22D3EE]">
             Conversão da experiência
           </p>
 
@@ -22,14 +22,14 @@ export default function TrialContinuationDashboardShortcut() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Link
             href="/dashboard/gestor/interesses-experiencia"
-            className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] transition hover:bg-[#c49563]"
+            className="inline-flex items-center justify-center rounded-lg bg-[#22D3EE] px-4 py-2 text-xs font-semibold text-[#0a0a0a] transition hover:bg-[#06B6D4]"
           >
             Ver interessados
           </Link>
 
           <Link
             href="/dashboard/financeiro"
-            className="inline-flex items-center justify-center rounded-lg border border-[#ffffff15] px-4 py-2 text-xs font-semibold text-[#a1a1a1] transition hover:border-[#D4A373]/50 hover:text-[#D4A373]"
+            className="inline-flex items-center justify-center rounded-lg border border-[#ffffff15] px-4 py-2 text-xs font-semibold text-[#a1a1a1] transition hover:border-[#22D3EE]/50 hover:text-[#22D3EE]"
           >
             Abrir Financeiro
           </Link>

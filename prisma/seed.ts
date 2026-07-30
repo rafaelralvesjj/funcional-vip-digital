@@ -4,13 +4,13 @@ const prisma = new PrismaClient()
 
 async function main() {
   const exists = await prisma.user.findUnique({
-    where: { email: 'exemplo@funcionalvip.digital' },
+    where: { email: 'exemplo@funcionalup.digital' },
   })
 
   if (!exists) {
     await prisma.user.create({
       data: {
-        email: 'exemplo@funcionalvip.digital',
+        email: 'exemplo@funcionalup.digital',
         name: 'Usuário de Exemplo',
       },
     })

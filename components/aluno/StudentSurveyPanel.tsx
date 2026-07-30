@@ -89,7 +89,7 @@ function RatingSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+        className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
       >
         <option value="">Selecione...</option>
         {Array.from({ length: 11 }).map((_, index) => (
@@ -205,10 +205,10 @@ export default function StudentSurveyPanel() {
   const dueDate = formatDate(selectedSurvey?.dueDate || null);
 
   return (
-    <div className="rounded-xl border border-[#D4A373]/25 bg-[#D4A373]/10 p-4 space-y-3">
+    <div className="rounded-xl border border-[#22D3EE]/25 bg-[#22D3EE]/10 p-4 space-y-3">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.22em] text-[#D4A373] font-semibold">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-[#22D3EE] font-semibold">
             Sua opinião importa
           </p>
           <h2 className="mt-1 text-sm font-bold text-[#f5f5f5]">
@@ -292,7 +292,7 @@ export default function StudentSurveyPanel() {
             value={answers.favoritePoint}
             onChange={(event) => updateAnswer("favoritePoint", event.target.value)}
             rows={2}
-            className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+            className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
             placeholder="Ex: acompanhamento, treinos, clareza, facilidade de uso..."
           />
         </div>
@@ -305,7 +305,7 @@ export default function StudentSurveyPanel() {
             value={answers.mainDifficulty}
             onChange={(event) => updateAnswer("mainDifficulty", event.target.value)}
             rows={2}
-            className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+            className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
             placeholder="Ex: tempo, dúvida no exercício, rotina, sistema, intensidade..."
           />
         </div>
@@ -319,7 +319,7 @@ export default function StudentSurveyPanel() {
               value={answers.continueIntention}
               onChange={(event) => updateAnswer("continueIntention", event.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
               placeholder="Conte como quer se sentir nos próximos 30/60 dias."
             />
           </div>
@@ -333,7 +333,7 @@ export default function StudentSurveyPanel() {
             value={answers.improvementSuggestion}
             onChange={(event) => updateAnswer("improvementSuggestion", event.target.value)}
             rows={2}
-            className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+            className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
             placeholder="Sua resposta ajuda o professor e a equipe a ajustar o acompanhamento."
           />
         </div>
@@ -346,7 +346,7 @@ export default function StudentSurveyPanel() {
             value={answers.openFeedback}
             onChange={(event) => updateAnswer("openFeedback", event.target.value)}
             rows={2}
-            className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+            className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
             placeholder="Escreva algo que não apareceu nas perguntas anteriores."
           />
         </div>
@@ -356,7 +356,7 @@ export default function StudentSurveyPanel() {
         type="button"
         onClick={submitSurvey}
         disabled={submitting || !selectedSurvey}
-        className="w-full rounded-lg bg-[#D4A373] px-4 py-2.5 text-xs font-bold text-[#0a0a0a] transition hover:bg-[#c49563] disabled:opacity-50"
+        className="w-full rounded-lg bg-[#22D3EE] px-4 py-2.5 text-xs font-bold text-[#0a0a0a] transition hover:bg-[#06B6D4] disabled:opacity-50"
       >
         {submitting ? "Enviando..." : "Enviar minha resposta"}
       </button>

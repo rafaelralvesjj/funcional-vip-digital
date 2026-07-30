@@ -8,11 +8,18 @@ type BrandLogoProps = {
   priority?: boolean;
 };
 
-const sizeClasses = {
+const symbolSizeClasses = {
   sm: "h-9 w-9",
   md: "h-12 w-12",
   lg: "h-24 w-24",
   xl: "h-36 w-36 sm:h-44 sm:w-44",
+};
+
+const fullSizeClasses = {
+  sm: "h-9 w-28",
+  md: "h-12 w-40",
+  lg: "h-24 w-72",
+  xl: "h-32 w-[22rem] sm:h-36 sm:w-[28rem]",
 };
 
 export default function BrandLogo({
@@ -25,21 +32,21 @@ export default function BrandLogo({
   const src =
     variant === "symbol"
       ? "/branding/icon-512.png"
-      : "/branding/logo-funcional-vip-digital.png";
+      : "/branding/logo-funcional-up-digital.png";
 
   const image = (
     <img
       src={src}
-      alt="Funcional VIP Digital"
+      alt="Funcional UP Digital"
       loading={priority ? "eager" : "lazy"}
-      className={`${sizeClasses[size]} rounded-full object-contain ${className}`}
+      className={`${variant === "symbol" ? symbolSizeClasses[size] : fullSizeClasses[size]} object-contain ${variant === "symbol" ? "rounded-full" : ""} ${className}`}
     />
   );
 
   return href ? (
     <Link
       href={href}
-      aria-label="Funcional VIP Digital — início"
+      aria-label="Funcional UP Digital — início"
       className="inline-flex items-center"
     >
       {image}

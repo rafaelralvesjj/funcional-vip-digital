@@ -949,7 +949,7 @@ export default function MontarTreinoPage() {
           <style>
             * { box-sizing: border-box; }
             body { font-family: Arial, sans-serif; color: #171717; margin: 0; padding: 32px; background: #fff; }
-            .header { border-bottom: 3px solid #D4A373; padding-bottom: 16px; margin-bottom: 24px; }
+            .header { border-bottom: 3px solid #22D3EE; padding-bottom: 16px; margin-bottom: 24px; }
             .brand { color: #9a6b3f; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; }
             h1 { margin: 8px 0 4px; font-size: 24px; }
             h2 { margin: 22px 0 10px; font-size: 16px; color: #9a6b3f; }
@@ -964,7 +964,7 @@ export default function MontarTreinoPage() {
             em { color: #525252; font-size: 11px; }
             .box { border: 1px solid #e5e5e5; border-radius: 10px; padding: 12px; margin-top: 10px; background: #fafafa; }
             .actions { position: sticky; top: 0; background: #fff; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #eee; }
-            button { background: #D4A373; border: 0; color: #0a0a0a; font-weight: bold; border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+            button { background: #22D3EE; border: 0; color: #0a0a0a; font-weight: bold; border-radius: 10px; padding: 10px 14px; cursor: pointer; }
             @media print { .actions { display: none; } body { padding: 20px; } }
           </style>
         </head>
@@ -974,7 +974,7 @@ export default function MontarTreinoPage() {
           </div>
 
           <div class="header">
-            <div class="brand">Funcional VIP Digital</div>
+            <div class="brand">Funcional UP Digital</div>
             <h1>${escapeHtmlForPrint(planName)}</h1>
             <p><strong>Aluno:</strong> ${escapeHtmlForPrint(studentName)}</p>
             <p><strong>Idade:</strong> ${escapeHtmlForPrint(selectedStudentInfo?.ageYears ?? "Não informada")} ano(s)${selectedStudentInfo?.isMinor ? " · menor de idade" : ""}</p>
@@ -1298,7 +1298,7 @@ export default function MontarTreinoPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#D4A373]">📋 Montar Treino</h1>
+        <h1 className="text-2xl font-bold text-[#22D3EE]">📋 Montar Treino</h1>
         <p className="text-[#a1a1a1] mt-1">
           Monte os treinos da semana. Treinos futuros ficam planejados para professor/gestão e só aparecem para o aluno na semana correta.
         </p>
@@ -1313,7 +1313,7 @@ export default function MontarTreinoPage() {
       <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-4 mb-6">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-[#D4A373] mb-1">
+            <p className="text-xs uppercase tracking-[0.25em] text-[#22D3EE] mb-1">
               Contexto da montagem
             </p>
             <h2 className="text-lg font-semibold text-[#f5f5f5]">
@@ -1423,7 +1423,7 @@ export default function MontarTreinoPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-          <h2 className="text-lg font-semibold text-[#D4A373] mb-4">👤 Aluno e Identificação</h2>
+          <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">👤 Aluno e Identificação</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-sm text-[#e5e5e5] block mb-1">Selecione o aluno *</label>
@@ -1433,7 +1433,7 @@ export default function MontarTreinoPage() {
                 required
                 disabled={lockStudentSelection}
                 className={
-                  "w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] " +
+                  "w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE] " +
                   (lockStudentSelection ? "opacity-80 cursor-not-allowed" : "")
                 }
               >
@@ -1449,8 +1449,8 @@ export default function MontarTreinoPage() {
               </select>
 
               {(openedFromPendingList || openedFromAiDraft) && selectedStudent && (
-                <div className="mt-2 rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 p-2">
-                  <p className="text-[11px] text-[#D4A373] font-medium">
+                <div className="mt-2 rounded-lg border border-[#22D3EE]/20 bg-[#22D3EE]/10 p-2">
+                  <p className="text-[11px] text-[#22D3EE] font-medium">
                     Aluno selecionado automaticamente {openedFromAiDraft ? "pelo rascunho da IA" : "pelo dashboard"}:
                     <span className="text-[#f5f5f5] ml-1">
                       {selectedStudentInfo?.name || "carregando aluno..."}
@@ -1478,10 +1478,10 @@ export default function MontarTreinoPage() {
                   "md:col-span-2 rounded-lg border p-4 " +
                   (selectedStudentMissingBirthDate
                     ? "border-red-500/30 bg-red-500/10"
-                    : "border-[#D4A373]/20 bg-[#D4A373]/10")
+                    : "border-[#22D3EE]/20 bg-[#22D3EE]/10")
                 }
               >
-                <p className={"text-sm font-semibold " + (selectedStudentMissingBirthDate ? "text-red-300" : "text-[#D4A373]")}>
+                <p className={"text-sm font-semibold " + (selectedStudentMissingBirthDate ? "text-red-300" : "text-[#22D3EE]")}>
                   {selectedStudentMissingBirthDate
                     ? "Data de nascimento obrigatória"
                     : `Aluno: ${selectedStudentInfo.name} · ${selectedStudentInfo.ageYears} ano(s)${selectedStudentInfo.isMinor ? " · menor de idade" : ""}`}
@@ -1498,7 +1498,7 @@ export default function MontarTreinoPage() {
               <div className="md:col-span-2 bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-[#D4A373]">
+                    <p className="text-sm font-semibold text-[#22D3EE]">
                       📆 Programação semanal do aluno
                     </p>
 
@@ -1569,7 +1569,7 @@ export default function MontarTreinoPage() {
                               className={
                                 "rounded-lg px-3 py-1.5 text-[11px] border transition " +
                                 (isSelected
-                                  ? "bg-[#D4A373] text-[#0a0a0a] border-[#D4A373]"
+                                  ? "bg-[#22D3EE] text-[#0a0a0a] border-[#22D3EE]"
                                   : alreadyCreated
                                     ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 cursor-not-allowed"
                                     : "bg-[#1a1a1a] text-[#a1a1a1] border-[#ffffff10] hover:text-[#f5f5f5]")
@@ -1627,10 +1627,10 @@ export default function MontarTreinoPage() {
                   </div>
 
                   {isWeeklyLimitReached && (
-                    <div className="mt-3 rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 p-4">
+                    <div className="mt-3 rounded-lg border border-[#22D3EE]/20 bg-[#22D3EE]/10 p-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
-                          <p className="text-sm font-semibold text-[#D4A373]">
+                          <p className="text-sm font-semibold text-[#22D3EE]">
                             Revisão final da semana
                           </p>
                           <p className="text-xs text-[#a1a1a1] mt-1">
@@ -1642,7 +1642,7 @@ export default function MontarTreinoPage() {
                           type="button"
                           onClick={() => releaseWeek(false)}
                           disabled={releaseLoading || !selectedStudent || !date}
-                          className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition disabled:opacity-50"
+                          className="inline-flex items-center justify-center rounded-lg bg-[#22D3EE] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#06B6D4] transition disabled:opacity-50"
                         >
                           {releaseLoading ? "Verificando..." : "Revisar e liberar semana"}
                         </button>
@@ -1741,8 +1741,8 @@ export default function MontarTreinoPage() {
                                   className={
                                     "inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs font-semibold transition " +
                                     (selectedStudentMissingBirthDate
-                                      ? "cursor-not-allowed bg-[#D4A373]/30 text-[#6b6b6b]"
-                                      : "bg-[#D4A373] text-[#0a0a0a] hover:bg-[#c49563]")
+                                      ? "cursor-not-allowed bg-[#22D3EE]/30 text-[#6b6b6b]"
+                                      : "bg-[#22D3EE] text-[#0a0a0a] hover:bg-[#06B6D4]")
                                   }
                                 >
                                   {selectedStudentMissingBirthDate ? "Data de nascimento pendente" : "Gerar novo resumo IA com alerta atualizado"}
@@ -1815,10 +1815,10 @@ export default function MontarTreinoPage() {
             )}
 
             {selectedStudent && date && (
-              <div className="md:col-span-2 rounded-xl border border-[#D4A373]/20 bg-[#D4A373]/10 p-4">
+              <div className="md:col-span-2 rounded-xl border border-[#22D3EE]/20 bg-[#22D3EE]/10 p-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-[#D4A373]">
+                    <p className="text-sm font-semibold text-[#22D3EE]">
                       Quer usar IA para montar esta semana?
                     </p>
                     <p className="text-xs text-[#a1a1a1] mt-1">
@@ -1839,8 +1839,8 @@ export default function MontarTreinoPage() {
                     className={
                       "inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs font-semibold transition " +
                       (selectedStudentMissingBirthDate
-                        ? "cursor-not-allowed bg-[#D4A373]/30 text-[#6b6b6b]"
-                        : "bg-[#D4A373] text-[#0a0a0a] hover:bg-[#c49563]")
+                        ? "cursor-not-allowed bg-[#22D3EE]/30 text-[#6b6b6b]"
+                        : "bg-[#22D3EE] text-[#0a0a0a] hover:bg-[#06B6D4]")
                     }
                   >
                     {selectedStudentMissingBirthDate ? "Data de nascimento pendente" : "Gerar por IA"}
@@ -1857,7 +1857,7 @@ export default function MontarTreinoPage() {
                 onChange={(e) => setPlanName(e.target.value)}
                 placeholder="Ex: Treino A - Segunda"
                 required
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
               />
             </div>
             <div>
@@ -1876,9 +1876,9 @@ export default function MontarTreinoPage() {
                     );
                   }}
                   required
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] [color-scheme:dark]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE] [color-scheme:dark]"
                 />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#D4A373] pointer-events-none text-lg">
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#22D3EE] pointer-events-none text-lg">
                   📅
                 </div>
               </div>
@@ -1890,14 +1890,14 @@ export default function MontarTreinoPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Ex: Treino de membros superiores"
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
               />
             </div>
           </div>
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-          <h2 className="text-lg font-semibold text-[#D4A373] mb-2">
+          <h2 className="text-lg font-semibold text-[#22D3EE] mb-2">
             ✨ Resumo inteligente para o aluno
           </h2>
           <p className="text-xs text-[#a1a1a1] mb-4">
@@ -1913,7 +1913,7 @@ export default function MontarTreinoPage() {
                 value={objective}
                 onChange={(e) => setObjective(e.target.value)}
                 placeholder="Ex: melhorar resistência muscular e retomar consistência"
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
               />
             </div>
 
@@ -1924,7 +1924,7 @@ export default function MontarTreinoPage() {
                 value={focusAreas}
                 onChange={(e) => setFocusAreas(e.target.value)}
                 placeholder="Ex: pernas, glúteos, core e condicionamento"
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
               />
             </div>
 
@@ -1933,7 +1933,7 @@ export default function MontarTreinoPage() {
               <select
                 value={intensity}
                 onChange={(e) => setIntensity(e.target.value)}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
               >
                 <option value="">Selecione...</option>
                 <option value="Leve">Leve</option>
@@ -1951,7 +1951,7 @@ export default function MontarTreinoPage() {
                 value={estimatedDurationMinutes}
                 onChange={(e) => setEstimatedDurationMinutes(e.target.value)}
                 placeholder="Ex: 40"
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
               />
             </div>
 
@@ -1965,7 +1965,7 @@ export default function MontarTreinoPage() {
                   value={estimatedCaloriesMin}
                   onChange={(e) => setEstimatedCaloriesMin(e.target.value)}
                   placeholder="mín."
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                 />
                 <input
                   type="number"
@@ -1974,7 +1974,7 @@ export default function MontarTreinoPage() {
                   value={estimatedCaloriesMax}
                   onChange={(e) => setEstimatedCaloriesMax(e.target.value)}
                   placeholder="máx."
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                 />
               </div>
               <p className="text-[10px] text-[#6b6b6b] mt-1">
@@ -1989,7 +1989,7 @@ export default function MontarTreinoPage() {
                 onChange={(e) => setStudentSummary(e.target.value)}
                 rows={3}
                 placeholder="Ex: O foco de hoje é fazer bem feito, manter constância e terminar o treino com sensação de evolução."
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
               />
             </div>
 
@@ -2000,7 +2000,7 @@ export default function MontarTreinoPage() {
                 onChange={(e) => setSafetyNote(e.target.value)}
                 rows={2}
                 placeholder="Ex: Se sentir dor ou desconforto fora do esperado, pare e avise o professor."
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
               />
             </div>
           </div>
@@ -2015,11 +2015,11 @@ export default function MontarTreinoPage() {
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-[#D4A373]">🏋️ Exercícios</h2>
+            <h2 className="text-lg font-semibold text-[#22D3EE]">🏋️ Exercícios</h2>
             <button
               type="button"
               onClick={() => setShowLibrary(!showLibrary)}
-              className="bg-[#D4A373] text-[#0a0a0a] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#c49463] transition"
+              className="bg-[#22D3EE] text-[#0a0a0a] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#06B6D4] transition"
             >
               {showLibrary ? "Fechar biblioteca" : "+ Adicionar exercício"}
             </button>
@@ -2032,7 +2032,7 @@ export default function MontarTreinoPage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="🔍 Buscar exercício por nome ou grupo muscular..."
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] mb-3"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2.5 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE] mb-3"
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
                 {filteredLibrary.map((ex) => (
@@ -2040,7 +2040,7 @@ export default function MontarTreinoPage() {
                     key={ex.id}
                     type="button"
                     onClick={() => addExercise(ex)}
-                    className="text-left bg-[#1a1a1a] border border-[#ffffff10] rounded-lg p-3 hover:border-[#D4A373]/50 transition text-sm"
+                    className="text-left bg-[#1a1a1a] border border-[#ffffff10] rounded-lg p-3 hover:border-[#22D3EE]/50 transition text-sm"
                   >
                     <p className="text-[#f5f5f5] font-medium">{ex.name}</p>
                     <p className="text-[#a1a1a1] text-xs mt-0.5">{ex.muscleGroup}</p>
@@ -2078,7 +2078,7 @@ export default function MontarTreinoPage() {
                 <div key={index} className="bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="bg-[#D4A373]/20 text-[#D4A373] text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">{index + 1}</span>
+                      <span className="bg-[#22D3EE]/20 text-[#22D3EE] text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">{index + 1}</span>
                       <span className="text-[#f5f5f5] font-medium">{ex.name}</span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -2101,7 +2101,7 @@ export default function MontarTreinoPage() {
                     )}
                     {getExercisePurpose(ex) && (
                       <div className="rounded-lg border border-[#ffffff10] bg-[#111] p-3">
-                        <p className="text-[10px] uppercase tracking-wide text-[#D4A373] font-semibold">
+                        <p className="text-[10px] uppercase tracking-wide text-[#22D3EE] font-semibold">
                           Pra que serve
                         </p>
                         <p className="mt-1 text-xs leading-relaxed text-[#d4d4d4]">
@@ -2125,24 +2125,24 @@ export default function MontarTreinoPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div>
                       <label className="text-xs text-[#a1a1a1] block mb-0.5">Séries</label>
-                      <input type="number" min="1" max="10" value={ex.series} onChange={(e) => updateExercise(index, "series", parseInt(e.target.value) || 3)} className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]" />
+                      <input type="number" min="1" max="10" value={ex.series} onChange={(e) => updateExercise(index, "series", parseInt(e.target.value) || 3)} className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]" />
                     </div>
                     <div>
                       <label className="text-xs text-[#a1a1a1] block mb-0.5">Repetições</label>
-                      <input type="text" value={ex.reps} onChange={(e) => updateExercise(index, "reps", e.target.value)} placeholder="Ex: 10 ou 8-12" className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]" />
+                      <input type="text" value={ex.reps} onChange={(e) => updateExercise(index, "reps", e.target.value)} placeholder="Ex: 10 ou 8-12" className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]" />
                     </div>
                     <div>
                       <label className="text-xs text-[#a1a1a1] block mb-0.5">Carga <span className="text-[#525252]">(opc)</span></label>
-                      <input type="text" value={ex.weight} onChange={(e) => updateExercise(index, "weight", e.target.value)} placeholder="Ex: 10kg" className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]" />
+                      <input type="text" value={ex.weight} onChange={(e) => updateExercise(index, "weight", e.target.value)} placeholder="Ex: 10kg" className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]" />
                     </div>
                     <div>
                       <label className="text-xs text-[#a1a1a1] block mb-0.5">Descanso</label>
-                      <input type="text" value={ex.restTime} onChange={(e) => updateExercise(index, "restTime", e.target.value)} placeholder="Ex: 60s" className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]" />
+                      <input type="text" value={ex.restTime} onChange={(e) => updateExercise(index, "restTime", e.target.value)} placeholder="Ex: 60s" className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]" />
                     </div>
                   </div>
                   <div className="mt-2">
                     <label className="text-xs text-[#a1a1a1] block mb-0.5">Observações <span className="text-[#525252]">(opcional)</span></label>
-                    <input type="text" value={ex.notes} onChange={(e) => updateExercise(index, "notes", e.target.value)} placeholder="Ex: Execução lenta, 3 segundos na fase excêntrica" className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]" />
+                    <input type="text" value={ex.notes} onChange={(e) => updateExercise(index, "notes", e.target.value)} placeholder="Ex: Execução lenta, 3 segundos na fase excêntrica" className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]" />
                   </div>
                 </div>
               ))}
@@ -2151,8 +2151,8 @@ export default function MontarTreinoPage() {
         </div>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-          <h2 className="text-lg font-semibold text-[#D4A373] mb-4">📝 Observações do Plano</h2>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Observações gerais para o aluno sobre este treino..." className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]" />
+          <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">📝 Observações do Plano</h2>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Observações gerais para o aluno sobre este treino..." className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2160,7 +2160,7 @@ export default function MontarTreinoPage() {
             type="button"
             onClick={openWorkoutPrintPreview}
             disabled={!selectedStudent || !planName.trim() || !date || exercises.length === 0 || selectedStudentMissingBirthDate}
-            className="w-full bg-[#1a1a1a] border border-[#D4A373]/30 text-[#D4A373] font-bold rounded-xl py-4 text-base transition hover:bg-[#D4A373]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-[#1a1a1a] border border-[#22D3EE]/30 text-[#22D3EE] font-bold rounded-xl py-4 text-base transition hover:bg-[#22D3EE]/10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             👁️ Pré-visualizar treino em PDF
           </button>
@@ -2179,7 +2179,7 @@ export default function MontarTreinoPage() {
             !weeklyWorkoutLimit ||
             isWeeklyLimitReached
           }
-          className="w-full bg-[#D4A373] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#b88a5e] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-[#22D3EE] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#0891B2] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving
             ? "💾 Salvando treino..."

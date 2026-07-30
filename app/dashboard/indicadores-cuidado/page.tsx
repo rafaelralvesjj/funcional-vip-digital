@@ -166,7 +166,7 @@ function sortedEntries(map?: Record<string, number>): [string, number][] {
 
 function buildManagementSummary(data: IndicatorResponse): string {
   return [
-    "RELATÓRIO DE CUIDADO E IMPACTO COMERCIAL — FUNCIONAL VIP DIGITAL",
+    "RELATÓRIO DE CUIDADO E IMPACTO COMERCIAL — FUNCIONAL UP DIGITAL",
     "",
     `Período considerado: últimos ${data.period.days} dias, mantendo pausas em aberto mesmo que tenham iniciado antes.`,
     `Gerado em: ${formatDateTime(data.period.generatedAt)}`,
@@ -267,10 +267,10 @@ export default function IndicadoresCuidadoPage() {
     <div className="p-4 md:p-8 space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div>
-          <p className="text-xs text-[#D4A373] uppercase tracking-[0.3em] mb-2">
+          <p className="text-xs text-[#22D3EE] uppercase tracking-[0.3em] mb-2">
             Gestão e indicadores
           </p>
-          <h1 className="text-2xl md:text-3xl font-bold text-[#D4A373]">
+          <h1 className="text-2xl md:text-3xl font-bold text-[#22D3EE]">
             Indicadores de cuidado e impacto comercial
           </h1>
           <p className="text-sm text-[#a1a1a1] mt-2 max-w-4xl">
@@ -289,7 +289,7 @@ export default function IndicadoresCuidadoPage() {
             type="button"
             onClick={loadIndicators}
             disabled={loading}
-            className="inline-flex rounded-xl border border-[#D4A373]/30 bg-[#D4A373]/10 px-4 py-3 text-sm font-semibold text-[#D4A373] disabled:opacity-50"
+            className="inline-flex rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/10 px-4 py-3 text-sm font-semibold text-[#22D3EE] disabled:opacity-50"
           >
             Atualizar
           </button>
@@ -331,7 +331,7 @@ export default function IndicadoresCuidadoPage() {
                 className={
                   "rounded-lg px-3 py-2 text-xs font-semibold border " +
                   (periodDays === days
-                    ? "bg-[#D4A373] text-[#0a0a0a] border-[#D4A373]"
+                    ? "bg-[#22D3EE] text-[#0a0a0a] border-[#22D3EE]"
                     : "bg-[#1a1a1a] text-[#a1a1a1] border-[#ffffff10] hover:text-white")
                 }
               >
@@ -364,10 +364,10 @@ export default function IndicadoresCuidadoPage() {
               <BreakdownCard title="Por tipo de ciclo" items={sortedEntries(data.breakdown.byContractType)} />
             </div>
 
-            <div className="rounded-xl border border-[#D4A373]/20 bg-[#D4A373]/10 p-4">
+            <div className="rounded-xl border border-[#22D3EE]/20 bg-[#22D3EE]/10 p-4">
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-[#D4A373]">Leitura executiva</p>
+                  <p className="text-sm font-semibold text-[#22D3EE]">Leitura executiva</p>
                   <div className="mt-2 space-y-1 text-xs leading-relaxed text-[#a1a1a1]">
                     {data.managementGuidance.map((item) => (
                       <p key={item}>• {item}</p>
@@ -386,7 +386,7 @@ export default function IndicadoresCuidadoPage() {
                   <button
                     type="button"
                     onClick={downloadReport}
-                    className="rounded-lg bg-[#D4A373] px-3 py-2 text-xs font-semibold text-[#0a0a0a]"
+                    className="rounded-lg bg-[#22D3EE] px-3 py-2 text-xs font-semibold text-[#0a0a0a]"
                   >
                     Baixar .txt
                   </button>
@@ -460,7 +460,7 @@ export default function IndicadoresCuidadoPage() {
                   </div>
 
                   <div className="rounded-lg border border-[#ffffff10] bg-[#0a0a0a] p-3">
-                    <p className="text-[10px] font-semibold text-[#D4A373]">Ação recomendada</p>
+                    <p className="text-[10px] font-semibold text-[#22D3EE]">Ação recomendada</p>
                     <p className="mt-1 text-xs leading-relaxed text-[#e5e5e5]">
                       {event.commercialImpact?.managementAction || "Avaliar manualmente."}
                     </p>
@@ -468,7 +468,7 @@ export default function IndicadoresCuidadoPage() {
 
                   {event.description && (
                     <p className="text-xs leading-relaxed text-[#a1a1a1]">
-                      <span className="text-[#D4A373] font-semibold">Relato:</span> {event.description}
+                      <span className="text-[#22D3EE] font-semibold">Relato:</span> {event.description}
                     </p>
                   )}
                 </div>
@@ -484,7 +484,7 @@ export default function IndicadoresCuidadoPage() {
           <div className="space-y-2">
             {data.lifecycleEvents.map((event) => (
               <div key={event.id} className="rounded-xl border border-[#ffffff10] bg-[#1a1a1a] p-3 text-xs text-[#e5e5e5]">
-                <p className="font-semibold text-[#D4A373]">{humanizeKey(event.eventType)}</p>
+                <p className="font-semibold text-[#22D3EE]">{humanizeKey(event.eventType)}</p>
                 <p className="mt-1 text-[#a1a1a1]">
                   {event.studentName} · {event.contractTypeLabel || "Contrato"} · registrado em {formatDateTime(event.createdAt)}
                 </p>
@@ -526,7 +526,7 @@ function BreakdownCard({ title, items }: { title: string; items: [string, number
           items.slice(0, 6).map(([key, value]) => (
             <div key={key} className="flex items-center justify-between gap-3 text-xs">
               <span className="text-[#a1a1a1] truncate">{humanizeKey(key)}</span>
-              <span className="rounded-full bg-[#0a0a0a] px-2 py-1 font-semibold text-[#D4A373]">{value}</span>
+              <span className="rounded-full bg-[#0a0a0a] px-2 py-1 font-semibold text-[#22D3EE]">{value}</span>
             </div>
           ))
         )}

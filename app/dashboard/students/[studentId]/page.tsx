@@ -749,7 +749,7 @@ export default function StudentDetailPage() {
       return "border-blue-500/15 bg-blue-500/5";
     }
 
-    return "border-[#D4A373]/20 bg-[#D4A373]/5";
+    return "border-[#22D3EE]/20 bg-[#22D3EE]/5";
   }
 
   function getQuestionBadgeClass(item: AnyItem): string {
@@ -758,7 +758,7 @@ export default function StudentDetailPage() {
     if (role === "STUDENT") return "bg-green-500/10 text-green-300";
     if (role === "GESTOR") return "bg-blue-500/10 text-blue-300";
 
-    return "bg-[#D4A373]/15 text-[#D4A373]";
+    return "bg-[#22D3EE]/15 text-[#22D3EE]";
   }
 
   function getQuestionConversationMessages(question: AnyItem | null): AnyItem[] {
@@ -825,7 +825,7 @@ export default function StudentDetailPage() {
         >
           <div className="flex items-start justify-between gap-4 border-b border-[#ffffff10] p-4">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.24em] text-[#D4A373] font-semibold">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-[#22D3EE] font-semibold">
                 Conversa da dúvida
               </p>
               <h2 className="mt-1 text-base font-bold text-[#f5f5f5]">
@@ -872,13 +872,13 @@ export default function StudentDetailPage() {
                 </div>
 
                 {shouldShowLegacyAnswer(item) && (
-                  <div className="ml-0 md:ml-8 rounded-2xl border border-[#D4A373]/20 bg-[#D4A373]/5 p-4">
+                  <div className="ml-0 md:ml-8 rounded-2xl border border-[#22D3EE]/20 bg-[#22D3EE]/5 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold text-[#f5f5f5]">
                           {item?.answeredBy?.name || professorName || "Professor"}
                         </span>
-                        <span className="rounded-full bg-[#D4A373]/15 px-2 py-1 text-[10px] font-semibold text-[#D4A373]">
+                        <span className="rounded-full bg-[#22D3EE]/15 px-2 py-1 text-[10px] font-semibold text-[#22D3EE]">
                           Resposta
                         </span>
                       </div>
@@ -926,7 +926,7 @@ export default function StudentDetailPage() {
               } : undefined}
               className={
                 "rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-4 space-y-3 " +
-                (kind === "question" ? "cursor-pointer hover:border-[#D4A373]/40 hover:bg-[#141414] transition" : "")
+                (kind === "question" ? "cursor-pointer hover:border-[#22D3EE]/40 hover:bg-[#141414] transition" : "")
               }
             >
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
@@ -934,7 +934,7 @@ export default function StudentDetailPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-semibold text-[#f5f5f5]">{title}</h3>
                     {status && (
-                      <span className="rounded-full bg-[#D4A373]/15 text-[#D4A373] px-2 py-1 text-[11px] font-semibold">
+                      <span className="rounded-full bg-[#22D3EE]/15 text-[#22D3EE] px-2 py-1 text-[11px] font-semibold">
                         {normalizeStatus(status)}
                       </span>
                     )}
@@ -951,7 +951,7 @@ export default function StudentDetailPage() {
                   </p>
 
                   {kind === "question" && (
-                    <p className="text-xs text-[#D4A373] mt-2 font-semibold">
+                    <p className="text-xs text-[#22D3EE] mt-2 font-semibold">
                       Clique para ver a conversa completa
                     </p>
                   )}
@@ -961,7 +961,7 @@ export default function StudentDetailPage() {
                   <div className="flex flex-wrap gap-2">
                     <Link
                       href={`/dashboard/montar-treino?studentId=${studentId}&workoutId=${item.id || ""}`}
-                      className="rounded-xl bg-[#1a1a1a] border border-[#D4A373]/30 text-[#D4A373] px-3 py-2 text-xs font-semibold"
+                      className="rounded-xl bg-[#1a1a1a] border border-[#22D3EE]/30 text-[#22D3EE] px-3 py-2 text-xs font-semibold"
                     >
                       Abrir/editar
                     </Link>
@@ -989,7 +989,7 @@ export default function StudentDetailPage() {
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#111] flex items-center justify-center">
+            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border border-[#22D3EE]/30 bg-[#111] flex items-center justify-center">
               {studentImageUrl ? (
                 <img
                   src={studentImageUrl}
@@ -997,22 +997,22 @@ export default function StudentDetailPage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="text-2xl font-bold text-[#D4A373]">
+                <span className="text-2xl font-bold text-[#22D3EE]">
                   {getInitials(student?.name)}
                 </span>
               )}
             </div>
 
             <div>
-              <Link href="/dashboard/students" className="text-xs text-[#D4A373] underline">
+              <Link href="/dashboard/students" className="text-xs text-[#22D3EE] underline">
                 ← Voltar para alunos
               </Link>
 
-              <p className="text-xs uppercase tracking-[0.3em] text-[#D4A373] mt-4 mb-2">
+              <p className="text-xs uppercase tracking-[0.3em] text-[#22D3EE] mt-4 mb-2">
                 Ficha do aluno
               </p>
 
-              <h1 className="text-2xl font-bold text-[#D4A373]">
+              <h1 className="text-2xl font-bold text-[#22D3EE]">
                 {student?.name || "Aluno"}
               </h1>
 
@@ -1024,7 +1024,7 @@ export default function StudentDetailPage() {
               <p className="text-xs text-[#6b6b6b] mt-1">
                 Entrou na Funcional em {formatDate(student?.createdAt)} · Professor atual: {professorName}
               </p>
-              <p className={"text-xs mt-1 font-semibold " + (student?.ageYears === null || student?.ageYears === undefined ? "text-red-400" : "text-[#D4A373]")}>
+              <p className={"text-xs mt-1 font-semibold " + (student?.ageYears === null || student?.ageYears === undefined ? "text-red-400" : "text-[#22D3EE]")}>
                 {student?.ageYears === null || student?.ageYears === undefined
                   ? "Data de nascimento não informada"
                   : `Nascimento: ${formatDate(student.birthDate)} · Idade: ${student.ageYears} ano(s)${student.isMinor ? " · menor de idade" : ""}`}
@@ -1035,7 +1035,7 @@ export default function StudentDetailPage() {
           <button
             type="button"
             onClick={loadData}
-            className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 text-sm font-semibold hover:border-[#D4A373]/40 transition"
+            className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 text-sm font-semibold hover:border-[#22D3EE]/40 transition"
           >
             Atualizar
           </button>
@@ -1065,7 +1065,7 @@ export default function StudentDetailPage() {
             <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4 md:p-5 space-y-4">
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-[#D4A373] font-semibold">
+                  <p className="text-xs uppercase tracking-[0.24em] text-[#22D3EE] font-semibold">
                     Resumo para transição de professor
                   </p>
                   <h2 className="text-lg font-bold text-[#f5f5f5] mt-1">
@@ -1078,7 +1078,7 @@ export default function StudentDetailPage() {
 
                 {student?.ageYears === null || student?.ageYears === undefined ? (
                   <span
-                    className="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-[#D4A373]/30 text-[#6b6b6b] px-4 py-3 text-xs font-semibold"
+                    className="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-[#22D3EE]/30 text-[#6b6b6b] px-4 py-3 text-xs font-semibold"
                     title="Informe a data de nascimento antes de gerar o resumo IA"
                   >
                     Data de nascimento pendente
@@ -1086,7 +1086,7 @@ export default function StudentDetailPage() {
                 ) : (
                   <Link
                     href={`/dashboard/resumo-aluno?studentId=${encodeURIComponent(studentId)}`}
-                    className="inline-flex items-center justify-center rounded-xl bg-[#D4A373] text-[#0a0a0a] px-4 py-3 text-xs font-semibold hover:bg-[#c49563] transition"
+                    className="inline-flex items-center justify-center rounded-xl bg-[#22D3EE] text-[#0a0a0a] px-4 py-3 text-xs font-semibold hover:bg-[#06B6D4] transition"
                   >
                     Gerar resumo IA
                   </Link>
@@ -1114,7 +1114,7 @@ export default function StudentDetailPage() {
             <section className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
                 <p className="text-xs uppercase text-[#6b6b6b]">Status</p>
-                <p className="text-lg font-bold text-[#D4A373] mt-1">
+                <p className="text-lg font-bold text-[#22D3EE] mt-1">
                   {normalizeStatus(student?.commercialStatus)}
                 </p>
               </div>
@@ -1153,7 +1153,7 @@ export default function StudentDetailPage() {
                     onClick={() => setActiveTab(tab.key as TabKey)}
                     className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
                       activeTab === tab.key
-                        ? "bg-[#D4A373] text-[#0a0a0a]"
+                        ? "bg-[#22D3EE] text-[#0a0a0a]"
                         : "bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10]"
                     }`}
                   >
@@ -1169,14 +1169,14 @@ export default function StudentDetailPage() {
               {activeTab === "resumo" && (
                 <div id="student-summary-print" className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-5 space-y-5">
                   <div>
-                    <h2 className="text-lg font-semibold text-[#D4A373]">Resumo do aluno</h2>
+                    <h2 className="text-lg font-semibold text-[#22D3EE]">Resumo do aluno</h2>
                     <p className="text-xs text-[#a1a1a1] mt-1">
                       Esta aba consolida os dados do cadastro, ficha inicial, histórico visível e leitura operacional para o professor.
                     </p>
                   </div>
 
                   <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-[#D4A373]">1. Identificação e contrato</h3>
+                    <h3 className="text-sm font-semibold text-[#22D3EE]">1. Identificação e contrato</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <SummaryField label="Aluno" value={student?.name || "Aluno"} />
                       <SummaryField label="E-mail" value={student?.email || "Sem e-mail"} />
@@ -1189,7 +1189,7 @@ export default function StudentDetailPage() {
                   </section>
 
                   <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-[#D4A373]">2. Ficha inicial / onboarding</h3>
+                    <h3 className="text-sm font-semibold text-[#22D3EE]">2. Ficha inicial / onboarding</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <SummaryField label="Objetivo principal" value={profile.objective} />
                       <SummaryField label="Nível atual" value={profile.activityLevel} />
@@ -1207,7 +1207,7 @@ export default function StudentDetailPage() {
                   </section>
 
                   <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-[#D4A373]">3. Histórico visível</h3>
+                    <h3 className="text-sm font-semibold text-[#22D3EE]">3. Histórico visível</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <SummaryField label="Treinos planejados/registrados" value={String(workoutStats.total)} />
                       <SummaryField label="Treinos concluídos" value={String(workoutStats.completed)} />
@@ -1220,7 +1220,7 @@ export default function StudentDetailPage() {
 
                   {notices.length > 0 && (
                     <section className="space-y-3">
-                      <h3 className="text-sm font-semibold text-[#D4A373]">4. Avisos recentes — resumo</h3>
+                      <h3 className="text-sm font-semibold text-[#22D3EE]">4. Avisos recentes — resumo</h3>
                       <div className="space-y-2">
                         {notices.slice(0, 5).map((notice, index) => {
                           const compactDescription = getItemCompactDescription(notice);
@@ -1242,8 +1242,8 @@ export default function StudentDetailPage() {
                   )}
 
                   <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-[#D4A373]">5. Leitura operacional para o professor</h3>
-                    <div className="rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 p-4">
+                    <h3 className="text-sm font-semibold text-[#22D3EE]">5. Leitura operacional para o professor</h3>
+                    <div className="rounded-xl bg-[#22D3EE]/10 border border-[#22D3EE]/20 p-4">
                       <p className="text-sm text-[#f5f5f5] leading-relaxed whitespace-pre-wrap">
                         {teacherReading}
                       </p>
@@ -1254,7 +1254,7 @@ export default function StudentDetailPage() {
                     <button
                       type="button"
                       onClick={() => window.print()}
-                      className="rounded-xl bg-[#D4A373] text-[#0a0a0a] px-4 py-3 text-sm font-semibold hover:bg-[#c49563] transition"
+                      className="rounded-xl bg-[#22D3EE] text-[#0a0a0a] px-4 py-3 text-sm font-semibold hover:bg-[#06B6D4] transition"
                     >
                       Imprimir / salvar como PDF
                     </button>
@@ -1262,7 +1262,7 @@ export default function StudentDetailPage() {
                     <button
                       type="button"
                       onClick={loadData}
-                      className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 text-sm font-semibold hover:border-[#D4A373]/40 transition"
+                      className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#f5f5f5] px-4 py-3 text-sm font-semibold hover:border-[#22D3EE]/40 transition"
                     >
                       Atualizar resumo
                     </button>

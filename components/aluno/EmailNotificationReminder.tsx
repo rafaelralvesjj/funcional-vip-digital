@@ -29,9 +29,9 @@ export default function EmailNotificationReminder() {
   if (!visible) return null;
 
   return (
-    <section className="rounded-xl border border-[#D4A373]/30 bg-[#D4A373]/10 p-4">
+    <section className="rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/10 p-4">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#D4A373]/15 text-[#D4A373]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#22D3EE]/15 text-[#22D3EE]">
           <svg
             aria-hidden="true"
             className="h-5 w-5"
@@ -66,7 +66,7 @@ export default function EmailNotificationReminder() {
         <button
           type="button"
           onClick={dismissReminder}
-          className="shrink-0 rounded-lg border border-[#D4A373]/30 px-2.5 py-1.5 text-[10px] font-semibold text-[#D4A373] transition hover:bg-[#D4A373]/10"
+          className="shrink-0 rounded-lg border border-[#22D3EE]/30 px-2.5 py-1.5 text-[10px] font-semibold text-[#22D3EE] transition hover:bg-[#22D3EE]/10"
         >
           Entendi
         </button>

@@ -244,7 +244,7 @@ export default function GestorVoceSabiaPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-[#D4A373] font-semibold">
+        <p className="text-xs uppercase tracking-[0.3em] text-[#22D3EE] font-semibold">
           Gestão de conteúdo
         </p>
         <h1 className="text-2xl font-bold text-[#f5f5f5] mt-2">
@@ -301,7 +301,7 @@ export default function GestorVoceSabiaPage() {
               value={form.title}
               onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
               placeholder="Ex.: Seu professor está a uma mensagem de distância"
-              className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#525252] outline-none focus:border-[#D4A373]"
+              className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#525252] outline-none focus:border-[#22D3EE]"
             />
           </div>
 
@@ -312,7 +312,7 @@ export default function GestorVoceSabiaPage() {
             <select
               value={form.category}
               onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
-              className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
             >
               <optgroup label="Dicas personalizadas do chat">
                 {chatCategories.map((category) => (
@@ -343,7 +343,7 @@ export default function GestorVoceSabiaPage() {
             value={form.content}
             onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))}
             placeholder="Explique como o aluno pode usar o chat para receber orientação e acompanhamento."
-            className="w-full min-h-[130px] rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#525252] outline-none focus:border-[#D4A373] resize-y"
+            className="w-full min-h-[130px] rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] placeholder-[#525252] outline-none focus:border-[#22D3EE] resize-y"
           />
         </div>
 
@@ -356,7 +356,7 @@ export default function GestorVoceSabiaPage() {
               type="number"
               value={form.priority}
               onChange={(event) => setForm((prev) => ({ ...prev, priority: Number(event.target.value) }))}
-              className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
             />
           </div>
 
@@ -365,7 +365,7 @@ export default function GestorVoceSabiaPage() {
               type="checkbox"
               checked={form.active}
               onChange={(event) => setForm((prev) => ({ ...prev, active: event.target.checked }))}
-              className="h-4 w-4 accent-[#D4A373]"
+              className="h-4 w-4 accent-[#22D3EE]"
             />
             Ativo na rotação do aluno
           </label>
@@ -374,7 +374,7 @@ export default function GestorVoceSabiaPage() {
             type="button"
             onClick={saveContent}
             disabled={saving}
-            className="bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-xl px-4 py-2 text-sm hover:bg-[#c49563] transition disabled:opacity-60"
+            className="bg-[#22D3EE] text-[#0a0a0a] font-semibold rounded-xl px-4 py-2 text-sm hover:bg-[#06B6D4] transition disabled:opacity-60"
           >
             {saving ? "Salvando..." : form.id ? "Salvar alterações" : "Cadastrar conteúdo"}
           </button>
@@ -395,7 +395,7 @@ export default function GestorVoceSabiaPage() {
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value as any)}
-            className="rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+            className="rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
           >
             <option value="TODOS">Todos</option>
             <option value="ATIVOS">Ativos</option>
@@ -424,7 +424,7 @@ export default function GestorVoceSabiaPage() {
                       >
                         {item.active ? "ATIVO" : "INATIVO"}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#D4A373]/10 text-[#D4A373]">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#22D3EE]/10 text-[#22D3EE]">
                         {getCategoryLabel(item.category)}
                       </span>
                       {!chatCategorySet.has(item.category) && (
@@ -449,7 +449,7 @@ export default function GestorVoceSabiaPage() {
                     <button
                       type="button"
                       onClick={() => editContent(item)}
-                      className="text-xs px-3 py-1.5 rounded-lg border border-[#ffffff10] text-[#D4A373] hover:bg-[#D4A373]/10 transition"
+                      className="text-xs px-3 py-1.5 rounded-lg border border-[#ffffff10] text-[#22D3EE] hover:bg-[#22D3EE]/10 transition"
                     >
                       Editar
                     </button>

@@ -90,7 +90,7 @@ export default function TeacherConversationCenter({
             onClick={() => setActiveTab("students")}
             className={`border-b-2 px-4 py-4 text-sm font-medium transition ${
               isStudentsTab
-                ? "border-[#D4A373] text-[#D4A373]"
+                ? "border-[#22D3EE] text-[#22D3EE]"
                 : "border-transparent text-[#a1a1a1] hover:text-[#f5f5f5]"
             }`}
           >
@@ -102,7 +102,7 @@ export default function TeacherConversationCenter({
             onClick={() => setActiveTab("management")}
             className={`border-b-2 px-4 py-4 text-sm font-medium transition ${
               !isStudentsTab
-                ? "border-[#D4A373] text-[#D4A373]"
+                ? "border-[#22D3EE] text-[#22D3EE]"
                 : "border-transparent text-[#a1a1a1] hover:text-[#f5f5f5]"
             }`}
           >

@@ -91,10 +91,10 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
       {/* Header */}
-      <div className="bg-gradient-to-b from-[#D4A373]/10 to-transparent pb-12">
+      <div className="bg-gradient-to-b from-[#22D3EE]/10 to-transparent pb-12">
         <div className="max-w-2xl mx-auto px-4 pt-12">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-[#D4A373]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-[#22D3EE]/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-3xl">📋</span>
             </div>
             <h1 className="text-2xl font-bold text-[#f5f5f5]">
@@ -111,7 +111,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Seção: Objetivo */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-            <h2 className="text-lg font-semibold text-[#D4A373] mb-4">🎯 Seu Objetivo</h2>
+            <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">🎯 Seu Objetivo</h2>
             <div className="space-y-4">
               <div>
                 <label className="text-sm text-[#e5e5e5] block mb-1">
@@ -121,7 +121,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   value={form.objetivo}
                   onChange={(e) => setForm({ ...form, objetivo: e.target.value })}
                   required
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                 >
                   <option value="">Selecione...</option>
                   <option value="emagrecimento">Emagrecimento / Redução de medidas</option>
@@ -140,7 +140,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   value={form.metaEspecifica}
                   onChange={(e) => setForm({ ...form, metaEspecifica: e.target.value })}
                   rows={2}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: Quero perder 3kg, conseguir fazer 10 flexões..."
                 />
               </div>
@@ -152,7 +152,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   value={form.preferencia}
                   onChange={(e) => setForm({ ...form, preferencia: e.target.value })}
                   required
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                 >
                   <option value="">Selecione...</option>
                   <option value="casa">Em casa</option>
@@ -180,8 +180,8 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                         key={eq.value}
                         className={`flex items-center gap-2 p-2.5 rounded-lg border text-sm cursor-pointer transition ${
                           form.equipamentos.includes(eq.value)
-                            ? "bg-[#D4A373]/10 border-[#D4A373] text-[#f5f5f5]"
-                            : "bg-[#0a0a0a] border-[#ffffff10] text-[#a1a1a1] hover:border-[#D4A373]/50"
+                            ? "bg-[#22D3EE]/10 border-[#22D3EE] text-[#f5f5f5]"
+                            : "bg-[#0a0a0a] border-[#ffffff10] text-[#a1a1a1] hover:border-[#22D3EE]/50"
                         }`}
                       >
                         <input
@@ -216,7 +216,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
           </div>
           {/* Seção: Dados Físicos */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-            <h2 className="text-lg font-semibold text-[#D4A373] mb-4">📏 Dados Físicos</h2>
+            <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">📏 Dados Físicos</h2>
             <p className="text-sm text-[#a1a1a1] mb-4">
               Tire suas medidas com uma fita métrica. Não precisa ser exato, o importante é acompanhar a evolução!
             </p>
@@ -229,7 +229,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   value={form.peso}
                   onChange={(e) => setForm({ ...form, peso: e.target.value })}
                   required
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 75"
                 />
               </div>
@@ -241,7 +241,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   value={form.altura}
                   onChange={(e) => setForm({ ...form, altura: e.target.value })}
                   required
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 170"
                 />
               </div>
@@ -252,7 +252,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   step="0.5"
                   value={form.abdomen}
                   onChange={(e) => setForm({ ...form, abdomen: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 85"
                 />
               </div>
@@ -263,7 +263,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   step="0.5"
                   value={form.gluteo}
                   onChange={(e) => setForm({ ...form, gluteo: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 98"
                 />
               </div>
@@ -274,7 +274,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   step="0.5"
                   value={form.braco}
                   onChange={(e) => setForm({ ...form, braco: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 32"
                 />
               </div>
@@ -285,7 +285,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   step="0.5"
                   value={form.coxa}
                   onChange={(e) => setForm({ ...form, coxa: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 55"
                 />
               </div>
@@ -296,7 +296,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   step="0.5"
                   value={form.quadril}
                   onChange={(e) => setForm({ ...form, quadril: e.target.value })}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 100"
                 />
               </div>
@@ -304,7 +304,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
           </div>
           {/* Seção: Contexto */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-            <h2 className="text-lg font-semibold text-[#D4A373] mb-4">📋 Seu Contexto</h2>
+            <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">📋 Seu Contexto</h2>
             <div className="space-y-4">
               <div>
                 <label className="text-sm text-[#e5e5e5] block mb-1">
@@ -314,7 +314,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   value={form.nivelAtividade}
                   onChange={(e) => setForm({ ...form, nivelAtividade: e.target.value })}
                   required
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                 >
                   <option value="">Selecione...</option>
                   <option value="sedentario">Sedentário</option>
@@ -331,7 +331,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
                   value={form.lesoes}
                   onChange={(e) => setForm({ ...form, lesoes: e.target.value })}
                   rows={2}
-                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                  className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: Joelho direito com lesão no menisco..."
                 />
               </div>
@@ -339,7 +339,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
           </div>
           {/* Seção: Foto */}
           <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-            <h2 className="text-lg font-semibold text-[#D4A373] mb-4">📸 Foto Inicial</h2>
+            <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">📸 Foto Inicial</h2>
             <p className="text-sm text-[#a1a1a1] mb-3">
               Tire uma foto de corpo inteiro para compararmos no fim do mês. <span className="text-[#525252]">(opcional)</span>
             </p>
@@ -347,10 +347,10 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
               type="file"
               accept="image/png,image/jpeg,image/webp"
               onChange={handleImageUpload}
-              className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#b88a5e]"
+              className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#22D3EE] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#0891B2]"
             />
             {uploading && (
-              <p className="text-xs text-[#D4A373] mt-2">Enviando foto...</p>
+              <p className="text-xs text-[#22D3EE] mt-2">Enviando foto...</p>
             )}
             {form.fotoUrl && !uploading && (
               <p className="text-xs text-green-500 mt-2">✅ Foto enviada!</p>
@@ -360,7 +360,7 @@ export default function OnboardingPage({ params }: { params: { id: string } }) {
           <button
             type="submit"
             disabled={loading || uploading}
-            className="w-full bg-[#D4A373] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#b88a5e] disabled:opacity-70"
+            className="w-full bg-[#22D3EE] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#0891B2] disabled:opacity-70"
           >
             {loading ? "Salvando..." : "✅ Salvar e Começar"}
           </button>

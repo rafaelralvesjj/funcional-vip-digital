@@ -1499,7 +1499,7 @@ export default async function DashboardPage() {
               />
 
               <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-[#D4A373]">
+                <p className="text-xs uppercase tracking-[0.25em] text-[#22D3EE]">
                   {isGestor ? 'Gestão' : isTeacher ? 'Professor' : 'Painel'}
                 </p>
                 <h1 className="mt-1 text-2xl md:text-3xl font-semibold text-[#f5f5f5]">
@@ -1520,7 +1520,7 @@ export default async function DashboardPage() {
           <div className="bg-[#111111] border border-[#ffffff10] rounded-2xl p-5 md:p-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-[#D4A373]">
+                <p className="text-xs uppercase tracking-[0.25em] text-[#22D3EE]">
                   Evolução dos alunos
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-[#f5f5f5]">
@@ -1533,7 +1533,7 @@ export default async function DashboardPage() {
 
               <a
                 href="/dashboard/evolucao-alunos"
-                className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition"
+                className="inline-flex items-center justify-center rounded-lg bg-[#22D3EE] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#06B6D4] transition"
               >
                 Abrir evolução
               </a>
@@ -1557,12 +1557,12 @@ export default async function DashboardPage() {
                   <a
                     key={student.id}
                     href={getStudentProfileHref(student.id)}
-                    className="group block bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden hover:border-[#D4A373]/40 hover:bg-[#141414] transition"
+                    className="group block bg-[#111111] border border-[#ffffff10] rounded-xl overflow-hidden hover:border-[#22D3EE]/40 hover:bg-[#141414] transition"
                   >
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#1a1a1a] flex items-center justify-center">
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#22D3EE]/30 bg-[#1a1a1a] flex items-center justify-center">
                             {student.image ? (
                               <img
                                 src={student.image}
@@ -1570,7 +1570,7 @@ export default async function DashboardPage() {
                                 className="h-full w-full object-cover"
                               />
                             ) : (
-                              <span className="text-sm font-bold text-[#D4A373]">
+                              <span className="text-sm font-bold text-[#22D3EE]">
                                 {getStudentInitials(student.name)}
                               </span>
                             )}
@@ -1582,14 +1582,14 @@ export default async function DashboardPage() {
                                 ALUNO
                               </span>
 
-                              <span className="text-sm font-bold text-[#f5f5f5] truncate group-hover:text-[#D4A373] transition">
+                              <span className="text-sm font-bold text-[#f5f5f5] truncate group-hover:text-[#22D3EE] transition">
                                 {student.name}
                               </span>
                             </div>
 
                             <p className="text-xs text-[#a1a1a1]">
                               Professor:{' '}
-                              <span className="text-[#D4A373]">
+                              <span className="text-[#22D3EE]">
                                 {student.user?.name || 'Não vinculado'}
                               </span>
                             </p>
@@ -1600,7 +1600,7 @@ export default async function DashboardPage() {
                           </div>
                         </div>
 
-                        <span className="text-[10px] text-[#D4A373] opacity-0 group-hover:opacity-100 transition shrink-0">
+                        <span className="text-[10px] text-[#22D3EE] opacity-0 group-hover:opacity-100 transition shrink-0">
                           Ver ficha →
                         </span>
                       </div>
@@ -1642,7 +1642,7 @@ export default async function DashboardPage() {
 
                 <a
                   href="/dashboard/gestor/vincular-alunos"
-                  className="inline-flex items-center justify-center bg-[#D4A373] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#c49563] transition"
+                  className="inline-flex items-center justify-center bg-[#22D3EE] text-[#0a0a0a] font-semibold rounded-lg px-4 py-2 text-xs hover:bg-[#06B6D4] transition"
                 >
                   Ir para vincular alunos
                 </a>
@@ -1720,7 +1720,7 @@ export default async function DashboardPage() {
 
                             <a
                               href="/dashboard/gestor/vincular-alunos"
-                              className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                              className="inline-flex items-center justify-center text-[#22D3EE] hover:text-[#06B6D4] text-xs px-3 py-1.5 rounded-lg hover:bg-[#22D3EE]/5 transition"
                             >
                               Resolver vínculo
                             </a>
@@ -1780,7 +1780,7 @@ export default async function DashboardPage() {
                           <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
                             Professor
                           </p>
-                          <p className="text-xs text-[#D4A373] truncate" title={item.student.user?.name || 'Não vinculado'}>
+                          <p className="text-xs text-[#22D3EE] truncate" title={item.student.user?.name || 'Não vinculado'}>
                             {item.student.user?.name || 'Não vinculado'}
                           </p>
                         </div>
@@ -1828,7 +1828,7 @@ export default async function DashboardPage() {
                               },
                             }}
                             prefetch={false}
-                            className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                            className="inline-flex items-center justify-center text-[#22D3EE] hover:text-[#06B6D4] text-xs px-3 py-1.5 rounded-lg hover:bg-[#22D3EE]/5 transition"
                           >
                             Montar treino deste aluno
                           </Link>
@@ -1922,7 +1922,7 @@ export default async function DashboardPage() {
                           <p className="text-[10px] text-[#6b6b6b] uppercase tracking-wide">
                             Professor
                           </p>
-                          <p className="text-xs text-[#D4A373] truncate" title={item.student.user?.name || 'Não vinculado'}>
+                          <p className="text-xs text-[#22D3EE] truncate" title={item.student.user?.name || 'Não vinculado'}>
                             {item.student.user?.name || 'Não vinculado'}
                           </p>
                         </div>
@@ -1970,7 +1970,7 @@ export default async function DashboardPage() {
                               },
                             }}
                             prefetch={false}
-                            className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                            className="inline-flex items-center justify-center text-[#22D3EE] hover:text-[#06B6D4] text-xs px-3 py-1.5 rounded-lg hover:bg-[#22D3EE]/5 transition"
                           >
                             Montar treino deste aluno
                           </Link>
@@ -2023,7 +2023,7 @@ export default async function DashboardPage() {
 
                       <p className="text-xs text-[#a1a1a1] mb-3">
                         Professor:{' '}
-                        <span className="text-[#D4A373]">
+                        <span className="text-[#22D3EE]">
                           {workout.student?.user?.name || 'Não vinculado'}
                         </span>
                       </p>
@@ -2089,7 +2089,7 @@ export default async function DashboardPage() {
                             {getCareEventStatusLabel(event.status)}
                           </span>
 
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#D4A373]/10 text-[#D4A373] border border-[#D4A373]/20">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#22D3EE]/10 text-[#22D3EE] border border-[#22D3EE]/20">
                             {getCareEventTypeLabel(event.eventType)}
                           </span>
                         </div>
@@ -2105,7 +2105,7 @@ export default async function DashboardPage() {
 
                       <p className="text-xs text-[#a1a1a1] mb-3">
                         Professor:{' '}
-                        <span className="text-[#D4A373]">
+                        <span className="text-[#22D3EE]">
                           {event.professor?.name || event.student?.user?.name || 'Não informado'}
                         </span>
                       </p>
@@ -2121,7 +2121,7 @@ export default async function DashboardPage() {
 
                         <a
                           href="/dashboard/cuidado-aluno"
-                          className="inline-flex items-center justify-center text-[#D4A373] hover:text-[#c49563] text-xs px-3 py-1.5 rounded-lg hover:bg-[#D4A373]/5 transition"
+                          className="inline-flex items-center justify-center text-[#22D3EE] hover:text-[#06B6D4] text-xs px-3 py-1.5 rounded-lg hover:bg-[#22D3EE]/5 transition"
                         >
                           {isTeacher ? 'Abrir e tratar alerta' : 'Visualizar central'}
                         </a>
@@ -2146,7 +2146,7 @@ export default async function DashboardPage() {
 
               <a
                 href="/dashboard/cuidado-aluno?tab=preferencias"
-                className="inline-flex items-center justify-center rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition"
+                className="inline-flex items-center justify-center rounded-lg bg-[#22D3EE] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#06B6D4] transition"
               >
                 Abrir central de preferências
               </a>
@@ -2166,7 +2166,7 @@ export default async function DashboardPage() {
                     <div className="p-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div className="flex items-start gap-3 min-w-0">
-                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#1a1a1a] flex items-center justify-center">
+                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-[#22D3EE]/30 bg-[#1a1a1a] flex items-center justify-center">
                             {preference.student.image ? (
                               <img
                                 src={preference.student.image}
@@ -2174,7 +2174,7 @@ export default async function DashboardPage() {
                                 className="h-full w-full object-cover"
                               />
                             ) : (
-                              <span className="text-xs font-bold text-[#D4A373]">
+                              <span className="text-xs font-bold text-[#22D3EE]">
                                 {getStudentInitials(preference.student.name)}
                               </span>
                             )}
@@ -2194,7 +2194,7 @@ export default async function DashboardPage() {
                               {preference.student.name}
                             </p>
                             <p className="text-xs text-[#a1a1a1] mt-1">
-                              Professor: <span className="text-[#D4A373]">{preference.student.user?.name || 'Não informado'}</span>
+                              Professor: <span className="text-[#22D3EE]">{preference.student.user?.name || 'Não informado'}</span>
                             </p>
                             <p className="text-sm text-[#e5e5e5] mt-3 whitespace-pre-wrap line-clamp-4">
                               {preference.summary}
@@ -2215,7 +2215,7 @@ export default async function DashboardPage() {
                           {isTeacher && (
                             <a
                               href={`/dashboard/conversas?conversationId=${encodeURIComponent(preference.sourceConversationId)}`}
-                              className="inline-flex items-center justify-center text-xs px-3 py-2 rounded-lg bg-[#D4A373] text-[#0a0a0a] font-semibold hover:bg-[#c49563]"
+                              className="inline-flex items-center justify-center text-xs px-3 py-2 rounded-lg bg-[#22D3EE] text-[#0a0a0a] font-semibold hover:bg-[#06B6D4]"
                             >
                               Abrir conversa e tratar
                             </a>
@@ -2268,14 +2268,14 @@ export default async function DashboardPage() {
 
                       <p className="text-xs text-[#a1a1a1] mb-2">
                         Para:{' '}
-                        <span className="text-[#D4A373]">
+                        <span className="text-[#22D3EE]">
                           Aluno: {item.student.name}
                         </span>
                       </p>
 
                       <p className="text-xs text-[#a1a1a1] mb-3">
                         Destino original:{' '}
-                        <span className="text-[#D4A373]">
+                        <span className="text-[#22D3EE]">
                           {getNoticeTargetLabel(item.notice)}
                         </span>
                       </p>

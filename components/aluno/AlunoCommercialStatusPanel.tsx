@@ -235,7 +235,7 @@ export function AlunoCommercialStatusPanel() {
     <section className="rounded-xl border border-[#ffffff10] bg-[#111] px-3 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#D4A373]">
+          <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#22D3EE]">
             Meu acompanhamento
           </p>
           <h2 className="mt-0.5 text-[13px] font-bold leading-snug text-[#f5f5f5]">
@@ -259,8 +259,8 @@ export function AlunoCommercialStatusPanel() {
       </p>
 
       {isTrialScheduled && (
-        <div className="mt-2 rounded-lg border border-[#D4A373]/20 bg-[#D4A373]/10 px-2.5 py-2">
-          <p className="text-[10px] font-semibold text-[#D4A373]">
+        <div className="mt-2 rounded-lg border border-[#22D3EE]/20 bg-[#22D3EE]/10 px-2.5 py-2">
+          <p className="text-[10px] font-semibold text-[#22D3EE]">
             Início na próxima janela segura
           </p>
           <div className="mt-1.5 grid grid-cols-3 gap-1.5">
@@ -308,7 +308,7 @@ export function AlunoCommercialStatusPanel() {
               href={summary.payment.paymentLinkUrl}
               target="_blank"
               rel="noreferrer"
-              className="ml-auto rounded-md bg-[#D4A373] px-2.5 py-1 text-[9px] font-semibold text-[#0a0a0a]"
+              className="ml-auto rounded-md bg-[#22D3EE] px-2.5 py-1 text-[9px] font-semibold text-[#0a0a0a]"
             >
               Pagar
             </a>
@@ -329,7 +329,7 @@ export function AlunoCommercialStatusPanel() {
             type="button"
             onClick={handleContinueTrial}
             disabled={isButtonDisabled}
-            className="shrink-0 rounded-lg bg-[#D4A373] px-3 py-1.5 text-[10px] font-semibold text-[#0a0a0a] disabled:opacity-60"
+            className="shrink-0 rounded-lg bg-[#22D3EE] px-3 py-1.5 text-[10px] font-semibold text-[#0a0a0a] disabled:opacity-60"
           >
             {requestStatus === "loading"
               ? "Enviando..."

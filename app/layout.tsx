@@ -6,7 +6,7 @@ import Providers from './providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Funcional VIP Digital',
+  title: 'Funcional UP Digital',
   description: 'Treinamento funcional personalizado com acompanhamento humano.',
   icons: {
     icon: [
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     apple: [{ url: '/branding/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   openGraph: {
-    title: 'Funcional VIP Digital',
+    title: 'Funcional UP Digital',
     description: 'Treinamento funcional personalizado com acompanhamento humano.',
     images: ['/branding/logo-1024.png'],
   },

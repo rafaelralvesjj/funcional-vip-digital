@@ -85,18 +85,18 @@ export default function GestorDuvidasPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
       {/* Header */}
-      <div className="bg-gradient-to-b from-[#D4A373]/10 to-transparent pb-6">
+      <div className="bg-gradient-to-b from-[#22D3EE]/10 to-transparent pb-6">
         <div className="max-w-4xl mx-auto px-4 pt-12">
           <div className="flex items-center justify-between mb-2">
             <button
               onClick={() => router.push("/dashboard")}
-              className="text-sm text-[#D4A373] hover:text-[#b88a5e]"
+              className="text-sm text-[#22D3EE] hover:text-[#0891B2]"
             >
               ← Voltar ao Dashboard
             </button>
           </div>
           <div className="text-center">
-            <div className="w-16 h-16 bg-[#D4A373]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-[#22D3EE]/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-3xl">💬</span>
             </div>
             <h1 className="text-2xl font-bold">Central de Dúvidas</h1>
@@ -114,7 +114,7 @@ export default function GestorDuvidasPage() {
             onClick={() => setFiltro("pendentes")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               filtro === "pendentes"
-                ? "bg-[#D4A373] text-[#0a0a0a]"
+                ? "bg-[#22D3EE] text-[#0a0a0a]"
                 : "bg-[#1a1a1a] text-[#a1a1a1] hover:bg-[#252525]"
             }`}
           >
@@ -124,7 +124,7 @@ export default function GestorDuvidasPage() {
             onClick={() => setFiltro("respondidas")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               filtro === "respondidas"
-                ? "bg-[#D4A373] text-[#0a0a0a]"
+                ? "bg-[#22D3EE] text-[#0a0a0a]"
                 : "bg-[#1a1a1a] text-[#a1a1a1] hover:bg-[#252525]"
             }`}
           >
@@ -134,7 +134,7 @@ export default function GestorDuvidasPage() {
             onClick={() => setFiltro("todas")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               filtro === "todas"
-                ? "bg-[#D4A373] text-[#0a0a0a]"
+                ? "bg-[#22D3EE] text-[#0a0a0a]"
                 : "bg-[#1a1a1a] text-[#a1a1a1] hover:bg-[#252525]"
             }`}
           >
@@ -163,14 +163,14 @@ export default function GestorDuvidasPage() {
                 key={duvida.id}
                 className={`bg-[#111111] border rounded-xl p-5 ${
                   !duvida.answer
-                    ? "border-[#D4A373]/30"
+                    ? "border-[#22D3EE]/30"
                     : "border-[#ffffff10]"
                 }`}
               >
                 {/* Cabeçalho */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#D4A373]/10 rounded-full flex items-center justify-center">
+                    <div className="w-10 h-10 bg-[#22D3EE]/10 rounded-full flex items-center justify-center">
                       <span className="text-sm">👤</span>
                     </div>
                     <div>
@@ -183,7 +183,7 @@ export default function GestorDuvidasPage() {
                     </div>
                   </div>
                   {!duvida.answer && (
-                    <span className="text-xs bg-[#D4A373]/10 text-[#D4A373] px-3 py-1 rounded-full">
+                    <span className="text-xs bg-[#22D3EE]/10 text-[#22D3EE] px-3 py-1 rounded-full">
                       ⏳ Pendente
                     </span>
                   )}
@@ -202,7 +202,7 @@ export default function GestorDuvidasPage() {
                         href={duvida.videoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs bg-[#1a1a1a] text-[#D4A373] px-3 py-1.5 rounded-lg hover:bg-[#252525]"
+                        className="inline-flex items-center gap-1.5 text-xs bg-[#1a1a1a] text-[#22D3EE] px-3 py-1.5 rounded-lg hover:bg-[#252525]"
                       >
                         ▶️ Ver vídeo
                       </a>
@@ -212,7 +212,7 @@ export default function GestorDuvidasPage() {
                         href={duvida.imageUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs bg-[#1a1a1a] text-[#D4A373] px-3 py-1.5 rounded-lg hover:bg-[#252525]"
+                        className="inline-flex items-center gap-1.5 text-xs bg-[#1a1a1a] text-[#22D3EE] px-3 py-1.5 rounded-lg hover:bg-[#252525]"
                       >
                         🖼️ Ver imagem
                       </a>
@@ -224,12 +224,12 @@ export default function GestorDuvidasPage() {
                 {duvida.answer && (
                   <div className="mt-3 pt-3 border-t border-[#ffffff10]">
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 bg-[#D4A373]/20 rounded-full flex items-center justify-center flex-shrink-0">
+                      <div className="w-8 h-8 bg-[#22D3EE]/20 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-sm">👨‍🏫</span>
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium text-[#D4A373]">
+                          <span className="text-sm font-medium text-[#22D3EE]">
                             {duvida.answeredBy?.name || "Você"}
                           </span>
                           {duvida.answeredAt && (
@@ -255,7 +255,7 @@ export default function GestorDuvidasPage() {
                           value={resposta}
                           onChange={(e) => setResposta(e.target.value)}
                           rows={3}
-                          className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                          className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                           placeholder="Escreva sua resposta..."
                           autoFocus
                         />
@@ -263,7 +263,7 @@ export default function GestorDuvidasPage() {
                           <button
                             onClick={() => handleResponder(duvida.id)}
                             disabled={enviando || !resposta.trim()}
-                            className="bg-[#D4A373] text-[#0a0a0a] font-bold px-4 py-2 rounded-lg text-sm transition hover:bg-[#b88a5e] disabled:opacity-70"
+                            className="bg-[#22D3EE] text-[#0a0a0a] font-bold px-4 py-2 rounded-lg text-sm transition hover:bg-[#0891B2] disabled:opacity-70"
                           >
                             {enviando ? "Enviando..." : "📤 Responder"}
                           </button>
@@ -281,7 +281,7 @@ export default function GestorDuvidasPage() {
                     ) : (
                       <button
                         onClick={() => setRespondendo(duvida.id)}
-                        className="text-sm text-[#D4A373] hover:text-[#b88a5e]"
+                        className="text-sm text-[#22D3EE] hover:text-[#0891B2]"
                       >
                         ✏️ Responder
                       </button>

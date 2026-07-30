@@ -153,7 +153,7 @@ function BrandMark() {
       <BrandLogo variant="symbol" size="md" priority />
       <div className="leading-none">
         <div className="text-sm font-black uppercase tracking-[0.16em] text-white sm:text-base">
-          Funcional VIP
+          Funcional UP
         </div>
         <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.42em] text-[#ff7a00]">
           Digital
@@ -173,7 +173,7 @@ function PrimaryButton({
   return (
     <Link
       href={primaryCta}
-      className={`group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#D4A373] px-5 py-3 text-center text-sm font-black text-[#0a0a0a] shadow-[0_18px_50px_-18px_rgba(212,163,115,0.8)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#e0b184] focus:outline-none focus:ring-2 focus:ring-[#D4A373] focus:ring-offset-2 focus:ring-offset-[#0a0a0a] ${className}`}
+      className={`group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#22D3EE] px-5 py-3 text-center text-sm font-black text-[#0a0a0a] shadow-[0_18px_50px_-18px_rgba(212,163,115,0.8)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#e0b184] focus:outline-none focus:ring-2 focus:ring-[#22D3EE] focus:ring-offset-2 focus:ring-offset-[#0a0a0a] ${className}`}
     >
       {label}
       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -183,7 +183,7 @@ function PrimaryButton({
 
 export default function Home() {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#070707] pb-24 text-[#f5f5f5] selection:bg-[#D4A373] selection:text-[#0a0a0a] md:pb-0">
+    <main className="min-h-screen overflow-x-hidden bg-[#070707] pb-24 text-[#f5f5f5] selection:bg-[#22D3EE] selection:text-[#0a0a0a] md:pb-0">
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.07] bg-[#070707]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" aria-label="Funcional Vip Digital — início">
@@ -193,25 +193,25 @@ export default function Home() {
           <nav className="hidden items-center gap-7 lg:flex" aria-label="Navegação principal">
             <a
               href="#objetivos"
-              className="text-sm font-medium text-neutral-300 transition hover:text-[#D4A373]"
+              className="text-sm font-medium text-neutral-300 transition hover:text-[#22D3EE]"
             >
               Objetivos
             </a>
             <a
               href="#como-funciona"
-              className="text-sm font-medium text-neutral-300 transition hover:text-[#D4A373]"
+              className="text-sm font-medium text-neutral-300 transition hover:text-[#22D3EE]"
             >
               Como funciona
             </a>
             <a
               href="#beneficios"
-              className="text-sm font-medium text-neutral-300 transition hover:text-[#D4A373]"
+              className="text-sm font-medium text-neutral-300 transition hover:text-[#22D3EE]"
             >
               Acompanhamento
             </a>
             <a
               href="#duvidas"
-              className="text-sm font-medium text-neutral-300 transition hover:text-[#D4A373]"
+              className="text-sm font-medium text-neutral-300 transition hover:text-[#22D3EE]"
             >
               Dúvidas
             </a>
@@ -231,21 +231,21 @@ export default function Home() {
 
       <section className="relative px-4 pb-20 pt-28 sm:px-6 sm:pb-24 sm:pt-36 lg:px-8">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute left-1/2 top-[-420px] h-[720px] w-[720px] -translate-x-1/2 rounded-full bg-[#D4A373]/10 blur-[120px]" />
+          <div className="absolute left-1/2 top-[-420px] h-[720px] w-[720px] -translate-x-1/2 rounded-full bg-[#22D3EE]/10 blur-[120px]" />
           <div className="absolute right-[-180px] top-40 h-80 w-80 rounded-full bg-[#8f4f23]/10 blur-[100px]" />
           <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:42px_42px] [mask-image:linear-gradient(to_bottom,black,transparent_75%)]" />
         </div>
 
         <div className="relative mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.05fr_0.95fr]">
           <div>
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#D4A373]/30 bg-[#D4A373]/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-[#e6bd94] sm:text-xs">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#22D3EE]/30 bg-[#22D3EE]/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-[#e6bd94] sm:text-xs">
               <Zap className="h-3.5 w-3.5" />
               Treinamento funcional com acompanhamento real
             </div>
 
             <h1 className="max-w-4xl text-4xl font-black leading-[1.03] tracking-[-0.045em] text-white sm:text-5xl lg:text-6xl xl:text-7xl">
               Treinamento funcional para{" "}
-              <span className="text-[#D4A373]">o seu objetivo</span>, no seu
+              <span className="text-[#22D3EE]">o seu objetivo</span>, no seu
               momento.
             </h1>
 
@@ -262,7 +262,7 @@ export default function Home() {
               />
               <a
                 href="#como-funciona"
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-bold text-white transition hover:border-[#D4A373]/35 hover:bg-[#D4A373]/5 sm:w-auto"
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-bold text-white transition hover:border-[#22D3EE]/35 hover:bg-[#22D3EE]/5 sm:w-auto"
               >
                 Entender como funciona
                 <ChevronRight className="h-4 w-4" />
@@ -276,7 +276,7 @@ export default function Home() {
                 "Para todos os níveis",
               ].map((item) => (
                 <span key={item} className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#D4A373]/12 text-[#D4A373]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#22D3EE]/12 text-[#22D3EE]">
                     <Check className="h-3.5 w-3.5" />
                   </span>
                   {item}
@@ -286,19 +286,19 @@ export default function Home() {
           </div>
 
           <div className="relative mx-auto w-full max-w-xl">
-            <div className="absolute -inset-6 rounded-[40px] bg-[#D4A373]/8 blur-3xl" />
+            <div className="absolute -inset-6 rounded-[40px] bg-[#22D3EE]/8 blur-3xl" />
             <div className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[#0e0e0e] p-4 shadow-2xl sm:p-6">
-              <div className="rounded-2xl border border-[#D4A373]/25 bg-[linear-gradient(145deg,rgba(212,163,115,0.13),rgba(255,255,255,0.02))] p-5 sm:p-6">
+              <div className="rounded-2xl border border-[#22D3EE]/25 bg-[linear-gradient(145deg,rgba(212,163,115,0.13),rgba(255,255,255,0.02))] p-5 sm:p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#D4A373]">
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#22D3EE]">
                       Seu treino considera
                     </p>
                     <h2 className="mt-2 text-xl font-black text-white sm:text-2xl">
                       Você por inteiro
                     </h2>
                   </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#D4A373]/25 bg-[#D4A373]/10 text-[#D4A373]">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#22D3EE]/25 bg-[#22D3EE]/10 text-[#22D3EE]">
                     <UserCheck className="h-6 w-6" />
                   </div>
                 </div>
@@ -319,7 +319,7 @@ export default function Home() {
                         key={label as string}
                         className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-black/25 p-3.5"
                       >
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#D4A373]/10 text-[#D4A373]">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#22D3EE]/10 text-[#22D3EE]">
                           <IconComponent className="h-4 w-4" />
                         </span>
                         <span className="text-xs font-semibold text-neutral-200 sm:text-sm">
@@ -342,14 +342,14 @@ export default function Home() {
                     key={label}
                     className="relative rounded-xl border border-white/[0.07] bg-white/[0.025] px-2 py-3 text-center"
                   >
-                    <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-[#D4A373] text-[11px] font-black text-black">
+                    <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-[#22D3EE] text-[11px] font-black text-black">
                       {number}
                     </div>
                     <div className="mt-2 text-[9px] font-bold uppercase tracking-wide text-neutral-400 sm:text-[10px]">
                       {label}
                     </div>
                     {index < 3 && (
-                      <span className="absolute -right-2 top-[25px] z-10 hidden h-px w-4 bg-[#D4A373]/35 sm:block" />
+                      <span className="absolute -right-2 top-[25px] z-10 hidden h-px w-4 bg-[#22D3EE]/35 sm:block" />
                     )}
                   </div>
                 ))}
@@ -376,7 +376,7 @@ export default function Home() {
             },
           ].map((item) => (
             <div key={item.title} className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#D4A373]/10 text-[#D4A373]">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#22D3EE]/10 text-[#22D3EE]">
                 <Check className="h-4 w-4" />
               </span>
               <div>
@@ -393,7 +393,7 @@ export default function Home() {
       <section id="objetivos" className="scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mx-auto max-w-3xl text-center">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#D4A373]">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#22D3EE]">
               Para diferentes objetivos
             </p>
             <h2 className="mt-4 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl lg:text-5xl">
@@ -412,9 +412,9 @@ export default function Home() {
               return (
                 <article
                   key={goal.title}
-                  className="group rounded-2xl border border-white/[0.08] bg-[#0e0e0e] p-6 transition duration-200 hover:-translate-y-1 hover:border-[#D4A373]/35 hover:bg-[#12100e]"
+                  className="group rounded-2xl border border-white/[0.08] bg-[#0e0e0e] p-6 transition duration-200 hover:-translate-y-1 hover:border-[#22D3EE]/35 hover:bg-[#12100e]"
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#D4A373]/20 bg-[#D4A373]/10 text-[#D4A373] transition group-hover:scale-105">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#22D3EE]/20 bg-[#22D3EE]/10 text-[#22D3EE] transition group-hover:scale-105">
                     <Icon className="h-5 w-5" />
                   </div>
                   <h3 className="mt-5 text-lg font-black text-white">
@@ -437,7 +437,7 @@ export default function Home() {
       <section id="beneficios" className="scroll-mt-24 bg-[#0b0b0b] px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
           <div className="lg:sticky lg:top-28">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#D4A373]">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#22D3EE]">
               Acompanhamento de verdade
             </p>
             <h2 className="mt-4 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">
@@ -449,9 +449,9 @@ export default function Home() {
               sua evolução.
             </p>
 
-            <div className="mt-7 rounded-2xl border border-[#D4A373]/25 bg-[#D4A373]/8 p-5">
+            <div className="mt-7 rounded-2xl border border-[#22D3EE]/25 bg-[#22D3EE]/8 p-5">
               <div className="flex items-start gap-3">
-                <Shield className="mt-0.5 h-5 w-5 shrink-0 text-[#D4A373]" />
+                <Shield className="mt-0.5 h-5 w-5 shrink-0 text-[#22D3EE]" />
                 <p className="text-sm leading-6 text-neutral-300">
                   Qualquer dor, incômodo ou desconforto deve ser registrado no
                   treino ou informado pelo chat. Essa informação impacta
@@ -470,7 +470,7 @@ export default function Home() {
                   key={benefit.title}
                   className="rounded-2xl border border-white/[0.08] bg-[#111111] p-6 sm:p-7"
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#D4A373] text-black">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#22D3EE] text-black">
                     <Icon className="h-5 w-5" />
                   </div>
                   <h3 className="mt-5 text-lg font-black text-white">
@@ -489,7 +489,7 @@ export default function Home() {
       <section id="como-funciona" className="scroll-mt-24 px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mx-auto max-w-3xl text-center">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#D4A373]">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#22D3EE]">
               Como funciona
             </p>
             <h2 className="mt-4 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl lg:text-5xl">
@@ -503,7 +503,7 @@ export default function Home() {
                 key={step.number}
                 className="relative rounded-2xl border border-white/[0.08] bg-[#0e0e0e] p-6"
               >
-                <div className="text-4xl font-black text-[#D4A373]/25">
+                <div className="text-4xl font-black text-[#22D3EE]/25">
                   {step.number}
                 </div>
                 <h3 className="mt-5 text-lg font-black text-white">
@@ -513,7 +513,7 @@ export default function Home() {
                   {step.description}
                 </p>
                 {index < steps.length - 1 && (
-                  <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-6 w-6 -translate-y-1/2 rounded-full bg-[#070707] p-1 text-[#D4A373] lg:block" />
+                  <ArrowRight className="absolute -right-3 top-1/2 z-10 hidden h-6 w-6 -translate-y-1/2 rounded-full bg-[#070707] p-1 text-[#22D3EE] lg:block" />
                 )}
               </article>
             ))}
@@ -522,10 +522,10 @@ export default function Home() {
       </section>
 
       <section className="px-4 pb-20 sm:px-6 sm:pb-24 lg:px-8">
-        <div className="mx-auto max-w-7xl overflow-hidden rounded-[30px] border border-[#D4A373]/25 bg-[radial-gradient(circle_at_top_right,rgba(212,163,115,0.18),transparent_38%),linear-gradient(145deg,#15110e,#0c0c0c_65%)] p-6 sm:p-10 lg:p-14">
+        <div className="mx-auto max-w-7xl overflow-hidden rounded-[30px] border border-[#22D3EE]/25 bg-[radial-gradient(circle_at_top_right,rgba(212,163,115,0.18),transparent_38%),linear-gradient(145deg,#15110e,#0c0c0c_65%)] p-6 sm:p-10 lg:p-14">
           <div className="grid items-center gap-10 lg:grid-cols-[1fr_auto]">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#D4A373]/25 bg-[#D4A373]/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-[#e6bd94]">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#22D3EE]/25 bg-[#22D3EE]/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-[#e6bd94]">
                 <Zap className="h-3.5 w-3.5" />
                 Período experimental
               </div>
@@ -547,7 +547,7 @@ export default function Home() {
                     key={item}
                     className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-black/20 px-3 py-2"
                   >
-                    <Check className="h-3.5 w-3.5 text-[#D4A373]" />
+                    <Check className="h-3.5 w-3.5 text-[#22D3EE]" />
                     {item}
                   </span>
                 ))}
@@ -570,7 +570,7 @@ export default function Home() {
       <section id="duvidas" className="scroll-mt-24 bg-[#0b0b0b] px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
         <div className="mx-auto max-w-4xl">
           <div className="text-center">
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#D4A373]">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#22D3EE]">
               Dúvidas frequentes
             </p>
             <h2 className="mt-4 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">
@@ -583,7 +583,7 @@ export default function Home() {
               <details key={faq.question} className="group py-5">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-5 text-left text-sm font-black text-white sm:text-base">
                   {faq.question}
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 text-[#D4A373] transition group-open:rotate-90">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 text-[#22D3EE] transition group-open:rotate-90">
                     <ChevronRight className="h-4 w-4" />
                   </span>
                 </summary>
@@ -604,16 +604,16 @@ export default function Home() {
         <div className="mx-auto flex max-w-7xl flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
           <BrandMark />
           <div className="flex flex-wrap gap-x-5 gap-y-3 text-xs font-medium text-neutral-500">
-            <Link href="/auth/signin" className="transition hover:text-[#D4A373]">
+            <Link href="/auth/signin" className="transition hover:text-[#22D3EE]">
               Entrar
             </Link>
-            <a href="#objetivos" className="transition hover:text-[#D4A373]">
+            <a href="#objetivos" className="transition hover:text-[#22D3EE]">
               Objetivos
             </a>
-            <a href="#como-funciona" className="transition hover:text-[#D4A373]">
+            <a href="#como-funciona" className="transition hover:text-[#22D3EE]">
               Como funciona
             </a>
-            <a href="#duvidas" className="transition hover:text-[#D4A373]">
+            <a href="#duvidas" className="transition hover:text-[#22D3EE]">
               Dúvidas
             </a>
           </div>

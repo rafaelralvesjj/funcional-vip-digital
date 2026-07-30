@@ -49,8 +49,8 @@ function Body({ side, levels, activeFilter }: { side: "front" | "back"; levels: 
 
     if (activeFilter && category !== activeFilter) return "#E7E7E7";
     if (category === "major") return "#FF6A00";
-    if (category === "moderate") return "#D79B68";
-    return "#8A6545";
+    if (category === "moderate") return "#06B6D4";
+    return "#0E7490";
   };
 
   return (
@@ -101,9 +101,9 @@ export default function WorkoutMuscleMap({ exercises, compact = false, title = "
   const levels = new Map(summary.muscles.map((item) => [item.key, item.normalizedScore]));
 
   return (
-    <section className={`rounded-2xl border border-[#D4A373]/25 bg-[#0b0b0b] ${compact ? "p-3" : "p-4"} ${className}`}>
+    <section className={`rounded-2xl border border-[#22D3EE]/25 bg-[#0b0b0b] ${compact ? "p-3" : "p-4"} ${className}`}>
       <div className="mb-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D4A373]">Mapa corporal</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#22D3EE]">Mapa corporal</p>
         <h3 className={`${compact ? "text-sm" : "text-base"} font-semibold text-[#f5f5f5]`}>{title}</h3>
         <p className="mt-1 text-[10px] leading-relaxed text-[#8d8d8d]">A intensidade da cor considera os músculos principais, auxiliares e o volume previsto de cada exercício.</p>
       </div>
@@ -116,7 +116,7 @@ export default function WorkoutMuscleMap({ exercises, compact = false, title = "
           type="button"
           aria-pressed={activeFilter === "major"}
           onClick={() => setActiveFilter((current) => current === "major" ? null : "major")}
-          className={`rounded-full border px-2.5 py-1.5 transition-all ${activeFilter === "major" ? "border-orange-400 bg-orange-500/30 text-orange-200 ring-1 ring-orange-400/50" : "border-orange-500/30 bg-orange-500/15 text-orange-300 hover:bg-orange-500/25"}`}
+          className={`rounded-full border px-2.5 py-1.5 transition-all ${activeFilter === "major" ? "border-cyan-400 bg-cyan-500/30 text-cyan-200 ring-1 ring-cyan-400/50" : "border-cyan-500/30 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25"}`}
         >
           Foco maior
         </button>
@@ -124,7 +124,7 @@ export default function WorkoutMuscleMap({ exercises, compact = false, title = "
           type="button"
           aria-pressed={activeFilter === "moderate"}
           onClick={() => setActiveFilter((current) => current === "moderate" ? null : "moderate")}
-          className={`rounded-full border px-2.5 py-1.5 transition-all ${activeFilter === "moderate" ? "border-[#E8B78C] bg-[#D79B68]/30 text-[#ffd5b0] ring-1 ring-[#D79B68]/50" : "border-[#D79B68]/30 bg-[#D79B68]/15 text-[#efbd91] hover:bg-[#D79B68]/25"}`}
+          className={`rounded-full border px-2.5 py-1.5 transition-all ${activeFilter === "moderate" ? "border-[#E8B78C] bg-[#06B6D4]/30 text-[#ffd5b0] ring-1 ring-[#06B6D4]/50" : "border-[#06B6D4]/30 bg-[#06B6D4]/15 text-[#efbd91] hover:bg-[#06B6D4]/25"}`}
         >
           Foco moderado
         </button>
@@ -132,7 +132,7 @@ export default function WorkoutMuscleMap({ exercises, compact = false, title = "
           type="button"
           aria-pressed={activeFilter === "auxiliary"}
           onClick={() => setActiveFilter((current) => current === "auxiliary" ? null : "auxiliary")}
-          className={`rounded-full border px-2.5 py-1.5 transition-all ${activeFilter === "auxiliary" ? "border-[#B98A63] bg-[#8A6545]/35 text-[#e1b48f] ring-1 ring-[#8A6545]/60" : "border-[#8A6545]/30 bg-[#8A6545]/15 text-[#c39a77] hover:bg-[#8A6545]/25"}`}
+          className={`rounded-full border px-2.5 py-1.5 transition-all ${activeFilter === "auxiliary" ? "border-[#B98A63] bg-[#0E7490]/35 text-[#e1b48f] ring-1 ring-[#0E7490]/60" : "border-[#0E7490]/30 bg-[#0E7490]/15 text-[#c39a77] hover:bg-[#0E7490]/25"}`}
         >
           Participação auxiliar
         </button>

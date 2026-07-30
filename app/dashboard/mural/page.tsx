@@ -186,13 +186,13 @@ export default function MuralPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
-        <h1 className="text-xl font-bold text-[#D4A373]">Mural de Avisos</h1>
+        <h1 className="text-xl font-bold text-[#22D3EE]">Mural de Avisos</h1>
 
         <form
           onSubmit={handleSubmit}
           className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4"
         >
-          <h2 className="text-lg font-semibold text-[#D4A373]">
+          <h2 className="text-lg font-semibold text-[#22D3EE]">
             Publicar novo aviso
           </h2>
 
@@ -204,7 +204,7 @@ export default function MuralPage() {
             <select
               value={selectedStudent}
               onChange={(e) => setSelectedStudent(e.target.value)}
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
             >
               <option value="">Todos os alunos</option>
               {students.map((s) => (
@@ -226,7 +226,7 @@ export default function MuralPage() {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Digite o título do aviso"
               required
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
             />
           </div>
 
@@ -241,7 +241,7 @@ export default function MuralPage() {
               rows={4}
               placeholder="Digite o conteúdo do aviso..."
               required
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] resize-none"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE] resize-none"
             />
           </div>
 
@@ -253,7 +253,7 @@ export default function MuralPage() {
             <select
               value={noticeType}
               onChange={(e) => setNoticeType(e.target.value)}
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
             >
               <option value="AVISO">Aviso</option>
               <option value="AVISO_IMPORTANTE">Aviso importante</option>
@@ -278,7 +278,7 @@ export default function MuralPage() {
                 type="date"
                 value={expiresAt}
                 onChange={(e) => setExpiresAt(e.target.value)}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373] [color-scheme:dark]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0a0a] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE] [color-scheme:dark]"
               />
 
               <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -287,7 +287,7 @@ export default function MuralPage() {
                   height="18"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#D4A373"
+                  stroke="#22D3EE"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -306,7 +306,7 @@ export default function MuralPage() {
           <button
             type="submit"
             disabled={saving || !title.trim() || !content.trim()}
-            className="w-full bg-[#D4A373] text-[#0a0a0a] font-bold rounded-xl py-3 text-sm transition hover:bg-[#b88a5e] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-[#22D3EE] text-[#0a0a0a] font-bold rounded-xl py-3 text-sm transition hover:bg-[#0891B2] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Publicando..." : "Publicar aviso"}
           </button>
@@ -319,7 +319,7 @@ export default function MuralPage() {
         </form>
 
         <div className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5">
-          <h2 className="text-lg font-semibold text-[#D4A373] mb-4">
+          <h2 className="text-lg font-semibold text-[#22D3EE] mb-4">
             Avisos publicados
           </h2>
 
@@ -400,7 +400,7 @@ export default function MuralPage() {
                               </span>
                             )}
 
-                            <span className="bg-[#D4A373]/10 text-[#D4A373] px-2 py-0.5 rounded text-[10px]">
+                            <span className="bg-[#22D3EE]/10 text-[#22D3EE] px-2 py-0.5 rounded text-[10px]">
                               {notice.type}
                             </span>
 
@@ -465,7 +465,7 @@ export default function MuralPage() {
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               placeholder="Título do aviso"
-              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#D4A373]"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-3 outline-none focus:border-[#22D3EE]"
             />
 
             <textarea
@@ -473,7 +473,7 @@ export default function MuralPage() {
               onChange={(e) => setEditContent(e.target.value)}
               placeholder="Conteúdo"
               rows={3}
-              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#D4A373] resize-none"
+              className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm mb-4 outline-none focus:border-[#22D3EE] resize-none"
             />
 
             <div className="flex gap-2 justify-end">
@@ -486,7 +486,7 @@ export default function MuralPage() {
 
               <button
                 onClick={saveNotice}
-                className="text-xs bg-[#D4A373] hover:bg-[#c49563] text-black px-4 py-1.5 rounded transition-colors"
+                className="text-xs bg-[#22D3EE] hover:bg-[#06B6D4] text-black px-4 py-1.5 rounded transition-colors"
               >
                 Salvar
               </button>

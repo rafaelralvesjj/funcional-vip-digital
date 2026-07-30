@@ -162,8 +162,8 @@ export default function DashboardLayout({
         <div className="p-6 border-b border-[#ffffff10] flex items-center justify-between">
           <div className="flex items-center gap-3">
             <BrandLogo href="/dashboard" variant="symbol" size="sm" priority />
-            <Link href="/dashboard" className="text-[#D4A373] font-bold text-base leading-tight">
-              Funcional VIP Digital
+            <Link href="/dashboard" className="text-[#22D3EE] font-bold text-base leading-tight">
+              Funcional UP Digital
             </Link>
           </div>
 
@@ -185,7 +185,7 @@ export default function DashboardLayout({
               onClick={() => setSidebarOpen(false)}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition ${
                 isActive(item.href)
-                  ? "bg-[#D4A373]/10 text-[#D4A373] border-l-2 border-[#D4A373]"
+                  ? "bg-[#22D3EE]/10 text-[#22D3EE] border-l-2 border-[#22D3EE]"
                   : "text-[#a1a1a1] hover:text-[#e5e5e5] hover:bg-white/5"
               }`}
             >
@@ -234,12 +234,12 @@ export default function DashboardLayout({
 
           <div className="flex items-center gap-2">
             <BrandLogo href="/dashboard" variant="symbol" size="sm" priority />
-            <span className="text-[#D4A373] font-bold text-xs sm:text-sm">
-              Funcional VIP Digital
+            <span className="text-[#22D3EE] font-bold text-xs sm:text-sm">
+              Funcional UP Digital
             </span>
           </div>
 
-          <div className="w-6 h-6 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-xs">
+          <div className="w-6 h-6 rounded-full bg-[#22D3EE]/20 text-[#22D3EE] flex items-center justify-center font-bold text-xs">
             {session?.user?.name?.charAt(0).toUpperCase() || "U"}
           </div>
         </div>

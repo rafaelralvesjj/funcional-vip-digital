@@ -163,7 +163,7 @@ export default function TeacherConversationComposer({
               value={target}
               onChange={handleTargetChange}
               disabled={sending}
-              className="w-full rounded-xl border border-[#ffffff10] bg-[#0a0a0a] px-3 py-3 text-sm text-[#f5f5f5] focus:border-[#D4A373] focus:outline-none disabled:opacity-60"
+              className="w-full rounded-xl border border-[#ffffff10] bg-[#0a0a0a] px-3 py-3 text-sm text-[#f5f5f5] focus:border-[#22D3EE] focus:outline-none disabled:opacity-60"
             >
               <option value="STUDENT">Um dos meus alunos</option>
               <option value="MANAGEMENT">Gestão</option>
@@ -185,7 +185,7 @@ export default function TeacherConversationComposer({
                 setSuccess("");
               }}
               disabled={sending || students.length === 0}
-              className="w-full rounded-xl border border-[#ffffff10] bg-[#0a0a0a] px-3 py-3 text-sm text-[#f5f5f5] focus:border-[#D4A373] focus:outline-none disabled:opacity-60"
+              className="w-full rounded-xl border border-[#ffffff10] bg-[#0a0a0a] px-3 py-3 text-sm text-[#f5f5f5] focus:border-[#22D3EE] focus:outline-none disabled:opacity-60"
             >
               <option value="">
                 {students.length === 0
@@ -201,8 +201,8 @@ export default function TeacherConversationComposer({
             </select>
           </label>
         ) : (
-          <div className="rounded-xl border border-[#D4A373]/20 bg-[#D4A373]/5 p-3">
-            <p className="text-xs font-semibold text-[#D4A373]">
+          <div className="rounded-xl border border-[#22D3EE]/20 bg-[#22D3EE]/5 p-3">
+            <p className="text-xs font-semibold text-[#22D3EE]">
               Conversa com a gestão
             </p>
             <p className="mt-1 text-xs leading-relaxed text-[#a1a1a1]">
@@ -230,7 +230,7 @@ export default function TeacherConversationComposer({
               ? "Escreva a mensagem que o aluno receberá..."
               : "Explique para a gestão como ela pode apoiar..."
           }
-          className="w-full resize-y rounded-xl border border-[#ffffff10] bg-[#0a0a0a] px-3 py-3 text-sm text-[#f5f5f5] placeholder:text-[#525252] focus:border-[#D4A373] focus:outline-none disabled:opacity-60"
+          className="w-full resize-y rounded-xl border border-[#ffffff10] bg-[#0a0a0a] px-3 py-3 text-sm text-[#f5f5f5] placeholder:text-[#525252] focus:border-[#22D3EE] focus:outline-none disabled:opacity-60"
         />
       </label>
 
@@ -246,13 +246,13 @@ export default function TeacherConversationComposer({
             accept="image/*,video/*"
             onChange={handleFileChange}
             disabled={sending}
-            className="mt-2 block w-full text-xs text-[#a1a1a1] file:mr-3 file:rounded-lg file:border-0 file:bg-[#D4A373] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#0a0a0a] hover:file:bg-[#c49563] disabled:opacity-60"
+            className="mt-2 block w-full text-xs text-[#a1a1a1] file:mr-3 file:rounded-lg file:border-0 file:bg-[#22D3EE] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#0a0a0a] hover:file:bg-[#06B6D4] disabled:opacity-60"
           />
         </label>
 
         {selectedFile && (
           <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="truncate text-[11px] text-[#D4A373]">
+            <p className="truncate text-[11px] text-[#22D3EE]">
               {selectedFile.name}
             </p>
 
@@ -295,7 +295,7 @@ export default function TeacherConversationComposer({
             sending ||
             (effectiveTarget === "STUDENT" && (!selectedStudentId || students.length === 0))
           }
-          className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[#D4A373] px-5 py-3 text-sm font-semibold text-[#0a0a0a] transition hover:bg-[#c49563] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[#22D3EE] px-5 py-3 text-sm font-semibold text-[#0a0a0a] transition hover:bg-[#06B6D4] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {sending ? "Enviando..." : "Iniciar conversa"}
         </button>

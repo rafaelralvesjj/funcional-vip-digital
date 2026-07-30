@@ -140,7 +140,7 @@ export default function ProfilePhotoEditor({
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="relative group">
-        <div className={`${classes.avatar} shrink-0 overflow-hidden rounded-full border border-[#D4A373]/30 bg-[#1a1a1a] flex items-center justify-center shadow-lg shadow-black/20`}>
+        <div className={`${classes.avatar} shrink-0 overflow-hidden rounded-full border border-[#22D3EE]/30 bg-[#1a1a1a] flex items-center justify-center shadow-lg shadow-black/20`}>
           {imageUrl ? (
             <img
               src={imageUrl}
@@ -148,7 +148,7 @@ export default function ProfilePhotoEditor({
               className="h-full w-full object-cover"
             />
           ) : (
-            <span className={`${classes.initials} font-bold text-[#D4A373]`}>
+            <span className={`${classes.initials} font-bold text-[#22D3EE]`}>
               {getInitials(name)}
             </span>
           )}
@@ -158,7 +158,7 @@ export default function ProfilePhotoEditor({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className={`${classes.button} absolute -bottom-1 -right-1 rounded-full bg-[#D4A373] text-[#0a0a0a] font-bold border border-[#0a0a0a] shadow-lg hover:bg-[#c49563] disabled:opacity-60`}
+          className={`${classes.button} absolute -bottom-1 -right-1 rounded-full bg-[#22D3EE] text-[#0a0a0a] font-bold border border-[#0a0a0a] shadow-lg hover:bg-[#06B6D4] disabled:opacity-60`}
           title="Alterar foto"
           aria-label="Alterar foto"
         >

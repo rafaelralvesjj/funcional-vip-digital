@@ -248,7 +248,7 @@ function renderAttachmentIndicator(item: { imageUrl?: string | null; videoUrl?: 
   if (!hasChatAttachment(item)) return null;
 
   return (
-    <p className="mt-2 text-[10px] text-[#D4A373]">
+    <p className="mt-2 text-[10px] text-[#22D3EE]">
       📎 Anexo enviado. Abra a conversa para visualizar.
     </p>
   );
@@ -904,7 +904,7 @@ export default function DashboardConversationList({
                     <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300">Documento do aluno</p>
                     <p className="mt-1 text-xs text-[#d4d4d4]">Gere o prompt, abra o documento e envie os dois juntos para a IA externa. Depois cole o JSON para salvar na memória técnica.</p>
                   </div>
-                  <button type="button" onClick={() => handlePrepareDocumentPrompt(conversation)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg bg-[#D4A373] px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">
+                  <button type="button" onClick={() => handlePrepareDocumentPrompt(conversation)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg bg-[#22D3EE] px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">
                     {documentLoadingId === conversation.id ? "Preparando..." : "Gerar prompt para analisar documento"}
                   </button>
                   {documentPromptById[conversation.id] && (
@@ -918,7 +918,7 @@ export default function DashboardConversationList({
               )}
 
               <p className="text-xs text-[#a1a1a1] mb-3 mt-3">
-                Para: <span className="text-[#D4A373]">{conversation.targetLabel}</span>
+                Para: <span className="text-[#22D3EE]">{conversation.targetLabel}</span>
               </p>
 
               <div className="flex justify-between items-center gap-4">
@@ -929,7 +929,7 @@ export default function DashboardConversationList({
                 <button
                   type="button"
                   onClick={() => setExpandedConversationId(isExpanded ? null : conversation.id)}
-                  className="text-xs text-[#D4A373] hover:underline"
+                  className="text-xs text-[#22D3EE] hover:underline"
                 >
                   {isExpanded ? "Recolher conversa" : "Abrir conversa"}
                 </button>
@@ -996,7 +996,7 @@ export default function DashboardConversationList({
                                   )
                                 }
                                 disabled={Boolean(adjustmentLoadingKey)}
-                                className="rounded-lg bg-[#D4A373] px-3 py-2 text-[11px] font-bold text-black transition hover:bg-[#b88b5d] disabled:opacity-50"
+                                className="rounded-lg bg-[#22D3EE] px-3 py-2 text-[11px] font-bold text-black transition hover:bg-[#0891B2] disabled:opacity-50"
                               >
                                 {isPreparing
                                   ? "Preparando prompt..."
@@ -1016,7 +1016,7 @@ export default function DashboardConversationList({
                       type="button"
                       onClick={() => handleFutureOnly(conversation)}
                       disabled={Boolean(adjustmentLoadingKey)}
-                      className="w-full rounded-lg border border-[#ffffff20] px-3 py-2 text-[11px] font-semibold text-[#f5f5f5] transition hover:border-[#D4A373] hover:text-[#D4A373] disabled:opacity-50"
+                      className="w-full rounded-lg border border-[#ffffff20] px-3 py-2 text-[11px] font-semibold text-[#f5f5f5] transition hover:border-[#22D3EE] hover:text-[#22D3EE] disabled:opacity-50"
                     >
                       {adjustmentLoadingKey === `${conversation.id}:future-only`
                         ? "Registrando decisão..."
@@ -1213,7 +1213,7 @@ export default function DashboardConversationList({
                           [conversation.id]: event.target.value,
                         }))
                       }
-                      className="w-full bg-[#111111] border border-[#ffffff10] rounded-lg p-2 text-xs text-[#f5f5f5] focus:outline-none focus:border-[#D4A373] h-20 resize-none"
+                      className="w-full bg-[#111111] border border-[#ffffff10] rounded-lg p-2 text-xs text-[#f5f5f5] focus:outline-none focus:border-[#22D3EE] h-20 resize-none"
                       placeholder="Escreva sua resposta..."
                     />
 
@@ -1227,10 +1227,10 @@ export default function DashboardConversationList({
                             [conversation.id]: event.target.files?.[0] || null,
                           }))
                         }
-                        className="block w-full text-[10px] text-[#a1a1a1] file:mr-2 file:rounded file:border-0 file:bg-[#D4A373] file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-[#0a0a0a]"
+                        className="block w-full text-[10px] text-[#a1a1a1] file:mr-2 file:rounded file:border-0 file:bg-[#22D3EE] file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-[#0a0a0a]"
                       />
                       {replyFileById[conversation.id] && (
-                        <p className="text-[10px] text-[#D4A373]">
+                        <p className="text-[10px] text-[#22D3EE]">
                           Anexo selecionado: {replyFileById[conversation.id]?.name}
                         </p>
                       )}
@@ -1240,7 +1240,7 @@ export default function DashboardConversationList({
                       <button
                         type="submit"
                         disabled={sendingConversationId === conversation.id}
-                        className="bg-[#D4A373] text-black text-xs font-bold px-4 py-1.5 rounded hover:bg-[#b88b5d] transition-colors disabled:opacity-50"
+                        className="bg-[#22D3EE] text-black text-xs font-bold px-4 py-1.5 rounded hover:bg-[#0891B2] transition-colors disabled:opacity-50"
                       >
                         {sendingConversationId === conversation.id ? "Enviando..." : "Responder"}
                       </button>

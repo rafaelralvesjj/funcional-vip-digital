@@ -110,12 +110,12 @@ export default function DashboardSectionSwitcher({ cards, children }: Props) {
               className={
                 "group relative flex min-h-[142px] flex-col rounded-2xl border bg-gradient-to-br from-[#111111] to-[#151515] p-3 text-left transition sm:min-h-[160px] sm:p-4 " +
                 (isActive
-                  ? "border-[#D4A373] shadow-[0_0_0_1px_rgba(212,163,115,0.28)]"
-                  : "border-[#ffffff12] hover:border-[#D4A373]/45")
+                  ? "border-[#22D3EE] shadow-[0_0_0_1px_rgba(212,163,115,0.28)]"
+                  : "border-[#ffffff12] hover:border-[#22D3EE]/45")
               }
             >
               <div className="flex items-start justify-between gap-1.5">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#D4A373]/10 text-[#E7AE73] sm:h-10 sm:w-10">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#22D3EE]/10 text-[#E7AE73] sm:h-10 sm:w-10">
                   <CardIcon id={card.id} />
                 </span>
 
@@ -133,7 +133,7 @@ export default function DashboardSectionSwitcher({ cards, children }: Props) {
               </p>
 
               <div className="mt-auto flex items-end justify-between gap-1 pt-2">
-                <p className="text-2xl font-semibold leading-none text-[#D4A373] sm:text-3xl">
+                <p className="text-2xl font-semibold leading-none text-[#22D3EE] sm:text-3xl">
                   {card.value}
                 </p>
 
@@ -150,7 +150,7 @@ export default function DashboardSectionSwitcher({ cards, children }: Props) {
       {activeCard && (
         <div className="flex items-center justify-between gap-3 px-0.5">
           <p className="min-w-0 truncate text-xs text-[#a1a1a1] sm:text-sm">
-            Exibindo: <span className="text-[#D4A373]">{activeCard.label}</span>
+            Exibindo: <span className="text-[#22D3EE]">{activeCard.label}</span>
           </p>
 
           <span
