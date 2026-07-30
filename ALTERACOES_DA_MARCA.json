@@ -1,0 +1,14 @@
+{
+  "marca": "Funcional UP Digital",
+  "arquivos_alterados_ou_criados": 91,
+  "arquivos_removidos": 0,
+  "principais_mudancas": [
+    "Nome da marca substituído em telas, e-mails, avisos, relatórios, prompts e metadados.",
+    "Paleta principal alterada do laranja/dourado para turquesa/ciano.",
+    "Logo horizontal, símbolo, favicons, ícones PWA e imagem de compartilhamento atualizados.",
+    "Componente BrandLogo ajustado para versões horizontal e símbolo.",
+    "Nome técnico do pacote atualizado para funcional-up-digital.",
+    "Build da Vercel alterado para prisma generate && next build, sem db push automático."
+  ],
+  "observacao_url": "O endereço funcional-vip-digital.vercel.app foi mantido como fallback porque continua sendo o domínio publicado atual. Quando um novo domínio for conectado, configure NEXT_PUBLIC_APP_URL/APP_URL na Vercel."
+}

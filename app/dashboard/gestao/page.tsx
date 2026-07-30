@@ -481,7 +481,7 @@ export default function GestaoPage() {
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5] p-6">
       <div className="max-w-5xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-[#D4A373] mb-2">Gestão</h1>
+          <h1 className="text-3xl font-bold text-[#22D3EE] mb-2">Gestão</h1>
           <p className="text-[#a1a1a1] text-sm">
             {students.length} alunos e {teachers.length} professores carregados.
           </p>
@@ -490,13 +490,13 @@ export default function GestaoPage() {
         <div className="flex gap-4 mb-8 border-b border-[#ffffff10]">
           <button
             onClick={() => setActiveTab("mural")}
-            className={`pb-2 px-4 transition-colors ${activeTab === "mural" ? "border-b-2 border-[#D4A373] text-[#D4A373]" : "text-[#a1a1a1] hover:text-[#f5f5f5]"}`}
+            className={`pb-2 px-4 transition-colors ${activeTab === "mural" ? "border-b-2 border-[#22D3EE] text-[#22D3EE]" : "text-[#a1a1a1] hover:text-[#f5f5f5]"}`}
           >
             Mural
           </button>
           <button
             onClick={() => setActiveTab("chat")}
-            className={`pb-2 px-4 transition-colors ${activeTab === "chat" ? "border-b-2 border-[#D4A373] text-[#D4A373]" : "text-[#a1a1a1] hover:text-[#f5f5f5]"}`}
+            className={`pb-2 px-4 transition-colors ${activeTab === "chat" ? "border-b-2 border-[#22D3EE] text-[#22D3EE]" : "text-[#a1a1a1] hover:text-[#f5f5f5]"}`}
           >
             Chat
           </button>
@@ -513,7 +513,7 @@ export default function GestaoPage() {
                   <select
                     value={targetType}
                     onChange={(e) => setTargetType(e.target.value as TargetType)}
-                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#22D3EE]"
                   >
                     <option value="TODOS_ALUNOS">Todos os alunos</option>
                     <option value="ALUNO_ESPECIFICO">Aluno específico</option>
@@ -529,7 +529,7 @@ export default function GestaoPage() {
                       <select
                         value={selectedStudentId}
                         onChange={(e) => setSelectedStudentId(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373]"
+                        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#22D3EE]"
                         required
                       >
                         <option value="">Selecione...</option>
@@ -546,7 +546,7 @@ export default function GestaoPage() {
                       <select
                         value={selectedTeacherId}
                         onChange={(e) => setSelectedTeacherId(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373]"
+                        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#22D3EE]"
                         required
                       >
                         <option value="">Selecione...</option>
@@ -562,7 +562,7 @@ export default function GestaoPage() {
                     type="text"
                     value={noticeTitle}
                     onChange={(e) => setNoticeTitle(e.target.value)}
-                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#22D3EE]"
                     placeholder="Título do aviso"
                     required
                   />
@@ -573,7 +573,7 @@ export default function GestaoPage() {
                   <textarea
                     value={noticeContent}
                     onChange={(e) => setNoticeContent(e.target.value)}
-                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373] h-32 resize-none"
+                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#22D3EE] h-32 resize-none"
                     placeholder="Escreva o aviso aqui..."
                     required
                   />
@@ -585,7 +585,7 @@ export default function GestaoPage() {
                 <button
                   type="submit"
                   disabled={savingNotice}
-                  className="w-full bg-[#D4A373] text-black font-bold py-2 rounded-lg hover:bg-[#b88b5d] transition-colors disabled:opacity-50"
+                  className="w-full bg-[#22D3EE] text-black font-bold py-2 rounded-lg hover:bg-[#0891B2] transition-colors disabled:opacity-50"
                 >
                   {savingNotice ? "Publicando..." : "Publicar"}
                 </button>
@@ -600,7 +600,7 @@ export default function GestaoPage() {
                 notices.map(n => (
                   <div key={n.id} className="bg-[#111111] border border-[#ffffff10] p-4 rounded-xl">
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-bold text-[#D4A373]">{n.title}</h3>
+                      <h3 className="font-bold text-[#22D3EE]">{n.title}</h3>
                       <span className="text-[10px] text-[#a1a1a1]">{formatDateTime(n.createdAt)}</span>
                     </div>
                     <p className="text-sm text-[#f5f5f5] whitespace-pre-wrap mb-3">{n.content}</p>
@@ -611,7 +611,7 @@ export default function GestaoPage() {
                         </span>
 
                         {getNoticeTargetNames(n).length === 0 ? (
-                          <span className="text-[10px] bg-[#D4A373]/10 text-[#D4A373] px-2 py-0.5 rounded">
+                          <span className="text-[10px] bg-[#22D3EE]/10 text-[#22D3EE] px-2 py-0.5 rounded">
                             Nenhum destinatário carregado
                           </span>
                         ) : (
@@ -654,7 +654,7 @@ export default function GestaoPage() {
                       setChatSelectedStudentId("");
                       setChatSelectedTeacherId("");
                     }}
-                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#22D3EE]"
                   >
                     <option value="ALUNO_ESPECIFICO">Aluno específico</option>
                     <option value="PROFESSOR_ESPECIFICO">Professor específico</option>
@@ -668,7 +668,7 @@ export default function GestaoPage() {
                       <select
                         value={chatSelectedStudentId}
                         onChange={(e) => setChatSelectedStudentId(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373]"
+                        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#22D3EE]"
                         required
                       >
                         <option value="">Selecione...</option>
@@ -685,7 +685,7 @@ export default function GestaoPage() {
                       <select
                         value={chatSelectedTeacherId}
                         onChange={(e) => setChatSelectedTeacherId(e.target.value)}
-                        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373]"
+                        className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#22D3EE]"
                         required
                       >
                         <option value="">Selecione...</option>
@@ -700,7 +700,7 @@ export default function GestaoPage() {
                   <textarea
                     value={chatContent}
                     onChange={(e) => setChatContent(e.target.value)}
-                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#D4A373] h-32 resize-none"
+                    className="w-full bg-[#0a0a0a] border border-[#ffffff10] rounded-lg p-2 text-sm focus:outline-none focus:border-[#22D3EE] h-32 resize-none"
                     placeholder="Escreva sua mensagem..."
                     required
                   />
@@ -712,7 +712,7 @@ export default function GestaoPage() {
                 <button
                   type="submit"
                   disabled={sendingChat}
-                  className="w-full bg-[#D4A373] text-black font-bold py-2 rounded-lg hover:bg-[#b88b5d] transition-colors disabled:opacity-50"
+                  className="w-full bg-[#22D3EE] text-black font-bold py-2 rounded-lg hover:bg-[#0891B2] transition-colors disabled:opacity-50"
                 >
                   {sendingChat ? "Enviando..." : "Enviar"}
                 </button>
@@ -744,7 +744,7 @@ export default function GestaoPage() {
                         </span>
                         <button
                           onClick={() => setExpandedQuestion(expandedQuestion === q.id ? null : q.id)}
-                          className="text-xs text-[#D4A373] hover:underline"
+                          className="text-xs text-[#22D3EE] hover:underline"
                         >
                           {expandedQuestion === q.id ? "Recolher conversa" : "Abrir conversa"}
                         </button>
@@ -777,14 +777,14 @@ export default function GestaoPage() {
                             <textarea
                               value={replyContent}
                               onChange={(e) => setReplyContent(e.target.value)}
-                              className="w-full bg-[#111111] border border-[#ffffff10] rounded-lg p-2 text-xs focus:outline-none focus:border-[#D4A373] h-20 resize-none"
+                              className="w-full bg-[#111111] border border-[#ffffff10] rounded-lg p-2 text-xs focus:outline-none focus:border-[#22D3EE] h-20 resize-none"
                               placeholder="Escreva sua resposta..."
                             />
 
                             <div className="flex flex-wrap gap-2">
                               <button
                                 onClick={() => handleReply(q)}
-                                className="bg-[#D4A373] text-black text-xs font-bold px-4 py-1.5 rounded hover:bg-[#b88b5d] transition-colors"
+                                className="bg-[#22D3EE] text-black text-xs font-bold px-4 py-1.5 rounded hover:bg-[#0891B2] transition-colors"
                               >
                                 Responder
                               </button>

@@ -291,10 +291,10 @@ export default function GerenciarGestorPage() {
     <div className="p-4 md:p-8 space-y-6">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
-          <p className="text-xs text-[#D4A373] uppercase tracking-[0.3em] mb-2">
+          <p className="text-xs text-[#22D3EE] uppercase tracking-[0.3em] mb-2">
             Gestão de acessos
           </p>
-          <h1 className="text-2xl md:text-3xl font-bold text-[#D4A373]">
+          <h1 className="text-2xl md:text-3xl font-bold text-[#22D3EE]">
             Gerenciar Gestores
           </h1>
           <p className="text-sm text-[#a1a1a1] mt-2">
@@ -304,7 +304,7 @@ export default function GerenciarGestorPage() {
 
         <button
           onClick={openCreateModal}
-          className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition"
+          className="bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#06B6D4] transition"
         >
           + Cadastrar Gestor
         </button>
@@ -329,7 +329,7 @@ export default function GerenciarGestorPage() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar por nome, e-mail, telefone, documento, registro ou especialidade..."
-            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
           />
 
           <label className="flex items-center gap-2 text-xs text-[#a1a1a1]">
@@ -337,7 +337,7 @@ export default function GerenciarGestorPage() {
               type="checkbox"
               checked={showInactive}
               onChange={(event) => setShowInactive(event.target.checked)}
-              className="accent-[#D4A373]"
+              className="accent-[#22D3EE]"
             />
             Mostrar inativos
           </label>
@@ -365,7 +365,7 @@ export default function GerenciarGestorPage() {
 
           <div className="bg-[#1a1a1a] rounded-xl p-4">
             <p className="text-[10px] uppercase text-[#6b6b6b]">Exibidos</p>
-            <p className="text-2xl font-bold text-[#D4A373]">{filteredUsers.length}</p>
+            <p className="text-2xl font-bold text-[#22D3EE]">{filteredUsers.length}</p>
           </div>
         </div>
       </div>
@@ -402,7 +402,7 @@ export default function GerenciarGestorPage() {
                       </span>
 
                       {user.cref && (
-                        <span className="text-[10px] px-2 py-1 rounded-full bg-[#D4A373]/10 text-[#D4A373]">
+                        <span className="text-[10px] px-2 py-1 rounded-full bg-[#22D3EE]/10 text-[#22D3EE]">
                           {user.cref}
                         </span>
                       )}
@@ -505,7 +505,7 @@ export default function GerenciarGestorPage() {
                     value={form.name}
                     onChange={(event) => updateField("name", event.target.value)}
                     placeholder="Nome completo"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -518,7 +518,7 @@ export default function GerenciarGestorPage() {
                     onChange={(event) => updateField("email", event.target.value)}
                     placeholder="email@exemplo.com"
                     type="email"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -531,7 +531,7 @@ export default function GerenciarGestorPage() {
                     onChange={(event) => updateField("password", event.target.value)}
                     placeholder={isEditing ? "Deixe em branco para manter a senha atual" : "Mínimo 6 caracteres"}
                     type="password"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -543,7 +543,7 @@ export default function GerenciarGestorPage() {
                     value={form.phone}
                     onChange={(event) => updateField("phone", event.target.value)}
                     placeholder="(00) 00000-0000"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -555,7 +555,7 @@ export default function GerenciarGestorPage() {
                     value={form.document}
                     onChange={(event) => updateField("document", event.target.value)}
                     placeholder="CPF ou documento"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -567,7 +567,7 @@ export default function GerenciarGestorPage() {
                     value={form.birthDate}
                     onChange={(event) => updateField("birthDate", event.target.value)}
                     type="date"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -579,7 +579,7 @@ export default function GerenciarGestorPage() {
                     value={form.cref}
                     onChange={(event) => updateField("cref", event.target.value)}
                     placeholder="Ex.: matrícula, código interno ou deixe em branco"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -591,7 +591,7 @@ export default function GerenciarGestorPage() {
                     value={form.specialty}
                     onChange={(event) => updateField("specialty", event.target.value)}
                     placeholder="Ex.: gestor operacional, administrador, coordenação"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -603,7 +603,7 @@ export default function GerenciarGestorPage() {
                     value={form.education}
                     onChange={(event) => updateField("education", event.target.value)}
                     placeholder="Ex.: gestão, atendimento, operação, administração"
-                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -616,7 +616,7 @@ export default function GerenciarGestorPage() {
                       type="checkbox"
                       checked={form.active}
                       onChange={(event) => updateField("active", event.target.checked)}
-                      className="accent-[#D4A373]"
+                      className="accent-[#22D3EE]"
                     />
                     Cadastro ativo
                   </label>
@@ -630,7 +630,7 @@ export default function GerenciarGestorPage() {
                     value={form.experience}
                     onChange={(event) => updateField("experience", event.target.value)}
                     placeholder="Ex.: acompanhamento de professores, alunos, avisos e indicadores"
-                    className="w-full min-h-[90px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full min-h-[90px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
 
@@ -642,13 +642,13 @@ export default function GerenciarGestorPage() {
                     value={form.bio}
                     onChange={(event) => updateField("bio", event.target.value)}
                     placeholder="Observações internas sobre permissões, atuação e responsabilidades."
-                    className="w-full min-h-[110px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+                    className="w-full min-h-[110px] bg-[#111] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
                   />
                 </div>
               </div>
 
-              <div className="rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 p-4">
-                <p className="text-xs text-[#D4A373] font-semibold mb-1">
+              <div className="rounded-xl bg-[#22D3EE]/10 border border-[#22D3EE]/20 p-4">
+                <p className="text-xs text-[#22D3EE] font-semibold mb-1">
                   Boa prática
                 </p>
                 <p className="text-xs text-[#a1a1a1] leading-relaxed">
@@ -669,7 +669,7 @@ export default function GerenciarGestorPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="bg-[#D4A373] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#c49563] transition disabled:opacity-50"
+                  className="bg-[#22D3EE] text-[#0a0a0a] rounded-xl px-5 py-3 font-semibold text-sm hover:bg-[#06B6D4] transition disabled:opacity-50"
                 >
                   {saving ? "Salvando..." : isEditing ? "Salvar alterações" : "Cadastrar"}
                 </button>

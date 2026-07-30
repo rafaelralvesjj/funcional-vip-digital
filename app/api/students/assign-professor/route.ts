@@ -21,7 +21,7 @@ function getAppLoginUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app";
+    "https://funcional-up-digital.vercel.app";
 
   return `${appUrl.replace(/\/$/, "")}/auth/signin`;
 }
@@ -74,7 +74,7 @@ function buildProfessorAssignmentContent({
     "Antes de montar o primeiro treino, confira objetivo, histórico, dores, restrições, ambiente e equipamentos disponíveis.",
     "Use o chat da plataforma como canal principal com o aluno. Assim, dúvidas, orientações e decisões ficam registradas no histórico de acompanhamento.",
     "",
-    "Gestão do Funcional VIP Digital",
+    "Gestão do Funcional UP Digital",
     "Mensagem automática enviada após o vínculo do aluno.",
   ]
     .filter(Boolean)
@@ -181,17 +181,17 @@ async function notifyProfessorAssignment({
     html: `
       <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
         <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-          <h2 style="color:#D4A373; margin:0 0 16px;">${escapeHtml(title)}</h2>
+          <h2 style="color:#22D3EE; margin:0 0 16px;">${escapeHtml(title)}</h2>
           <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeProfessorName}</strong>!</p>
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">A gestão vinculou um novo aluno ao seu acompanhamento no Funcional VIP Digital.</p>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">A gestão vinculou um novo aluno ao seu acompanhamento no Funcional UP Digital.</p>
           <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
             <p style="color:#f5f5f5; margin:0 0 8px; font-size:14px;"><strong>Aluno:</strong> ${safeStudentName}</p>
             <p style="color:#d4d4d4; margin:0; font-size:13px;"><strong>E-mail:</strong> ${safeStudentEmail}</p>
           </div>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Antes de montar o primeiro treino, abra a ficha e confira objetivo, histórico, dores, restrições, ambiente e equipamentos disponíveis.</p>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Use o chat da plataforma como canal principal com o aluno. Assim, dúvidas, orientações e decisões ficam registradas no acompanhamento.</p>
-          <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:8px;">Abrir painel do aluno</a>
-          <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">Gestão do Funcional VIP Digital</p>
+          <a href="${loginUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:8px;">Abrir painel do aluno</a>
+          <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">Gestão do Funcional UP Digital</p>
           <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática enviada após o vínculo do aluno.</p>
         </div>
       </div>

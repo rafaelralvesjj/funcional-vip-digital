@@ -189,7 +189,7 @@ function buildVideoPrompt(exercise: {
     safety ? `CUIDADO TÉCNICO: ${safety}` : "",
     "",
     "RESULTADO ESPERADO:",
-    "Vídeo silencioso, didático, limpo e padronizado para uma biblioteca profissional de exercícios do Funcional VIP Digital.",
+    "Vídeo silencioso, didático, limpo e padronizado para uma biblioteca profissional de exercícios do Funcional UP Digital.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -357,7 +357,7 @@ export async function GET(req: NextRequest) {
     root?.file(
       "LEIA-ME.txt",
       [
-        "EXPORTAÇÃO PARA VÍDEOS — FUNCIONAL VIP DIGITAL",
+        "EXPORTAÇÃO PARA VÍDEOS — FUNCIONAL UP DIGITAL",
         "",
         `Parte: ${batch} de ${totalBatches}`,
         `Exercícios neste pacote: ${exercises.length}`,

@@ -374,10 +374,10 @@ export default function CuidadoAlunoPage() {
     <div className="p-4 md:p-8 space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div>
-          <p className="text-xs text-[#D4A373] uppercase tracking-[0.3em] mb-2">
+          <p className="text-xs text-[#22D3EE] uppercase tracking-[0.3em] mb-2">
             Experiência e retenção
           </p>
-          <h1 className="text-2xl md:text-3xl font-bold text-[#D4A373]">
+          <h1 className="text-2xl md:text-3xl font-bold text-[#22D3EE]">
             Acompanhamento do Aluno
           </h1>
           <p className="text-sm text-[#a1a1a1] mt-2 max-w-4xl">
@@ -387,7 +387,7 @@ export default function CuidadoAlunoPage() {
 
         <Link
           href="/dashboard/indicadores-cuidado"
-          className="inline-flex items-center justify-center rounded-xl bg-[#1a1a1a] border border-[#D4A373]/30 text-[#D4A373] px-4 py-3 text-sm font-semibold hover:border-[#D4A373] transition"
+          className="inline-flex items-center justify-center rounded-xl bg-[#1a1a1a] border border-[#22D3EE]/30 text-[#22D3EE] px-4 py-3 text-sm font-semibold hover:border-[#22D3EE] transition"
         >
           Ver indicadores comerciais
         </Link>
@@ -400,7 +400,7 @@ export default function CuidadoAlunoPage() {
             onClick={() => changeTab("CARE")}
             className={`border-b-2 px-2 py-4 text-sm font-semibold transition ${
               activeTab === "CARE"
-                ? "border-[#D4A373] text-[#D4A373]"
+                ? "border-[#22D3EE] text-[#22D3EE]"
                 : "border-transparent text-[#a1a1a1] hover:text-[#f5f5f5]"
             }`}
           >
@@ -412,7 +412,7 @@ export default function CuidadoAlunoPage() {
             onClick={() => changeTab("PREFERENCES")}
             className={`border-b-2 px-2 py-4 text-sm font-semibold transition ${
               activeTab === "PREFERENCES"
-                ? "border-[#D4A373] text-[#D4A373]"
+                ? "border-[#22D3EE] text-[#22D3EE]"
                 : "border-transparent text-[#a1a1a1] hover:text-[#f5f5f5]"
             }`}
           >
@@ -474,13 +474,13 @@ export default function CuidadoAlunoPage() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar por aluno, professor, tipo, relato ou status..."
-            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
           />
 
           <select
             value={status}
             onChange={(event) => setStatus(event.target.value)}
-            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#D4A373]"
+            className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#22D3EE]"
           >
             <option value="TODOS">Todos os status</option>
             <option value="ABERTO">Aberto</option>
@@ -499,8 +499,8 @@ export default function CuidadoAlunoPage() {
           </button>
         </div>
 
-        <div className="rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 p-4">
-          <p className="text-xs text-[#D4A373] font-semibold mb-1">
+        <div className="rounded-xl bg-[#22D3EE]/10 border border-[#22D3EE]/20 p-4">
+          <p className="text-xs text-[#22D3EE] font-semibold mb-1">
             Como usar
           </p>
           <p className="text-xs text-[#a1a1a1] leading-relaxed">
@@ -535,7 +535,7 @@ export default function CuidadoAlunoPage() {
                       {getCareEventStatusLabel(event)}
                     </span>
 
-                    <span className="text-[10px] px-2 py-1 rounded-full bg-[#D4A373]/10 text-[#D4A373]">
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-[#22D3EE]/10 text-[#22D3EE]">
                       {getEventTypeLabel(event.eventType)}
                     </span>
                   </div>
@@ -620,7 +620,7 @@ export default function CuidadoAlunoPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-4">
-                  <p className="text-xs text-[#D4A373] font-semibold mb-2">
+                  <p className="text-xs text-[#22D3EE] font-semibold mb-2">
                     Relato do aluno
                   </p>
                   <p className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-wrap">
@@ -629,7 +629,7 @@ export default function CuidadoAlunoPage() {
                 </div>
 
                 <div className="bg-[#0a0a0a] border border-[#ffffff10] rounded-xl p-4">
-                  <p className="text-xs text-[#D4A373] font-semibold mb-2">
+                  <p className="text-xs text-[#22D3EE] font-semibold mb-2">
                     Leitura para o professor
                   </p>
                   <p className="text-sm text-[#e5e5e5] leading-relaxed whitespace-pre-wrap">
@@ -712,7 +712,7 @@ export default function CuidadoAlunoPage() {
                   }
                   placeholder={canManageEvents ? "Ex.: treino revisado, carga reduzida, exercício substituído, aluno orientado..." : "Gestão visualiza este campo. Somente o professor responsável registra resolução/revisão."}
                   disabled={!canManageEvents}
-                  className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE] disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
             </div>

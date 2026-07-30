@@ -429,14 +429,14 @@ async function sendSurveyEmail(row: SurveyEmailRow, reminder = false) {
     "",
     `Responder pela área do aluno: ${alunoUrl}`,
     "",
-    "Equipe Funcional VIP Digital",
+    "Equipe Funcional UP Digital",
     "Mensagem automática de acompanhamento.",
   ].join("\n");
 
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <p style="color:#D4A373; margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:2px; font-weight:bold;">
+        <p style="color:#22D3EE; margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:2px; font-weight:bold;">
           ${safeSurveyLabel}
         </p>
         <h2 style="color:#f5f5f5; margin:0 0 16px; font-size:22px;">${safeTitle}</h2>
@@ -453,12 +453,12 @@ async function sendSurveyEmail(row: SurveyEmailRow, reminder = false) {
           Para dúvidas sobre seus treinos, use o chat da plataforma. Assim, a conversa fica registrada e pode ser acompanhada com segurança. O WhatsApp fica reservado para contatos específicos da gestão.
         </p>
 
-        <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
+        <a href="${alunoUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
           ${safeAction}
         </a>
 
         <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">
-          Equipe Funcional VIP Digital
+          Equipe Funcional UP Digital
         </p>
         <p style="color:#6b6b6b; font-size:11px; margin-top:8px; line-height:1.5;">
           Mensagem automática de acompanhamento. A pesquisa está disponível na sua área do aluno.

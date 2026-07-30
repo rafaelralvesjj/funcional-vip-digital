@@ -80,7 +80,7 @@ function getAppAlunoUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app";
+    "https://funcional-up-digital.vercel.app";
 
   return `${appUrl.replace(/\/$/, "")}/aluno`;
 }
@@ -120,10 +120,10 @@ function buildSenderAvatarHtml(name: string, image?: string | null): string {
     image && /^https?:\/\//i.test(image) ? escapeHtml(image) : "";
 
   if (safeImage) {
-    return `<img src="${safeImage}" alt="${safeName}" width="52" height="52" style="display:block; width:52px; height:52px; border-radius:999px; object-fit:cover; border:2px solid #D4A373;" />`;
+    return `<img src="${safeImage}" alt="${safeName}" width="52" height="52" style="display:block; width:52px; height:52px; border-radius:999px; object-fit:cover; border:2px solid #22D3EE;" />`;
   }
 
-  return `<div style="width:52px; height:52px; border-radius:999px; background:#2a2119; border:2px solid #D4A373; color:#D4A373; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:17px;">${escapeHtml(
+  return `<div style="width:52px; height:52px; border-radius:999px; background:#2a2119; border:2px solid #22D3EE; color:#22D3EE; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:17px;">${escapeHtml(
     getInitials(name)
   )}</div>`;
 }
@@ -174,7 +174,7 @@ async function sendWorkoutAdjustmentEmail({
     "Caso queira comentar como foi a adaptação ou tenha alguma dúvida, use o chat da plataforma.",
     "",
     professorName,
-    "Professor · Funcional VIP Digital",
+    "Professor · Funcional UP Digital",
     "Mensagem automática enviada após a revisão e confirmação do professor.",
   ]
     .filter(Boolean)
@@ -187,12 +187,12 @@ async function sendWorkoutAdjustmentEmail({
           ${avatarHtml}
           <div>
             <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.3;">${safeProfessorName}</div>
-            <div style="color:#D4A373; font-size:12px; margin-top:3px;">Professor · Funcional VIP Digital</div>
+            <div style="color:#22D3EE; font-size:12px; margin-top:3px;">Professor · Funcional UP Digital</div>
           </div>
         </div>
 
         <div style="padding:24px;">
-          <h2 style="color:#D4A373; margin:0 0 16px; font-size:22px;">Seu treino foi ajustado</h2>
+          <h2 style="color:#22D3EE; margin:0 0 16px; font-size:22px;">Seu treino foi ajustado</h2>
 
           <p style="color:#f5f5f5; font-size:15px; line-height:1.6;">
             Oi, <strong>${safeStudentName}</strong>!
@@ -202,8 +202,8 @@ async function sendWorkoutAdjustmentEmail({
             ${safeStudentMessage}
           </p>
 
-          <div style="background:#1a1510; border:1px solid #7c5228; border-radius:12px; padding:16px; margin:18px 0;">
-            <div style="color:#D4A373; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">Treino atualizado</div>
+          <div style="background:#071A22; border:1px solid #155E75; border-radius:12px; padding:16px; margin:18px 0;">
+            <div style="color:#22D3EE; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">Treino atualizado</div>
             <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.4;">${safeWorkoutName}</div>
             <div style="color:#b8b8b8; font-size:13px; margin-top:6px;">Data: ${safeWorkoutDate}</div>
             ${
@@ -217,7 +217,7 @@ async function sendWorkoutAdjustmentEmail({
             Acesse sua área para conferir os exercícios, séries, repetições e orientações atualizadas antes de iniciar.
           </p>
 
-          <a href="${alunoUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:4px;">
+          <a href="${alunoUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:4px;">
             Ver treino atualizado
           </a>
 
@@ -226,7 +226,7 @@ async function sendWorkoutAdjustmentEmail({
           </p>
 
           <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:20px;">
-            ${safeProfessorName}<br />Professor · Funcional VIP Digital
+            ${safeProfessorName}<br />Professor · Funcional UP Digital
           </p>
 
           <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">
@@ -974,7 +974,7 @@ export async function POST(req: NextRequest) {
       : null;
     const professorName =
       cleanText(professor?.name) ||
-      (role === "TEACHER" ? cleanText(sessionUser.name) : "Equipe Funcional VIP Digital");
+      (role === "TEACHER" ? cleanText(sessionUser.name) : "Equipe Funcional UP Digital");
     const professorImage = professor?.image || null;
     const studentEmail =
       cleanText(context.preference.student.email) ||

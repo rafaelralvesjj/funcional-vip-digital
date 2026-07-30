@@ -71,7 +71,7 @@ function getStatusClass(status?: string | null): string {
   if (value === "AGUARDANDO_BIOIMPEDANCIA") return "bg-blue-500/10 text-blue-300 border-blue-500/20";
   if (value === "RASCUNHO") return "bg-amber-500/10 text-amber-300 border-amber-500/20";
 
-  return "bg-[#D4A373]/10 text-[#D4A373] border-[#D4A373]/20";
+  return "bg-[#22D3EE]/10 text-[#22D3EE] border-[#22D3EE]/20";
 }
 
 function getDefaultContent(item: FeedbackItem): string {
@@ -171,11 +171,11 @@ export default function EvolucaoAlunosPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <Link href="/dashboard" className="text-xs text-[#D4A373] underline">
+            <Link href="/dashboard" className="text-xs text-[#22D3EE] underline">
               ← Voltar para dashboard
             </Link>
 
-            <p className="mt-4 text-xs uppercase tracking-[0.3em] text-[#D4A373]">
+            <p className="mt-4 text-xs uppercase tracking-[0.3em] text-[#22D3EE]">
               Evolução dos alunos
             </p>
 
@@ -192,7 +192,7 @@ export default function EvolucaoAlunosPage() {
             <button
               type="button"
               onClick={() => setIncludeSent((current) => !current)}
-              className="rounded-xl border border-[#ffffff10] bg-[#111] px-4 py-3 text-xs font-semibold text-[#a1a1a1] hover:border-[#D4A373]/40 hover:text-white"
+              className="rounded-xl border border-[#ffffff10] bg-[#111] px-4 py-3 text-xs font-semibold text-[#a1a1a1] hover:border-[#22D3EE]/40 hover:text-white"
             >
               {includeSent ? "Ocultar enviados" : "Mostrar enviados"}
             </button>
@@ -200,7 +200,7 @@ export default function EvolucaoAlunosPage() {
             <button
               type="button"
               onClick={loadFeedbacks}
-              className="rounded-xl bg-[#D4A373] px-4 py-3 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563]"
+              className="rounded-xl bg-[#22D3EE] px-4 py-3 text-xs font-semibold text-[#0a0a0a] hover:bg-[#06B6D4]"
             >
               Atualizar
             </button>
@@ -225,7 +225,7 @@ export default function EvolucaoAlunosPage() {
         <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <div className="rounded-2xl border border-[#ffffff10] bg-[#111] p-4">
             <p className="text-xs uppercase text-[#6b6b6b]">Pendentes</p>
-            <p className="mt-1 text-2xl font-bold text-[#D4A373]">{pendingCount}</p>
+            <p className="mt-1 text-2xl font-bold text-[#22D3EE]">{pendingCount}</p>
           </div>
 
           <div className="rounded-2xl border border-[#ffffff10] bg-[#111] p-4">
@@ -246,7 +246,7 @@ export default function EvolucaoAlunosPage() {
 
         <section className="rounded-2xl border border-[#ffffff10] bg-[#111] p-4 md:p-5">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold text-[#D4A373]">Fila de feedbacks</h2>
+            <h2 className="text-lg font-semibold text-[#22D3EE]">Fila de feedbacks</h2>
             <p className="mt-1 text-xs text-[#a1a1a1]">
               O rascunho é automático. O professor pode ajustar o tom antes de enviar ao aluno.
             </p>
@@ -295,7 +295,7 @@ export default function EvolucaoAlunosPage() {
                         </h3>
 
                         <p className="mt-1 text-xs text-[#a1a1a1]">
-                          Professor: <span className="text-[#D4A373]">{item.professor_name || "Não informado"}</span>
+                          Professor: <span className="text-[#22D3EE]">{item.professor_name || "Não informado"}</span>
                         </p>
                       </div>
 
@@ -326,7 +326,7 @@ export default function EvolucaoAlunosPage() {
                     )}
 
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-[#D4A373]">
+                      <label className="mb-1 block text-xs font-semibold text-[#22D3EE]">
                         Feedback para o aluno
                       </label>
                       <textarea
@@ -334,7 +334,7 @@ export default function EvolucaoAlunosPage() {
                         onChange={(event) => setDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
                         disabled={isSent}
                         rows={10}
-                        className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm leading-relaxed text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373] disabled:opacity-70"
+                        className="w-full rounded-xl border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm leading-relaxed text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE] disabled:opacity-70"
                         placeholder="Escreva a devolutiva para o aluno..."
                       />
                     </div>
@@ -343,14 +343,14 @@ export default function EvolucaoAlunosPage() {
                       <div className="flex flex-wrap gap-2">
                         <Link
                           href={`/dashboard/students/${item.student_id}`}
-                          className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs font-semibold text-[#a1a1a1] hover:border-[#D4A373]/40 hover:text-white"
+                          className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-3 py-2 text-xs font-semibold text-[#a1a1a1] hover:border-[#22D3EE]/40 hover:text-white"
                         >
                           Ver ficha do aluno
                         </Link>
 
                         <Link
                           href={`/dashboard/resumo-aluno?studentId=${item.student_id}`}
-                          className="rounded-lg border border-[#D4A373]/30 bg-[#D4A373]/10 px-3 py-2 text-xs font-semibold text-[#D4A373] hover:bg-[#D4A373]/20"
+                          className="rounded-lg border border-[#22D3EE]/30 bg-[#22D3EE]/10 px-3 py-2 text-xs font-semibold text-[#22D3EE] hover:bg-[#22D3EE]/20"
                         >
                           Gerar resumo IA
                         </Link>
@@ -362,7 +362,7 @@ export default function EvolucaoAlunosPage() {
                             type="button"
                             onClick={() => runAction(item.id, "SAVE_DRAFT")}
                             disabled={savingId === item.id}
-                            className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2 text-xs font-semibold text-[#a1a1a1] hover:border-[#D4A373]/40 hover:text-white disabled:opacity-50"
+                            className="rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-2 text-xs font-semibold text-[#a1a1a1] hover:border-[#22D3EE]/40 hover:text-white disabled:opacity-50"
                           >
                             {savingId === item.id ? "Salvando..." : "Salvar rascunho"}
                           </button>
@@ -375,7 +375,7 @@ export default function EvolucaoAlunosPage() {
                               }
                             }}
                             disabled={savingId === item.id}
-                            className="rounded-lg bg-[#D4A373] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#c49563] disabled:opacity-50"
+                            className="rounded-lg bg-[#22D3EE] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#06B6D4] disabled:opacity-50"
                           >
                             {savingId === item.id ? "Enviando..." : "Enviar ao aluno"}
                           </button>

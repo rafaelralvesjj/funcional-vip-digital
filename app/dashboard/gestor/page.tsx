@@ -182,7 +182,7 @@ export default async function GestorDashboardPage() {
       {/* CARDS KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <Link href="/dashboard/mural" className="group">
-          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
+          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#22D3EE]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#22D3EE]/5">
             <div className="flex items-start justify-between mb-3">
               <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -199,7 +199,7 @@ export default async function GestorDashboardPage() {
         </Link>
 
         <Link href="/dashboard/gestor/alunos" className="group">
-          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
+          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#22D3EE]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#22D3EE]/5">
             <div className="flex items-start justify-between mb-3">
               <div className="w-10 h-10 rounded-lg bg-green-500/10 text-green-400 flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -216,7 +216,7 @@ export default async function GestorDashboardPage() {
         </Link>
 
         <Link href="/dashboard/gestor/alunos" className="group">
-          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#D4A373]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#D4A373]/5">
+          <div className="bg-gradient-to-br from-[#111] to-[#1a1a1a] border border-[#ffffff10] rounded-xl p-4 md:p-5 hover:border-[#22D3EE]/30 transition-all group-hover:shadow-lg group-hover:shadow-[#22D3EE]/5">
             <div className="flex items-start justify-between mb-3">
               <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -250,10 +250,10 @@ export default async function GestorDashboardPage() {
                 <div key={s.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
                   <div className="flex items-center justify-between mb-1">
                     <div>
-                      <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#D4A373] transition">
+                      <Link href={`/dashboard/aluno?id=${s.id}`} className="text-sm font-medium text-[#f5f5f5] hover:text-[#22D3EE] transition">
                         {s.name}
                       </Link>
-                      <p className="text-[9px] text-[#D4A373] mt-0.5">Prof: {s.user?.name || "Sem professor"}</p>
+                      <p className="text-[9px] text-[#22D3EE] mt-0.5">Prof: {s.user?.name || "Sem professor"}</p>
                     </div>
                     <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
                       {s.workouts.length} pendente(s)
@@ -293,7 +293,7 @@ export default async function GestorDashboardPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-xs font-medium text-[#D4A373] hover:text-[#c49563] transition">
+                        <Link href={`/dashboard/aluno?id=${q.studentId}`} className="text-xs font-medium text-[#22D3EE] hover:text-[#06B6D4] transition">
                           {q.student?.name || "Aluno"}
                         </Link>
                         <span className="text-[8px] text-[#525252] bg-[#ffffff08] px-1 py-0.5 rounded">
@@ -333,7 +333,7 @@ export default async function GestorDashboardPage() {
                 <div key={teacher.id} className="p-3 md:p-4 hover:bg-white/[0.02] transition">
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-[#D4A373]/20 text-[#D4A373] flex items-center justify-center font-bold text-xs">
+                      <div className="w-7 h-7 rounded-full bg-[#22D3EE]/20 text-[#22D3EE] flex items-center justify-center font-bold text-xs">
                         {teacher.name?.charAt(0).toUpperCase() || "?"}
                       </div>
                       <span className="text-sm font-medium text-[#f5f5f5]">{teacher.name}</span>
@@ -355,7 +355,7 @@ export default async function GestorDashboardPage() {
                           <Link
                             key={s.id}
                             href={`/dashboard/aluno?id=${s.id}`}
-                            className={`text-[9px] px-1.5 py-0.5 rounded transition ${isPending ? "text-red-400 bg-red-500/10 hover:text-red-300" : "text-[#6b6b6b] bg-[#ffffff08] hover:text-[#D4A373]"}`}
+                            className={`text-[9px] px-1.5 py-0.5 rounded transition ${isPending ? "text-red-400 bg-red-500/10 hover:text-red-300" : "text-[#6b6b6b] bg-[#ffffff08] hover:text-[#22D3EE]"}`}
                           >
                             {s.name}
                           </Link>
@@ -388,7 +388,7 @@ export default async function GestorDashboardPage() {
                     <div className="flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                       <span className="text-xs font-medium text-[#f5f5f5]">{notice.title}</span>
-                      <span className="text-[8px] text-[#D4A373] bg-[#D4A373]/10 px-1 py-0.5 rounded-full">
+                      <span className="text-[8px] text-[#22D3EE] bg-[#22D3EE]/10 px-1 py-0.5 rounded-full">
                         {notice.type || "Aviso"}
                       </span>
                     </div>

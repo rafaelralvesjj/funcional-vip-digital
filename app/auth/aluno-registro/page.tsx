@@ -365,8 +365,8 @@ export default function AlunoRegisterPage() {
           <div className="mb-4 flex justify-center">
             <BrandLogo variant="full" size="lg" priority />
           </div>
-          <h1 className="text-2xl font-bold text-[#D4A373]">
-            Funcional VIP Digital
+          <h1 className="text-2xl font-bold text-[#22D3EE]">
+            Funcional UP Digital
           </h1>
           <p className="text-sm text-[#a1a1a1] mt-2">
             Crie sua conta para iniciar sua experiência gratuita
@@ -383,8 +383,8 @@ export default function AlunoRegisterPage() {
             </div>
           )}
 
-          <div className="rounded-xl bg-[#D4A373]/10 border border-[#D4A373]/20 px-4 py-3">
-            <p className="text-sm text-[#D4A373] font-semibold">
+          <div className="rounded-xl bg-[#22D3EE]/10 border border-[#22D3EE]/20 px-4 py-3">
+            <p className="text-sm text-[#22D3EE] font-semibold">
               Experiência gratuita de 1 mês
             </p>
             <p className="text-xs text-[#a1a1a1] mt-1">
@@ -394,7 +394,7 @@ export default function AlunoRegisterPage() {
 
           <section className="space-y-4">
             <div>
-              <h2 className="text-base font-semibold text-[#D4A373]">
+              <h2 className="text-base font-semibold text-[#22D3EE]">
                 1. Dados de acesso
               </h2>
               <p className="text-xs text-[#a1a1a1] mt-1">
@@ -411,11 +411,11 @@ export default function AlunoRegisterPage() {
                 type="file"
                 accept="image/*"
                 onChange={handleImageUpload}
-                className="block w-full text-sm text-[#a1a1a1] file:mr-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#0a0a0a]"
+                className="block w-full text-sm text-[#a1a1a1] file:mr-4 file:rounded-lg file:border-0 file:bg-[#22D3EE] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#0a0a0a]"
               />
 
               {uploading && (
-                <p className="text-xs text-[#D4A373] mt-1">Enviando foto...</p>
+                <p className="text-xs text-[#22D3EE] mt-1">Enviando foto...</p>
               )}
 
               {imageUrl && !uploading && (
@@ -431,7 +431,7 @@ export default function AlunoRegisterPage() {
                 name="name"
                 value={form.name}
                 onChange={handleChange}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                 placeholder="Seu nome"
                 autoComplete="name"
               />
@@ -445,7 +445,7 @@ export default function AlunoRegisterPage() {
                 name="preferredName"
                 value={form.preferredName}
                 onChange={handleChange}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                 placeholder="Ex.: Rafa, Dê, Gabi"
                 autoComplete="nickname"
                 maxLength={40}
@@ -463,7 +463,7 @@ export default function AlunoRegisterPage() {
                   type="email"
                   value={form.email}
                   onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                   placeholder="voce@email.com"
                   autoComplete="email"
                 />
@@ -477,16 +477,16 @@ export default function AlunoRegisterPage() {
                   name="phone"
                   value={form.phone}
                   onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                   placeholder="(61) 99999-9999"
                   autoComplete="tel"
                 />
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#D4A373]/30 bg-[#D4A373]/10 p-4">
+            <div className="rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/10 p-4">
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#D4A373]/15 text-[#D4A373]">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#22D3EE]/15 text-[#22D3EE]">
                   <svg
                     aria-hidden="true"
                     className="h-5 w-5"
@@ -525,14 +525,14 @@ export default function AlunoRegisterPage() {
                 value={form.birthDate}
                 onChange={handleChange}
                 max={todayDateInput}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                 autoComplete="bday"
               />
               <p className="text-[11px] text-[#6b6b6b] mt-1">
                 A idade é calculada automaticamente e ajuda o professor e a IA a ajustar intensidade, volume, recuperação e progressão com mais segurança.
               </p>
               {calculatedAge !== null && calculatedAge >= 0 && (
-                <p className="text-xs text-[#D4A373] mt-1 font-semibold">
+                <p className="text-xs text-[#22D3EE] mt-1 font-semibold">
                   Idade calculada: {calculatedAge} ano{calculatedAge === 1 ? "" : "s"}
                   {calculatedAge < 18 ? " · aluno menor de idade" : ""}
                 </p>
@@ -549,7 +549,7 @@ export default function AlunoRegisterPage() {
                   type="password"
                   value={form.password}
                   onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                   placeholder="Mínimo 6 caracteres"
                   autoComplete="new-password"
                 />
@@ -564,7 +564,7 @@ export default function AlunoRegisterPage() {
                   type="password"
                   value={form.confirmPassword}
                   onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                   placeholder="Repita sua senha"
                   autoComplete="new-password"
                 />
@@ -574,7 +574,7 @@ export default function AlunoRegisterPage() {
 
           <section className="space-y-4 border-t border-[#ffffff10] pt-5">
             <div>
-              <h2 className="text-base font-semibold text-[#D4A373]">
+              <h2 className="text-base font-semibold text-[#22D3EE]">
                 2. Ficha inicial para treino seguro
               </h2>
               <p className="text-xs text-[#a1a1a1] mt-1">
@@ -590,7 +590,7 @@ export default function AlunoRegisterPage() {
                 name="objective"
                 value={form.objective}
                 onChange={handleChange}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
               >
                 <option value="">Selecione...</option>
                 {OBJECTIVE_OPTIONS.map((objective) => (
@@ -610,7 +610,7 @@ export default function AlunoRegisterPage() {
                     value={form.objectiveOther}
                     onChange={handleChange}
                     rows={3}
-                    className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                     placeholder="Ex: melhorar condicionamento para uma trilha, preparar para uma prova específica, voltar após uma pausa longa"
                   />
                 </div>
@@ -625,7 +625,7 @@ export default function AlunoRegisterPage() {
                 name="activityLevel"
                 value={form.activityLevel}
                 onChange={handleChange}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
               >
                 <option value="">Selecione...</option>
                 <option value="Sedentário">Sedentário</option>
@@ -658,18 +658,18 @@ export default function AlunoRegisterPage() {
                       aria-pressed={selected}
                       className={`rounded-xl border p-4 text-left transition ${
                         selected
-                          ? "border-[#D4A373] bg-[#D4A373]/10 shadow-[0_0_0_1px_rgba(212,163,115,0.15)]"
-                          : "border-[#ffffff10] bg-[#151515] hover:border-[#D4A373]/40"
+                          ? "border-[#22D3EE] bg-[#22D3EE]/10 shadow-[0_0_0_1px_rgba(212,163,115,0.15)]"
+                          : "border-[#ffffff10] bg-[#151515] hover:border-[#22D3EE]/40"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <span className={selected ? "font-semibold text-[#D4A373]" : "font-semibold text-[#f5f5f5]"}>
+                        <span className={selected ? "font-semibold text-[#22D3EE]" : "font-semibold text-[#f5f5f5]"}>
                           {option.label}
                         </span>
                         <span
                           className={`flex h-5 w-5 items-center justify-center rounded-full border text-[11px] ${
                             selected
-                              ? "border-[#D4A373] bg-[#D4A373] text-[#0a0a0a]"
+                              ? "border-[#22D3EE] bg-[#22D3EE] text-[#0a0a0a]"
                               : "border-[#ffffff20] text-transparent"
                           }`}
                         >
@@ -685,7 +685,7 @@ export default function AlunoRegisterPage() {
               </div>
 
               {form.trainingLocations.includes("ACADEMIA") && (
-                <div className="mt-4 rounded-xl border border-[#D4A373]/20 bg-[#D4A373]/5 p-4">
+                <div className="mt-4 rounded-xl border border-[#22D3EE]/20 bg-[#22D3EE]/5 p-4">
                   <label className="block text-sm text-[#d6d6d6] mb-1">
                     Qual estrutura de academia estará disponível? *
                   </label>
@@ -693,7 +693,7 @@ export default function AlunoRegisterPage() {
                     name="gymType"
                     value={form.gymType}
                     onChange={handleChange}
-                    className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                    className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                   >
                     <option value="">Selecione...</option>
                     {GYM_TYPE_OPTIONS.map((option) => (
@@ -712,7 +712,7 @@ export default function AlunoRegisterPage() {
                       value={form.gymUnavailableEquipment}
                       onChange={handleChange}
                       rows={2}
-                      className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                      className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                       placeholder="Ex: não possui leg press, não tem área livre, aparelhos de cardio limitados"
                     />
                   </div>
@@ -743,14 +743,14 @@ export default function AlunoRegisterPage() {
                           aria-pressed={selected}
                           className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-xs transition ${
                             selected
-                              ? "border-[#D4A373] bg-[#D4A373]/10 text-[#f5f5f5]"
-                              : "border-[#ffffff10] bg-[#101010] text-[#bdbdbd] hover:border-[#D4A373]/35"
+                              ? "border-[#22D3EE] bg-[#22D3EE]/10 text-[#f5f5f5]"
+                              : "border-[#ffffff10] bg-[#101010] text-[#bdbdbd] hover:border-[#22D3EE]/35"
                           }`}
                         >
                           <span
                             className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
                               selected
-                                ? "border-[#D4A373] bg-[#D4A373] text-[#0a0a0a]"
+                                ? "border-[#22D3EE] bg-[#22D3EE] text-[#0a0a0a]"
                                 : "border-[#ffffff20] text-transparent"
                             }`}
                           >
@@ -771,7 +771,7 @@ export default function AlunoRegisterPage() {
                         name="equipmentOther"
                         value={form.equipmentOther}
                         onChange={handleChange}
-                        className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                        className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                         placeholder="Ex: saco de pancadas, trenó, cone, faixa específica"
                       />
                     </div>
@@ -800,7 +800,7 @@ export default function AlunoRegisterPage() {
                   max="180"
                   value={form.timeAvailableMinutes}
                   onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 40"
                 />
               </div>
@@ -813,7 +813,7 @@ export default function AlunoRegisterPage() {
                   name="preferredDays"
                   value={form.preferredDays}
                   onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: segunda e quarta à noite"
                 />
               </div>
@@ -828,7 +828,7 @@ export default function AlunoRegisterPage() {
                 value={form.currentPain}
                 onChange={handleChange}
                 rows={2}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                 placeholder="Ex: não sinto dores; dor leve no joelho; desconforto na lombar"
               />
             </div>
@@ -842,7 +842,7 @@ export default function AlunoRegisterPage() {
                 value={form.medicalRestriction}
                 onChange={handleChange}
                 rows={2}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                 placeholder="Ex: nenhuma; liberação médica com restrição; evitar impacto; problema no ombro"
               />
               <p className="text-[11px] text-[#6b6b6b] mt-1">
@@ -859,7 +859,7 @@ export default function AlunoRegisterPage() {
                 value={form.trainingHistory}
                 onChange={handleChange}
                 rows={3}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                 placeholder="Ex: já treinei musculação por 1 ano; estou parado há 6 meses; nunca treinei"
               />
             </div>
@@ -873,7 +873,7 @@ export default function AlunoRegisterPage() {
                   name="weightKg"
                   value={form.weightKg}
                   onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 72"
                 />
               </div>
@@ -886,7 +886,7 @@ export default function AlunoRegisterPage() {
                   name="heightCm"
                   value={form.heightCm}
                   onChange={handleChange}
-                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                  className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                   placeholder="Ex: 168"
                 />
               </div>
@@ -901,7 +901,7 @@ export default function AlunoRegisterPage() {
                 value={form.notes}
                 onChange={handleChange}
                 rows={3}
-                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#D4A373]"
+                className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#22D3EE]"
                 placeholder="Ex: prefiro treinos curtos; tenho pouco tempo; quero começar devagar"
               />
             </div>
@@ -913,11 +913,11 @@ export default function AlunoRegisterPage() {
               type="checkbox"
               checked={form.acceptedTerms}
               onChange={handleChange}
-              className="mt-1 h-4 w-4 accent-[#D4A373]"
+              className="mt-1 h-4 w-4 accent-[#22D3EE]"
             />
             <span className="text-xs text-[#d6d6d6] leading-relaxed">
               Li e aceito o{" "}
-              <strong className="text-[#D4A373]">
+              <strong className="text-[#22D3EE]">
                 Termo de Experiência Gratuita
               </strong>
               . Entendo que o período experimental tem duração limitada, não gera cobrança automática e que, para continuar após o período gratuito, será necessário contratar um plano.
@@ -927,14 +927,14 @@ export default function AlunoRegisterPage() {
           <button
             type="submit"
             disabled={loading || !form.acceptedTerms}
-            className="w-full rounded-xl bg-[#D4A373] px-4 py-3 font-semibold text-[#0a0a0a] hover:bg-[#c49563] transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-xl bg-[#22D3EE] px-4 py-3 font-semibold text-[#0a0a0a] hover:bg-[#06B6D4] transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Criando experiência..." : "Começar experiência gratuita"}
           </button>
 
           <p className="text-center text-sm text-[#a1a1a1]">
             Já tem conta?{" "}
-            <Link href="/auth/signin" className="text-[#D4A373] hover:underline">
+            <Link href="/auth/signin" className="text-[#22D3EE] hover:underline">
               Fazer login
             </Link>
           </p>

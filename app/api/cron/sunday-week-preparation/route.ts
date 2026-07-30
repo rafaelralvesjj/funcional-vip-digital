@@ -32,7 +32,7 @@ function getAppStudentUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app";
+    "https://funcional-up-digital.vercel.app";
 
   return `${appUrl.replace(/\/$/, "")}/aluno`;
 }
@@ -166,7 +166,7 @@ function buildMessage({
     "Desejamos uma ótima semana e bons treinos!",
     "",
     professorName,
-    "Funcional VIP Digital",
+    "Funcional UP Digital",
     "Mensagem automática de preparação para a semana enviada em nome do seu professor.",
   ].join("\n");
 }
@@ -203,7 +203,7 @@ async function sendPreparationEmail({
         <p>Amanhã, <strong>${safeMondayLabel}</strong>, seus treinos da nova semana estarão disponíveis na plataforma. Organize sua agenda, separe seus horários e comece a semana preparado para cuidar de você.</p>
         <p>Antes de iniciar, confira as orientações, imagens, séries, repetições e cuidados de execução. Se surgir qualquer dúvida, use o chat da plataforma para falar com seu professor.</p>
         <p>Desejamos uma ótima semana e bons treinos!</p>
-        <p style="margin-top:24px;">${safeProfessorName}<br/>Funcional VIP Digital</p>
+        <p style="margin-top:24px;">${safeProfessorName}<br/>Funcional UP Digital</p>
         <a href="${appUrl}" style="display:inline-block;margin-top:14px;background:#f5a623;color:#111111;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:10px;">Acessar a plataforma</a>
         <p style="margin-top:24px;color:#a3a3a3;font-size:12px;">Mensagem automática de preparação para a semana enviada em nome do seu professor.</p>
       </div>

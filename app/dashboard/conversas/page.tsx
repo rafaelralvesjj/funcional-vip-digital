@@ -295,11 +295,11 @@ export default async function TeacherConversationsPage({
     <div className="min-h-screen bg-[#0a0a0a] p-5 text-[#f5f5f5] md:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <header>
-          <p className="text-xs uppercase tracking-[0.25em] text-[#D4A373]">
+          <p className="text-xs uppercase tracking-[0.25em] text-[#22D3EE]">
             Comunicação
           </p>
 
-          <h1 className="mt-1 text-3xl font-semibold text-[#D4A373]">
+          <h1 className="mt-1 text-3xl font-semibold text-[#22D3EE]">
             Conversas
           </h1>
 

@@ -189,7 +189,7 @@ function getAppLoginUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app";
+    "https://funcional-up-digital.vercel.app";
 
   return `${appUrl.replace(/\/$/, "")}/auth/signin`;
 }
@@ -330,7 +330,7 @@ async function notifyPaymentStatusChange({
         "Acesse o painel para acompanhar seus treinos e avisos. Para dúvidas de treino, use o chat da plataforma; para assuntos financeiros, fale com a gestão.",
         "",
         "Obrigado por continuar com a gente!",
-        "Gestão do Funcional VIP Digital",
+        "Gestão do Funcional UP Digital",
         "Mensagem automática de confirmação de pagamento.",
       ].join("\n")
     : [
@@ -343,7 +343,7 @@ async function notifyPaymentStatusChange({
         "Se você já realizou o pagamento, pode desconsiderar esta mensagem e aguardar a atualização. Se precisar de apoio, fale com a gestão.",
         "Enquanto a pendência permanecer, a liberação de novos treinos pode ser pausada conforme as regras do plano, mas seu histórico continua salvo.",
         "",
-        "Gestão do Funcional VIP Digital",
+        "Gestão do Funcional UP Digital",
         "Mensagem automática de acompanhamento financeiro.",
       ]
         .filter(Boolean)
@@ -375,13 +375,13 @@ async function notifyPaymentStatusChange({
     ? `
       <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
         <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-          <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
+          <h2 style="color:#22D3EE; margin:0 0 16px;">${safeTitle}</h2>
           <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Pagamento confirmado.</p>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Recebemos <strong style="color:#f5f5f5;">${safeAmountText}</strong>, referente ao plano <strong style="color:#f5f5f5;">${safePlanName}</strong>, em <strong style="color:#f5f5f5;">${safePaidAtText}</strong>.</p>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">${contractActivated ? contractStartsInFuture ? `Seu contrato está confirmado e o acesso aos novos treinos começa em ${contractStartDateText}, respeitando a primeira janela segura de acompanhamento.` : "Seu contrato está ativo e seu acompanhamento segue normalmente." : "O pagamento foi registrado pela gestão e ficará disponível no seu histórico financeiro."}</p>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Para dúvidas de treino, use o chat da plataforma. Para assuntos financeiros, fale com a gestão.</p>
-          <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meu painel</a>
-          <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional VIP Digital</p>
+          <a href="${loginUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meu painel</a>
+          <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional UP Digital</p>
           <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de confirmação de pagamento.</p>
         </div>
       </div>
@@ -389,7 +389,7 @@ async function notifyPaymentStatusChange({
     : `
       <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
         <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-          <h2 style="color:#D4A373; margin:0 0 16px;">${safeTitle}</h2>
+          <h2 style="color:#22D3EE; margin:0 0 16px;">${safeTitle}</h2>
           <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Tudo bem?</p>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">O pagamento do plano <strong style="color:#f5f5f5;">${safePlanName}</strong> ainda aparece como pendente no sistema.</p>
           <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
@@ -397,9 +397,9 @@ async function notifyPaymentStatusChange({
             <p style="color:#d4d4d4; font-size:13px; margin:0;">Vencimento: <strong style="color:#f5f5f5;">${safeDueDateText}</strong></p>
           </div>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Sabemos que imprevistos acontecem. Confira quando puder. Se você já pagou, pode desconsiderar esta mensagem e aguardar a atualização.</p>
-          ${safePaymentLinkUrl ? `<p><a href="${safePaymentLinkUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Regularizar pagamento</a></p>` : ""}
+          ${safePaymentLinkUrl ? `<p><a href="${safePaymentLinkUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Regularizar pagamento</a></p>` : ""}
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se precisar de apoio, fale com a gestão. Enquanto a pendência permanecer, a liberação de novos treinos pode ser pausada, mas seu histórico continua salvo.</p>
-          <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional VIP Digital</p>
+          <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional UP Digital</p>
           <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de acompanhamento financeiro.</p>
         </div>
       </div>

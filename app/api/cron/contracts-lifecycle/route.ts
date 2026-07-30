@@ -57,7 +57,7 @@ function getAppLoginUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app";
+    "https://funcional-up-digital.vercel.app";
 
   return `${appUrl.replace(/\/$/, "")}/auth/signin`;
 }
@@ -333,7 +333,7 @@ function buildEndingCopy(contract: ContractWithStudent, daysLeft: number) {
       "Se você quiser continuar com o acompanhamento, sinalize seu interesse pelo painel ou fale com a gestão para conhecer as opções de plano.",
       "Seu histórico, suas conversas e sua evolução permanecem salvos.",
       "",
-      "Gestão do Funcional VIP Digital",
+      "Gestão do Funcional UP Digital",
       "Mensagem automática de acompanhamento da sua experiência.",
     ].join("\n");
 
@@ -345,13 +345,13 @@ function buildEndingCopy(contract: ContractWithStudent, daysLeft: number) {
       html: `
         <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
           <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-            <h2 style="color:#D4A373;margin:0 0 16px;">${escapeHtml(title)}</h2>
+            <h2 style="color:#22D3EE;margin:0 0 16px;">${escapeHtml(title)}</h2>
             <p style="color:#f5f5f5;font-size:15px;line-height:1.5;">Oi, <strong>${safeName}</strong>!</p>
             <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${isToday ? `Sua experiência gratuita termina hoje, <strong style="color:#f5f5f5;">${safeEndDate}</strong>.` : `Sua experiência gratuita termina em <strong style="color:#f5f5f5;">${daysLeft} dia(s)</strong>, no dia <strong style="color:#f5f5f5;">${safeEndDate}</strong>.`}</p>
             <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Enquanto ela estiver ativa, seus treinos continuam disponíveis normalmente. Se quiser continuar, sinalize pelo painel ou fale com a gestão para conhecer as opções.</p>
             <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Seu histórico, suas conversas e sua evolução permanecem salvos.</p>
-            <a href="${safeLoginUrl}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Acessar meu painel</a>
-            <p style="color:#d4d4d4;font-size:13px;margin-top:22px;">Gestão do Funcional VIP Digital</p>
+            <a href="${safeLoginUrl}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Acessar meu painel</a>
+            <p style="color:#d4d4d4;font-size:13px;margin-top:22px;">Gestão do Funcional UP Digital</p>
             <p style="color:#6b6b6b;font-size:11px;margin-top:4px;">Mensagem automática de acompanhamento da sua experiência.</p>
           </div>
         </div>
@@ -373,7 +373,7 @@ function buildEndingCopy(contract: ContractWithStudent, daysLeft: number) {
     "Se a renovação já foi combinada ou paga, pode desconsiderar este lembrete e aguardar a atualização do sistema.",
     "Seu histórico, suas conversas e sua evolução permanecem salvos.",
     "",
-    "Gestão do Funcional VIP Digital",
+    "Gestão do Funcional UP Digital",
     "Mensagem automática de acompanhamento contratual.",
   ].join("\n");
 
@@ -385,13 +385,13 @@ function buildEndingCopy(contract: ContractWithStudent, daysLeft: number) {
     html: `
       <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
         <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-          <h2 style="color:#D4A373;margin:0 0 16px;">${escapeHtml(title)}</h2>
+          <h2 style="color:#22D3EE;margin:0 0 16px;">${escapeHtml(title)}</h2>
           <p style="color:#f5f5f5;font-size:15px;line-height:1.5;">Oi, <strong>${safeName}</strong>!</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${isToday ? `Seu ${publicName} termina hoje, <strong style="color:#f5f5f5;">${safeEndDate}</strong>.` : `Seu ${publicName} termina em <strong style="color:#f5f5f5;">${daysLeft} dia(s)</strong>, no dia <strong style="color:#f5f5f5;">${safeEndDate}</strong>.`}</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Para manter o acompanhamento sem interrupção, fale com a gestão sobre a renovação. Se já estiver combinado ou pago, desconsidere e aguarde a atualização.</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Seu histórico, suas conversas e sua evolução permanecem salvos.</p>
-          <a href="${safeLoginUrl}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Acessar meu painel</a>
-          <p style="color:#d4d4d4;font-size:13px;margin-top:22px;">Gestão do Funcional VIP Digital</p>
+          <a href="${safeLoginUrl}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Acessar meu painel</a>
+          <p style="color:#d4d4d4;font-size:13px;margin-top:22px;">Gestão do Funcional UP Digital</p>
           <p style="color:#6b6b6b;font-size:11px;margin-top:4px;">Mensagem automática de acompanhamento contratual.</p>
         </div>
       </div>
@@ -422,7 +422,7 @@ function buildExpiredCopy(contract: ContractWithStudent) {
       ? "Se você quiser continuar, sinalize pelo painel ou fale com a gestão para conhecer as opções de plano."
       : "Para retomar o acompanhamento, fale com a gestão sobre a renovação.",
     "",
-    "Gestão do Funcional VIP Digital",
+    "Gestão do Funcional UP Digital",
     "Mensagem automática de encerramento de ciclo.",
   ].join("\n");
 
@@ -434,13 +434,13 @@ function buildExpiredCopy(contract: ContractWithStudent) {
     html: `
       <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
         <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-          <h2 style="color:#D4A373;margin:0 0 16px;">${escapeHtml(title)}</h2>
+          <h2 style="color:#22D3EE;margin:0 0 16px;">${escapeHtml(title)}</h2>
           <p style="color:#f5f5f5;font-size:15px;line-height:1.5;">Oi, <strong>${safeName}</strong>!</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${isTrial(contract) ? `Sua experiência gratuita terminou em <strong style="color:#f5f5f5;">${safeEndDate}</strong>.` : `Seu contrato terminou em <strong style="color:#f5f5f5;">${safeEndDate}</strong>.`}</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Novos treinos ficam pausados até a contratação ou renovação, mas seu histórico, suas conversas e sua evolução continuam salvos.</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${isTrial(contract) ? "Se quiser continuar, sinalize pelo painel ou fale com a gestão para conhecer as opções." : "Para retomar o acompanhamento, fale com a gestão sobre a renovação."}</p>
-          <a href="${safeLoginUrl}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Acessar meu painel</a>
-          <p style="color:#d4d4d4;font-size:13px;margin-top:22px;">Gestão do Funcional VIP Digital</p>
+          <a href="${safeLoginUrl}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Acessar meu painel</a>
+          <p style="color:#d4d4d4;font-size:13px;margin-top:22px;">Gestão do Funcional UP Digital</p>
           <p style="color:#6b6b6b;font-size:11px;margin-top:4px;">Mensagem automática de encerramento de ciclo.</p>
         </div>
       </div>

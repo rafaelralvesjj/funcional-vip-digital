@@ -39,7 +39,7 @@ function getAppBaseUrl(): string {
   return (
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app"
+    "https://funcional-up-digital.vercel.app"
   ).replace(/\/$/, "");
 }
 
@@ -143,7 +143,7 @@ function buildFeedbackDraft({
     "Continue registrando os treinos e use o chat para me avisar sobre dúvidas, dificuldades, dor ou mudanças na rotina. Assim, consigo acompanhar sua evolução com mais contexto.",
     "",
     professorName,
-    "Funcional VIP Digital",
+    "Funcional UP Digital",
   ].join("\n");
 }
 
@@ -191,19 +191,19 @@ async function sendStudentBioRequestEmail({
     `Preencher avaliação: ${bioFormUrl}`,
     "",
     professorName,
-    "Funcional VIP Digital",
+    "Funcional UP Digital",
     "Mensagem automática de acompanhamento enviada em nome do seu professor.",
   ].join("\n");
 
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:600px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <h2 style="color:#D4A373; margin:0 0 16px;">${title}</h2>
+        <h2 style="color:#22D3EE; margin:0 0 16px;">${title}</h2>
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeName}</strong>! Aqui é <strong>${safeProfessorName}</strong>.</p>
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Você chegou ao marco de <strong>${milestone} treinos concluídos</strong>. Antes de preparar sua devolutiva, preciso que você atualize sua avaliação/bioimpedância.</p>
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Essa atualização permite comparar os dados com mais cuidado e evita conclusões baseadas em informações antigas. Preencha com calma e, se tiver dúvida, fale comigo pelo chat da plataforma.</p>
-        <a href="${bioFormUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Atualizar minha avaliação</a>
-        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional VIP Digital</p>
+        <a href="${bioFormUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Atualizar minha avaliação</a>
+        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">${safeProfessorName}<br />Funcional UP Digital</p>
         <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de acompanhamento enviada em nome do seu professor.</p>
       </div>
     </div>
@@ -236,18 +236,18 @@ async function sendProfessorReadyEmail({
     "",
     `Revisar devolutiva: ${reviewUrl}`,
     "",
-    "Gestão Funcional VIP Digital",
+    "Gestão Funcional UP Digital",
     "Mensagem automática de acompanhamento.",
   ].join("\n");
 
   const html = `
     <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
       <div style="max-width:620px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <h2 style="color:#D4A373; margin:0 0 16px;">${escapeHtml(title)}</h2>
+        <h2 style="color:#22D3EE; margin:0 0 16px;">${escapeHtml(title)}</h2>
         <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${escapeHtml(professorName)}</strong>.</p>
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;"><strong>${escapeHtml(student.name)}</strong> chegou ao marco de <strong>${milestone} treinos concluídos</strong> e já atualizou a avaliação/bioimpedância.</p>
         <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">O sistema preparou um rascunho para apoiar sua análise, mas a mensagem precisa da sua leitura e personalização antes de chegar ao aluno.</p>
-        <a href="${reviewUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Revisar devolutiva</a>
+        <a href="${reviewUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">Revisar devolutiva</a>
         <p style="color:#6b6b6b; font-size:11px; margin-top:20px;">Mensagem automática de acompanhamento.</p>
       </div>
     </div>
@@ -428,7 +428,7 @@ async function processStudent({
       `Atualizar avaliação: ${bioFormUrl}`,
       "",
       professorName,
-      "Funcional VIP Digital",
+      "Funcional UP Digital",
       "Mensagem automática de acompanhamento enviada em nome do seu professor.",
     ].join("\n");
 

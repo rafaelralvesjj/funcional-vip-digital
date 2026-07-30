@@ -1227,7 +1227,7 @@ export async function GET(
     const onboardingOperationalLines = getOnboardingOperationalLines(onboardingProfile);
 
     const baseSummaryText = [
-      "RESUMO COMPLETO DO ALUNO — FUNCIONAL VIP DIGITAL",
+      "RESUMO COMPLETO DO ALUNO — FUNCIONAL UP DIGITAL",
       "",
       "1) Identificação",
       `Aluno: ${student.name}`,

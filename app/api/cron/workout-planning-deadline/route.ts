@@ -25,7 +25,7 @@ function getAppDashboardUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app";
+    "https://funcional-up-digital.vercel.app";
 
   return `${appUrl.replace(/\/$/, "")}/dashboard`;
 }
@@ -214,14 +214,14 @@ async function notifyProfessorDeadline({
       "",
       `Abrir dashboard e concluir treinos: ${dashboardUrl}`,
       "",
-      "Equipe de Gestão — Funcional VIP Digital",
+      "Equipe de Gestão — Funcional UP Digital",
       "Mensagem automática de acompanhamento operacional.",
     ].join("\n");
 
     const html = `
       <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
         <div style="max-width:640px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-          <h2 style="color:#D4A373; margin:0 0 16px;">Vamos concluir a próxima semana hoje?</h2>
+          <h2 style="color:#22D3EE; margin:0 0 16px;">Vamos concluir a próxima semana hoje?</h2>
 
           <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
             Oi, <strong>${safeProfessorName}</strong>! Tudo bem?
@@ -243,7 +243,7 @@ async function notifyProfessorDeadline({
             ${studentItemsHtml}
           </ul>
 
-          <a href="${dashboardUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
+          <a href="${dashboardUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
             Acessar dashboard
           </a>
 
@@ -251,7 +251,7 @@ async function notifyProfessorDeadline({
             Se houver algum impedimento ou situação que precise de apoio, sinalize a gestão ainda hoje.
           </p>
           <p style="color:#6b6b6b; font-size:11px; margin-top:10px;">
-            Mensagem automática de acompanhamento operacional enviada pela gestão do Funcional VIP Digital.
+            Mensagem automática de acompanhamento operacional enviada pela gestão do Funcional UP Digital.
           </p>
         </div>
       </div>

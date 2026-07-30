@@ -15,7 +15,7 @@ function getAppLoginUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app";
+    "https://funcional-up-digital.vercel.app";
 
   return `${appUrl.replace(/\/$/, "")}/auth/signin`;
 }
@@ -79,7 +79,7 @@ function getSenderRoleLabel(role?: string | null): string {
   if (normalizedRole === "TEACHER") return "Professor";
   if (normalizedRole === "GESTOR" || normalizedRole === "ADMIN") return "Gestão";
 
-  return "Equipe Funcional VIP Digital";
+  return "Equipe Funcional UP Digital";
 }
 
 function getInitials(name?: string | null): string {
@@ -103,7 +103,7 @@ function getSafeRemoteImageUrl(value?: string | null): string | null {
 }
 
 function buildSenderAvatarHtml(sender: NoticeEmailSender): string {
-  const senderName = sender.name?.trim() || "Equipe Funcional VIP Digital";
+  const senderName = sender.name?.trim() || "Equipe Funcional UP Digital";
   const safeSenderName = escapeHtml(senderName);
   const safeImageUrl = getSafeRemoteImageUrl(sender.image);
 
@@ -114,13 +114,13 @@ function buildSenderAvatarHtml(sender: NoticeEmailSender): string {
         width="48"
         height="48"
         alt="Foto de ${safeSenderName}"
-        style="display:block; width:48px; height:48px; border-radius:999px; object-fit:cover; border:1px solid #D4A373;"
+        style="display:block; width:48px; height:48px; border-radius:999px; object-fit:cover; border:1px solid #22D3EE;"
       />
     `;
   }
 
   return `
-    <div style="width:48px; height:48px; border-radius:999px; background:#D4A373; color:#0a0a0a; font-size:15px; font-weight:bold; line-height:48px; text-align:center;">
+    <div style="width:48px; height:48px; border-radius:999px; background:#22D3EE; color:#0a0a0a; font-size:15px; font-weight:bold; line-height:48px; text-align:center;">
       ${escapeHtml(getInitials(senderName))}
     </div>
   `;
@@ -139,7 +139,7 @@ async function sendNoticeEmailToRecipients({
 }) {
   const loginUrl = getAppLoginUrl();
   const safeTitle = escapeHtml(title);
-  const senderName = sender.name?.trim() || "Equipe Funcional VIP Digital";
+  const senderName = sender.name?.trim() || "Equipe Funcional UP Digital";
   const senderRoleLabel = getSenderRoleLabel(sender.role);
   const safeSenderName = escapeHtml(senderName);
   const safeSenderRoleLabel = escapeHtml(senderRoleLabel);
@@ -180,14 +180,14 @@ async function sendNoticeEmailToRecipients({
           "",
           `Entrar no sistema: ${loginUrl}`,
           "",
-          `${senderName} — ${senderRoleLabel} | Funcional VIP Digital`,
+          `${senderName} — ${senderRoleLabel} | Funcional UP Digital`,
           "Mensagem automática sobre um aviso registrado na plataforma.",
         ].join("\n");
 
         const html = `
           <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
             <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-              <h2 style="color:#D4A373; margin:0 0 16px;">${safeSenderName} deixou um aviso para você</h2>
+              <h2 style="color:#22D3EE; margin:0 0 16px;">${safeSenderName} deixou um aviso para você</h2>
 
               <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
                 Oi, <strong>${escapeHtml(recipientName)}</strong>! Tudo bem?
@@ -210,7 +210,7 @@ async function sendNoticeEmailToRecipients({
                 ${escapeHtml(channelText)}
               </p>
 
-              <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+              <a href="${loginUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
                 Abrir meu painel
               </a>
 
@@ -224,7 +224,7 @@ async function sendNoticeEmailToRecipients({
                       ${safeSenderName}
                     </p>
                     <p style="color:#a1a1a1; font-size:11px; line-height:1.4; margin:3px 0 0;">
-                      ${safeSenderRoleLabel} | Funcional VIP Digital
+                      ${safeSenderRoleLabel} | Funcional UP Digital
                     </p>
                   </td>
                 </tr>
@@ -261,7 +261,7 @@ async function notifyNoticeByEmail(notice: {
   const title = notice.title || "Novo aviso da gestão";
   const sender: NoticeEmailSender = notice.author || {
     id: "system",
-    name: "Equipe Funcional VIP Digital",
+    name: "Equipe Funcional UP Digital",
     role: "GESTOR",
     image: null,
   };

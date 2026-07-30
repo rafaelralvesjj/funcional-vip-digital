@@ -87,18 +87,18 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f5f5]">
       {/* Header */}
-      <div className="bg-gradient-to-b from-[#D4A373]/10 to-transparent pb-6">
+      <div className="bg-gradient-to-b from-[#22D3EE]/10 to-transparent pb-6">
         <div className="max-w-2xl mx-auto px-4 pt-12">
           <div className="flex items-center justify-between mb-2">
             <button
               onClick={() => router.push(`/dashboard/aluno/${params.id}`)}
-              className="text-sm text-[#D4A373] hover:text-[#b88a5e]"
+              className="text-sm text-[#22D3EE] hover:text-[#0891B2]"
             >
               ← Voltar
             </button>
           </div>
           <div className="text-center">
-            <div className="w-16 h-16 bg-[#D4A373]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-[#22D3EE]/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-3xl">💬</span>
             </div>
             <h1 className="text-2xl font-bold">Central de Dúvidas</h1>
@@ -114,7 +114,7 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
         {!mostrarForm && (
           <button
             onClick={() => setMostrarForm(true)}
-            className="w-full bg-[#D4A373] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#b88a5e]"
+            className="w-full bg-[#22D3EE] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#0891B2]"
           >
             📝 Nova Dúvida
           </button>
@@ -123,7 +123,7 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
         {/* Formulário nova dúvida */}
         {mostrarForm && (
           <form onSubmit={handleSubmit} className="bg-[#111111] border border-[#ffffff10] rounded-xl p-5 space-y-4">
-            <h2 className="font-semibold text-[#D4A373]">Nova Dúvida</h2>
+            <h2 className="font-semibold text-[#22D3EE]">Nova Dúvida</h2>
 
             <div>
               <label className="text-sm text-[#e5e5e5] block mb-1">
@@ -134,7 +134,7 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
                 onChange={(e) => setNovaDuvida({ ...novaDuvida, content: e.target.value })}
                 rows={3}
                 required
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                 placeholder="Descreva sua dúvida em detalhes..."
               />
             </div>
@@ -147,7 +147,7 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
                 type="url"
                 value={novaDuvida.videoUrl}
                 onChange={(e) => setNovaDuvida({ ...novaDuvida, videoUrl: e.target.value })}
-                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#D4A373]"
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#22D3EE]"
                 placeholder="Cole o link do vídeo (YouTube, Google Drive...)"
               />
               <p className="text-xs text-[#6b6b6b] mt-1">
@@ -163,7 +163,7 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 onChange={handleImageUpload}
-                className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#D4A373] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#b88a5e]"
+                className="w-full text-sm text-[#e5e5e5] file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#22D3EE] file:text-[#0a0a0a] file:font-semibold file:text-sm hover:file:bg-[#0891B2]"
               />
               {novaDuvida.imageUrl && (
                 <p className="text-xs text-green-500 mt-1">✅ Imagem anexada</p>
@@ -174,7 +174,7 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
               <button
                 type="submit"
                 disabled={enviando || !novaDuvida.content.trim()}
-                className="flex-1 bg-[#D4A373] text-[#0a0a0a] font-bold rounded-xl py-3 text-sm transition hover:bg-[#b88a5e] disabled:opacity-70"
+                className="flex-1 bg-[#22D3EE] text-[#0a0a0a] font-bold rounded-xl py-3 text-sm transition hover:bg-[#0891B2] disabled:opacity-70"
               >
                 {enviando ? "Enviando..." : "📤 Enviar Dúvida"}
               </button>
@@ -215,7 +215,7 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
                     Respondida ✅
                   </span>
                 ) : (
-                  <span className="text-xs bg-[#D4A373]/10 text-[#D4A373] px-3 py-1 rounded-full">
+                  <span className="text-xs bg-[#22D3EE]/10 text-[#22D3EE] px-3 py-1 rounded-full">
                     Aguardando resposta ⏳
                   </span>
                 )}
@@ -231,7 +231,7 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
                     href={duvida.videoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs bg-[#1a1a1a] text-[#D4A373] px-3 py-1.5 rounded-lg hover:bg-[#252525] transition"
+                    className="inline-flex items-center gap-1.5 text-xs bg-[#1a1a1a] text-[#22D3EE] px-3 py-1.5 rounded-lg hover:bg-[#252525] transition"
                   >
                     ▶️ Ver vídeo
                   </a>
@@ -241,7 +241,7 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
                     href={duvida.imageUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs bg-[#1a1a1a] text-[#D4A373] px-3 py-1.5 rounded-lg hover:bg-[#252525] transition"
+                    className="inline-flex items-center gap-1.5 text-xs bg-[#1a1a1a] text-[#22D3EE] px-3 py-1.5 rounded-lg hover:bg-[#252525] transition"
                   >
                     🖼️ Ver imagem
                   </a>
@@ -252,12 +252,12 @@ export default function CentralDuvidasPage({ params }: { params: { id: string } 
               {duvida.answer && (
                 <div className="mt-4 pt-4 border-t border-[#ffffff10]">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 bg-[#D4A373]/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 bg-[#22D3EE]/20 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-sm">👨‍🏫</span>
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium text-[#D4A373]">
+                        <span className="text-sm font-medium text-[#22D3EE]">
                           {duvida.answeredBy?.name || "Professor"}
                         </span>
                         {duvida.answeredAt && (

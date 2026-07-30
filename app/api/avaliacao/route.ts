@@ -6,7 +6,7 @@ function getAppBaseUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app";
+    "https://funcional-up-digital.vercel.app";
 
   return appUrl.replace(/\/$/, "");
 }
@@ -184,21 +184,21 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
       "",
       `Acessar meu painel: ${loginUrl}`,
       "",
-      "Equipe Funcional VIP Digital",
+      "Equipe Funcional UP Digital",
       "Mensagem automática de boas-vindas e acompanhamento.",
     ].join("\n");
 
     const html = `
       <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
         <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-          <h2 style="color:#D4A373;margin:0 0 16px;">Recebemos sua avaliação inicial</h2>
+          <h2 style="color:#22D3EE;margin:0 0 16px;">Recebemos sua avaliação inicial</h2>
           <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${safeStudentName}</strong>!</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Recebemos seu cadastro e sua avaliação inicial. Obrigado por compartilhar essas informações com a gente.</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Elas serão usadas para que seu acompanhamento comece com mais contexto, cuidado e segurança.</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Agora a gestão vai organizar o vínculo com o professor responsável e a preparação dos seus primeiros treinos. Acompanhe o mural e seus e-mails para não perder as próximas orientações.</p>
           <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Quando o professor estiver vinculado, use o chat da plataforma para dúvidas sobre treino e evolução. Assim, as conversas ficam registradas. O WhatsApp fica reservado para contatos específicos da gestão.</p>
-          <a href="${loginUrl}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Acessar meu painel</a>
-          <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Mensagem automática de boas-vindas e acompanhamento enviada pela equipe Funcional VIP Digital.</p>
+          <a href="${loginUrl}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Acessar meu painel</a>
+          <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Mensagem automática de boas-vindas e acompanhamento enviada pela equipe Funcional UP Digital.</p>
         </div>
       </div>
     `;
@@ -230,19 +230,19 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
         "",
         `Abrir vínculo de alunos: ${vincularAlunosUrl}`,
         "",
-        "Funcional VIP Digital",
+        "Funcional UP Digital",
         "Aviso automático de pendência operacional para a gestão.",
       ].join("\n");
 
       const html = `
         <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
           <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
-            <h2 style="color:#D4A373;margin:0 0 16px;">Novo aluno pronto para vínculo</h2>
+            <h2 style="color:#22D3EE;margin:0 0 16px;">Novo aluno pronto para vínculo</h2>
             <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(gestorName)}</strong>!</p>
             <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">${safeStudentName}</strong> concluiu o cadastro e a avaliação inicial.</p>
             <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Próxima ação: revisar os dados, vincular o professor responsável e confirmar a quantidade contratada de treinos/dias no mês.</p>
             <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Depois do vínculo, confira se o professor recebeu o contexto necessário para iniciar o acompanhamento.</p>
-            <a href="${vincularAlunosUrl}" style="display:inline-block;background:#D4A373;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Organizar vínculo</a>
+            <a href="${vincularAlunosUrl}" style="display:inline-block;background:#22D3EE;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Organizar vínculo</a>
             <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Aviso automático de pendência operacional para a gestão.</p>
           </div>
         </div>

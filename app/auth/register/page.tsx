@@ -80,8 +80,8 @@ export default function RegisterPage() {
         <div className="mb-4 flex justify-center">
           <BrandLogo variant="full" size="lg" priority />
         </div>
-        <h1 className="mb-2 text-center text-2xl font-bold text-[#D4A373] sm:text-3xl">
-          Funcional VIP Digital
+        <h1 className="mb-2 text-center text-2xl font-bold text-[#22D3EE] sm:text-3xl">
+          Funcional UP Digital
         </h1>
         <p className="mb-6 text-center text-sm text-[#a1a1a1] sm:text-base">
           Crie sua conta
@@ -98,7 +98,7 @@ export default function RegisterPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Seu nome completo"
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#22D3EE] focus:ring-1 focus:ring-[#22D3EE]"
             />
           </div>
 
@@ -112,7 +112,7 @@ export default function RegisterPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="seu@email.com"
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#22D3EE] focus:ring-1 focus:ring-[#22D3EE]"
             />
           </div>
 
@@ -126,7 +126,7 @@ export default function RegisterPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="(11) 99999-8888"
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#22D3EE] focus:ring-1 focus:ring-[#22D3EE]"
             />
           </div>
 
@@ -140,7 +140,7 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Mínimo 6 caracteres"
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#22D3EE] focus:ring-1 focus:ring-[#22D3EE]"
             />
           </div>
 
@@ -154,7 +154,7 @@ export default function RegisterPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Repita a senha"
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition placeholder:text-[#6b6b6b] focus:border-[#22D3EE] focus:ring-1 focus:ring-[#22D3EE]"
             />
           </div>
 
@@ -166,7 +166,7 @@ export default function RegisterPage() {
               id="role"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition focus:border-[#D4A373] focus:ring-1 focus:ring-[#D4A373]"
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition focus:border-[#22D3EE] focus:ring-1 focus:ring-[#22D3EE]"
             >
               <option value="GESTOR">Gestor</option>
               <option value="PROFESSOR">Professor</option>
@@ -186,7 +186,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 w-full rounded-lg bg-[#D4A373] px-4 py-3 text-sm font-bold text-[#0a0a0a] transition hover:bg-[#b88a5e] disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-2 w-full rounded-lg bg-[#22D3EE] px-4 py-3 text-sm font-bold text-[#0a0a0a] transition hover:bg-[#0891B2] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {loading ? "Cadastrando..." : "Criar conta"}
           </button>
@@ -195,7 +195,7 @@ export default function RegisterPage() {
         <div className="mt-6 flex flex-col items-center gap-2 text-sm">
           <Link
             href="/auth/signin"
-            className="text-[#D4A373] transition hover:underline"
+            className="text-[#22D3EE] transition hover:underline"
           >
             Já tem conta? Fazer login
           </Link>

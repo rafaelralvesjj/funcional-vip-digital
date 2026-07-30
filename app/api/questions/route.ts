@@ -157,7 +157,7 @@ function getAppLoginUrl(): string {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://funcional-vip-digital.vercel.app";
+    "https://funcional-up-digital.vercel.app";
 
   return `${appUrl.replace(/\/$/, "")}/auth/signin`;
 }
@@ -407,7 +407,7 @@ async function sendNewConversationEmail({
         const html = `
           <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
             <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-              <h2 style="color:#D4A373; margin:0 0 16px;">Nova mensagem</h2>
+              <h2 style="color:#22D3EE; margin:0 0 16px;">Nova mensagem</h2>
 
               <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
                 Olá, ${escapeHtml(recipientName)}!
@@ -421,7 +421,7 @@ async function sendNewConversationEmail({
                 Para visualizar, acesse ${panelText}.
               </p>
 
-              <a href="${loginUrl}" style="display:inline-block; background:#D4A373; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
+              <a href="${loginUrl}" style="display:inline-block; background:#22D3EE; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">
                 Acessar o sistema
               </a>
 
