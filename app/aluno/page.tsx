@@ -95,6 +95,9 @@ const ALLOWED_CHAT_DOCUMENT_TYPES = new Set([
 ]);
 const ALLOWED_CHAT_DOCUMENT_EXTENSIONS = new Set(["pdf", "doc", "docx", "txt"]);
 
+const MANAGEMENT_WHATSAPP_URL =
+  "https://wa.me/5561998780006?text=Ol%C3%A1%2C%20equipe%20da%20Funcional%20UP%20Digital!%20Preciso%20falar%20com%20a%20gest%C3%A3o.";
+
 function getChatFileExtension(fileName: string): string {
   return String(fileName || "").split(".").pop()?.toLowerCase() || "";
 }
@@ -1442,6 +1445,37 @@ export default function AlunoPage() {
       <EmailNotificationReminder />
 
       <AlunoCommercialStatusPanel />
+
+      <a
+        href={MANAGEMENT_WHATSAPP_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-between gap-3 rounded-xl border border-[#25D366]/25 bg-[#25D366]/10 p-3 transition hover:border-[#25D366]/45 hover:bg-[#25D366]/15"
+        aria-label="Falar com a gestão pelo WhatsApp"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-[#07140c]">
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-5 w-5 fill-current"
+            >
+              <path d="M12.04 2a9.84 9.84 0 0 0-8.49 14.8L2 22l5.34-1.5A9.96 9.96 0 1 0 12.04 2Zm0 17.99a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.17.89.85-3.09-.2-.32a8.07 8.07 0 1 1 6.95 3.83Zm4.43-6.04c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.19a7.25 7.25 0 0 1-1.34-1.67c-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.39-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.1 3.62.57.25 1.02.39 1.37.5.58.18 1.1.16 1.51.1.46-.07 1.43-.59 1.63-1.15.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z" />
+            </svg>
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-[#f5f5f5]">Falar com a gestão pelo WhatsApp</p>
+            <p className="mt-0.5 text-[10px] leading-relaxed text-[#a1a1a1]">
+              Para pagamentos, cadastro, acesso ou suporte administrativo.
+            </p>
+          </div>
+        </div>
+
+        <span className="shrink-0 text-lg text-[#25D366]" aria-hidden="true">
+          ›
+        </span>
+      </a>
 
       <StudentDidYouKnowCard />
 
