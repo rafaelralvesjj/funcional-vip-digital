@@ -4,6 +4,7 @@ import BrandLogo from "../components/BrandLogo";
 import {
   Activity,
   ArrowRight,
+  CalendarDays,
   Check,
   ChevronRight,
   Dumbbell,
@@ -12,6 +13,7 @@ import {
   MapPin,
   MessageCircle,
   Shield,
+  Sparkles,
   Target,
   TrendingUp,
   UserCheck,
@@ -25,6 +27,43 @@ export const metadata: Metadata = {
 };
 
 const primaryCta = "/auth/aluno-registro";
+
+const plans = [
+  {
+    name: "Funcional UP Essencial",
+    shortName: "Essencial",
+    eyebrow: "Para criar consistência",
+    price: "49,90",
+    frequency: "2 treinos por semana",
+    description:
+      "Uma rotina objetiva para começar, retomar ou manter o cuidado com o corpo sem sobrecarregar a semana.",
+    features: [
+      "2 treinos personalizados por semana",
+      "Acompanhamento do professor",
+      "Chat com suporte",
+      "Vídeos e orientações dos exercícios",
+    ],
+    href: "https://www.asaas.com/c/uw28wkv8oin75u3i",
+    highlighted: false,
+  },
+  {
+    name: "Funcional UP Evolução",
+    shortName: "Evolução",
+    eyebrow: "Para avançar com mais frequência",
+    price: "79,90",
+    frequency: "4 treinos por semana",
+    description:
+      "Mais estímulos na semana para quem quer acelerar a evolução com organização e acompanhamento próximo.",
+    features: [
+      "4 treinos personalizados por semana",
+      "Acompanhamento do professor",
+      "Chat com suporte",
+      "Vídeos e orientações dos exercícios",
+    ],
+    href: "https://www.asaas.com/c/ppeor89ansiv6ocr",
+    highlighted: true,
+  },
+];
 
 const goals = [
   {
@@ -141,6 +180,21 @@ const faqs = [
       "Registre no próprio treino qualquer incômodo, dor ou desconforto. Em caso de dúvida antes de continuar, use o chat da plataforma para falar com o professor.",
   },
   {
+    question: "Qual é a diferença entre os planos Essencial e Evolução?",
+    answer:
+      "Os dois planos incluem treino personalizado, acompanhamento do professor, chat, vídeos e orientações. A diferença principal é a frequência: o Essencial oferece 2 treinos por semana e o Evolução oferece 4 treinos por semana.",
+  },
+  {
+    question: "Posso experimentar antes de escolher um plano?",
+    answer:
+      "Sim. Você pode começar pelo período experimental gratuito, sem cadastrar cartão. Depois, escolhe o plano que melhor combina com sua rotina.",
+  },
+  {
+    question: "A cobrança começa automaticamente depois do período experimental?",
+    answer:
+      "Não. Como o período experimental não solicita cartão, não existe cobrança automática. A assinatura só começa quando você escolher e contratar um dos planos.",
+  },
+  {
     question: "Preciso informar cartão para começar?",
     answer:
       "Não. O cadastro do período experimental não solicita cartão de crédito.",
@@ -208,6 +262,12 @@ export default function Home() {
               className="text-sm font-medium text-neutral-300 transition hover:text-[#00A19C]"
             >
               Acompanhamento
+            </a>
+            <a
+              href="#planos"
+              className="text-sm font-medium text-neutral-300 transition hover:text-[#00A19C]"
+            >
+              Planos
             </a>
             <a
               href="#duvidas"
@@ -521,6 +581,121 @@ export default function Home() {
         </div>
       </section>
 
+      <section
+        id="planos"
+        className="scroll-mt-24 border-y border-white/[0.06] bg-[#0b0b0b] px-4 py-20 sm:px-6 sm:py-24 lg:px-8"
+      >
+        <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#00A19C]">
+              Planos mensais
+            </p>
+            <h2 className="mt-4 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl lg:text-5xl">
+              Escolha a frequência que cabe na sua rotina
+            </h2>
+            <p className="mt-5 text-base leading-7 text-neutral-400 sm:text-lg">
+              Nos dois planos, o treino é personalizado e você conta com o
+              acompanhamento de um professor de verdade. O que muda é a
+              quantidade de treinos por semana.
+            </p>
+          </div>
+
+          <div className="mx-auto mt-12 grid max-w-5xl gap-5 lg:grid-cols-2">
+            {plans.map((plan) => (
+              <article
+                key={plan.name}
+                className={`relative overflow-hidden rounded-[28px] border p-6 sm:p-8 ${
+                  plan.highlighted
+                    ? "border-[#00A19C]/60 bg-[radial-gradient(circle_at_top_right,rgba(0,161,156,0.22),transparent_42%),linear-gradient(145deg,#121918,#0c0c0c_68%)] shadow-[0_24px_80px_-40px_rgba(0,161,156,0.9)]"
+                    : "border-white/[0.1] bg-[#111111]"
+                }`}
+              >
+                {plan.highlighted && (
+                  <div className="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-[#00A19C] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Mais completo
+                  </div>
+                )}
+
+                <div className="pr-28">
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#7FE2DE]">
+                    {plan.eyebrow}
+                  </p>
+                  <h3 className="mt-3 text-2xl font-black text-white sm:text-3xl">
+                    {plan.name}
+                  </h3>
+                </div>
+
+                <div className="mt-7 flex items-end gap-2">
+                  <span className="pb-1 text-sm font-bold text-neutral-400">R$</span>
+                  <span className="text-5xl font-black tracking-[-0.05em] text-white">
+                    {plan.price}
+                  </span>
+                  <span className="pb-1.5 text-sm font-semibold text-neutral-400">
+                    /mês
+                  </span>
+                </div>
+
+                <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#00A19C]/25 bg-[#00A19C]/8 px-3 py-2 text-xs font-black text-[#7FE2DE]">
+                  <CalendarDays className="h-4 w-4" />
+                  {plan.frequency}
+                </div>
+
+                <p className="mt-5 text-sm leading-6 text-neutral-400">
+                  {plan.description}
+                </p>
+
+                <div className="mt-7 space-y-3">
+                  {plan.features.map((feature) => (
+                    <div key={feature} className="flex items-start gap-3">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#00A19C]/12 text-[#00A19C]">
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="text-sm leading-5 text-neutral-300">
+                        {feature}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <a
+                  href={plan.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group mt-8 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black transition duration-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#00A19C] focus:ring-offset-2 focus:ring-offset-[#0a0a0a] ${
+                    plan.highlighted
+                      ? "bg-[#00A19C] text-black hover:bg-[#24C7C0]"
+                      : "border border-[#00A19C]/35 bg-[#00A19C]/8 text-white hover:bg-[#00A19C]/14"
+                  }`}
+                >
+                  Assinar plano {plan.shortName}
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </a>
+
+                <p className="mt-3 text-center text-[11px] leading-5 text-neutral-500">
+                  Pagamento seguro pela página do Asaas.
+                </p>
+              </article>
+            ))}
+          </div>
+
+          <div className="mx-auto mt-8 flex max-w-3xl flex-col items-center justify-between gap-5 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-5 text-center sm:flex-row sm:text-left">
+            <div>
+              <p className="text-sm font-black text-white">
+                Ainda não sabe qual plano escolher?
+              </p>
+              <p className="mt-1 text-xs leading-5 text-neutral-400">
+                Comece pelo período experimental gratuito, sem informar cartão.
+              </p>
+            </div>
+            <PrimaryButton
+              label="Experimentar primeiro"
+              className="w-full shrink-0 sm:w-auto"
+            />
+          </div>
+        </div>
+      </section>
+
       <section className="px-4 pb-20 sm:px-6 sm:pb-24 lg:px-8">
         <div className="mx-auto max-w-7xl overflow-hidden rounded-[30px] border border-[#00A19C]/25 bg-[radial-gradient(circle_at_top_right,rgba(0,161,156,0.18),transparent_38%),linear-gradient(145deg,#15110e,#0c0c0c_65%)] p-6 sm:p-10 lg:p-14">
           <div className="grid items-center gap-10 lg:grid-cols-[1fr_auto]">
@@ -612,6 +787,9 @@ export default function Home() {
             </a>
             <a href="#como-funciona" className="transition hover:text-[#00A19C]">
               Como funciona
+            </a>
+            <a href="#planos" className="transition hover:text-[#00A19C]">
+              Planos
             </a>
             <a href="#duvidas" className="transition hover:text-[#00A19C]">
               Dúvidas
