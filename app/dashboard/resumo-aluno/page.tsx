@@ -544,43 +544,91 @@ export default function ResumoAlunoPage() {
     ]);
   }
 
-  function getExerciseLibraryPromptLines(): string[] {
+  function normalizePromptSearch(value: unknown): string {
+    return compactText(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  }
+
+  function getCompactStudentContext(summaryData: SummaryResponse): string {
+    const source = String(summaryData.summaryText || "");
+    const relevantLines = source
+      .split(/\r?\n/)
+      .map((line) => compactText(line))
+      .filter(Boolean)
+      .filter((line) =>
+        /(objetiv|prefer|restri|dor|desconfort|equip|local|academ|casa|corrida|ades[aã]o|conclu|dif[ií]cil|f[aá]cil|n[aã]o fez|cuidado|mem[oó]ria|bioimped|avalia|idade|peso|altura)/i.test(line)
+      )
+      .slice(0, 28);
+
+    const compact = relevantLines.join(" | ");
+    if (compact) return compact.slice(0, 6000);
+
+    return compactText(source).slice(0, 6000) || "Sem informações adicionais relevantes.";
+  }
+
+  function selectPromptLibrary(summaryData: SummaryResponse): LibraryExercise[] {
+    const context = normalizePromptSearch(
+      [summaryData.summaryText, selectedStudent?.name, summaryData.evolutionContext?.reason]
+        .filter(Boolean)
+        .join(" ")
+    );
+
+    const stopWords = new Set([
+      "aluno", "treino", "treinos", "para", "com", "sem", "mais", "uma", "como",
+      "objetivo", "objetivos", "professor", "semana", "atual", "dados", "informacao",
+      "informacoes", "deve", "fazer", "realizar", "geral", "atividade", "fisica",
+    ]);
+    const terms = Array.from(new Set(
+      context.split(/[^a-z0-9]+/).filter((term) => term.length >= 4 && !stopWords.has(term))
+    )).slice(0, 50);
+
+    const boosts: string[] = [];
+    if (context.includes("corrida")) boosts.push("corrida", "pernas", "gluteos", "panturrilha", "core", "quadril", "tornozelo");
+    if (context.includes("academia")) boosts.push("academia", "maquina", "halteres", "polia");
+    if (context.includes("casa")) boosts.push("casa", "peso corporal", "nenhum equipamento", "elastico");
+    if (context.includes("emagrec")) boosts.push("condicionamento", "corpo inteiro", "cardio");
+    if (context.includes("hipertrof") || context.includes("massa muscular")) boosts.push("hipertrofia", "fortalecimento", "halteres", "maquinas");
+    if (context.includes("mobilidade")) boosts.push("mobilidade", "alongamento");
+
+    return exerciseLibrary
+      .map((exercise, index) => {
+        const searchable = normalizePromptSearch([
+          exercise.name, exercise.muscleGroup, exercise.objectiveTags, exercise.locationTags,
+          exercise.equipmentTags, exercise.levelTags, exercise.intensity,
+        ].join(" "));
+        let score = 0;
+        for (const term of terms) if (searchable.includes(term)) score += term.length >= 7 ? 5 : 3;
+        for (const boost of boosts) if (searchable.includes(boost)) score += 10;
+        return { exercise, score, index };
+      })
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .slice(0, 32)
+      .map((item) => item.exercise);
+  }
+
+  function getExerciseLibraryPromptLines(summaryData: SummaryResponse): string[] {
     if (exerciseLibrary.length === 0) {
       return [
-        "BIBLIOTECA DE EXERCÍCIOS PERMITIDOS:",
-        "- Nenhum exercício cadastrado/ativo encontrado. Não gere treino enquanto a biblioteca estiver vazia.",
+        "BIBLIOTECA PERMITIDA: []",
+        "Não gere treino enquanto a biblioteca estiver vazia.",
       ];
     }
 
-    const lines = exerciseLibrary.map((exercise, index) => {
-      const tags = [
-        exercise.muscleGroup ? `grupo=${exercise.muscleGroup}` : null,
-        exercise.levelTags ? `nível=${exercise.levelTags}` : null,
-        exercise.locationTags ? `local=${exercise.locationTags}` : null,
-        exercise.equipmentTags ? `equipamento=${exercise.equipmentTags}` : null,
-        exercise.objectiveTags ? `objetivo=${exercise.objectiveTags}` : null,
-        exercise.restrictionTags ? `cuidados=${exercise.restrictionTags}` : null,
-        exercise.intensity ? `intensidade=${exercise.intensity}` : null,
-      ]
-        .filter(Boolean)
-        .join("; ");
-
-      const purpose = buildExercisePurpose(exercise);
-      const execution = compactText(exercise.instructions)
-        ? `comoExecutar=${compactText(exercise.instructions)}`
-        : "";
-      const safety = buildExerciseSafetyGuidance(exercise);
-
-      return `${index + 1}. exerciseId=${exercise.id} | nome=${exercise.name} | ${tags || "sem tags"} | ${purpose || `praQueServe=${exercise.description}`} | ${execution || "comoExecutar=não informado"} | ${safety || "cuidadosExecucao=não informado"}`;
-    });
+    const selected = selectPromptLibrary(summaryData);
+    const compactLibrary = selected.map((exercise) => ({
+      exerciseId: exercise.id,
+      name: exercise.name,
+      group: exercise.muscleGroup || undefined,
+      location: compactText(exercise.locationTags) || undefined,
+      equipment: compactText(exercise.equipmentTags) || undefined,
+      intensity: compactText(exercise.intensity) || undefined,
+    }));
 
     return [
-      "BIBLIOTECA DE EXERCÍCIOS PERMITIDOS:",
-      "Use SOMENTE os exercícios abaixo. Cada exercício do JSON deve trazer exerciseId exatamente igual ao cadastrado.",
-      "Não invente exercícios. Não use exercício sem exerciseId.",
-      "Use os campos praQueServe, comoExecutar e cuidadosExecucao da biblioteca para preencher finalidade, orientação e segurança do exercício.",
-      "Se a biblioteca não trouxer algum desses campos, deixe simples e sinalize revisão do professor; não invente contraindicações.",
-      ...lines,
+      `BIBLIOTECA PERMITIDA (${compactLibrary.length} opções já filtradas pelo sistema): ${JSON.stringify(compactLibrary)}`,
+      "Use somente esses exerciseId. O sistema completará descrição, execução e segurança a partir do cadastro oficial.",
     ];
   }
 
@@ -622,124 +670,41 @@ export default function ResumoAlunoPage() {
       .map((item) => `"${item}"`)
       .join(", ");
 
+    const compactContext = getCompactStudentContext(summaryData);
+    const evolution = summaryData.evolutionContext || {};
+    const validationPayload = {
+      studentId: validationContext.studentId,
+      weekStart: validationContext.weekStart,
+      weekEnd: validationContext.weekEnd,
+      expectedWorkoutCount: validationContext.expectedWorkoutCount,
+      expectedWorkoutDates: validationContext.expectedWorkoutDates,
+      validationKey: validationContext.validationKey,
+    };
+
     return [
       ...MANUAL_AI_EXECUTION_HEADER_LINES,
-      "Você é um professor de educação física apoiando a montagem de treino.",
+      "Monte os treinos da semana para apoiar o professor de educação física.",
+      "Responda somente com JSON válido, sem markdown, comentários ou explicações.",
+      "Use somente exerciseId da biblioteca permitida. Não invente exercícios, cargas, equipamentos, lesões, restrições ou diagnósticos.",
+      "Respeite objetivo, local, equipamentos, preferências, adesão, histórico e cuidados. Dor/desconforto impede progressão automática e exige revisão humana.",
+      "Se os dados forem insuficientes ou a adesão estiver baixa, faça planejamento conservador e sinalize isso em evolutionDecision.",
+      "Calorias são faixa estimada e conservadora, nunca promessa. O professor revisará antes de liberar.",
       "",
-      "Com base no resumo do aluno abaixo, gere uma sugestão de treinos em JSON válido.",
+      `ALUNO: ${summaryData.student.name} | studentId=${summaryData.student.id}`,
+      `SEMANA E VALIDAÇÃO IMUTÁVEL: ${JSON.stringify(validationPayload)}`,
+      `CALENDÁRIO: ${scheduleDescription} Datas obrigatórias: ${validationContext.expectedWorkoutDates.join(", ") || "não configuradas"}.`,
+      `DECISÃO PRÉVIA DO SISTEMA: ${JSON.stringify({
+        status: evolution.status || "PRE_PLANEJAMENTO_CONSERVADOR",
+        reason: evolution.reason || "Revisar contexto antes da liberação.",
+        alerts: evolution.reviewAlerts || [],
+      })}`,
+      `CONTEXTO ESSENCIAL DO ALUNO: ${compactContext}`,
+      ...getExerciseLibraryPromptLines(summaryData),
       "",
-      "ENTREGA OBRIGATÓRIA:",
-      "- Gere um arquivo .txt para download contendo somente o JSON válido.",
-      "- Nome sugerido do arquivo: treino_" + summaryData.student.name.replaceAll(" ", "_").toLowerCase() + ".txt",
-      "- Não renderize o JSON longo diretamente na tela se conseguir entregar o arquivo .txt.",
-      "- O conteúdo do arquivo .txt deve começar com { e terminar com }.",
-      "- O arquivo .txt não pode ter markdown, comentários, explicações ou texto antes/depois do JSON.",
-      "- Se você não conseguir gerar arquivo .txt, responda somente com o JSON puro, sem markdown.",
-      "",
-      "REGRAS IMPORTANTES:",
-      "- Não gere SQL.",
-      "- Não use markdown.",
-      "- Não coloque comentários no JSON.",
-      "- O professor vai revisar tudo antes de salvar.",
-      "- Se a adesão estiver baixa, priorize retomada, simplicidade, segurança e consistência.",
-      "- Se faltarem dados, use observações para o professor confirmar antes de aplicar.",
-      "- Gere um resumo humanizado para o aluno entender o objetivo da sessão.",
-      "- O gasto calórico deve ser sempre uma faixa estimada, nunca uma promessa exata.",
-      "- A estimativa de calorias deve ser conservadora e compatível com duração, intensidade e objetivo do aluno.",
-      "- Se o aluno tiver baixa adesão, dor/desconforto ou retomada, evite estimativas agressivas e priorize segurança.",
-      "- Para objetivo de emagrecimento, fale em contribuição para gasto energético e consistência, não em promessa de perda de peso.",
-      "- Para hipertrofia/força, priorize estímulo muscular, técnica e progressão, não calorias.",
-      "",
-      "REGRA DE EVOLUÇÃO E PRÉ-PLANEJAMENTO:",
-      "- Antes de prescrever, classifique a decisão evolutiva em um destes status: EVOLUCAO_PERMITIDA, MANUTENCAO_RECOMENDADA, RETOMADA_REPETICAO_ADAPTADA, PRE_PLANEJAMENTO_CONSERVADOR ou REVISAO_HUMANA_OBRIGATORIA.",
-      "- Se a semana atual ainda não tem execução registrada, trate a próxima semana como PRE_PLANEJAMENTO_CONSERVADOR.",
-      "- Se o aluno não concluiu treinos, teve baixa adesão ou tem treinos vencidos, priorize RETOMADA_REPETICAO_ADAPTADA.",
-      "- Se houver dor/desconforto, restrição, dúvida aberta ou evento de cuidado, sinalize REVISAO_HUMANA_OBRIGATORIA e não gere progressão agressiva.",
-      "- Só use EVOLUCAO_PERMITIDA quando houver dados suficientes de execução/adesão e ausência de alertas críticos.",
-      "- Não evolua carga, impacto, volume, complexidade ou intensidade sem evidência de resposta do aluno.",
-      "- Mesmo em pré-planejamento, crie treino seguro, conservador e revisável pelo professor antes da liberação ao aluno.",
-      "",
-      "REGRA DE JANELA SEGURA DE INÍCIO:",
-      "- O aluno não começa atrasado; ele começa na primeira janela segura de acompanhamento.",
-      "- Se a entrada ou tentativa de planejamento cair em sexta-feira, sábado ou domingo, não gere treino para a semana atual. Direcione para a próxima semana.",
-      "- Treino atrasado não acumula. A próxima prescrição deve respeitar a semana real de execução do aluno.",
-      "- Sábado e domingo não devem ser usados para iniciar uma semana de treino normal.",
-      "",
-      "REGRA DE SEGURANÇA DO SISTEMA:",
-      "- O JSON deve devolver o bloco aiValidation exatamente como informado no formato obrigatório.",
-      "- Não altere studentId, weekStart, weekEnd, expectedWorkoutDates, expectedWorkoutCount nem validationKey.",
-      "- Se esses campos forem alterados, o Funcional UP Digital vai bloquear a importação para evitar treino no aluno ou semana errada.",
-      "",
-      "REGRA DA BIBLIOTECA OFICIAL:",
-      "- Use somente exercícios cadastrados na biblioteca abaixo.",
-      "- Cada exercício precisa ter exerciseId.",
-      "- Não invente exercícios fora da biblioteca.",
-      "- O sistema vai bloquear qualquer exercício sem exerciseId válido.",
-      "",
-      ...getExerciseLibraryPromptLines(),
-      "",
-      "REGRA DE CALENDÁRIO DO CONTRATO:",
-      scheduleDescription,
-      `Semana alvo obrigatória: ${validationContext.weekStart} a ${validationContext.weekEnd}.`,
-      `Quantidade exata esperada no JSON: ${expectedWorkoutCount} treino(s).`,
-      "Datas obrigatórias para esta semana:",
-      ...scheduleLines,
-      "",
-      "FORMATO OBRIGATÓRIO DO JSON:",
-      "{",
-      '  "studentId": "' + summaryData.student.id + '",',
-      '  "studentName": "' + summaryData.student.name.replaceAll('"', "'") + '",',
-      '  "aiValidation": {',
-      '    "studentId": "' + validationContext.studentId + '",',
-      '    "weekStart": "' + validationContext.weekStart + '",',
-      '    "weekEnd": "' + validationContext.weekEnd + '",',
-      '    "expectedWorkoutCount": ' + validationContext.expectedWorkoutCount + ',',
-      '    "expectedWorkoutDates": [' + expectedDatesJson + '],',
-      '    "validationKey": "' + validationContext.validationKey + '"',
-      '  },',
-      '  "evolutionDecision": {',
-      '    "status": "PRE_PLANEJAMENTO_CONSERVADOR",',
-      '    "reason": "Explique a decisão com base no resumo: evolução, manutenção, retomada, pré-planejamento ou revisão humana obrigatória.",',
-      '    "requiresReviewBeforeRelease": true,',
-      '    "reviewAlerts": ["Professor deve revisar dados atualizados antes de liberar a próxima semana"]',
-      '  },',
-      '  "workouts": [',
-      "    {",
-      '      "name": "Treino A - nome do treino",',
-      '      "date": "' + (schedule[0]?.date || "AAAA-MM-DD") + '",',
-      '      "description": "descrição técnica curta do treino",',
-      '      "objective": "objetivo principal da sessão, em linguagem simples para o aluno",',
-      '      "focusAreas": "grupos musculares ou capacidades trabalhadas, ex: pernas, glúteos, core e condicionamento",',
-      '      "intensity": "leve, moderada ou alta",',
-      '      "estimatedDurationMinutes": 40,',
-      '      "estimatedCaloriesMin": 180,',
-      '      "estimatedCaloriesMax": 300,',
-      '      "studentSummary": "resumo humanizado para o aluno entender o porquê do treino",',
-      '      "safetyNote": "observação de segurança, deixando claro que gasto calórico é estimativa e que dor não deve ser ignorada",',
-      '      "notes": "observações para o professor revisar",',
-      '      "exercises": [',
-      "        {",
-      '          "exerciseId": "id-exato-da-biblioteca",',
-      '          "name": "Nome do exercício cadastrado na biblioteca",',
-      '          "description": "descrição curta do exercício conforme biblioteca",',
-      '          "purpose": "pra que serve este exercício, usando a biblioteca oficial",',
-      '          "instructions": "como executar, usando a biblioteca oficial",',
-      '          "safetyGuidance": "cuidados para executar com segurança, usando a biblioteca oficial",',
-      '          "series": 3,',
-      '          "reps": "10-12",',
-      '          "weight": "carga leve/moderada ou a definir",',
-      '          "restTime": "60s",',
-      '          "notes": "observações de segurança/progressão",',
-      '          "order": 0',
-      "        }",
-      "      ]",
-      "    }",
-      "  ]",
-      "}",
-      "",
-      "RESUMO DO ALUNO:",
-      summaryData.summaryText,
-    ].join("\\n");
+      "FORMATO OBRIGATÓRIO:",
+      `{"studentId":"${summaryData.student.id}","studentName":"${summaryData.student.name.replaceAll('"', "'")}","aiValidation":${JSON.stringify(validationPayload)},"evolutionDecision":{"status":"PRE_PLANEJAMENTO_CONSERVADOR","reason":"motivo objetivo","requiresReviewBeforeRelease":true,"reviewAlerts":[]},"workouts":[{"name":"Treino A","date":"${schedule[0]?.date || "AAAA-MM-DD"}","description":"","objective":"","focusAreas":"","intensity":"leve|moderada|alta","estimatedDurationMinutes":40,"estimatedCaloriesMin":0,"estimatedCaloriesMax":0,"studentSummary":"","safetyNote":"","notes":"","exercises":[{"exerciseId":"ID_DA_BIBLIOTECA","series":3,"reps":"10-12","weight":"a definir pelo professor","restTime":"60s","notes":"","order":0}]}]}`,
+      `Gere exatamente ${expectedWorkoutCount} treino(s), nas datas obrigatórias e mantendo aiValidation sem qualquer alteração.`,
+    ].join("\n");
   }
 
   function extractJsonFromText(rawText: string): any {
