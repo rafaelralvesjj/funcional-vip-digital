@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import JSZip from "jszip";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function normalizeRole(value?: string | null): string {
   const role = String(value || "").toUpperCase();
@@ -16,13 +20,21 @@ function cleanText(value: unknown): string {
 }
 
 function parseJson(raw: unknown): any {
-  const text = cleanText(raw)
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "");
+  const text = cleanText(raw).replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("Cole um JSON válido.");
   return JSON.parse(text.slice(start, end + 1));
+}
+
+function safeFileName(value: string, fallback: string): string {
+  const cleaned = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned || fallback;
 }
 
 async function getAccessibleQuestion(questionId: string, userId: string, role: string) {
@@ -30,47 +42,84 @@ async function getAccessibleQuestion(questionId: string, userId: string, role: s
     where: { id: questionId },
     include: {
       student: { select: { id: true, name: true, userId: true } },
+      attachments: { orderBy: { createdAt: "asc" } },
     },
   });
 
-  if (!question?.student || !question.documentUrl) return null;
-  const allowed = role === "GESTOR" || role === "ADMIN" || (role === "TEACHER" && (question.teacherId === userId || question.student.userId === userId));
+  if (!question?.student) return null;
+  const allowed = role === "GESTOR" || role === "ADMIN" || (role === "TEACHER" && question.teacherId === userId);
   return allowed ? question : null;
 }
 
-function buildPrompt(question: any): string {
+type PackageItem = {
+  id: string;
+  kind: "IMAGE" | "DOCUMENT" | "VIDEO";
+  url: string;
+  name: string;
+  mimeType: string;
+  videoReviewSummary?: string;
+};
+
+function collectItems(question: any): PackageItem[] {
+  const items: PackageItem[] = (question.attachments || []).map((attachment: any, index: number) => ({
+    id: attachment.id,
+    kind: String(attachment.kind || "DOCUMENT").toUpperCase() as PackageItem["kind"],
+    url: attachment.url,
+    name: attachment.name || `arquivo-${index + 1}`,
+    mimeType: attachment.mimeType || "application/octet-stream",
+    videoReviewSummary: cleanText(attachment.videoReviewSummary),
+  }));
+
+  const urls = new Set(items.map((item) => item.url));
+  if (question.imageUrl && !urls.has(question.imageUrl)) items.push({ id: "legacy-image", kind: "IMAGE", url: question.imageUrl, name: "imagem-enviada.jpg", mimeType: "image/jpeg" });
+  if (question.documentUrl && !urls.has(question.documentUrl)) items.push({ id: "legacy-document", kind: "DOCUMENT", url: question.documentUrl, name: question.documentName || "documento-enviado", mimeType: question.documentMimeType || "application/octet-stream" });
+  if (question.videoUrl && !urls.has(question.videoUrl)) items.push({ id: "legacy-video", kind: "VIDEO", url: question.videoUrl, name: "video-enviado.mp4", mimeType: "video/mp4", videoReviewSummary: "" });
+  return items;
+}
+
+function buildPrompt(question: any, items: PackageItem[]): string {
+  const documents = items.filter((item) => item.kind === "DOCUMENT");
+  const images = items.filter((item) => item.kind === "IMAGE");
+  const videos = items.filter((item) => item.kind === "VIDEO");
   const model = {
-    documentType: "LAUDO | EXAME | ATESTADO | ORIENTACAO_MEDICA | AVALIACAO | OUTRO",
-    title: "Título objetivo",
-    objectiveFindings: ["Informação literalmente presente no documento"],
-    trainingRelevantInformation: ["Informação que pode influenciar o treino"],
-    explicitRestrictions: ["Somente restrições explicitamente escritas"],
-    recommendations: ["Somente recomendações explicitamente escritas"],
-    bodyRegions: ["Regiões mencionadas"],
-    validityOrDate: "Data/validade encontrada ou vazio",
-    questionsForProfessor: ["Pontos que precisam ser confirmados"],
+    packageTitle: "Título objetivo do conjunto analisado",
+    analyzedFiles: [{ fileName: "arquivo.ext", fileType: "IMAGE | DOCUMENT", objectiveFindings: ["achado objetivo"] }],
+    professorVideoReviews: [{ fileName: "video.mp4", summaryUsed: "resumo técnico informado pelo professor" }],
+    trainingRelevantInformation: ["informação relevante para prescrição"],
+    explicitRestrictions: ["somente restrições explicitamente presentes"],
+    recommendations: ["somente recomendações explícitas"],
+    bodyRegions: ["regiões mencionadas"],
+    questionsForProfessor: ["pontos que precisam ser confirmados"],
     summaryForTraining: "Resumo curto, objetivo e sem diagnóstico",
     requiresUrgentHumanReview: false,
   };
 
   return [
     ...MANUAL_AI_EXECUTION_HEADER_LINES,
-    "Você está apoiando um professor de educação física na leitura de um documento enviado por um aluno.",
-    "Analise o ARQUIVO QUE SERÁ ANEXADO JUNTO COM ESTE PROMPT.",
-    "Não dê diagnóstico, não interprete valores além do texto, não invente restrições e não substitua avaliação médica.",
-    "Extraia somente informações objetivas que possam influenciar a prescrição ou segurança do treino.",
-    "Quando algo não estiver claro, inclua em questionsForProfessor.",
-    "Retorne SOMENTE JSON válido, sem markdown, comentários ou texto fora do JSON.",
+    "Analise integralmente o prompt.txt e todos os arquivos de imagem e documento deste pacote ZIP.",
+    "Para vídeos, NÃO invente uma análise visual: use exclusivamente o resumo técnico escrito pelo professor no prompt.",
+    "Não dê diagnóstico, não interprete além do conteúdo apresentado e não substitua avaliação médica.",
+    "Extraia apenas informações objetivas que possam influenciar a segurança ou a prescrição de treino.",
+    "Retorne somente JSON válido, sem markdown ou comentários. Salve ou entregue o resultado como arquivo TXT quando a plataforma permitir.",
     "O professor revisará o resultado antes de salvar na memória técnica do aluno.",
     "",
     `ALUNO: ${question.student.name}`,
-    `ARQUIVO: ${question.documentName || "Documento sem nome"}`,
-    `TIPO MIME: ${question.documentMimeType || "não informado"}`,
     `MENSAGEM DO ALUNO: ${question.content || ""}`,
+    `IMAGENS NO PACOTE: ${images.map((item) => item.name).join(", ") || "nenhuma"}`,
+    `DOCUMENTOS NO PACOTE: ${documents.map((item) => item.name).join(", ") || "nenhum"}`,
+    "",
+    "RESUMOS TÉCNICOS DOS VÍDEOS FEITOS PELO PROFESSOR:",
+    ...(videos.length ? videos.map((item) => `- ${item.name}: ${item.videoReviewSummary || "SEM RESUMO — não utilizar este vídeo na análise"}`) : ["- Nenhum vídeo enviado."]),
     "",
     "MODELO OBRIGATÓRIO:",
     JSON.stringify(model, null, 2),
   ].join("\n");
+}
+
+async function downloadFile(url: string): Promise<Buffer> {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`Não foi possível baixar um anexo (${response.status}).`);
+  return Buffer.from(await response.arrayBuffer());
 }
 
 export async function POST(request: NextRequest) {
@@ -79,64 +128,73 @@ export async function POST(request: NextRequest) {
     const user = session?.user as any;
     const userId = user?.id ? String(user.id) : "";
     const role = normalizeRole(user?.role);
-    if (!userId || !["GESTOR", "ADMIN", "TEACHER"].includes(role)) {
-      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
-    }
+    if (!userId || !["GESTOR", "ADMIN", "TEACHER"].includes(role)) return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
 
     const body = await request.json();
     const action = cleanText(body?.action).toUpperCase();
     const questionId = cleanText(body?.questionId);
     const question = await getAccessibleQuestion(questionId, userId, role);
-    if (!question || !question.student) return NextResponse.json({ error: "Documento não encontrado ou sem permissão." }, { status: 404 });
+    if (!question?.student) return NextResponse.json({ error: "Conversa não encontrada ou sem permissão." }, { status: 404 });
+
+    if (action === "SAVE_VIDEO_REVIEW") {
+      const attachmentId = cleanText(body?.attachmentId);
+      const summary = cleanText(body?.summary);
+      if (!attachmentId || !summary) return NextResponse.json({ error: "Informe o resumo técnico do vídeo." }, { status: 422 });
+      const attachment = question.attachments.find((item: any) => item.id === attachmentId && String(item.kind).toUpperCase() === "VIDEO");
+      if (!attachment) return NextResponse.json({ error: "Vídeo não encontrado nesta conversa." }, { status: 404 });
+      await prisma.questionAttachment.update({
+        where: { id: attachmentId },
+        data: { videoReviewSummary: summary, videoReviewedById: userId, videoReviewedAt: new Date() },
+      });
+      return NextResponse.json({ ok: true, message: "Resumo técnico do vídeo salvo." });
+    }
+
+    const items = collectItems(question);
+    const videosWithoutReview = items.filter((item) => item.kind === "VIDEO" && !item.videoReviewSummary);
 
     if (action === "PREPARE_PROMPT") {
-      return NextResponse.json({ ok: true, manualPrompt: buildPrompt(question) });
+      return NextResponse.json({ ok: true, manualPrompt: buildPrompt(question, items), videosWithoutReview: videosWithoutReview.map((item) => item.name) });
+    }
+
+    if (action === "DOWNLOAD_PACKAGE") {
+      if (!items.some((item) => item.kind === "IMAGE" || item.kind === "DOCUMENT" || item.kind === "VIDEO")) return NextResponse.json({ error: "Não há anexos nesta conversa." }, { status: 422 });
+      if (videosWithoutReview.length) return NextResponse.json({ error: `Preencha e salve o resumo técnico de todos os vídeos antes de gerar o pacote: ${videosWithoutReview.map((item) => item.name).join(", ")}.` }, { status: 422 });
+
+      const zip = new JSZip();
+      const prompt = buildPrompt(question, items);
+      zip.file("prompt.txt", prompt);
+      zip.file("manifesto.json", JSON.stringify({ student: question.student.name, questionId: question.id, generatedAt: new Date().toISOString(), files: items.map(({ id, kind, name, mimeType, videoReviewSummary }) => ({ id, kind, name, mimeType, videoReviewSummary: kind === "VIDEO" ? videoReviewSummary : undefined })) }, null, 2));
+
+      let sequence = 1;
+      for (const item of items) {
+        if (item.kind === "VIDEO") continue;
+        const folder = item.kind === "IMAGE" ? "imagens" : "documentos";
+        const fileName = `${String(sequence).padStart(2, "0")}-${safeFileName(item.name, `arquivo-${sequence}`)}`;
+        zip.file(`${folder}/${fileName}`, await downloadFile(item.url));
+        sequence += 1;
+      }
+      const output = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
+      const downloadName = `pacote-ia-${safeFileName(question.student.name, "aluno")}.zip`;
+      return new NextResponse(output, { status: 200, headers: { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${downloadName}"`, "Cache-Control": "no-store" } });
     }
 
     if (action === "SAVE_ANALYSIS") {
       let parsed: any;
-      try { parsed = parseJson(body?.manualResponse); } catch (error: any) {
-        return NextResponse.json({ error: error?.message || "JSON inválido." }, { status: 422 });
-      }
-
+      try { parsed = parseJson(body?.manualResponse); } catch (error: any) { return NextResponse.json({ error: error?.message || "JSON inválido." }, { status: 422 }); }
       const summary = cleanText(parsed?.summaryForTraining);
-      const title = cleanText(parsed?.title) || question.documentName || "Documento analisado";
+      const title = cleanText(parsed?.packageTitle) || "Análise de anexos do aluno";
       if (!summary) return NextResponse.json({ error: "O JSON precisa conter summaryForTraining." }, { status: 422 });
-
-      const details = {
-        documentType: cleanText(parsed?.documentType) || "OUTRO",
-        summaryForTraining: summary,
-        objectiveFindings: Array.isArray(parsed?.objectiveFindings) ? parsed.objectiveFindings : [],
-        trainingRelevantInformation: Array.isArray(parsed?.trainingRelevantInformation) ? parsed.trainingRelevantInformation : [],
-        explicitRestrictions: Array.isArray(parsed?.explicitRestrictions) ? parsed.explicitRestrictions : [],
-        recommendations: Array.isArray(parsed?.recommendations) ? parsed.recommendations : [],
-        bodyRegions: Array.isArray(parsed?.bodyRegions) ? parsed.bodyRegions : [],
-        validityOrDate: cleanText(parsed?.validityOrDate),
-        questionsForProfessor: Array.isArray(parsed?.questionsForProfessor) ? parsed.questionsForProfessor : [],
-        requiresUrgentHumanReview: Boolean(parsed?.requiresUrgentHumanReview),
-      };
-
+      const firstDocument = items.find((item) => item.kind === "DOCUMENT");
+      const details = { ...parsed, summaryForTraining: summary, reviewedPackageFiles: items.map((item) => ({ name: item.name, kind: item.kind })) };
       const memory = await prisma.studentTechnicalMemory.create({
-        data: {
-          studentId: question.student.id,
-          sourceQuestionId: question.id,
-          category: "DOCUMENT",
-          title,
-          summary: JSON.stringify(details, null, 2),
-          sourceDocumentName: question.documentName,
-          sourceDocumentUrl: question.documentUrl,
-          status: "APPROVED",
-          reviewedById: userId,
-          reviewedAt: new Date(),
-        },
+        data: { studentId: question.student.id, sourceQuestionId: question.id, category: "DOCUMENT", title, summary: JSON.stringify(details, null, 2), sourceDocumentName: firstDocument?.name || "Pacote de anexos", sourceDocumentUrl: firstDocument?.url || null, status: "APPROVED", reviewedById: userId, reviewedAt: new Date() },
       });
-
-      return NextResponse.json({ ok: true, memoryId: memory.id, message: "Análise salva na memória técnica do aluno e pronta para entrar nos próximos prompts." });
+      return NextResponse.json({ ok: true, memoryId: memory.id, message: "Análise aprovada e salva na memória técnica do aluno." });
     }
 
     return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
   } catch (error) {
     console.error("POST /api/student-documents error:", error);
-    return NextResponse.json({ error: "Erro interno ao processar documento." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Erro interno ao processar os anexos." }, { status: 500 });
   }
 }

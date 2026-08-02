@@ -511,6 +511,9 @@ model QuestionAttachment {
   mimeType     String?  @map("mime_type")
   sizeBytes    Int?     @map("size_bytes")
   purpose      String?
+  videoReviewSummary String?   @map("video_review_summary") @db.Text
+  videoReviewedById  String?   @map("video_reviewed_by_id")
+  videoReviewedAt    DateTime? @map("video_reviewed_at")
   createdAt    DateTime @default(now()) @map("created_at")
 
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)

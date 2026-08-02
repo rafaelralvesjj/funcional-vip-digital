@@ -12,6 +12,8 @@ type ConversationAttachment = {
   name?: string | null;
   mimeType?: string | null;
   purpose?: string | null;
+  videoReviewSummary?: string | null;
+  videoReviewedAt?: string | null;
 };
 
 type ConversationReply = {
@@ -307,6 +309,7 @@ export default function DashboardConversationList({
   const [documentPromptById, setDocumentPromptById] = useState<Record<string, string>>({});
   const [documentResponseById, setDocumentResponseById] = useState<Record<string, string>>({});
   const [documentLoadingId, setDocumentLoadingId] = useState<string | null>(null);
+  const [videoReviewByAttachmentId, setVideoReviewByAttachmentId] = useState<Record<string, string>>({});
   const [adjustmentDraftByConversationId, setAdjustmentDraftByConversationId] = useState<
     Record<string, AdjustmentDraftState | null>
   >({});
@@ -421,9 +424,69 @@ export default function DashboardConversationList({
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || "Não foi possível preparar o prompt.");
       setDocumentPromptById((current) => ({ ...current, [conversation.id]: data.manualPrompt }));
-      setSuccessById((current) => ({ ...current, [conversation.id]: "Prompt preparado. Abra o documento e envie-o junto com o prompt para a IA externa." }));
+      const pending = Array.isArray(data?.videosWithoutReview) ? data.videosWithoutReview : [];
+      setSuccessById((current) => ({ ...current, [conversation.id]: pending.length ? `Prompt preparado, mas ainda falta resumir: ${pending.join(", ")}.` : "Prompt preparado. Você já pode gerar o pacote ZIP para a IA externa." }));
     } catch (error: any) {
       setErrorById((current) => ({ ...current, [conversation.id]: error?.message || "Erro ao preparar o prompt." }));
+    } finally {
+      setDocumentLoadingId(null);
+    }
+  }
+
+  async function handleSaveVideoReview(conversation: ConversationItem, attachment: ConversationAttachment) {
+    const summary = (videoReviewByAttachmentId[attachment.id] ?? attachment.videoReviewSummary ?? "").trim();
+    if (!summary) {
+      setErrorById((current) => ({ ...current, [conversation.id]: "Escreva o resumo técnico do vídeo antes de salvar." }));
+      return;
+    }
+    setDocumentLoadingId(conversation.id);
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+    try {
+      const response = await fetch("/api/student-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "SAVE_VIDEO_REVIEW", questionId: conversation.id, attachmentId: attachment.id, summary }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || "Não foi possível salvar o resumo do vídeo.");
+      setVideoReviewByAttachmentId((current) => ({ ...current, [attachment.id]: summary }));
+      attachment.videoReviewSummary = summary;
+      setSuccessById((current) => ({ ...current, [conversation.id]: data.message || "Resumo técnico do vídeo salvo." }));
+    } catch (error: any) {
+      setErrorById((current) => ({ ...current, [conversation.id]: error?.message || "Erro ao salvar o resumo do vídeo." }));
+    } finally {
+      setDocumentLoadingId(null);
+    }
+  }
+
+  async function handleDownloadAiPackage(conversation: ConversationItem) {
+    setDocumentLoadingId(conversation.id);
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+    try {
+      const response = await fetch("/api/student-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "DOWNLOAD_PACKAGE", questionId: conversation.id }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || "Não foi possível gerar o pacote ZIP.");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const fileName = match?.[1] || `pacote-ia-${conversation.id}.zip`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setSuccessById((current) => ({ ...current, [conversation.id]: "Pacote ZIP gerado. Envie o ZIP completo para a IA externa e depois cole o JSON retornado abaixo." }));
+    } catch (error: any) {
+      setErrorById((current) => ({ ...current, [conversation.id]: error?.message || "Erro ao gerar o pacote ZIP." }));
     } finally {
       setDocumentLoadingId(null);
     }
@@ -935,22 +998,43 @@ export default function DashboardConversationList({
               {!isExpanded && renderAttachmentIndicator(conversation)}
               {isExpanded && renderChatAttachmentViewer(conversation, `conversation-${conversation.id}`)}
 
-              {isExpanded && conversation.documentUrl && normalizeRole(currentRole) === "TEACHER" && (
+              {isExpanded && hasChatAttachment(conversation) && normalizeRole(currentRole) === "TEACHER" && (
                 <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 space-y-3">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300">Documento do aluno</p>
-                    <p className="mt-1 text-xs text-[#d4d4d4]">Gere o prompt, abra o documento e envie os dois juntos para a IA externa. Depois cole o JSON para salvar na memória técnica.</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300">Pacote de anexos para análise por IA</p>
+                    <p className="mt-1 text-xs text-[#d4d4d4]">O ZIP levará o prompt, imagens e documentos. Vídeos entram por meio do resumo técnico escrito pelo professor.</p>
                   </div>
-                  <button type="button" onClick={() => handlePrepareDocumentPrompt(conversation)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">
-                    {documentLoadingId === conversation.id ? "Preparando..." : "Gerar prompt para analisar documento"}
+
+                  {(conversation.attachments || []).filter((attachment) => attachment.kind === "VIDEO").map((attachment) => (
+                    <div key={attachment.id} className="rounded-lg border border-violet-400/20 bg-black/25 p-3 space-y-2">
+                      <p className="text-[11px] font-semibold text-violet-200">Resumo técnico do vídeo: {attachment.name || "vídeo enviado"}</p>
+                      <textarea
+                        rows={4}
+                        value={videoReviewByAttachmentId[attachment.id] ?? attachment.videoReviewSummary ?? ""}
+                        onChange={(event) => setVideoReviewByAttachmentId((current) => ({ ...current, [attachment.id]: event.target.value }))}
+                        placeholder="Descreva o exercício, qualidade da execução, dificuldades, compensações percebidas, dor relatada e orientação sugerida. Não faça diagnóstico."
+                        className="w-full rounded-lg border border-violet-400/20 bg-black/30 px-3 py-2 text-xs text-[#f5f5f5] outline-none"
+                      />
+                      <button type="button" onClick={() => handleSaveVideoReview(conversation, attachment)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg border border-violet-400/30 px-3 py-2 text-[11px] font-semibold text-violet-200 disabled:opacity-50">Salvar resumo do vídeo</button>
+                    </div>
+                  ))}
+
+                  <button type="button" onClick={() => handlePrepareDocumentPrompt(conversation)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg border border-amber-400/30 px-3 py-2 text-[11px] font-semibold text-amber-200 disabled:opacity-50">
+                    {documentLoadingId === conversation.id ? "Preparando..." : "Visualizar prompt do pacote"}
                   </button>
+                  <button type="button" onClick={() => handleDownloadAiPackage(conversation)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">
+                    {documentLoadingId === conversation.id ? "Gerando..." : "Gerar e baixar pacote ZIP para IA"}
+                  </button>
+
                   {documentPromptById[conversation.id] && (
                     <>
-                      <button type="button" onClick={() => navigator.clipboard.writeText(documentPromptById[conversation.id])} className="w-full rounded-lg border border-amber-400/30 px-3 py-2 text-[11px] font-semibold text-amber-200">Copiar prompt do documento</button>
-                      <textarea rows={9} value={documentResponseById[conversation.id] || ""} onChange={(event) => setDocumentResponseById((current) => ({ ...current, [conversation.id]: event.target.value }))} placeholder="Cole aqui somente o JSON devolvido pela IA" className="w-full rounded-lg border border-amber-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none" />
-                      <button type="button" onClick={() => handleSaveDocumentAnalysis(conversation)} disabled={documentLoadingId === conversation.id || !(documentResponseById[conversation.id] || "").trim()} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Salvar análise aprovada na memória técnica</button>
+                      <textarea readOnly rows={7} value={documentPromptById[conversation.id]} className="w-full rounded-lg border border-amber-400/20 bg-black/30 px-3 py-3 font-mono text-[10px] text-[#d4d4d4] outline-none" />
+                      <button type="button" onClick={() => navigator.clipboard.writeText(documentPromptById[conversation.id])} className="w-full rounded-lg border border-amber-400/30 px-3 py-2 text-[11px] font-semibold text-amber-200">Copiar prompt</button>
                     </>
                   )}
+
+                  <textarea rows={9} value={documentResponseById[conversation.id] || ""} onChange={(event) => setDocumentResponseById((current) => ({ ...current, [conversation.id]: event.target.value }))} placeholder="Cole aqui o JSON ou o conteúdo do TXT devolvido pela IA" className="w-full rounded-lg border border-amber-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none" />
+                  <button type="button" onClick={() => handleSaveDocumentAnalysis(conversation)} disabled={documentLoadingId === conversation.id || !(documentResponseById[conversation.id] || "").trim()} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Salvar análise aprovada na memória técnica</button>
                 </div>
               )}
 
