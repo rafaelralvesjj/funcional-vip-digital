@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
+import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 
 function normalizeRole(value?: string | null): string {
   const role = String(value || "").toUpperCase();
@@ -64,6 +65,7 @@ type NoticeEmailRecipient = {
   id: string;
   name: string | null;
   email: string | null;
+  userAuthId?: string | null;
 };
 
 type NoticeEmailSender = {
@@ -164,7 +166,13 @@ async function sendNoticeEmailToRecipients({
   await Promise.allSettled(
     recipients
       .filter((recipient) => Boolean(recipient.email))
-      .map((recipient) => {
+      .map(async (recipient) => {
+        const safeRecipientEmail = recipientKind === "STUDENT"
+          ? await resolveStudentRecipientEmail({ studentId: recipient.id, studentEmail: recipient.email, userAuthId: recipient.userAuthId || null })
+          : recipient.email;
+
+        if (!safeRecipientEmail) return;
+
         const recipientName =
           recipient.name || (recipientKind === "STUDENT" ? "aluno" : "professor");
 
@@ -237,7 +245,7 @@ async function sendNoticeEmailToRecipients({
         `;
 
         return sendEmail({
-          to: recipient.email as string,
+          to: safeRecipientEmail,
           subject,
           text,
           html,
@@ -316,6 +324,7 @@ async function notifyNoticeByEmail(notice: {
           id: true,
           name: true,
           email: true,
+          userAuthId: true,
         },
       });
     }

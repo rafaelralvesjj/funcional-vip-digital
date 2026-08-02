@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmail } from "@/lib/sendEmail";
+import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 
 function getAppBaseUrl(): string {
   const appUrl =
@@ -67,7 +68,7 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
 
   if (!student) return;
 
-  let studentEmail = student.email || null;
+  let studentEmail = await resolveStudentRecipientEmail({ studentId: student.id, studentEmail: student.email, userAuthId: student.userAuthId });
   let studentName = student.name || "Aluno";
 
   if (!studentEmail && student.userAuthId) {
@@ -79,7 +80,7 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
       },
     });
 
-    studentEmail = userAuth?.email || null;
+    studentEmail = await resolveStudentRecipientEmail({ studentId: student.id, studentEmail: userAuth?.email || null, userAuthId: student.userAuthId });
     studentName = student.name || userAuth?.name || "Aluno";
   }
 

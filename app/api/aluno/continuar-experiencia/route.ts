@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
+import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -140,7 +141,7 @@ export async function POST() {
 
     const authorId = student.userAuthId || sessionUser.id || student.userId;
     const studentName = student.name || student.userAuth?.name || sessionUser.name || "Aluno";
-    const studentEmail = student.email || student.userAuth?.email || sessionUser.email || null;
+    const studentEmail = await resolveStudentRecipientEmail({ studentId: student.id, studentEmail: student.email || student.userAuth?.email || null, userAuthId: student.userAuthId });
 
     const notice = await prisma.notice.create({
       data: {

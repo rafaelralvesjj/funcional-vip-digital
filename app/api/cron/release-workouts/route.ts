@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/sendEmail";
+import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 
 export const maxDuration = 60;
 
@@ -99,16 +100,11 @@ function formatDatePtBr(date: Date): string {
 }
 
 async function getStudentEmail(student: StudentForRelease): Promise<string | null> {
-  if (student.email) return student.email;
-
-  if (!student.userAuthId) return null;
-
-  const userAuth = await prisma.user.findUnique({
-    where: { id: student.userAuthId },
-    select: { email: true },
+  return resolveStudentRecipientEmail({
+    studentId: student.id,
+    studentEmail: student.email,
+    userAuthId: student.userAuthId,
   });
-
-  return userAuth?.email || null;
 }
 
 async function getFallbackNoticeAuthorId(studentProfessorId?: string | null): Promise<string | null> {

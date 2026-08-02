@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 import { calculateAgeYears } from "@/lib/student-age";
+import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 
 const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
 const WORKOUT_STATUS_PENDING = "PENDENTE";
@@ -357,19 +358,15 @@ async function normalizeExercisesFromOfficialLibrary(exercises: any[]) {
 
 
 async function getStudentEmail(student: {
+  id?: string | null;
   email?: string | null;
   userAuthId?: string | null;
 }): Promise<string | null> {
-  if (student.email) return student.email;
-
-  if (!student.userAuthId) return null;
-
-  const userAuth = await prisma.user.findUnique({
-    where: { id: student.userAuthId },
-    select: { email: true },
+  return resolveStudentRecipientEmail({
+    studentId: student.id || null,
+    studentEmail: student.email || null,
+    userAuthId: student.userAuthId || null,
   });
-
-  return userAuth?.email || null;
 }
 
 async function getFallbackNoticeAuthorId(studentProfessorId?: string | null): Promise<string | null> {

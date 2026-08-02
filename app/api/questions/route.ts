@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
+import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import {
   isStudentAssignedToProfessor,
   isTeacherUserId,
@@ -367,6 +368,7 @@ type ConversationEmailRecipient = {
   id: string;
   name: string | null;
   email: string | null;
+  userAuthId?: string | null;
   panelKind: "STUDENT" | "TEACHER" | "GESTOR";
 };
 
@@ -383,7 +385,13 @@ async function sendNewConversationEmail({
   await Promise.allSettled(
     recipients
       .filter((recipient) => Boolean(recipient.email))
-      .map((recipient) => {
+      .map(async (recipient) => {
+        const safeRecipientEmail = recipient.panelKind === "STUDENT"
+          ? await resolveStudentRecipientEmail({ studentId: recipient.id, studentEmail: recipient.email, userAuthId: recipient.userAuthId || null })
+          : recipient.email;
+
+        if (!safeRecipientEmail) return;
+
         const recipientName = recipient.name || "usuário";
         const panelText =
           recipient.panelKind === "STUDENT"
@@ -433,7 +441,7 @@ async function sendNewConversationEmail({
         `;
 
         return sendEmail({
-          to: recipient.email as string,
+          to: safeRecipientEmail,
           subject,
           text,
           html,
@@ -475,27 +483,6 @@ async function notifyNewConversationByEmail({
       if (teacher) {
         recipients = [{ ...teacher, panelKind: "TEACHER" }];
       }
-    } else {
-      const gestores = await prisma.user.findMany({
-        where: {
-          role: {
-            in: ["GESTOR", "ADMIN"],
-          },
-          email: {
-            not: null,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      });
-
-      recipients = gestores.map((gestor) => ({
-        ...gestor,
-        panelKind: "GESTOR" as const,
-      }));
     }
   } else if (senderRole === "TEACHER") {
     const teacher = await prisma.user.findUnique({
@@ -508,33 +495,12 @@ async function notifyNewConversationByEmail({
     if (studentId) {
       const student = await prisma.student.findUnique({
         where: { id: studentId },
-        select: { id: true, name: true, email: true },
+        select: { id: true, name: true, email: true, userAuthId: true },
       });
 
       if (student) {
         recipients = [{ ...student, panelKind: "STUDENT" }];
       }
-    } else {
-      const gestores = await prisma.user.findMany({
-        where: {
-          role: {
-            in: ["GESTOR", "ADMIN"],
-          },
-          email: {
-            not: null,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      });
-
-      recipients = gestores.map((gestor) => ({
-        ...gestor,
-        panelKind: "GESTOR" as const,
-      }));
     }
   } else {
     const gestor = await prisma.user.findUnique({
@@ -556,7 +522,7 @@ async function notifyNewConversationByEmail({
     } else if (studentId) {
       const student = await prisma.student.findUnique({
         where: { id: studentId },
-        select: { id: true, name: true, email: true },
+        select: { id: true, name: true, email: true, userAuthId: true },
       });
 
       if (student) {
