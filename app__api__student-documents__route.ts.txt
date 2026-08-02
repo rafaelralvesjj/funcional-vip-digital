@@ -20,12 +20,164 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function stripMarkdownFences(value: string): string {
+  return value
+    .replace(/^\uFEFF/, "")
+    .replace(/^```(?:json|javascript|js|txt)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function findFirstValidJsonObject(text: string): any {
+  for (let start = 0; start < text.length; start += 1) {
+    if (text[start] !== "{") continue;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let index = start; index < text.length; index += 1) {
+      const char = text[index];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (char === "\\") {
+          escaped = true;
+        } else if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (char === "{") depth += 1;
+      if (char === "}") depth -= 1;
+
+      if (depth === 0) {
+        const candidate = text.slice(start, index + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {
+          break;
+        }
+      }
+    }
+  }
+
+  throw new Error("Não foi possível localizar um objeto JSON válido na resposta da IA.");
+}
+
 function parseJson(raw: unknown): any {
-  const text = cleanText(raw).replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("Cole um JSON válido.");
-  return JSON.parse(text.slice(start, end + 1));
+  const text = stripMarkdownFences(cleanText(raw));
+  if (!text) throw new Error("Cole ou importe a resposta produzida pela IA.");
+
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {
+    // A IA pode devolver uma introdução curta, bloco markdown ou texto após o JSON.
+  }
+
+  return findFirstValidJsonObject(text);
+}
+
+function firstNonEmptyText(...values: unknown[]): string {
+  for (const value of values) {
+    const text = cleanText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter(Boolean)
+      .slice(0, 50);
+  }
+
+  const text = cleanText(value);
+  return text ? [text] : [];
+}
+
+function unwrapAnalysisPayload(parsed: any): any {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+  for (const key of ["analysis", "result", "data", "response", "resposta"]) {
+    const nested = parsed[key];
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      return { ...parsed, ...nested };
+    }
+  }
+
+  return parsed;
+}
+
+function normalizeAnalysisResponse(parsedValue: any) {
+  const parsed = unwrapAnalysisPayload(parsedValue);
+  const trainingRelevantInformation = normalizeStringArray(
+    parsed.trainingRelevantInformation ?? parsed.training_relevant_information ?? parsed.informacoesRelevantesTreino
+  );
+  const explicitRestrictions = normalizeStringArray(
+    parsed.explicitRestrictions ?? parsed.explicit_restrictions ?? parsed.restricoesExplicitas
+  );
+  const recommendations = normalizeStringArray(parsed.recommendations ?? parsed.recomendacoes);
+  const questionsForProfessor = normalizeStringArray(
+    parsed.questionsForProfessor ?? parsed.questions_for_professor ?? parsed.perguntasParaProfessor
+  );
+  const limitations = normalizeStringArray(parsed.limitations ?? parsed.limits ?? parsed.limitacoes);
+
+  const fallbackSummary = [
+    ...trainingRelevantInformation,
+    ...explicitRestrictions.map((item) => `Restrição explícita: ${item}`),
+    ...recommendations.map((item) => `Recomendação registrada: ${item}`),
+  ]
+    .slice(0, 8)
+    .join(" ");
+
+  const summaryForTraining = firstNonEmptyText(
+    parsed.summaryForTraining,
+    parsed.summary_for_training,
+    parsed.trainingSummary,
+    parsed.summary,
+    parsed.resumoParaTreino,
+    parsed.resumo,
+    fallbackSummary
+  );
+
+  const studentReplySuggestion = firstNonEmptyText(
+    parsed.studentReplySuggestion,
+    parsed.student_reply_suggestion,
+    parsed.replySuggestion,
+    parsed.suggestedStudentReply,
+    parsed.respostaSugeridaAluno,
+    parsed.sugestaoRespostaAluno
+  );
+
+  return {
+    schemaVersion: "1.0",
+    packageTitle: firstNonEmptyText(parsed.packageTitle, parsed.title, parsed.titulo) || "Análise de anexos do aluno",
+    analyzedFiles: Array.isArray(parsed.analyzedFiles) ? parsed.analyzedFiles.slice(0, 50) : [],
+    professorVideoReviews: Array.isArray(parsed.professorVideoReviews) ? parsed.professorVideoReviews.slice(0, 20) : [],
+    trainingRelevantInformation,
+    explicitRestrictions,
+    recommendations,
+    bodyRegions: normalizeStringArray(parsed.bodyRegions ?? parsed.body_regions ?? parsed.regioesDoCorpo),
+    questionsForProfessor,
+    limitations,
+    summaryForTraining,
+    studentReplySuggestion,
+    requiresUrgentHumanReview: Boolean(
+      parsed.requiresUrgentHumanReview ?? parsed.requires_urgent_human_review ?? parsed.requerRevisaoHumanaUrgente
+    ),
+    sourceResponse: parsed,
+  };
 }
 
 function safeFileName(value: string, fallback: string): string {
@@ -91,8 +243,9 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     recommendations: ["somente recomendações explícitas"],
     bodyRegions: ["regiões mencionadas"],
     questionsForProfessor: ["pontos que precisam ser confirmados"],
-    summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e pronto para a memória técnica do aluno",
-    studentReplySuggestion: "Sugestão de resposta humana para o aluno, sem diagnóstico e sem promessa de resultado",
+    summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e útil para a prescrição do treino",
+    studentReplySuggestion: "Mensagem humana e cuidadosa para o professor revisar e enviar ao aluno no chat",
+    limitations: ["arquivos ilegíveis, ambiguidades, conflitos ou limites da análise"],
     requiresUrgentHumanReview: false,
   };
 
@@ -102,9 +255,10 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     "Para vídeos, NÃO invente uma análise visual: use exclusivamente o resumo técnico escrito pelo professor no prompt.",
     "Não dê diagnóstico, não interprete além do conteúdo apresentado e não substitua avaliação médica.",
     "Extraia apenas informações objetivas que possam influenciar a segurança ou a prescrição de treino.",
-    "Retorne somente JSON válido, sem markdown ou comentários. O campo summaryForTraining é obrigatório e não pode ficar vazio.",
-    "Inclua também studentReplySuggestion com uma sugestão de resposta humana para o aluno. Salve ou entregue o resultado como arquivo TXT quando a plataforma permitir.",
-    "O professor revisará o resultado antes de salvar na memória técnica do aluno.",
+    "Retorne somente JSON válido, sem markdown ou comentários. Salve ou entregue o resultado como arquivo TXT quando a plataforma permitir.",
+    "Os campos summaryForTraining e studentReplySuggestion são obrigatórios e não podem ficar vazios.",
+    "summaryForTraining deve resumir apenas implicações objetivas para o treino; studentReplySuggestion deve ser uma mensagem humana para o aluno, sem diagnóstico.",
+    "O professor revisará o resultado antes de salvar na memória técnica do aluno e antes de responder no chat.",
     "",
     `ALUNO: ${question.student.name}`,
     `MENSAGEM DO ALUNO: ${question.content || ""}`,
@@ -167,7 +321,7 @@ export async function POST(request: NextRequest) {
       const prompt = buildPrompt(question, items);
       const generatedAt = new Date().toISOString();
       const packageId = randomUUID();
-      const packageVersion = "2.2";
+      const packageVersion = "3.0";
       const imageCount = items.filter((item) => item.kind === "IMAGE").length;
       const documentCount = items.filter((item) => item.kind === "DOCUMENT").length;
       const videoCount = items.filter((item) => item.kind === "VIDEO").length;
@@ -261,8 +415,7 @@ export async function POST(request: NextRequest) {
             recommendations: ["somente recomendações explícitas"],
             bodyRegions: ["regiões mencionadas"],
             questionsForProfessor: ["pontos que precisam ser confirmados"],
-            summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e pronto para a memória técnica do aluno",
-            studentReplySuggestion: "Sugestão de resposta humana para o aluno, sem diagnóstico e sem promessa de resultado",
+            summaryForTraining: "Resumo curto, objetivo e sem diagnóstico",
             requiresUrgentHumanReview: false,
           },
           null,
@@ -381,16 +534,74 @@ export async function POST(request: NextRequest) {
 
     if (action === "SAVE_ANALYSIS") {
       let parsed: any;
-      try { parsed = parseJson(body?.manualResponse); } catch (error: any) { return NextResponse.json({ error: error?.message || "JSON inválido." }, { status: 422 }); }
-      const summary = cleanText(parsed?.summaryForTraining);
-      const title = cleanText(parsed?.packageTitle) || "Análise de anexos do aluno";
-      if (!summary) return NextResponse.json({ error: "O JSON precisa conter summaryForTraining." }, { status: 422 });
+      try {
+        parsed = parseJson(body?.manualResponse);
+      } catch (error: any) {
+        return NextResponse.json(
+          { error: error?.message || "A resposta não contém um JSON válido." },
+          { status: 422 }
+        );
+      }
+
+      const normalized = normalizeAnalysisResponse(parsed);
+      if (!normalized.summaryForTraining) {
+        return NextResponse.json(
+          {
+            error: "A resposta da IA não trouxe um resumo utilizável para o treino.",
+            missingFields: ["summaryForTraining"],
+            acceptedAliases: [
+              "summaryForTraining",
+              "summary_for_training",
+              "trainingSummary",
+              "summary",
+              "resumoParaTreino",
+              "resumo",
+            ],
+            guidance: "Gere novamente a resposta usando o MODELO_RESPOSTA.json do pacote ou preencha um resumo objetivo das implicações para o treino.",
+          },
+          { status: 422 }
+        );
+      }
+
       const firstDocument = items.find((item) => item.kind === "DOCUMENT");
-      const details = { ...parsed, summaryForTraining: summary, reviewedPackageFiles: items.map((item) => ({ name: item.name, kind: item.kind })) };
+      const details = {
+        ...normalized,
+        importedAt: new Date().toISOString(),
+        reviewedPackageFiles: items.map((item) => ({ name: item.name, kind: item.kind })),
+      };
+
       const memory = await prisma.studentTechnicalMemory.create({
-        data: { studentId: question.student.id, sourceQuestionId: question.id, category: "DOCUMENT", title, summary: JSON.stringify(details, null, 2), sourceDocumentName: firstDocument?.name || "Pacote de anexos", sourceDocumentUrl: firstDocument?.url || null, status: "APPROVED", reviewedById: userId, reviewedAt: new Date() },
+        data: {
+          studentId: question.student.id,
+          sourceQuestionId: question.id,
+          category: "DOCUMENT",
+          title: normalized.packageTitle,
+          summary: JSON.stringify(details, null, 2),
+          sourceDocumentName: firstDocument?.name || "Pacote de anexos",
+          sourceDocumentUrl: firstDocument?.url || null,
+          status: "APPROVED",
+          reviewedById: userId,
+          reviewedAt: new Date(),
+        },
       });
-      return NextResponse.json({ ok: true, memoryId: memory.id, message: "Análise aprovada e salva na memória técnica do aluno." });
+
+      return NextResponse.json({
+        ok: true,
+        memoryId: memory.id,
+        normalizedAnalysis: {
+          packageTitle: normalized.packageTitle,
+          summaryForTraining: normalized.summaryForTraining,
+          studentReplySuggestion: normalized.studentReplySuggestion,
+          requiresUrgentHumanReview: normalized.requiresUrgentHumanReview,
+          questionsForProfessor: normalized.questionsForProfessor,
+          limitations: normalized.limitations,
+        },
+        studentReplySuggestion: normalized.studentReplySuggestion || null,
+        warning: normalized.studentReplySuggestion
+          ? null
+          : "A análise foi salva, mas a IA não trouxe uma sugestão de resposta ao aluno. Escreva a resposta manualmente no chat.",
+        message: "Análise validada, normalizada e salva na memória técnica do aluno.",
+      });
     }
 
     return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
