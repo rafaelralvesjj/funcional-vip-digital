@@ -165,13 +165,13 @@ export async function POST(request: NextRequest) {
       const prompt = buildPrompt(question, items);
       const generatedAt = new Date().toISOString();
       const packageId = randomUUID();
-      const packageVersion = "2.1";
+      const packageVersion = "2.2";
       const imageCount = items.filter((item) => item.kind === "IMAGE").length;
       const documentCount = items.filter((item) => item.kind === "DOCUMENT").length;
       const videoCount = items.filter((item) => item.kind === "VIDEO").length;
 
       zip.file(
-        "LEIA_PRIMEIRO.txt",
+        "INSTRUCOES/LEIA_PRIMEIRO.txt",
         [
           "LEIA ESTE ARQUIVO ANTES DE TUDO.",
           "",
@@ -181,15 +181,15 @@ export async function POST(request: NextRequest) {
           "4. Relacione cada achado ao nome exato do arquivo correspondente.",
           "5. Não faça diagnóstico, não extrapole o conteúdo e não substitua avaliação médica ou profissional.",
           "6. Retorne somente o JSON solicitado no prompt.txt, sem markdown ou explicações.",
-          "7. Quando a plataforma permitir, preencha ou gere o arquivo RESPOSTA_AQUI.txt.",
+          "7. Quando a plataforma permitir, preencha ou gere o arquivo INSTRUCOES/RESPOSTA_AQUI.txt.",
           "8. Se algum arquivo estiver ilegível, ambíguo ou incompleto, registre isso claramente no campo adequado da resposta.",
           "",
-          "O manifesto.json informa a quantidade, o tipo, o caminho e a integridade dos arquivos incluídos neste pacote.",
+          "O manifesto.json informa a quantidade, o tipo, o caminho, a ordem de análise e a integridade dos arquivos incluídos neste pacote.",
         ].join("\n")
       );
       zip.file("prompt.txt", prompt);
       zip.file(
-        "VERSAO_DO_PACOTE.txt",
+        "INSTRUCOES/VERSAO_DO_PACOTE.txt",
         [
           "FUNCIONAL UP DIGITAL",
           "Pacote IA",
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
         ].join("\n")
       );
       zip.file(
-        "RESPOSTA_AQUI.txt",
+        "INSTRUCOES/RESPOSTA_AQUI.txt",
         [
           "Cole aqui exatamente a resposta produzida pela IA.",
           "",
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
         ].join("\n")
       );
       zip.file(
-        "ERROS_E_LIMITACOES.txt",
+        "INSTRUCOES/ERROS_E_LIMITACOES.txt",
         [
           "REGRAS DE SEGURANÇA E LIMITES",
           "",
@@ -308,12 +308,23 @@ export async function POST(request: NextRequest) {
             imageCount,
             documentCount,
             videoCount,
-            instructionsFile: "LEIA_PRIMEIRO.txt",
+            instructionsFile: "INSTRUCOES/LEIA_PRIMEIRO.txt",
             promptFile: "prompt.txt",
-            versionFile: "VERSAO_DO_PACOTE.txt",
+            versionFile: "INSTRUCOES/VERSAO_DO_PACOTE.txt",
             caseSummaryFile: "RESUMO_DO_CASO.txt",
-            limitationsFile: "ERROS_E_LIMITACOES.txt",
-            responseExpected: "RESPOSTA_AQUI.txt",
+            limitationsFile: "INSTRUCOES/ERROS_E_LIMITACOES.txt",
+            responseExpected: "INSTRUCOES/RESPOSTA_AQUI.txt",
+            recommendedModel: "Modelo multimodal capaz de ler imagens e documentos, como ChatGPT, Microsoft Copilot, Gemini ou Claude.",
+            analysisOrder: [
+              "INSTRUCOES/LEIA_PRIMEIRO.txt",
+              "prompt.txt",
+              "RESUMO_DO_CASO.txt",
+              ...manifestFiles
+                .filter((file) => file.includedAsBinary && file.packagePath)
+                .map((file) => file.packagePath as string),
+              "INSTRUCOES/ERROS_E_LIMITACOES.txt",
+              "INSTRUCOES/RESPOSTA_AQUI.txt",
+            ],
             files: manifestFiles,
           },
           null,
