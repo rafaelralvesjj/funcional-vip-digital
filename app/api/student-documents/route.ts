@@ -175,14 +175,22 @@ export async function POST(request: NextRequest) {
         [
           "LEIA ESTE ARQUIVO ANTES DE TUDO.",
           "",
-          "1. Abra e execute integralmente o arquivo prompt.txt.",
-          "2. Analise todos os arquivos existentes nas pastas imagens e documentos.",
-          "3. Caso existam vídeos, não invente análise visual. Use somente os resumos técnicos escritos pelo professor no prompt.txt.",
-          "4. Relacione cada achado ao nome exato do arquivo correspondente.",
-          "5. Não faça diagnóstico, não extrapole o conteúdo e não substitua avaliação médica ou profissional.",
-          "6. Retorne somente o JSON solicitado no prompt.txt, sem markdown ou explicações.",
-          "7. Quando a plataforma permitir, preencha ou gere o arquivo INSTRUCOES/RESPOSTA_AQUI.txt.",
-          "8. Se algum arquivo estiver ilegível, ambíguo ou incompleto, registre isso claramente no campo adequado da resposta.",
+          "ORDEM DE LEITURA OBRIGATÓRIA:",
+          "1. prompt.txt",
+          "2. RESUMO_DO_CASO.txt",
+          "3. manifesto.json",
+          "4. todos os arquivos existentes nas pastas imagens e documentos, seguindo analysisOrder do manifesto.json",
+          "5. INSTRUCOES/ERROS_E_LIMITACOES.txt",
+          "6. INSTRUCOES/MODELO_RESPOSTA.json",
+          "7. produzir a resposta final em INSTRUCOES/RESPOSTA_AQUI.txt quando a plataforma permitir",
+          "",
+          "REGRAS:",
+          "- Execute integralmente o arquivo prompt.txt.",
+          "- Caso existam vídeos, não invente análise visual. Use somente os resumos técnicos escritos pelo professor no prompt.txt.",
+          "- Relacione cada achado ao nome exato do arquivo correspondente.",
+          "- Não faça diagnóstico, não extrapole o conteúdo e não substitua avaliação médica ou profissional.",
+          "- Retorne somente o JSON solicitado, sem markdown ou explicações.",
+          "- Se algum arquivo estiver ilegível, ambíguo ou incompleto, registre isso claramente no campo adequado da resposta.",
           "",
           "O manifesto.json informa a quantidade, o tipo, o caminho, a ordem de análise e a integridade dos arquivos incluídos neste pacote.",
         ].join("\n")
@@ -227,6 +235,36 @@ export async function POST(request: NextRequest) {
           "- Para vídeos, use somente o resumo técnico informado pelo professor no prompt.txt.",
           "- Use somente evidências presentes no pacote.",
         ].join("\n")
+      );
+      zip.file(
+        "INSTRUCOES/MODELO_RESPOSTA.json",
+        JSON.stringify(
+          {
+            packageTitle: "Título objetivo do conjunto analisado",
+            analyzedFiles: [
+              {
+                fileName: "arquivo.ext",
+                fileType: "IMAGE | DOCUMENT",
+                objectiveFindings: ["achado objetivo"],
+              },
+            ],
+            professorVideoReviews: [
+              {
+                fileName: "video.mp4",
+                summaryUsed: "resumo técnico informado pelo professor",
+              },
+            ],
+            trainingRelevantInformation: ["informação relevante para prescrição"],
+            explicitRestrictions: ["somente restrições explicitamente presentes"],
+            recommendations: ["somente recomendações explícitas"],
+            bodyRegions: ["regiões mencionadas"],
+            questionsForProfessor: ["pontos que precisam ser confirmados"],
+            summaryForTraining: "Resumo curto, objetivo e sem diagnóstico",
+            requiresUrgentHumanReview: false,
+          },
+          null,
+          2
+        )
       );
       zip.file(
         "RESUMO_DO_CASO.txt",
@@ -313,6 +351,7 @@ export async function POST(request: NextRequest) {
             versionFile: "INSTRUCOES/VERSAO_DO_PACOTE.txt",
             caseSummaryFile: "RESUMO_DO_CASO.txt",
             limitationsFile: "INSTRUCOES/ERROS_E_LIMITACOES.txt",
+            responseModelFile: "INSTRUCOES/MODELO_RESPOSTA.json",
             responseExpected: "INSTRUCOES/RESPOSTA_AQUI.txt",
             recommendedModel: "Modelo multimodal capaz de ler imagens e documentos, como ChatGPT, Microsoft Copilot, Gemini ou Claude.",
             analysisOrder: [
@@ -323,6 +362,7 @@ export async function POST(request: NextRequest) {
                 .filter((file) => file.includedAsBinary && file.packagePath)
                 .map((file) => file.packagePath as string),
               "INSTRUCOES/ERROS_E_LIMITACOES.txt",
+              "INSTRUCOES/MODELO_RESPOSTA.json",
               "INSTRUCOES/RESPOSTA_AQUI.txt",
             ],
             files: manifestFiles,
