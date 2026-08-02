@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import JSZip from "jszip";
+import { createHash, randomUUID } from "crypto";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
@@ -58,6 +59,7 @@ type PackageItem = {
   name: string;
   mimeType: string;
   videoReviewSummary?: string;
+  sizeBytes?: number | null;
 };
 
 function collectItems(question: any): PackageItem[] {
@@ -68,51 +70,70 @@ function collectItems(question: any): PackageItem[] {
     name: attachment.name || `arquivo-${index + 1}`,
     mimeType: attachment.mimeType || "application/octet-stream",
     videoReviewSummary: cleanText(attachment.videoReviewSummary),
+    sizeBytes: typeof attachment.sizeBytes === "number" ? attachment.sizeBytes : null,
   }));
 
   const urls = new Set(items.map((item) => item.url));
-  if (question.imageUrl && !urls.has(question.imageUrl)) items.push({ id: "legacy-image", kind: "IMAGE", url: question.imageUrl, name: "imagem-enviada.jpg", mimeType: "image/jpeg" });
-  if (question.documentUrl && !urls.has(question.documentUrl)) items.push({ id: "legacy-document", kind: "DOCUMENT", url: question.documentUrl, name: question.documentName || "documento-enviado", mimeType: question.documentMimeType || "application/octet-stream" });
-  if (question.videoUrl && !urls.has(question.videoUrl)) items.push({ id: "legacy-video", kind: "VIDEO", url: question.videoUrl, name: "video-enviado.mp4", mimeType: "video/mp4", videoReviewSummary: "" });
+  if (question.imageUrl && !urls.has(question.imageUrl)) items.push({ id: "legacy-image", kind: "IMAGE", url: question.imageUrl, name: "imagem-enviada.jpg", mimeType: "image/jpeg", sizeBytes: null });
+  if (question.documentUrl && !urls.has(question.documentUrl)) items.push({ id: "legacy-document", kind: "DOCUMENT", url: question.documentUrl, name: question.documentName || "documento-enviado", mimeType: question.documentMimeType || "application/octet-stream", sizeBytes: null });
+  if (question.videoUrl && !urls.has(question.videoUrl)) items.push({ id: "legacy-video", kind: "VIDEO", url: question.videoUrl, name: "video-enviado.mp4", mimeType: "video/mp4", videoReviewSummary: "", sizeBytes: null });
   return items;
 }
 
-function buildPrompt(question: any, items: PackageItem[]): string {
+function buildResponseModel() {
+  return {
+    packageTitle: "Título objetivo do conjunto analisado",
+    analyzedFiles: [
+      {
+        fileName: "arquivo.ext",
+        fileType: "IMAGE | DOCUMENT",
+        objectiveFindings: ["achado objetivo diretamente sustentado pelo arquivo"],
+      },
+    ],
+    professorVideoReviews: [
+      {
+        fileName: "video.mp4",
+        summaryUsed: "resumo técnico informado pelo professor",
+      },
+    ],
+    trainingRelevantInformation: ["informação relevante para prescrição"],
+    explicitRestrictions: ["somente restrições explicitamente presentes"],
+    recommendations: ["somente recomendações explicitamente presentes"],
+    bodyRegions: ["regiões mencionadas"],
+    questionsForProfessor: ["pontos que precisam ser confirmados"],
+    summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e pronto para revisão do professor",
+    requiresUrgentHumanReview: false,
+  };
+}
+
+function buildPrompt(question: any, items: PackageItem[], packageId: string): string {
   const documents = items.filter((item) => item.kind === "DOCUMENT");
   const images = items.filter((item) => item.kind === "IMAGE");
   const videos = items.filter((item) => item.kind === "VIDEO");
-  const model = {
-    packageTitle: "Título objetivo do conjunto analisado",
-    analyzedFiles: [{ fileName: "arquivo.ext", fileType: "IMAGE | DOCUMENT", objectiveFindings: ["achado objetivo"] }],
-    professorVideoReviews: [{ fileName: "video.mp4", summaryUsed: "resumo técnico informado pelo professor" }],
-    trainingRelevantInformation: ["informação relevante para prescrição"],
-    explicitRestrictions: ["somente restrições explicitamente presentes"],
-    recommendations: ["somente recomendações explícitas"],
-    bodyRegions: ["regiões mencionadas"],
-    questionsForProfessor: ["pontos que precisam ser confirmados"],
-    summaryForTraining: "Resumo curto, objetivo e sem diagnóstico",
-    requiresUrgentHumanReview: false,
-  };
 
   return [
     ...MANUAL_AI_EXECUTION_HEADER_LINES,
-    "Analise integralmente o prompt.txt e todos os arquivos de imagem e documento deste pacote ZIP.",
-    "Para vídeos, NÃO invente uma análise visual: use exclusivamente o resumo técnico escrito pelo professor no prompt.",
-    "Não dê diagnóstico, não interprete além do conteúdo apresentado e não substitua avaliação médica.",
-    "Extraia apenas informações objetivas que possam influenciar a segurança ou a prescrição de treino.",
-    "Retorne somente JSON válido, sem markdown ou comentários. Salve ou entregue o resultado como arquivo TXT quando a plataforma permitir.",
-    "O professor revisará o resultado antes de salvar na memória técnica do aluno.",
+    `PACOTE: ${packageId}`,
+    "Leia primeiro LEIA_PRIMEIRO.txt, depois este prompt e todos os arquivos binários listados no manifesto.json.",
+    "Analise integralmente as imagens e os documentos do pacote.",
+    "Para vídeos, NÃO invente análise visual: use exclusivamente os resumos técnicos escritos pelo professor abaixo.",
+    "Relacione cada achado ao nome exato do arquivo que o sustenta.",
+    "Não dê diagnóstico, não extrapole o conteúdo e não substitua avaliação médica ou profissional.",
+    "Extraia apenas informações objetivas que possam influenciar segurança, adaptação ou prescrição de treino.",
+    "Quando um dado estiver ilegível, ausente ou ambíguo, registre em questionsForProfessor em vez de inferir.",
+    "Retorne somente JSON válido seguindo MODELO_RESPOSTA.json, sem markdown, comentários ou texto adicional.",
+    "Quando a plataforma permitir, entregue o resultado em resposta.txt.",
+    "O professor revisará o resultado antes de salvar qualquer informação na memória técnica do aluno.",
     "",
     `ALUNO: ${question.student.name}`,
     `MENSAGEM DO ALUNO: ${question.content || ""}`,
-    `IMAGENS NO PACOTE: ${images.map((item) => item.name).join(", ") || "nenhuma"}`,
-    `DOCUMENTOS NO PACOTE: ${documents.map((item) => item.name).join(", ") || "nenhum"}`,
+    `IMAGENS: ${images.map((item) => item.name).join(", ") || "nenhuma"}`,
+    `DOCUMENTOS: ${documents.map((item) => item.name).join(", ") || "nenhum"}`,
     "",
     "RESUMOS TÉCNICOS DOS VÍDEOS FEITOS PELO PROFESSOR:",
-    ...(videos.length ? videos.map((item) => `- ${item.name}: ${item.videoReviewSummary || "SEM RESUMO — não utilizar este vídeo na análise"}`) : ["- Nenhum vídeo enviado."]),
-    "",
-    "MODELO OBRIGATÓRIO:",
-    JSON.stringify(model, null, 2),
+    ...(videos.length
+      ? videos.map((item) => `- ${item.name}: ${item.videoReviewSummary || "SEM RESUMO — não utilizar este vídeo na análise"}`)
+      : ["- Nenhum vídeo enviado."]),
   ].join("\n");
 }
 
@@ -153,7 +174,7 @@ export async function POST(request: NextRequest) {
     const videosWithoutReview = items.filter((item) => item.kind === "VIDEO" && !item.videoReviewSummary);
 
     if (action === "PREPARE_PROMPT") {
-      return NextResponse.json({ ok: true, manualPrompt: buildPrompt(question, items), videosWithoutReview: videosWithoutReview.map((item) => item.name) });
+      return NextResponse.json({ ok: true, manualPrompt: buildPrompt(question, items, randomUUID()), videosWithoutReview: videosWithoutReview.map((item) => item.name) });
     }
 
     if (action === "DOWNLOAD_PACKAGE") {
@@ -161,8 +182,10 @@ export async function POST(request: NextRequest) {
       if (videosWithoutReview.length) return NextResponse.json({ error: `Preencha e salve o resumo técnico de todos os vídeos antes de gerar o pacote: ${videosWithoutReview.map((item) => item.name).join(", ")}.` }, { status: 422 });
 
       const zip = new JSZip();
-      const prompt = buildPrompt(question, items);
+      const packageId = randomUUID();
       const generatedAt = new Date().toISOString();
+      const prompt = buildPrompt(question, items, packageId);
+      const responseModel = buildResponseModel();
       const imageCount = items.filter((item) => item.kind === "IMAGE").length;
       const documentCount = items.filter((item) => item.kind === "DOCUMENT").length;
       const videoCount = items.filter((item) => item.kind === "VIDEO").length;
@@ -172,18 +195,24 @@ export async function POST(request: NextRequest) {
         [
           "LEIA ESTE ARQUIVO ANTES DE TUDO.",
           "",
-          "1. Abra e execute integralmente o arquivo prompt.txt.",
-          "2. Analise todos os arquivos existentes nas pastas imagens e documentos.",
-          "3. Caso existam vídeos, não invente análise visual. Use somente os resumos técnicos escritos pelo professor no prompt.txt.",
-          "4. Relacione cada achado ao nome exato do arquivo correspondente.",
-          "5. Não faça diagnóstico, não extrapole o conteúdo e não substitua avaliação médica ou profissional.",
-          "6. Retorne somente o JSON solicitado no prompt.txt, sem markdown ou explicações.",
-          "7. Quando a plataforma permitir, entregue o resultado em um arquivo chamado resposta.txt.",
+          `Identificador do pacote: ${packageId}`,
           "",
-          "O manifesto.json informa a quantidade, o tipo e o caminho dos arquivos incluídos neste pacote.",
+          "ORDEM OBRIGATÓRIA:",
+          "1. Leia manifesto.json para conhecer todos os arquivos e seus caminhos.",
+          "2. Leia e execute integralmente prompt.txt.",
+          "3. Analise todos os arquivos binários existentes nas pastas imagens e documentos.",
+          "4. Para vídeos, use somente o resumo técnico do professor presente no prompt.txt; não invente análise visual.",
+          "5. Relacione cada conclusão ao nome exato do arquivo que a sustenta.",
+          "6. Quando algo estiver ilegível, ausente ou ambíguo, registre a dúvida; não complete por suposição.",
+          "7. Não faça diagnóstico e não substitua avaliação médica ou profissional.",
+          "8. Responda exatamente conforme MODELO_RESPOSTA.json, somente com JSON válido.",
+          "9. Quando a plataforma permitir, entregue o resultado em resposta.txt.",
+          "",
+          "IMPORTANTE: o resultado será revisado por um professor antes de entrar na memória técnica do aluno.",
         ].join("\n")
       );
       zip.file("prompt.txt", prompt);
+      zip.file("MODELO_RESPOSTA.json", JSON.stringify(responseModel, null, 2));
 
       let sequence = 1;
       const manifestFiles: Array<{
@@ -193,6 +222,8 @@ export async function POST(request: NextRequest) {
         mimeType: string;
         packagePath: string | null;
         includedAsBinary: boolean;
+        sizeBytes: number | null;
+        sha256: string | null;
         videoReviewSummary?: string;
       }> = [];
 
@@ -205,6 +236,8 @@ export async function POST(request: NextRequest) {
             mimeType: item.mimeType,
             packagePath: null,
             includedAsBinary: false,
+            sizeBytes: item.sizeBytes ?? null,
+            sha256: null,
             videoReviewSummary: item.videoReviewSummary,
           });
           continue;
@@ -213,7 +246,9 @@ export async function POST(request: NextRequest) {
         const folder = item.kind === "IMAGE" ? "imagens" : "documentos";
         const fileName = `${String(sequence).padStart(2, "0")}-${safeFileName(item.name, `arquivo-${sequence}`)}`;
         const packagePath = `${folder}/${fileName}`;
-        zip.file(packagePath, await downloadFile(item.url));
+        const fileBuffer = await downloadFile(item.url);
+        const sha256 = createHash("sha256").update(fileBuffer).digest("hex");
+        zip.file(packagePath, fileBuffer);
         manifestFiles.push({
           id: item.id,
           kind: item.kind,
@@ -221,6 +256,8 @@ export async function POST(request: NextRequest) {
           mimeType: item.mimeType,
           packagePath,
           includedAsBinary: true,
+          sizeBytes: fileBuffer.byteLength,
+          sha256,
         });
         sequence += 1;
       }
@@ -229,9 +266,13 @@ export async function POST(request: NextRequest) {
         "manifesto.json",
         JSON.stringify(
           {
-            student: question.student.name,
-            questionId: question.id,
+            packageVersion: "2.0",
+            packageId,
             generatedAt,
+            studentId: question.student.id,
+            studentName: question.student.name,
+            questionId: question.id,
+            sourceMessage: question.content || "",
             attachmentCount: items.length,
             containsImages: imageCount > 0,
             containsDocuments: documentCount > 0,
@@ -241,7 +282,9 @@ export async function POST(request: NextRequest) {
             videoCount,
             instructionsFile: "LEIA_PRIMEIRO.txt",
             promptFile: "prompt.txt",
+            responseModelFile: "MODELO_RESPOSTA.json",
             responseExpected: "resposta.txt",
+            videoPolicy: "Vídeos não são enviados como binário. A IA deve usar apenas o resumo técnico do professor presente no prompt.txt.",
             files: manifestFiles,
           },
           null,
