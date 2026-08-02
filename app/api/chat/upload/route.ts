@@ -19,9 +19,14 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "video/quicktime",
   "video/x-msvideo",
   "video/mpeg",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
 ]);
 
 const MAX_CHAT_MEDIA_SIZE = 25 * 1024 * 1024;
+const MAX_CHAT_DOCUMENT_SIZE = 5 * 1024 * 1024;
 const SIGNED_URL_VALIDITY_MS = 15 * 60 * 1000;
 
 type UploadRequestBody = {
@@ -112,9 +117,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Number.isFinite(size) || size <= 0 || size > MAX_CHAT_MEDIA_SIZE) {
+    const isDocument = contentType === "application/pdf" || contentType === "application/msword" || contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || contentType === "text/plain";
+    const maximumSize = isDocument ? MAX_CHAT_DOCUMENT_SIZE : MAX_CHAT_MEDIA_SIZE;
+
+    if (!Number.isFinite(size) || size <= 0 || size > maximumSize) {
       return NextResponse.json(
-        { error: "Fotos e vídeos precisam ter até 25 MB." },
+        { error: isDocument ? "Documentos precisam ter até 5 MB." : "Fotos e vídeos precisam ter até 25 MB." },
         { status: 400 }
       );
     }
@@ -124,7 +132,7 @@ export async function POST(request: Request) {
       pathname: normalizedPathname,
       operations: ["put"],
       allowedContentTypes: [contentType],
-      maximumSizeInBytes: MAX_CHAT_MEDIA_SIZE,
+      maximumSizeInBytes: maximumSize,
       validUntil,
     });
 

@@ -5,6 +5,15 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 
 type ConversationRole = "GESTOR" | "ADMIN" | "TEACHER" | "PROFESSOR";
 
+type ConversationAttachment = {
+  id: string;
+  kind: string;
+  url: string;
+  name?: string | null;
+  mimeType?: string | null;
+  purpose?: string | null;
+};
+
 type ConversationReply = {
   id: string;
   studentId?: string | null;
@@ -15,6 +24,7 @@ type ConversationReply = {
   documentUrl?: string | null;
   documentName?: string | null;
   documentMimeType?: string | null;
+  attachments?: ConversationAttachment[];
   senderRole: string;
   createdAt: string;
   resolvedAt?: string | null;
@@ -85,6 +95,7 @@ type ConversationItem = {
   documentUrl?: string | null;
   documentName?: string | null;
   documentMimeType?: string | null;
+  attachments?: ConversationAttachment[];
   senderRole: string;
   createdAt: string;
   resolvedAt?: string | null;
@@ -241,7 +252,7 @@ function canCurrentUserCloseConversation(
 
 
 function hasChatAttachment(item: { imageUrl?: string | null; videoUrl?: string | null; documentUrl?: string | null }): boolean {
-  return Boolean(item.imageUrl || item.videoUrl || item.documentUrl);
+  return Boolean(item.imageUrl || item.videoUrl || item.documentUrl || item.attachments?.length);
 }
 
 function renderAttachmentIndicator(item: { imageUrl?: string | null; videoUrl?: string | null; documentUrl?: string | null; documentName?: string | null }) {
@@ -299,7 +310,7 @@ export default function DashboardConversationList({
   }, [initialExpandedConversationId]);
 
   function renderChatAttachmentViewer(
-    item: { id?: string | null; imageUrl?: string | null; videoUrl?: string | null; documentUrl?: string | null; documentName?: string | null },
+    item: { id?: string | null; imageUrl?: string | null; videoUrl?: string | null; documentUrl?: string | null; documentName?: string | null; attachments?: ConversationAttachment[] },
     fallbackKey: string
   ) {
     if (!hasChatAttachment(item)) return null;
@@ -334,6 +345,16 @@ export default function DashboardConversationList({
             </a>
           )}
 
+
+          {(item.attachments || []).map((attachment) => {
+            if (attachment.kind === "DOCUMENT") {
+              return <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-300">Abrir {attachment.name || "documento"}</a>;
+            }
+            if (attachment.kind === "IMAGE") {
+              return <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-[11px] font-semibold text-blue-300">Ver {attachment.name || "imagem"}</a>;
+            }
+            return <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-2 text-[11px] font-semibold text-violet-300">Ver {attachment.name || "vídeo"}</a>;
+          })}
           {item.videoUrl && (
             <button
               type="button"

@@ -142,10 +142,6 @@ async function uploadStudentChatFile(studentId: string, file: File): Promise<Cha
   const validationError = validateChatFile(file);
 
   if (validationError) throw new Error(validationError);
-  if (isChatDocument(file)) {
-    throw new Error("Documentos devem ser enviados diretamente pela conversa.");
-  }
-
   const pathname = `chat/${studentId}/${Date.now()}-${sanitizeChatFileName(file.name)}`;
   const prepareResponse = await fetch("/api/chat/upload", {
     method: "POST",
@@ -253,7 +249,7 @@ export default function AlunoPage() {
   const [loading, setLoading] = useState(true);
   const [newQuestion, setNewQuestion] = useState("");
   const [questionTarget, setQuestionTarget] = useState<"PROFESSOR" | "GESTAO">("PROFESSOR");
-  const [questionFile, setQuestionFile] = useState<File | null>(null);
+  const [questionFiles, setQuestionFiles] = useState<File[]>([]);
   const [questionFileInputKey, setQuestionFileInputKey] = useState(0);
   const [sendingQuestion, setSendingQuestion] = useState(false);
   const questionTextAreaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -281,7 +277,7 @@ export default function AlunoPage() {
   // Estados para o modal de dúvidas (thread)
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
   const [followUpText, setFollowUpText] = useState("");
-  const [followUpFile, setFollowUpFile] = useState<File | null>(null);
+  const [followUpFiles, setFollowUpFiles] = useState<File[]>([]);
   const [followUpFileInputKey, setFollowUpFileInputKey] = useState(0);
   const [sendingFollowUp, setSendingFollowUp] = useState(false);
 
@@ -913,33 +909,34 @@ export default function AlunoPage() {
 
   function handleChatFileSelection(
     event: ChangeEvent<HTMLInputElement>,
-    onSelect: (file: File | null) => void
+    onSelect: (files: File[]) => void,
+    currentFiles: File[]
   ) {
-    const file = event.target.files?.[0] || null;
-
-    if (!file) {
-      onSelect(null);
-      return;
+    const selected = Array.from(event.target.files || []);
+    const merged = [...currentFiles, ...selected].slice(0, 6);
+    for (const file of selected) {
+      const validationError = validateChatFile(file);
+      if (validationError) {
+        event.target.value = "";
+        setMessage({ type: "error", text: `${file.name}: ${validationError}` });
+        setTimeout(() => setMessage(null), 5000);
+        return;
+      }
     }
-
-    const validationError = validateChatFile(file);
-
-    if (validationError) {
-      event.target.value = "";
-      onSelect(null);
-      setMessage({ type: "error", text: validationError });
-      setTimeout(() => setMessage(null), 5000);
-      return;
-    }
-
-    onSelect(file);
+    onSelect(merged);
+    event.target.value = "";
   }
+
+  function removeChatFile(files: File[], index: number, onSelect: (files: File[]) => void) {
+    onSelect(files.filter((_, fileIndex) => fileIndex !== index));
+  }
+
 
   async function handleSendQuestion(parentId?: string) {
     const text = parentId ? followUpText : newQuestion;
-    const file = parentId ? followUpFile : questionFile;
+    const files = parentId ? followUpFiles : questionFiles;
 
-    if ((!text.trim() && !file) || !studentId) return;
+    if ((!text.trim() && files.length === 0) || !studentId) return;
 
     if (parentId) setSendingFollowUp(true);
     else setSendingQuestion(true);
@@ -947,56 +944,41 @@ export default function AlunoPage() {
     setMessage(null);
 
     try {
-      let res: Response;
-
-      if (file && isChatDocument(file)) {
-        const form = new FormData();
-        form.append("content", text.trim() || "Documento enviado pelo aluno.");
-        form.append("studentId", studentId);
-        form.append("file", file);
-
-        if (parentId) form.append("parentId", parentId);
-        else form.append("target", questionTarget);
-
-        res = await fetch("/api/aluno/questions", {
-          method: "POST",
-          body: form,
-        });
-      } else {
-        const attachment = file
-          ? await uploadStudentChatFile(studentId, file)
-          : {};
-        const attachmentFallback = attachment.videoUrl
-          ? "Vídeo enviado pelo aluno."
-          : attachment.imageUrl
-            ? "Imagem enviada pelo aluno."
-            : "";
-
-        const body = {
-          content: text.trim() || attachmentFallback,
+      const uploaded = await Promise.all(files.map((file) => uploadStudentChatFile(studentId, file)));
+      const purpose = files.some(isChatDocument) ? "DOCUMENTO_SAUDE" : "ACOMPANHAMENTO_TECNICO";
+      const attachments = uploaded.map((item, index) => ({
+        kind: item.documentUrl ? "DOCUMENT" : item.videoUrl ? "VIDEO" : "IMAGE",
+        url: item.documentUrl || item.videoUrl || item.imageUrl || "",
+        name: files[index]?.name || null,
+        mimeType: files[index]?.type || null,
+        sizeBytes: files[index]?.size || null,
+        purpose,
+      }));
+      const fallback = attachments.some((item) => item.kind === "DOCUMENT")
+        ? `${attachments.filter((item) => item.kind === "DOCUMENT").length} documento(s) enviado(s) pelo aluno.`
+        : `${attachments.length} anexo(s) enviado(s) pelo aluno.`;
+      const res = await fetch("/api/aluno/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: text.trim() || fallback,
           studentId,
           ...(parentId ? { parentId } : { target: questionTarget }),
-          ...attachment,
-        };
-
-        res = await fetch("/api/aluno/questions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-      }
+          attachments,
+        }),
+      });
 
       const data = await res.json().catch(() => null);
 
       if (res.ok) {
         if (parentId) {
           setFollowUpText("");
-          setFollowUpFile(null);
+          setFollowUpFiles([]);
           setFollowUpFileInputKey((current) => current + 1);
           setSelectedQuestion(null);
         } else {
           setNewQuestion("");
-          setQuestionFile(null);
+          setQuestionFiles([]);
           setQuestionFileInputKey((current) => current + 1);
         }
         setMessage({ type: "success", text: "Mensagem enviada pelo chat!" });
@@ -1694,27 +1676,22 @@ export default function AlunoPage() {
                   key={questionFileInputKey}
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg,.pdf,.doc,.docx,.txt"
-                  onChange={(event) => handleChatFileSelection(event, setQuestionFile)}
+                  multiple
+                  onChange={(event) => handleChatFileSelection(event, setQuestionFiles, questionFiles)}
                   className="min-w-0 flex-1 text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#00A19C] file:text-[#0a0a0a]"
                 />
-                {questionFile && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuestionFile(null);
-                      setQuestionFileInputKey((current) => current + 1);
-                    }}
-                    title="Remover anexo"
-                    className="max-w-[130px] truncate rounded border border-[#00A19C]/30 px-1.5 py-0.5 text-[8px] text-[#00A19C] hover:bg-[#00A19C]/10"
-                  >
-                    {questionFile.name} ×
-                  </button>
+                {questionFiles.length > 0 && (
+                  <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                    {questionFiles.map((file, index) => (
+                      <button key={`${file.name}-${index}`} type="button" onClick={() => removeChatFile(questionFiles, index, setQuestionFiles)} className="max-w-[150px] truncate rounded border border-[#00A19C]/30 px-1.5 py-0.5 text-[8px] text-[#00A19C]">{file.name} ×</button>
+                    ))}
+                  </div>
                 )}
               </div>
               <p className="mb-1.5 text-[8px] leading-relaxed text-[#6b6b6b]">
-                Fotos e vídeos: até 25 MB. Exames, laudos e prescrições: até 3 MB.
+                Selecione até 6 arquivos por envio. Fotos e vídeos: até 25 MB cada. Documentos: até 5 MB cada.
               </p>
-              <button onClick={() => handleSendQuestion()} disabled={sendingQuestion || (!newQuestion.trim() && !questionFile)}
+              <button onClick={() => handleSendQuestion()} disabled={sendingQuestion || (!newQuestion.trim() && questionFiles.length === 0)}
                 className="w-full bg-[#00A19C] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
                 {sendingQuestion ? "Enviando..." : "Enviar"}
               </button>
@@ -1890,26 +1867,21 @@ export default function AlunoPage() {
                     key={followUpFileInputKey}
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg,.pdf,.doc,.docx,.txt"
-                    onChange={(event) => handleChatFileSelection(event, setFollowUpFile)}
+                    multiple
+                    onChange={(event) => handleChatFileSelection(event, setFollowUpFiles, followUpFiles)}
                     className="min-w-0 flex-1 text-[8px] text-[#a1a1a1] file:mr-1 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[8px] file:font-medium file:bg-[#00A19C] file:text-[#0a0a0a]"
                   />
-                  {followUpFile && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFollowUpFile(null);
-                        setFollowUpFileInputKey((current) => current + 1);
-                      }}
-                      title="Remover anexo"
-                      className="max-w-[130px] truncate rounded border border-[#00A19C]/30 px-1.5 py-0.5 text-[8px] text-[#00A19C] hover:bg-[#00A19C]/10"
-                    >
-                      {followUpFile.name} ×
-                    </button>
+                  {followUpFiles.length > 0 && (
+                    <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                      {followUpFiles.map((file, index) => (
+                        <button key={`${file.name}-${index}`} type="button" onClick={() => removeChatFile(followUpFiles, index, setFollowUpFiles)} className="max-w-[150px] truncate rounded border border-[#00A19C]/30 px-1.5 py-0.5 text-[8px] text-[#00A19C]">{file.name} ×</button>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleSendQuestion(selectedQuestion.id)}
-                    disabled={sendingFollowUp || (!followUpText.trim() && !followUpFile)}
+                    disabled={sendingFollowUp || (!followUpText.trim() && followUpFiles.length === 0)}
                     className="flex-1 bg-[#00A19C] text-[#0a0a0a] text-xs font-semibold py-1.5 rounded-lg disabled:opacity-50">
                     {sendingFollowUp ? "Enviando..." : "Continuar perguntando"}
                   </button>

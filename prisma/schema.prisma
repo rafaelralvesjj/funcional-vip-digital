@@ -492,6 +492,7 @@ model Question {
   student    Student?   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   parent     Question?  @relation("QuestionThread", fields: [parentId], references: [id])
   children   Question[] @relation("QuestionThread")
+  attachments QuestionAttachment[]
   answeredBy User?      @relation(fields: [answeredById], references: [id])
   teacher    User?      @relation("QuestionTeacher", fields: [teacherId], references: [id])
 
@@ -499,6 +500,25 @@ model Question {
 }
 
 
+
+
+model QuestionAttachment {
+  id           String   @id @default(uuid())
+  questionId   String   @map("question_id")
+  kind         String
+  url          String   @db.Text
+  name         String?
+  mimeType     String?  @map("mime_type")
+  sizeBytes    Int?     @map("size_bytes")
+  purpose      String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@index([kind])
+  @@map("question_attachments")
+}
 
 model StudentTechnicalMemory {
   id                 String    @id @default(uuid())

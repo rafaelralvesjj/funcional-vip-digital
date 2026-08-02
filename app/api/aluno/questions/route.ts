@@ -362,6 +362,34 @@ async function getChatAttachmentFromBody(body: Record<string, unknown>): Promise
   };
 }
 
+type IncomingAttachment = {
+  kind: "IMAGE" | "VIDEO" | "DOCUMENT";
+  url: string;
+  name?: string | null;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  purpose?: string | null;
+};
+
+function parseIncomingAttachments(value: unknown): IncomingAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 6).flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const raw = item as Record<string, unknown>;
+    const url = cleanId(raw.url);
+    const kind = String(raw.kind || "").toUpperCase();
+    if (!url || !["IMAGE", "VIDEO", "DOCUMENT"].includes(kind)) return [];
+    return [{
+      kind: kind as IncomingAttachment["kind"],
+      url,
+      name: cleanId(raw.name),
+      mimeType: cleanId(raw.mimeType),
+      sizeBytes: Number.isFinite(Number(raw.sizeBytes)) ? Number(raw.sizeBytes) : null,
+      purpose: cleanId(raw.purpose),
+    }];
+  });
+}
+
 async function getStudentFromSessionOrId(
   userId: string,
   email?: string | null,
@@ -414,6 +442,7 @@ function getQuestionIncludes() {
         role: true,
       },
     },
+    attachments: { orderBy: { createdAt: "asc" as const } },
     answeredBy: {
       select: {
         id: true,
@@ -439,6 +468,7 @@ function getQuestionIncludes() {
             role: true,
           },
         },
+        attachments: { orderBy: { createdAt: "asc" as const } },
         answeredBy: {
           select: {
             id: true,
@@ -729,6 +759,7 @@ export async function POST(req: NextRequest) {
     const body = await readBody(req);
     const userId = String(sessionUser.id);
     const attachment = await getChatAttachmentFromBody(body);
+    const incomingAttachments = parseIncomingAttachments(body.attachments);
 
     if (attachment.error) {
       return NextResponse.json(
@@ -738,10 +769,11 @@ export async function POST(req: NextRequest) {
     }
 
     let content = cleanText(body.content || body.question || body.message);
-    const hasAttachment = Boolean(attachment.imageUrl || attachment.videoUrl || attachment.documentUrl);
+    const hasAttachment = Boolean(attachment.imageUrl || attachment.videoUrl || attachment.documentUrl || incomingAttachments.length);
 
     if (!content && hasAttachment) {
-      content = attachment.videoUrl ? "Vídeo enviado pelo aluno." : attachment.documentUrl ? "Documento enviado pelo aluno." : "Imagem enviada pelo aluno.";
+      const documents = incomingAttachments.filter((item) => item.kind === "DOCUMENT").length;
+      content = documents > 0 ? `${documents} documento(s) enviado(s) pelo aluno.` : incomingAttachments.length > 1 ? `${incomingAttachments.length} anexos enviados pelo aluno.` : attachment.videoUrl ? "Vídeo enviado pelo aluno." : attachment.documentUrl ? "Documento enviado pelo aluno." : "Imagem enviada pelo aluno.";
     }
 
     const studentIdFromBody = cleanId(body.studentId);
@@ -874,14 +906,38 @@ export async function POST(req: NextRequest) {
         parentId: rootQuestion?.id || null,
         senderRole: "STUDENT",
         answeredById: userId,
-        imageUrl: attachment.imageUrl,
-        videoUrl: attachment.videoUrl,
-        documentUrl: attachment.documentUrl,
-        documentName: attachment.documentName,
-        documentMimeType: attachment.documentMimeType,
+        imageUrl: attachment.imageUrl || incomingAttachments.find((item) => item.kind === "IMAGE")?.url || null,
+        videoUrl: attachment.videoUrl || incomingAttachments.find((item) => item.kind === "VIDEO")?.url || null,
+        documentUrl: attachment.documentUrl || incomingAttachments.find((item) => item.kind === "DOCUMENT")?.url || null,
+        documentName: attachment.documentName || incomingAttachments.find((item) => item.kind === "DOCUMENT")?.name || null,
+        documentMimeType: attachment.documentMimeType || incomingAttachments.find((item) => item.kind === "DOCUMENT")?.mimeType || null,
+        attachments: incomingAttachments.length ? { create: incomingAttachments } : undefined,
       },
       include: getQuestionIncludes(),
     });
+
+    const documentAttachments = incomingAttachments.filter((item) => item.kind === "DOCUMENT");
+    if (documentAttachments.length > 0 && teacherId) {
+      try {
+        const contractId = await findActiveContractIdForCareEvent(student.id);
+        await prisma.studentCareEvent.create({
+          data: {
+            studentId: student.id,
+            professorId: teacherId,
+            authorId: userId,
+            eventType: "DOCUMENTOS_AGUARDANDO_REVISAO",
+            severity: "ATENCAO",
+            status: "REQUER_REVISAO",
+            source: "CHAT_DOCUMENTOS",
+            title: `${student.name} enviou ${documentAttachments.length} documento(s)`,
+            description: [`Conversa: ${rootQuestion?.id || question.id}`, "Documentos aguardando revisão do professor.", ...documentAttachments.map((item) => `- ${item.name || "Documento"}`)].join("\n"),
+            contractId,
+          },
+        });
+      } catch (documentEventError) {
+        console.error("Erro ao criar evento agrupado de documentos:", documentEventError);
+      }
+    }
 
     try {
       await maybeCreateCareEventFromStudentQuestion({
