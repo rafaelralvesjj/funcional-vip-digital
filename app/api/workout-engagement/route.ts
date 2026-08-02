@@ -1,39 +1,80 @@
-import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
+import { getStudentTechnicalContext } from "@/lib/student-technical-memory";
+import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 
-export const maxDuration = 60;
 
-type StudentForEngagement = {
+type AdjustmentAction =
+  | "PREPARE_PROMPT"
+  | "VALIDATE_MANUAL"
+  | "APPLY"
+  | "FUTURE_ONLY";
+
+type ProposedExercise = {
+  exerciseId: string;
+  exerciseName?: string;
+  series: number;
+  reps: string;
+  weight: string;
+  restTime: string;
+  notes: string;
+  order: number;
+};
+
+type LibraryExerciseRecord = {
   id: string;
   name: string;
-  email: string | null;
-  userId: string | null;
-  userAuth?: {
-    email: string | null;
-    role: string | null;
-  } | null;
-  user?: {
-    id: string;
-    name: string | null;
-    email: string | null;
-    image: string | null;
-    role: string | null;
-  } | null;
+  description: string | null;
+  imageUrl: string | null;
+  videoUrl: string | null;
 };
 
-type WorkoutForEngagement = {
-  id: string;
-  studentId: string;
-  workoutPlanId: string | null;
-  date: Date;
-  status: string;
-  student: StudentForEngagement;
-  workoutPlan?: {
-    id: string;
-    name: string;
-  } | null;
+type AdjustmentProposal = {
+  name: string;
+  description: string;
+  objective: string;
+  focusAreas: string;
+  intensity: string;
+  estimatedDurationMinutes: number;
+  estimatedCaloriesMin: number;
+  estimatedCaloriesMax: number;
+  studentSummary: string;
+  safetyNote: string;
+  notes: string;
+  rationale: string;
+  studentMessage: string;
+  exercises: ProposedExercise[];
 };
+
+function normalizeRole(value?: string | null): string {
+  const role = String(value || "").toUpperCase();
+
+  if (role === "PROFESSOR") return "TEACHER";
+  if (role === "ALUNO") return "STUDENT";
+
+  return role;
+}
+
+function cleanId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function cleanText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function cleanPositiveInteger(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+
+  return Math.round(parsed);
+}
 
 function getAppAlunoUrl(): string {
   const appUrl =
@@ -42,15 +83,6 @@ function getAppAlunoUrl(): string {
     "https://funcional-up-digital.vercel.app";
 
   return `${appUrl.replace(/\/$/, "")}/aluno`;
-}
-
-function getAppDashboardUrl(): string {
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
-    "https://funcional-up-digital.vercel.app";
-
-  return `${appUrl.replace(/\/$/, "")}/dashboard`;
 }
 
 function escapeHtml(value: string): string {
@@ -70,64 +102,7 @@ function formatDatePtBr(date: Date): string {
   });
 }
 
-function addDays(days: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  date.setHours(23, 59, 59, 999);
-
-  return date;
-}
-
-function getTodayRange(): { start: Date; end: Date } {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date(start);
-  end.setDate(start.getDate() + 1);
-
-  return { start, end };
-}
-
-async function getNoticeAuthorId(): Promise<string | null> {
-  const gestor = await prisma.user.findFirst({
-    where: {
-      role: {
-        in: ["GESTOR", "ADMIN"],
-      },
-    },
-    select: {
-      id: true,
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
-
-  return gestor?.id || null;
-}
-
-function getStudentEmail(student: StudentForEngagement): string | null {
-  const linkedRole = String(student.userAuth?.role || "").toUpperCase();
-
-  if (linkedRole !== "ALUNO") {
-    console.warn(
-      `[workout-engagement] E-mail não enviado: cadastro ${student.id} não possui usuário ALUNO vinculado.`
-    );
-    return null;
-  }
-
-  return student.userAuth?.email?.trim() || null;
-}
-
-type StudentCommunicationIdentity = {
-  authorId: string;
-  senderName: string;
-  senderRoleLabel: "Professor" | "Gestão";
-  senderImage: string | null;
-  sentByProfessor: boolean;
-};
-
-function getInitials(name?: string | null): string {
+function getInitials(name: string): string {
   const parts = String(name || "")
     .trim()
     .split(/\s+/)
@@ -136,922 +111,1015 @@ function getInitials(name?: string | null): string {
   if (parts.length === 0) return "FV";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
 
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  return `${parts[0][0] || ""}${parts[parts.length - 1][0] || ""}`.toUpperCase();
 }
 
-function getSafeRemoteImageUrl(value?: string | null): string | null {
-  const imageUrl = String(value || "").trim();
-  return /^https?:\/\//i.test(imageUrl) ? imageUrl : null;
-}
-
-function buildEmailAvatarHtml(name: string, image?: string | null): string {
+function buildSenderAvatarHtml(name: string, image?: string | null): string {
   const safeName = escapeHtml(name);
-  const safeImageUrl = getSafeRemoteImageUrl(image);
+  const safeImage =
+    image && /^https?:\/\//i.test(image) ? escapeHtml(image) : "";
 
-  if (safeImageUrl) {
-    return `
-      <img
-        src="${escapeHtml(safeImageUrl)}"
-        width="48"
-        height="48"
-        alt="Foto de ${safeName}"
-        style="display:block; width:48px; height:48px; border-radius:999px; object-fit:cover; border:1px solid #00A19C;"
-      />
-    `;
+  if (safeImage) {
+    return `<img src="${safeImage}" alt="${safeName}" width="52" height="52" style="display:block; width:52px; height:52px; border-radius:999px; object-fit:cover; border:2px solid #00A19C;" />`;
   }
 
-  return `
-    <div style="width:48px; height:48px; border-radius:999px; background:#00A19C; color:#0a0a0a; font-size:15px; font-weight:bold; line-height:48px; text-align:center;">
-      ${escapeHtml(getInitials(name))}
-    </div>
-  `;
+  return `<div style="width:52px; height:52px; border-radius:999px; background:#2a2119; border:2px solid #00A19C; color:#00A19C; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:17px;">${escapeHtml(
+    getInitials(name)
+  )}</div>`;
 }
 
-function getStudentCommunicationIdentity(
-  student: StudentForEngagement,
-  managementAuthorId: string
-): StudentCommunicationIdentity {
-  const assignedUserRole = String(student.user?.role || "").toUpperCase();
-  const hasAssignedProfessor = Boolean(
-    student.user?.id && ["TEACHER", "PROFESSOR"].includes(assignedUserRole)
-  );
-
-  if (hasAssignedProfessor && student.user) {
-    return {
-      authorId: student.user.id,
-      senderName: student.user.name?.trim() || "Seu professor",
-      senderRoleLabel: "Professor",
-      senderImage: student.user.image || null,
-      sentByProfessor: true,
-    };
-  }
-
-  return {
-    authorId: managementAuthorId,
-    senderName: "Equipe Funcional UP Digital",
-    senderRoleLabel: "Gestão",
-    senderImage: null,
-    sentByProfessor: false,
-  };
-}
-
-async function alreadySent({
-  studentId,
-  eventType,
-  eventKey,
-}: {
-  studentId: string;
-  eventType: string;
-  eventKey: string;
-}): Promise<boolean> {
-  const existing = await prisma.workoutEngagementNotification.findFirst({
-    where: {
-      studentId,
-      eventType,
-      eventKey,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  return Boolean(existing);
-}
-
-
-async function hasWorkoutReleaseNoticeToday(studentId: string): Promise<boolean> {
-  const { start, end } = getTodayRange();
-
-  const existing = await prisma.notice.findFirst({
-    where: {
-      studentId,
-      type: "WORKOUT",
-      createdAt: {
-        gte: start,
-        lt: end,
-      },
-      title: {
-        in: [
-          "Seus treinos da semana estão disponíveis",
-          "Seus primeiros treinos já estão disponíveis",
-        ],
-      },
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  return Boolean(existing);
-}
-
-async function registerSent({
-  studentId,
-  workoutId,
-  noticeId,
-  eventType,
-  eventKey,
-  channel,
-}: {
-  studentId: string;
-  workoutId?: string | null;
-  noticeId?: string | null;
-  eventType: string;
-  eventKey: string;
-  channel: string;
-}) {
-  try {
-    await prisma.workoutEngagementNotification.create({
-      data: {
-        studentId,
-        workoutId: workoutId || null,
-        noticeId: noticeId || null,
-        eventType,
-        eventKey,
-        channel,
-      },
-    });
-  } catch (error: any) {
-    if (error?.code !== "P2002") {
-      throw error;
-    }
-  }
-}
-
-async function createNotice({
-  title,
-  content,
-  type = "ENGAJAMENTO_TREINO",
-  targetRole,
-  authorId,
-  studentId,
-  professorId,
-  expiresAt,
-}: {
-  title: string;
-  content: string;
-  type?: string;
-  targetRole: string;
-  authorId: string;
-  studentId?: string | null;
-  professorId?: string | null;
-  expiresAt?: Date | null;
-}) {
-  return prisma.notice.create({
-    data: {
-      title,
-      content,
-      type,
-      targetRole,
-      authorId,
-      studentId: studentId || null,
-      professorId: professorId || null,
-      expiresAt: expiresAt || null,
-    },
-    select: {
-      id: true,
-    },
-  });
-}
-
-async function sendStudentEmail({
+async function sendWorkoutAdjustmentEmail({
   to,
   studentName,
-  senderName,
-  senderRoleLabel,
-  senderImage,
-  sentByProfessor,
-  subject,
-  title,
-  content,
+  professorName,
+  professorImage,
+  workoutName,
+  workoutDate,
+  objective,
+  studentMessage,
 }: {
   to: string | null;
   studentName: string;
-  senderName: string;
-  senderRoleLabel: "Professor" | "Gestão";
-  senderImage?: string | null;
-  sentByProfessor: boolean;
-  subject: string;
-  title: string;
-  content: string;
-}) {
+  professorName: string;
+  professorImage?: string | null;
+  workoutName: string;
+  workoutDate: Date;
+  objective: string;
+  studentMessage: string;
+}): Promise<boolean> {
   if (!to) return false;
 
   const alunoUrl = getAppAlunoUrl();
   const safeStudentName = escapeHtml(studentName);
-  const safeSenderName = escapeHtml(senderName);
-  const safeSenderRoleLabel = escapeHtml(senderRoleLabel);
-  const safeTitle = escapeHtml(title);
-  const safeContent = escapeHtml(content).replaceAll("\n", "<br />");
-  const avatarHtml = buildEmailAvatarHtml(senderName, senderImage);
-
-  const chatGuidance = sentByProfessor
-    ? `Se precisar falar sobre treino, use o chat da plataforma. Assim, ${senderName} consegue acompanhar seu histórico e responder com mais contexto.`
-    : "Se precisar falar sobre treino, use o chat da plataforma para que o professor responsável acompanhe seu histórico e responda com mais contexto.";
-
-  const automationDisclosure = sentByProfessor
-    ? "Mensagem automática de acompanhamento enviada em nome do seu professor."
-    : "Mensagem automática enviada pela gestão do Funcional UP Digital.";
+  const safeProfessorName = escapeHtml(professorName);
+  const safeWorkoutName = escapeHtml(workoutName);
+  const safeWorkoutDate = escapeHtml(formatDatePtBr(workoutDate));
+  const safeObjective = escapeHtml(objective);
+  const safeStudentMessage = escapeHtml(studentMessage).replaceAll("\n", "<br />");
+  const avatarHtml = buildSenderAvatarHtml(professorName, professorImage);
+  const subject = `${professorName}: seu treino foi ajustado`;
 
   const text = [
     `Oi, ${studentName}!`,
     "",
-    content,
+    studentMessage,
     "",
-    chatGuidance,
-    "Para dúvidas de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.",
+    `Treino atualizado: ${workoutName}`,
+    `Data: ${formatDatePtBr(workoutDate)}`,
+    objective ? `Objetivo: ${objective}` : "",
     "",
-    `Enviado por: ${senderName} · ${senderRoleLabel}`,
-    automationDisclosure,
+    "Acesse sua área do aluno para conferir os exercícios, séries, repetições e orientações atualizadas.",
+    `Acessar treino: ${alunoUrl}`,
     "",
-    `Acesse sua área do aluno: ${alunoUrl}`,
-  ].join("\n");
+    "Caso queira comentar como foi a adaptação ou tenha alguma dúvida, use o chat da plataforma.",
+    "",
+    professorName,
+    "Professor · Funcional UP Digital",
+    "Mensagem automática enviada após a revisão e confirmação do professor.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const html = `
-    <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-      <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 18px;">
-          <tr>
-            <td style="vertical-align:middle; padding-right:12px;">${avatarHtml}</td>
-            <td style="vertical-align:middle;">
-              <div style="color:#f5f5f5; font-size:15px; font-weight:bold;">${safeSenderName}</div>
-              <div style="color:#00A19C; font-size:12px; margin-top:3px;">${safeSenderRoleLabel} · Funcional UP Digital</div>
-            </td>
-          </tr>
-        </table>
+    <div style="font-family:Arial,sans-serif; background:#0a0a0a; padding:24px;">
+      <div style="max-width:580px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:18px; overflow:hidden;">
+        <div style="padding:22px 24px; border-bottom:1px solid #2a2a2a; display:flex; align-items:center; gap:14px;">
+          ${avatarHtml}
+          <div>
+            <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.3;">${safeProfessorName}</div>
+            <div style="color:#00A19C; font-size:12px; margin-top:3px;">Professor · Funcional UP Digital</div>
+          </div>
+        </div>
 
-        <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
+        <div style="padding:24px;">
+          <h2 style="color:#00A19C; margin:0 0 16px; font-size:22px;">Seu treino foi ajustado</h2>
 
-        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Oi, <strong>${safeStudentName}</strong>!
-        </p>
+          <p style="color:#f5f5f5; font-size:15px; line-height:1.6;">
+            Oi, <strong>${safeStudentName}</strong>!
+          </p>
 
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          ${safeContent}
-        </p>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.7;">
+            ${safeStudentMessage}
+          </p>
 
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          ${escapeHtml(chatGuidance)}
-        </p>
+          <div style="background:#071413; border:1px solid #005D5A; border-radius:12px; padding:16px; margin:18px 0;">
+            <div style="color:#00A19C; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">Treino atualizado</div>
+            <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.4;">${safeWorkoutName}</div>
+            <div style="color:#b8b8b8; font-size:13px; margin-top:6px;">Data: ${safeWorkoutDate}</div>
+            ${
+              safeObjective
+                ? `<div style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:8px;">Objetivo: ${safeObjective}</div>`
+                : ""
+            }
+          </div>
 
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          Para dúvidas de treino, não responda pelo WhatsApp. Esse canal fica reservado para contatos específicos da gestão.
-        </p>
+          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+            Acesse sua área para conferir os exercícios, séries, repetições e orientações atualizadas antes de iniciar.
+          </p>
 
-        <a href="${alunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
-          Acessar minha área
-        </a>
+          <a href="${alunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:4px;">
+            Ver treino atualizado
+          </a>
 
-        <p style="color:#6b6b6b; font-size:11px; margin-top:22px;">
-          ${escapeHtml(automationDisclosure)}
-        </p>
+          <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin-top:22px;">
+            Caso queira comentar como foi a adaptação ou tenha alguma dúvida, use o chat da plataforma.
+          </p>
+
+          <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:20px;">
+            ${safeProfessorName}<br />Professor · Funcional UP Digital
+          </p>
+
+          <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">
+            Mensagem automática enviada após a revisão e confirmação do professor.
+          </p>
+        </div>
       </div>
     </div>
   `;
 
-  await sendEmail({
-    to,
-    subject: `${senderName} — ${subject}`,
-    text,
-    html,
-  });
+  await sendEmail({ to, subject, text, html });
 
   return true;
 }
 
-async function sendProfessorEmail({
-  to,
-  professorName,
-  subject,
-  title,
-  content,
-}: {
-  to: string | null;
-  professorName: string;
-  subject: string;
-  title: string;
-  content: string;
-}) {
-  if (!to) return false;
+function getCurrentWeekRange() {
+  const now = new Date();
+  const date = new Date(now);
+  date.setHours(0, 0, 0, 0);
 
-  const dashboardUrl = getAppDashboardUrl();
-  const safeProfessorName = escapeHtml(professorName);
-  const safeTitle = escapeHtml(title);
-  const safeContent = escapeHtml(content).replaceAll("\n", "<br />");
+  const day = date.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const startOfWeek = new Date(date);
+  startOfWeek.setDate(date.getDate() + diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
 
-  const text = [
-    `Oi, ${professorName}.`,
-    "",
-    content,
-    "",
-    "Acesse o dashboard para revisar o histórico do aluno e registrar a ação realizada.",
-    `Dashboard: ${dashboardUrl}`,
-    "",
-    "Gestão Funcional UP Digital",
-    "Mensagem automática de acompanhamento.",
-  ].join("\n");
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-      <div style="max-width:620px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-        <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
-
-        <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">
-          Oi, <strong>${safeProfessorName}</strong>.
-        </p>
-
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          ${safeContent}
-        </p>
-
-        <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-          Acesse o dashboard para revisar o histórico do aluno e registrar a ação realizada.
-        </p>
-
-        <a href="${dashboardUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:12px;">
-          Acessar dashboard
-        </a>
-
-        <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:22px;">
-          Gestão Funcional UP Digital
-        </p>
-
-        <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">
-          Mensagem automática de acompanhamento.
-        </p>
-      </div>
-    </div>
-  `;
-
-  await sendEmail({
-    to,
-    subject,
-    text,
-    html,
-  });
-
-  return true;
+  return { startOfWeek, endOfWeek };
 }
 
-async function notifyTodayWorkout({
-  workout,
-  managementAuthorId,
+async function getAdjustmentContext({
+  preferenceId,
+  workoutId,
+  userId,
+  role,
+  requireWorkout = true,
 }: {
-  workout: WorkoutForEngagement;
-  managementAuthorId: string;
+  preferenceId: string;
+  workoutId?: string | null;
+  userId: string;
+  role: string;
+  requireWorkout?: boolean;
 }) {
-  const eventType = "WORKOUT_DAY_REMINDER";
-  const eventKey = workout.id;
+  const preference = await prisma.studentTrainingPreference.findUnique({
+    where: { id: preferenceId },
+    include: {
+      student: {
+        select: {
+          id: true,
+          name: true,
+          userId: true,
+          notes: true,
+          contractedTrainingDaysPerMonth: true,
+          email: true,
+          userAuth: {
+            select: {
+              birthDate: true,
+              email: true,
+            },
+          },
+        },
+      },
+    },
+  });
 
-  if (await alreadySent({ studentId: workout.studentId, eventType, eventKey })) {
-    return { sent: false, reason: "Já enviado" };
-  }
-
-  if (await hasWorkoutReleaseNoticeToday(workout.studentId)) {
+  if (!preference || preference.status !== "ACTIVE") {
     return {
-      sent: false,
-      reason: "Comunicação de liberação da semana já enviada hoje",
+      error: "Solicitação de ajuste não encontrada ou inativa.",
+      status: 404 as const,
     };
   }
 
-  const workoutName = workout.workoutPlan?.name || "seu treino";
-  const studentName = workout.student?.name || "Aluno";
-  const identity = getStudentCommunicationIdentity(
-    workout.student,
-    managementAuthorId
-  );
-  const title = "Seu treino de hoje está te esperando 💪";
+  const canAccess =
+    role === "GESTOR" ||
+    role === "ADMIN" ||
+    (role === "TEACHER" &&
+      (preference.professorId === userId || preference.student.userId === userId));
 
-  const content = identity.sentByProfessor
-    ? [
-        `Oi, ${studentName}! Aqui é ${identity.senderName}.`,
-        "",
-        `O treino de hoje já está disponível: ${workoutName}.`,
-        "Quando puder, reserve esse momento para você e faça tudo com atenção às orientações.",
-        "Se alguma coisa não estiver clara ou se precisar adaptar, fale comigo pelo chat da plataforma antes de executar.",
-        "",
-        "Bom treino! Estou acompanhando sua evolução.",
-        identity.senderName,
-        "Funcional UP Digital",
-        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
-      ].join("\n")
-    : [
-        `Oi, ${studentName}! Aqui é a equipe do Funcional UP Digital.`,
-        "",
-        `O treino de hoje já está disponível: ${workoutName}.`,
-        "Quando puder, reserve esse momento para você e faça tudo com atenção às orientações.",
-        "Se alguma coisa não estiver clara ou se precisar adaptar, fale com o professor responsável pelo chat da plataforma antes de executar.",
-        "",
-        "Bom treino! Seguimos acompanhando sua evolução.",
-        "Equipe Funcional UP Digital",
-        "Mensagem automática de acompanhamento.",
-      ].join("\n");
+  if (!canAccess) {
+    return {
+      error: "Você não tem permissão para ajustar este treino.",
+      status: 403 as const,
+    };
+  }
 
-  const notice = await createNotice({
-    title,
-    content,
-    targetRole: "ALUNO",
-    authorId: identity.authorId,
-    studentId: workout.studentId,
-    expiresAt: addDays(1),
+  if (!requireWorkout) {
+    return {
+      preference,
+      workout: null,
+      activePreferences: [],
+      technicalContext: null,
+    };
+  }
+
+  const effectiveWorkoutId = workoutId || preference.relatedWorkoutId;
+
+  if (!effectiveWorkoutId) {
+    return {
+      error: "Não existe treino pendente relacionado a esta preferência.",
+      status: 409 as const,
+    };
+  }
+
+  const workout = await prisma.workout.findUnique({
+    where: { id: effectiveWorkoutId },
+    include: {
+      workoutPlan: {
+        include: {
+          exercises: {
+            orderBy: { order: "asc" },
+          },
+          workouts: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+      },
+    },
   });
 
-  await registerSent({
-    studentId: workout.studentId,
-    workoutId: workout.id,
-    noticeId: notice.id,
-    eventType,
-    eventKey,
-    channel: "AVISO",
-  });
-
-  return { sent: true };
-}
-
-async function notifyMissedWorkoutLevel({
-  student,
-  missedWorkouts,
-  level,
-  managementAuthorId,
-}: {
-  student: StudentForEngagement;
-  missedWorkouts: WorkoutForEngagement[];
-  level: 1 | 2 | 3;
-  managementAuthorId: string;
-}) {
-  const latestMissedWorkout = missedWorkouts
-    .slice()
-    .sort((a, b) => b.date.getTime() - a.date.getTime())[0];
-
-  if (!latestMissedWorkout) {
-    return { sent: false, reason: "Sem treino perdido" };
+  if (!workout || workout.studentId !== preference.studentId || !workout.workoutPlan) {
+    return { error: "Treino pendente não localizado.", status: 404 as const };
   }
 
-  const eventType = `MISSED_WORKOUT_${level}`;
-  const eventKey = latestMissedWorkout.id;
-
-  if (await alreadySent({ studentId: student.id, eventType, eventKey })) {
-    return { sent: false, reason: "Já enviado" };
+  if (String(workout.status || "").toUpperCase() !== "PENDENTE") {
+    return {
+      error: "Somente treino com status PENDENTE pode ser adaptado por este fluxo.",
+      status: 409 as const,
+    };
   }
 
-  const studentName = student.name || "Aluno";
-  const missedCount = missedWorkouts.length;
+  const { startOfWeek, endOfWeek } = getCurrentWeekRange();
 
-  const identity = getStudentCommunicationIdentity(student, managementAuthorId);
-
-  const title =
-    level === 1
-      ? "Vamos retomar com calma?"
-      : level === 2
-        ? "Quero entender como apoiar sua rotina"
-        : "Vamos reorganizar seus treinos juntos";
-
-  const content =
-    level === 1
-      ? [
-          `Oi, ${studentName}! Aqui é ${identity.senderName}.`,
-          "",
-          "Vi que o último treino não foi concluído. Isso pode acontecer e não apaga o caminho que você já começou.",
-          "Quando estiver pronto, retome pelo próximo treino disponível. Se algo dificultou a execução, me conte pelo chat para eu considerar no seu acompanhamento.",
-          "",
-          "Vamos seguir um passo de cada vez.",
-        ].join("\n")
-      : level === 2
-        ? [
-            `Oi, ${studentName}! Aqui é ${identity.senderName}.`,
-            "",
-            `Notei que alguns treinos ficaram sem conclusão (${missedCount} até agora). Antes de pensar apenas em constância, quero entender o que está acontecendo na sua rotina.`,
-            "Pode ser tempo, dúvida, dificuldade com algum exercício ou necessidade de ajuste. Fale comigo pelo chat da plataforma para organizarmos uma proposta mais possível para você.",
-            "",
-            "Você não precisa resolver isso sozinho.",
-          ].join("\n")
-        : [
-            `Oi, ${studentName}! Aqui é ${identity.senderName}.`,
-            "",
-            `Percebi que ${missedCount} treinos ficaram sem conclusão. Quero evitar que essa sequência vire um afastamento do seu objetivo.`,
-            "Vamos conversar pelo chat da plataforma para entender suas barreiras e decidir juntos se precisamos reduzir duração, ajustar exercícios, reorganizar dias ou fazer uma retomada mais leve.",
-            "",
-            "Estou aqui para acompanhar de verdade, sem julgamento e respeitando seu momento.",
-          ].join("\n");
-
-  const studentNotice = await createNotice({
-    title,
-    content,
-    targetRole: "ALUNO",
-    authorId: identity.authorId,
-    studentId: student.id,
-    expiresAt: addDays(level === 1 ? 7 : 15),
-  });
-
-  let studentEmailSent = false;
-
-  try {
-    studentEmailSent = await sendStudentEmail({
-      to: getStudentEmail(student),
-      studentName,
-      senderName: identity.senderName,
-      senderRoleLabel: identity.senderRoleLabel,
-      senderImage: identity.senderImage,
-      sentByProfessor: identity.sentByProfessor,
-      subject: title,
-      title,
-      content,
-    });
-  } catch (error) {
-    console.error("Erro ao enviar e-mail para aluno com treino perdido:", error);
+  if (workout.date < startOfWeek || workout.date >= endOfWeek) {
+    return {
+      error: "Este fluxo ajusta somente treino pendente da semana atual.",
+      status: 409 as const,
+    };
   }
 
-  let professorNoticeCreated = false;
-  let professorEmailSent = false;
-  let gestaoNoticeCreated = false;
-
-  if (level >= 2 && student.user?.id) {
-    const professorTitle =
-      level === 2
-        ? `Acompanhar adesão de ${studentName}`
-        : `Ação de cuidado necessária com ${studentName}`;
-
-    const professorContent =
-      level === 2
-        ? [
-            `Oi, ${student.user?.name || "professor(a)"}.`,
-            "",
-            `${studentName} está com ${missedCount} treino(s) sem conclusão.`,
-            "Antes de ajustar a programação, faça uma abordagem pelo chat para entender se existe dificuldade de execução, dúvida, falta de tempo ou incompatibilidade com a rotina.",
-            "Depois, registre o encaminhamento e adapte o treino se necessário.",
-          ].join("\n")
-        : [
-            `Oi, ${student.user?.name || "professor(a)"}.`,
-            "",
-            `${studentName} acumula ${missedCount} treino(s) sem conclusão e precisa de uma abordagem ativa de cuidado.`,
-            "Converse pelo chat com escuta e sem cobrança. Entenda as barreiras, combine um próximo passo possível e avalie uma retomada mais simples ou ajuste da programação.",
-            "A gestão também receberá visibilidade para apoiar o acompanhamento, se necessário.",
-          ].join("\n");
-
-    await createNotice({
-      title: professorTitle,
-      content: professorContent,
-      targetRole: "PROFESSOR",
-      authorId: managementAuthorId,
-      professorId: student.user.id,
-      expiresAt: addDays(15),
-    });
-
-    professorNoticeCreated = true;
-
-    if (level >= 3) {
-      try {
-        professorEmailSent = await sendProfessorEmail({
-          to: student.user.email,
-          professorName: student.user.name || "Professor",
-          subject: professorTitle,
-          title: professorTitle,
-          content: professorContent,
-        });
-      } catch (error) {
-        console.error("Erro ao enviar e-mail para professor:", error);
-      }
-    }
-  }
-
-  if (level >= 3) {
-    const gestaoTitle = `Acompanhamento de retenção: ${studentName}`;
-    const gestaoContent = [
-      `${studentName} está com ${missedCount} treino(s) sem conclusão.`,
-      "",
-      student.user?.name
-        ? `Professor responsável: ${student.user.name}.`
-        : "Professor responsável não identificado.",
-      "",
-      "Ação sugerida para a gestão: acompanhar se o professor realizou uma abordagem pelo chat e se houve combinação de um próximo passo com o aluno.",
-      "Se não houver retorno ou se surgirem questões comerciais, a gestão pode fazer contato adicional pelos canais sob sua responsabilidade.",
-    ].join("\n");
-
-    await createNotice({
-      title: gestaoTitle,
-      content: gestaoContent,
-      targetRole: "GESTOR",
-      authorId: managementAuthorId,
-      expiresAt: addDays(15),
-    });
-
-    gestaoNoticeCreated = true;
-  }
-
-  await registerSent({
-    studentId: student.id,
-    workoutId: latestMissedWorkout.id,
-    noticeId: studentNotice.id,
-    eventType,
-    eventKey,
-    channel: studentEmailSent ? "AVISO_EMAIL" : "AVISO",
-  });
+  const [activePreferences, technicalContext] = await Promise.all([prisma.studentTrainingPreference.findMany({
+    where: {
+      studentId: preference.studentId,
+      status: "ACTIVE",
+    },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      category: true,
+      summary: true,
+      originalMessage: true,
+    },
+  }), getStudentTechnicalContext(preference.studentId)]);
 
   return {
-    sent: true,
-    level,
-    studentEmailSent,
-    professorNoticeCreated,
-    professorEmailSent,
-    gestaoNoticeCreated,
+    preference,
+    workout,
+    activePreferences,
+    technicalContext,
   };
 }
 
-async function ensureLowAdherencePause({
-  student,
-  consecutiveMissedWorkouts,
-  managementAuthorId,
-}: {
-  student: StudentForEngagement;
-  consecutiveMissedWorkouts: WorkoutForEngagement[];
-  managementAuthorId: string;
-}) {
-  if (consecutiveMissedWorkouts.length < 3) return null;
 
-  const existing = await prisma.studentCareEvent.findFirst({
-    where: {
-      studentId: student.id,
-      eventType: "PAUSA_BAIXA_ADERENCIA",
-      status: { not: "RESOLVIDO" },
-    },
-    select: { id: true },
-  });
-
-  if (existing) return existing;
-
-  const latest = consecutiveMissedWorkouts[0];
-  const professorId = student.user?.id || null;
-  const description = `${consecutiveMissedWorkouts.length} treinos consecutivos não realizados. Pausa automática criada para interromper novas liberações até o aluno solicitar retomada e o professor revisar.`;
-
-  return prisma.studentCareEvent.create({
-    data: {
-      studentId: student.id,
-      professorId,
-      authorId: managementAuthorId,
-      eventType: "PAUSA_BAIXA_ADERENCIA",
-      severity: "ATENCAO",
-      status: "REQUER_REVISAO",
-      source: "AUTOMACAO_ADERENCIA",
-      title: "Treinos pausados por baixa adesão",
-      description,
-      studentMessage: "Seus treinos foram temporariamente pausados para evitar novas programações sem considerar o que está acontecendo na sua rotina. Quando estiver pronto para voltar, solicite a retomada pelo botão disponível na sua área.",
-      professorMessage: `${student.name} chegou a ${consecutiveMissedWorkouts.length} treinos consecutivos não realizados. Converse pelo chat, entenda as barreiras e libere a retomada somente depois de combinar um plano possível.`,
-      relatedWorkoutId: latest?.id || null,
-    },
-    select: { id: true },
-  });
+function normalizeSearchText(value: unknown): string {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
-export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
+function selectRelevantLibraryExercises({
+  context,
+  library,
+  currentExerciseIds,
+}: {
+  context: any;
+  library: any[];
+  currentExerciseIds: string[];
+}): any[] {
+  const preferenceText = normalizeSearchText(
+    [
+      context.preference?.summary,
+      context.preference?.originalMessage,
+      ...(context.activePreferences || []).flatMap((item: any) => [
+        item?.summary,
+        item?.originalMessage,
+      ]),
+      context.workout?.workoutPlan?.name,
+      context.workout?.workoutPlan?.description,
+      context.workout?.workoutPlan?.objective,
+      context.workout?.workoutPlan?.focusAreas,
+    ].join(" ")
+  );
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const currentIds = new Set(currentExerciseIds.filter(Boolean));
+  const importantTerms = Array.from(
+    new Set(
+      preferenceText
+        .split(/[^a-z0-9]+/)
+        .filter((term) => term.length >= 4)
+        .filter(
+          (term) =>
+            ![
+              "treino",
+              "aluno",
+              "preferencia",
+              "geral",
+              "fazer",
+              "gostaria",
+              "objetivo",
+              "fortalecer",
+              "mais",
+              "para",
+              "pela",
+              "como",
+              "moderada",
+              "intenso",
+              "intensos",
+            ].includes(term)
+        )
+    )
+  );
 
-  const managementAuthorId = await getNoticeAuthorId();
-
-  if (!managementAuthorId) {
-    return NextResponse.json(
-      { error: "Nenhum gestor/admin encontrado para assinar os avisos." },
-      { status: 400 }
+  const thematicBoosts: string[] = [];
+  if (preferenceText.includes("corrida")) {
+    thematicBoosts.push(
+      "corrida",
+      "pernas",
+      "gluteos",
+      "panturrilha",
+      "quadril",
+      "tornozelo",
+      "core",
+      "unilateral"
     );
   }
+  if (preferenceText.includes("agachamento")) thematicBoosts.push("agachamento");
+  if (preferenceText.includes("bulgar")) thematicBoosts.push("bulgar", "afundo");
+  if (preferenceText.includes("academia")) thematicBoosts.push("academia");
+  if (preferenceText.includes("casa")) thematicBoosts.push("casa", "nenhum equipamento");
 
-  const { start: todayStart, end: todayEnd } = getTodayRange();
-  const lookbackStart = new Date(todayStart);
-  lookbackStart.setDate(todayStart.getDate() - 45);
+  const scored = library.map((exercise, index) => {
+    const searchable = normalizeSearchText(
+      [
+        exercise.name,
+        exercise.muscleGroup,
+        exercise.objectiveTags,
+        exercise.locationTags,
+        exercise.equipmentTags,
+        exercise.levelTags,
+        exercise.intensity,
+      ].join(" ")
+    );
 
-  const todayWorkouts = (await prisma.workout.findMany({
-    where: {
-      date: {
-        gte: todayStart,
-        lt: todayEnd,
-      },
-      status: {
-        not: "CONCLUIDO",
-      },
-      student: {
-        active: true,
-      },
-    },
-    include: {
-      workoutPlan: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      student: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          userId: true,
-          userAuth: {
-            select: {
-              email: true,
-              role: true,
-            },
-          },
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-              role: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      date: "asc",
-    },
-  })) as WorkoutForEngagement[];
+    let score = currentIds.has(exercise.id) ? 1000 : 0;
 
-  const recentPastWorkouts = (await prisma.workout.findMany({
-    where: {
-      date: {
-        gte: lookbackStart,
-        lt: todayStart,
-      },
-      student: {
-        active: true,
-      },
-    },
-    include: {
-      workoutPlan: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-      student: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          userId: true,
-          userAuth: {
-            select: {
-              email: true,
-              role: true,
-            },
-          },
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-              role: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      date: "asc",
-    },
-  })) as WorkoutForEngagement[];
-
-  const reminderResults: any[] = [];
-  const missedResults: any[] = [];
-  const errors: any[] = [];
-
-  for (const workout of todayWorkouts) {
-    try {
-      const result = await notifyTodayWorkout({
-        workout,
-        managementAuthorId,
-      });
-
-      reminderResults.push({
-        workoutId: workout.id,
-        studentId: workout.studentId,
-        studentName: workout.student.name,
-        ...result,
-      });
-    } catch (error: any) {
-      errors.push({
-        type: "TODAY_REMINDER",
-        workoutId: workout.id,
-        message: error?.message || "Erro desconhecido",
-      });
-    }
-  }
-
-  const recentByStudent = new Map<string, WorkoutForEngagement[]>();
-
-  for (const workout of recentPastWorkouts) {
-    if (!recentByStudent.has(workout.studentId)) {
-      recentByStudent.set(workout.studentId, []);
+    for (const term of importantTerms) {
+      if (searchable.includes(term)) score += term.length >= 7 ? 8 : 5;
     }
 
-    recentByStudent.get(workout.studentId)!.push(workout);
-  }
-
-  const missedByStudent = new Map<string, WorkoutForEngagement[]>();
-
-  for (const [studentId, workouts] of Array.from(recentByStudent.entries())) {
-    const ordered = workouts.slice().sort((a, b) => b.date.getTime() - a.date.getTime());
-    const consecutiveMissed: WorkoutForEngagement[] = [];
-
-    for (const workout of ordered) {
-      const status = String(workout.status || "").toUpperCase();
-
-      if (status === "CONCLUIDO" || status === "CONCLUIDO_PARCIALMENTE") {
-        break;
-      }
-
-      if (["CANCELADO", "SUBSTITUIDO", "INTERROMPIDO_CUIDADO"].includes(status)) {
-        continue;
-      }
-
-      consecutiveMissed.push(workout);
+    for (const term of thematicBoosts) {
+      if (searchable.includes(term)) score += 12;
     }
 
-    if (consecutiveMissed.length > 0) {
-      missedByStudent.set(studentId, consecutiveMissed);
+    if (preferenceText.includes("corrida") && /pernas|gluteos|core|mobilidade/.test(searchable)) {
+      score += 8;
     }
-  }
 
-  for (const [studentId, workouts] of Array.from(missedByStudent.entries())) {
-    try {
-      const student = workouts[0].student;
-      const missedCount = workouts.length;
-      const level: 1 | 2 | 3 = missedCount >= 3 ? 3 : missedCount === 2 ? 2 : 1;
-      const existingLowAdherencePause = await prisma.studentCareEvent.findFirst({
-        where: {
-          studentId,
-          eventType: "PAUSA_BAIXA_ADERENCIA",
-          status: { not: "RESOLVIDO" },
-        },
-        select: { id: true },
-      });
-
-      if (existingLowAdherencePause) {
-        missedResults.push({
-          studentId,
-          studentName: student.name,
-          missedCount,
-          level,
-          pausedForLowAdherence: true,
-          sent: false,
-          reason: "Aluno já está com pausa ativa por baixa adesão",
-        });
-        continue;
-      }
-
-      const result = await notifyMissedWorkoutLevel({
-        student,
-        missedWorkouts: workouts,
-        level,
-        managementAuthorId,
-      });
-
-      const pauseEvent = await ensureLowAdherencePause({
-        student,
-        consecutiveMissedWorkouts: workouts,
-        managementAuthorId,
-      });
-
-      missedResults.push({
-        studentId,
-        studentName: student.name,
-        missedCount,
-        level,
-        pausedForLowAdherence: Boolean(pauseEvent),
-        ...result,
-      });
-    } catch (error: any) {
-      errors.push({
-        type: "MISSED_WORKOUT",
-        studentId,
-        message: error?.message || "Erro desconhecido",
-      });
-    }
-  }
-
-  return NextResponse.json({
-    ok: errors.length === 0,
-    today: {
-      start: todayStart.toISOString(),
-      end: todayEnd.toISOString(),
-      display: formatDatePtBr(todayStart),
-    },
-    totals: {
-      todayWorkouts: todayWorkouts.length,
-      remindersSent: reminderResults.filter((item) => item.sent).length,
-      studentsWithMissedWorkouts: missedByStudent.size,
-      missedNotificationsSent: missedResults.filter((item) => item.sent).length,
-      errors: errors.length,
-    },
-    reminders: reminderResults,
-    missed: missedResults,
-    errors,
+    return { exercise, score, index };
   });
+
+  const currentExercises = library.filter((exercise) => currentIds.has(exercise.id));
+  const currentLibraryIds = new Set(currentExercises.map((exercise) => exercise.id));
+
+  const alternatives = scored
+    .filter((item) => item.score > 0 && !currentLibraryIds.has(item.exercise.id))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, Math.max(0, 16 - currentExercises.length))
+    .map((item) => item.exercise);
+
+  return [...currentExercises, ...alternatives].slice(0, 16);
+}
+
+function buildAdjustmentPrompt({
+  context,
+  library,
+}: {
+  context: any;
+  library: any[];
+}): string {
+  const plan = context.workout.workoutPlan;
+  const currentExercises = plan.exercises.map((exercise: any) => ({
+    exerciseId: exercise.libraryExerciseId,
+    name: exercise.name,
+    series: exercise.series,
+    reps: exercise.reps,
+    weight: exercise.weight,
+    restTime: exercise.restTime,
+    order: exercise.order,
+  }));
+
+  const relevantLibrary = selectRelevantLibraryExercises({
+    context,
+    library,
+    currentExerciseIds: currentExercises
+      .map((exercise: any) => exercise.exerciseId)
+      .filter(Boolean),
+  });
+
+  const availableExercises = relevantLibrary.map((exercise) => ({
+    exerciseId: exercise.id,
+    name: exercise.name,
+  }));
+
+  const technicalContext = context.technicalContext || {};
+  const adherence = technicalContext.adherence || {};
+  const exerciseHistory = technicalContext.exerciseHistory || {};
+
+  const preferences = (context.activePreferences || [])
+    .map((item: any) => cleanText(item.originalMessage || item.summary))
+    .filter(Boolean)
+    .slice(0, 8);
+
+  const easy = (exerciseHistory.easy || []).map((item: any) =>
+    `${item.exerciseName}${item.count ? ` (${item.count}x)` : ""}`
+  );
+  const difficult = (exerciseHistory.difficult || []).map((item: any) =>
+    `${item.exerciseName}${item.count ? ` (${item.count}x)` : ""}`
+  );
+  const skipped = (exerciseHistory.skipped || []).map((item: any) => {
+    const reasons = Array.isArray(item.reasons) ? item.reasons.join(", ") : "";
+    return `${item.exerciseName}${reasons ? `: ${reasons}` : ""}`;
+  });
+  const care = (technicalContext.openCareEvents || [])
+    .map((item: any) =>
+      cleanText(`${item.title || ""}${item.description ? `: ${item.description}` : ""}`).slice(0, 280)
+    )
+    .filter(Boolean)
+    .slice(0, 5);
+  const approvedMemory = (technicalContext.approvedTechnicalMemory || [])
+    .map((item: any) => cleanText(item.summary || item.content || item.description).slice(0, 280))
+    .filter(Boolean)
+    .slice(0, 8);
+
+  const historySummary = {
+    adherence: cleanText(adherence.summary) || "Sem resumo de adesão.",
+    easy,
+    difficult,
+    skipped,
+    care,
+    approvedMemory,
+  };
+
+  const currentWorkout = {
+    name: plan.name,
+    objective: plan.objective,
+    focusAreas: plan.focusAreas,
+    intensity: plan.intensity,
+    estimatedDurationMinutes: plan.estimatedDurationMinutes,
+    estimatedCaloriesMin: plan.estimatedCaloriesMin,
+    estimatedCaloriesMax: plan.estimatedCaloriesMax,
+    exercises: currentExercises,
+  };
+
+  return [
+    ...MANUAL_AI_EXECUTION_HEADER_LINES,
+    "Adapte apenas o treino pendente abaixo para apoiar o professor.",
+    "Responda somente com um objeto JSON válido, sem markdown ou explicações.",
+    "Use somente exerciseId da biblioteca fornecida. Não invente exercícios, cargas, restrições, lesões, equipamentos ou diagnósticos.",
+    "Mantenha data e objetivo geral. Respeite preferências, histórico e eventos de cuidado. Um relato isolado pede cautela, não progressão automática.",
+    "Exercício difícil ou não realizado deve ser simplificado ou substituído. Dor/desconforto exige revisão humana.",
+    "A proposta será revisada pelo professor antes de ser aplicada.",
+    "",
+    `ALUNO: ${context.preference.student.name}`,
+    `DATA: ${context.workout.date.toISOString().slice(0, 10)}`,
+    `PREFERÊNCIA PRINCIPAL: ${cleanText(context.preference.originalMessage || context.preference.summary)}`,
+    `PREFERÊNCIAS ATIVAS: ${JSON.stringify(preferences)}`,
+    `HISTÓRICO RESUMIDO: ${JSON.stringify(historySummary)}`,
+    `TREINO ATUAL: ${JSON.stringify(currentWorkout)}`,
+    `BIBLIOTECA PERMITIDA: ${JSON.stringify(availableExercises)}`,
+    "",
+    "CAMPOS OBRIGATÓRIOS NO JSON:",
+    "name, description, objective, focusAreas, intensity, estimatedDurationMinutes, estimatedCaloriesMin, estimatedCaloriesMax, studentSummary, safetyNote, notes, rationale, studentMessage, exercises.",
+    "Cada item de exercises deve conter: exerciseId, series, reps, weight, restTime, notes, order.",
+    "estimatedDurationMinutes, estimatedCaloriesMin, estimatedCaloriesMax, series e order devem ser números.",
+    "studentMessage deve informar de forma humana que o treino pendente foi ajustado após revisão do professor.",
+  ].join("\n");
+}
+
+function parseManualProposal(rawValue: unknown): {
+  proposal?: AdjustmentProposal;
+  error?: string;
+} {
+  const raw = cleanText(rawValue);
+
+  if (!raw) {
+    return { error: "Cole a resposta da IA antes de validar." };
+  }
+
+  let jsonText = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  const firstBrace = jsonText.indexOf("{");
+  const lastBrace = jsonText.lastIndexOf("}");
+
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    jsonText = jsonText.slice(firstBrace, lastBrace + 1);
+  }
+
+  try {
+    const parsed = JSON.parse(jsonText);
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { error: "A resposta precisa ser um objeto JSON válido." };
+    }
+
+    return { proposal: parsed as AdjustmentProposal };
+  } catch {
+    return {
+      error:
+        "A resposta não é um JSON válido. Peça à IA para devolver somente o JSON, sem explicações ou blocos de código.",
+    };
+  }
+}
+
+async function validateProposal(proposal: AdjustmentProposal) {
+  if (!proposal || !Array.isArray(proposal.exercises) || proposal.exercises.length === 0) {
+    return { error: "A proposta precisa conter ao menos um exercício." };
+  }
+
+  const requiredTextFields: Array<keyof AdjustmentProposal> = [
+    "name",
+    "description",
+    "objective",
+    "focusAreas",
+    "intensity",
+    "studentSummary",
+    "safetyNote",
+    "notes",
+    "rationale",
+    "studentMessage",
+  ];
+
+  const missingFields = requiredTextFields.filter(
+    (field) => typeof proposal[field] !== "string"
+  );
+
+  if (missingFields.length > 0) {
+    return {
+      error: `A resposta está sem campos obrigatórios ou com formato incorreto: ${missingFields.join(
+        ", "
+      )}.`,
+    };
+  }
+
+  const numericFields: Array<keyof AdjustmentProposal> = [
+    "estimatedDurationMinutes",
+    "estimatedCaloriesMin",
+    "estimatedCaloriesMax",
+  ];
+
+  const invalidNumericFields = numericFields.filter(
+    (field) => !Number.isFinite(Number(proposal[field])) || Number(proposal[field]) < 0
+  );
+
+  if (invalidNumericFields.length > 0) {
+    return {
+      error: `Os campos numéricos estão inválidos: ${invalidNumericFields.join(", ")}.`,
+    };
+  }
+
+  const ids = proposal.exercises
+    .map((exercise) => cleanId(exercise.exerciseId))
+    .filter(Boolean) as string[];
+
+  if (ids.length !== proposal.exercises.length) {
+    return { error: "Todos os exercícios precisam ter exerciseId válido." };
+  }
+
+  const invalidExerciseFields = proposal.exercises.findIndex(
+    (exercise) =>
+      !Number.isFinite(Number(exercise.series)) ||
+      Number(exercise.series) < 1 ||
+      !Number.isFinite(Number(exercise.order)) ||
+      typeof exercise.reps !== "string" ||
+      typeof exercise.weight !== "string" ||
+      typeof exercise.restTime !== "string" ||
+      typeof exercise.notes !== "string"
+  );
+
+  if (invalidExerciseFields >= 0) {
+    return {
+      error: `O exercício ${invalidExerciseFields + 1} está com campos obrigatórios inválidos.`,
+    };
+  }
+
+  const libraryExercises = (await prisma.exerciseLibrary.findMany({
+    where: {
+      id: { in: Array.from(new Set(ids)) },
+      active: true,
+    },
+  })) as LibraryExerciseRecord[];
+
+  const byId = new Map(libraryExercises.map((exercise) => [exercise.id, exercise]));
+  const missing = ids.filter((id) => !byId.has(id));
+
+  if (missing.length > 0) {
+    return {
+      error: `A proposta contém exercício inexistente ou inativo: ${Array.from(
+        new Set(missing)
+      ).join(", ")}.`,
+    };
+  }
+
+  const normalizedExercises = proposal.exercises.map((exercise, index) => {
+    const libraryExercise = byId.get(exercise.exerciseId)!;
+
+    return {
+      libraryExerciseId: libraryExercise.id,
+      name: libraryExercise.name,
+      description: libraryExercise.description,
+      series: cleanPositiveInteger(exercise.series, 3) || 1,
+      reps: cleanText(exercise.reps) || "10",
+      weight: cleanText(exercise.weight) || null,
+      restTime: cleanText(exercise.restTime) || "60s",
+      notes: cleanText(exercise.notes) || null,
+      order: Number.isFinite(Number(exercise.order)) ? Number(exercise.order) : index,
+      imageUrl: libraryExercise.imageUrl || null,
+      videoUrl: libraryExercise.videoUrl || null,
+    };
+  });
+
+  return { normalizedExercises };
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    const sessionUser = session?.user as any;
+
+    if (!sessionUser?.id) {
+      return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+    }
+
+    const userId = String(sessionUser.id);
+    const role = normalizeRole(sessionUser.role);
+
+    if (!["TEACHER", "GESTOR", "ADMIN"].includes(role)) {
+      return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const action = String(body?.action || "").toUpperCase() as AdjustmentAction;
+    const preferenceId = cleanId(body?.preferenceId);
+    const workoutId = cleanId(body?.workoutId);
+
+    if (
+      !preferenceId ||
+      !["PREPARE_PROMPT", "VALIDATE_MANUAL", "APPLY", "FUTURE_ONLY"].includes(
+        action
+      )
+    ) {
+      return NextResponse.json({ error: "Dados do ajuste inválidos." }, { status: 400 });
+    }
+
+    const contextResult = await getAdjustmentContext({
+      preferenceId,
+      workoutId,
+      userId,
+      role,
+      requireWorkout: action !== "FUTURE_ONLY",
+    });
+
+    if ("error" in contextResult) {
+      return NextResponse.json(
+        { error: contextResult.error },
+        { status: contextResult.status }
+      );
+    }
+
+    const context = contextResult;
+
+    if (action === "FUTURE_ONLY") {
+      const now = new Date();
+      const replyContent = [
+        `${context.preference.student.name}, registrei sua preferência: ${context.preference.summary}`,
+        context.workout
+          ? "Ela será considerada nos próximos treinos. O treino que já está disponível nesta semana será mantido como está."
+          : "Ela será considerada na montagem dos próximos treinos.",
+        "Mensagem automática enviada após a decisão do professor.",
+      ].join("\n\n");
+
+      await prisma.$transaction([
+        prisma.studentTrainingPreference.update({
+          where: { id: preferenceId },
+          data: {
+            currentWeekAction: "FUTURE_ONLY",
+            handledAt: now,
+            handledById: userId,
+          },
+        }),
+        prisma.question.create({
+          data: {
+            content: replyContent,
+            answer: replyContent,
+            answeredAt: now,
+            answeredById: userId,
+            parentId: context.preference.sourceConversationId,
+            studentId: context.preference.studentId,
+            teacherId:
+              context.preference.professorId || context.preference.student.userId,
+            senderRole: role === "TEACHER" ? "TEACHER" : "GESTOR",
+          },
+        }),
+      ]);
+
+      return NextResponse.json({
+        ok: true,
+        action: "FUTURE_ONLY",
+        message:
+          "Preferência registrada para os próximos treinos. O treino atual foi mantido.",
+      });
+    }
+
+    if (!context.workout || !context.workout.workoutPlan) {
+      return NextResponse.json(
+        { error: "Treino pendente não localizado para esta ação." },
+        { status: 409 }
+      );
+    }
+
+    if (action === "PREPARE_PROMPT") {
+      const library = await prisma.exerciseLibrary.findMany({
+        where: { active: true },
+        orderBy: [{ muscleGroup: "asc" }, { name: "asc" }],
+        take: 300,
+      });
+
+      if (library.length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              "A biblioteca oficial está vazia. Cadastre exercícios antes de preparar a adaptação.",
+          },
+          { status: 409 }
+        );
+      }
+
+      const manualPrompt = buildAdjustmentPrompt({ context, library });
+
+      return NextResponse.json({
+        ok: true,
+        manualPrompt,
+        currentWorkout: {
+          id: context.workout.id,
+          date: context.workout.date.toISOString(),
+          status: context.workout.status,
+          plan: {
+            id: context.workout.workoutPlan.id,
+            name: context.workout.workoutPlan.name,
+            exercises: context.workout.workoutPlan.exercises.map((exercise: any) => ({
+              exerciseId: exercise.libraryExerciseId,
+              name: exercise.name,
+              series: exercise.series,
+              reps: exercise.reps,
+            })),
+          },
+        },
+        message:
+          "Prompt preparado. Copie para a IA, cole a resposta JSON no sistema e valide antes de aplicar.",
+      });
+    }
+
+    if (action === "VALIDATE_MANUAL") {
+      const parsed = parseManualProposal(body?.manualResponse);
+
+      if (parsed.error || !parsed.proposal) {
+        return NextResponse.json(
+          { error: parsed.error || "Resposta manual inválida." },
+          { status: 422 }
+        );
+      }
+
+      const validation = await validateProposal(parsed.proposal);
+
+      if (validation.error || !validation.normalizedExercises) {
+        return NextResponse.json(
+          { error: validation.error || "Proposta inválida." },
+          { status: 422 }
+        );
+      }
+
+      const proposalWithNames = {
+        ...parsed.proposal,
+        exercises: parsed.proposal.exercises.map((exercise, index) => ({
+          ...exercise,
+          exerciseName:
+            validation.normalizedExercises?.[index]?.name ||
+            "Exercício da biblioteca",
+        })),
+      };
+
+      return NextResponse.json({
+        ok: true,
+        proposal: proposalWithNames,
+        message:
+          "Resposta validada. Revise a proposta antes de substituir o treino pendente.",
+      });
+    }
+
+    const proposal = body?.proposal as AdjustmentProposal;
+    const validation = await validateProposal(proposal);
+
+    if (validation.error || !validation.normalizedExercises) {
+      return NextResponse.json(
+        { error: validation.error || "Proposta inválida." },
+        { status: 422 }
+      );
+    }
+
+    const plan = context.workout.workoutPlan;
+    const now = new Date();
+    const studentMessage = cleanText(proposal.studentMessage) ||
+      [
+        `${context.preference.student.name}, sua preferência foi considerada na revisão do treino desta semana.`,
+        "O treino pendente foi ajustado e já está disponível para você.",
+        "Mensagem automática enviada após a revisão do professor.",
+      ].join("\n\n");
+
+    const professorId =
+      context.preference.professorId || (role === "TEACHER" ? userId : null);
+    const professor = professorId
+      ? await prisma.user.findUnique({
+          where: { id: professorId },
+          select: {
+            name: true,
+            image: true,
+          },
+        })
+      : null;
+    const professorName =
+      cleanText(professor?.name) ||
+      (role === "TEACHER" ? cleanText(sessionUser.name) : "Equipe Funcional UP Digital");
+    const professorImage = professor?.image || null;
+    const studentEmail =
+      cleanText(context.preference.student.email) ||
+      cleanText(context.preference.student.userAuth?.email) ||
+      null;
+
+    await prisma.$transaction(async (tx) => {
+      const adaptedPlan = await tx.workoutPlan.create({
+        data: {
+          studentId: plan.studentId,
+          name: cleanText(proposal.name) || plan.name,
+          description: cleanText(proposal.description) || null,
+          active: true,
+          date: plan.date || context.workout.date,
+          objective: cleanText(proposal.objective) || plan.objective,
+          focusAreas: cleanText(proposal.focusAreas) || null,
+          intensity: cleanText(proposal.intensity) || null,
+          estimatedDurationMinutes:
+            cleanPositiveInteger(
+              proposal.estimatedDurationMinutes,
+              plan.estimatedDurationMinutes || 0
+            ) || null,
+          estimatedCaloriesMin:
+            cleanPositiveInteger(
+              proposal.estimatedCaloriesMin,
+              plan.estimatedCaloriesMin || 0
+            ) || null,
+          estimatedCaloriesMax:
+            cleanPositiveInteger(
+              proposal.estimatedCaloriesMax,
+              plan.estimatedCaloriesMax || 0
+            ) || null,
+          studentSummary: cleanText(proposal.studentSummary) || null,
+          safetyNote: cleanText(proposal.safetyNote) || null,
+          contractId: plan.contractId || context.workout.contractId || null,
+          notes: [
+            cleanText(proposal.notes),
+            `Ajustado após preferência registrada no chat: ${context.preference.summary}`,
+            `Justificativa da sugestão revisada: ${cleanText(proposal.rationale)}`,
+            `Plano anterior preservado para histórico: ${plan.id}`,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      });
+
+      await tx.exercise.createMany({
+        data: validation.normalizedExercises.map((exercise) => ({
+          workoutPlanId: adaptedPlan.id,
+          ...exercise,
+        })),
+      });
+
+      await tx.workout.update({
+        where: { id: context.workout.id },
+        data: {
+          workoutPlanId: adaptedPlan.id,
+          notes: [
+            cleanText(context.workout.notes),
+            `Treino adaptado após preferência registrada no chat em ${now.toISOString()}.`,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      });
+
+      if (plan.workouts.length === 1 && plan.workouts[0]?.id === context.workout.id) {
+        await tx.workoutPlan.update({
+          where: { id: plan.id },
+          data: { active: false },
+        });
+      }
+
+      await tx.studentTrainingPreference.update({
+        where: { id: preferenceId },
+        data: {
+          currentWeekAction: "ADAPTED",
+          relatedWorkoutId: context.workout.id,
+          relatedWorkoutPlanId: adaptedPlan.id,
+          handledAt: now,
+          handledById: userId,
+        },
+      });
+
+      await tx.question.create({
+        data: {
+          content: studentMessage,
+          answer: studentMessage,
+          answeredAt: now,
+          answeredById: userId,
+          parentId: context.preference.sourceConversationId,
+          studentId: context.preference.studentId,
+          teacherId:
+            context.preference.professorId || context.preference.student.userId,
+          senderRole: role === "TEACHER" ? "TEACHER" : "GESTOR",
+        },
+      });
+    });
+
+    let emailSent = false;
+    let emailStatus: "SENT" | "NO_EMAIL" | "FAILED" = studentEmail
+      ? "FAILED"
+      : "NO_EMAIL";
+
+    if (studentEmail) {
+      try {
+        emailSent = await sendWorkoutAdjustmentEmail({
+          to: studentEmail,
+          studentName: context.preference.student.name,
+          professorName,
+          professorImage,
+          workoutName: cleanText(proposal.name) || plan.name,
+          workoutDate: context.workout.date,
+          objective: cleanText(proposal.objective) || cleanText(plan.objective),
+          studentMessage,
+        });
+        emailStatus = emailSent ? "SENT" : "FAILED";
+      } catch (emailError) {
+        console.error(
+          "Falha ao enviar e-mail de treino ajustado ao aluno:",
+          emailError
+        );
+        emailStatus = "FAILED";
+      }
+    }
+
+    const responseMessage =
+      emailStatus === "SENT"
+        ? "Treino pendente ajustado. O treino concluído permaneceu intacto e o aluno foi avisado no chat e por e-mail."
+        : emailStatus === "NO_EMAIL"
+          ? "Treino pendente ajustado e aviso registrado no chat. O aluno não possui e-mail cadastrado para receber a notificação."
+          : "Treino pendente ajustado e aviso registrado no chat, mas não foi possível enviar o e-mail neste momento.";
+
+    return NextResponse.json({
+      ok: true,
+      action: "ADAPTED",
+      emailSent,
+      emailStatus,
+      message: responseMessage,
+    });
+  } catch (error) {
+    console.error("POST /api/workout-adjustments error:", error);
+    return NextResponse.json(
+      { error: "Erro ao processar o ajuste do treino." },
+      { status: 500 }
+    );
+  }
 }
