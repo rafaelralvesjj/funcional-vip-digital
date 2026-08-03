@@ -635,11 +635,39 @@ export default function ResumoAlunoPage() {
       .filter((memory) => /(hor[aá]rio|dia|semana|06:00|manh[aã])/i.test(`${memory.title} ${memory.parsed.text}`));
 
     const environmentData = environmentMemory?.parsed.data || null;
-    const environmentEquipment = Array.isArray(environmentData?.availableEquipment)
-      ? environmentData.availableEquipment.map((item) => String(item))
-      : [];
-    const individualEquipment = equipmentMemories.map((memory) => memory.title || memory.parsed.text).filter(Boolean);
-    const consolidatedEquipment = Array.from(new Set([...environmentEquipment, ...individualEquipment]));
+
+    const documentAnalysisMemories = byCategory(["DOCUMENT_ANALYSIS", "DOCUMENT"]);
+    const extractedTrainingEnvironment = documentAnalysisMemories
+      .map((memory) => memory.parsed.data)
+      .map((data) => {
+        if (!data) return null;
+        const direct = data.trainingEnvironment;
+        if (direct && typeof direct === "object") return direct as Record<string, unknown>;
+
+        const sourceResponse = data.sourceResponse;
+        if (sourceResponse && typeof sourceResponse === "object") {
+          const nested = (sourceResponse as Record<string, unknown>).trainingEnvironment;
+          if (nested && typeof nested === "object") return nested as Record<string, unknown>;
+        }
+
+        return null;
+      })
+      .find(Boolean) || null;
+
+    const environmentEquipment = [environmentData, extractedTrainingEnvironment]
+      .flatMap((data) =>
+        Array.isArray(data?.availableEquipment)
+          ? data.availableEquipment.map((item) => String(item))
+          : []
+      );
+
+    const individualEquipment = equipmentMemories
+      .map((memory) => memory.title || memory.parsed.text)
+      .filter(Boolean);
+
+    const consolidatedEquipment = Array.from(
+      new Set([...environmentEquipment, ...individualEquipment].map((item) => compactText(item)).filter(Boolean))
+    );
 
     const conflictsResolved: Array<{ field: string; previousSource: string; selectedSource: string; decision: string }> = [];
     if (consolidatedEquipment.length > 0 && /nenhum equipamento|sem equipamento/i.test(summaryData.summaryText || "")) {
@@ -661,7 +689,7 @@ export default function ResumoAlunoPage() {
       goal: goalMemory?.parsed.text || "Usar o objetivo cadastrado no RESUMO_ALUNO quando não houver memória aprovada mais recente.",
       schedulePreferences: scheduleMemories.map((memory) => memory.parsed.text || memory.title),
       cardioRoutine: cardioMemory?.parsed.text || null,
-      trainingEnvironment: environmentData || environmentMemory?.parsed.text || null,
+      trainingEnvironment: environmentData || extractedTrainingEnvironment || environmentMemory?.parsed.text || null,
       availableEquipment: consolidatedEquipment,
       activePreferences: summaryData.technicalContext?.activePreferences || [],
       healthAndRestrictions: byCategory(["HEALTH_PERMANENT", "HEALTH_TEMPORARY", "MEDICAL_GUIDANCE", "EXERCISE_AVOID"])

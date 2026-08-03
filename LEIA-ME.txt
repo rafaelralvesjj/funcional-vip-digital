@@ -1,15 +1,16 @@
-CORREÇÃO — MONTAR TREINO COM CONFLITO DE DADOS
+CORREÇÃO — EQUIPAMENTOS NO CONTEXTO CONSOLIDADO
 
 Arquivo alterado:
 - app/dashboard/resumo-aluno/page.tsx
 
 O que muda:
-- O pacote de Montar Treino passa a gerar CONTEXTO/CONTEXTO_CONSOLIDADO.json.
-- Memória técnica APPROVED mais recente prevalece sobre cadastro/onboarding antigo.
-- Equipamentos confirmados por fotos e análises passam a orientar a seleção da biblioteca.
-- Conflitos são registrados em CONTEXTO/CONFLITOS_RESOLVIDOS.json.
-- A IA não pode recusar montar o treino apenas por conflito de dados.
-- Quando faltarem dados secundários, deve gerar planejamento conservador com revisão humana.
-- O treino só permanece bloqueado em pausa de cuidado aberta, biblioteca vazia ou validação imutável inválida.
+- O contexto consolidado passa a buscar equipamentos em:
+  1. memórias EQUIPMENT_AVAILABLE;
+  2. memória TRAINING_ENVIRONMENT;
+  3. análises DOCUMENT_ANALYSIS/DOCUMENT com trainingEnvironment;
+  4. sourceResponse.trainingEnvironment, quando a análise antiga estiver aninhada.
+- O campo availableEquipment deixa de ficar vazio quando os equipamentos já foram confirmados nas fotos.
+- A memória mais recente continua prevalecendo sobre o onboarding antigo.
+- O conflito “nenhum equipamento” x equipamentos confirmados passa a ser registrado sem bloquear a montagem do treino.
 
 Não houve alteração no Prisma nem no banco.
