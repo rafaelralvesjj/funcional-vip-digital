@@ -416,6 +416,7 @@ export async function POST(request: NextRequest) {
             bodyRegions: ["regiões mencionadas"],
             questionsForProfessor: ["pontos que precisam ser confirmados"],
             summaryForTraining: "Resumo curto, objetivo e sem diagnóstico",
+            studentReplySuggestion: "Mensagem humana, clara e cuidadosa para o professor revisar e enviar ao aluno no chat, sem diagnóstico e sem prometer resultado.",
             requiresUrgentHumanReview: false,
           },
           null,
