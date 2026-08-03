@@ -164,6 +164,7 @@ function groupApprovedMemories(memories: TechnicalContext["approvedMemories"]) {
     performanceSignals: [],
     preferredExercises: [],
     avoidedExercises: [],
+    availableEquipment: [],
     documentAnalyses: [],
     other: [],
   };
@@ -177,6 +178,7 @@ function groupApprovedMemories(memories: TechnicalContext["approvedMemories"]) {
     PERFORMANCE_SIGNAL: "performanceSignals",
     EXERCISE_PREFERRED: "preferredExercises",
     EXERCISE_AVOID: "avoidedExercises",
+    EQUIPMENT_AVAILABLE: "availableEquipment",
     DOCUMENT_ANALYSIS: "documentAnalyses",
     DOCUMENT: "documentAnalyses",
   };
@@ -221,6 +223,7 @@ export function formatStudentTechnicalContext(context: TechnicalContext): string
         "Não realizado por dor/desconforto: não repetir automaticamente e exigir revisão humana.",
         "Não entendeu: preferir alternativa mais simples e orientação técnica clara.",
         "Sem equipamento: usar somente equipamento confirmado ou peso corporal.",
+        "Equipamentos registrados em availableEquipment podem orientar a montagem, mas o professor deve validar disponibilidade, integridade e forma segura de uso.",
         "Falta de tempo: reduzir duração/volume preservando o objetivo principal.",
         "Informações de documentos só podem ser usadas quando estiverem APPROVED na memória técnica.",
         "Memórias permanentes continuam válidas até nova evidência aprovada que as substitua.",

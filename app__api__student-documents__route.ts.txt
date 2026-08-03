@@ -132,6 +132,18 @@ function normalizeAnalysisResponse(parsedValue: any) {
     parsed.questionsForProfessor ?? parsed.questions_for_professor ?? parsed.perguntasParaProfessor
   );
   const limitations = normalizeStringArray(parsed.limitations ?? parsed.limits ?? parsed.limitacoes);
+  const availableEquipmentSummary = firstNonEmptyText(
+    parsed.availableEquipmentSummary,
+    parsed.available_equipment_summary,
+    parsed.resumoEquipamentosDisponiveis,
+    parsed.equipmentSummary
+  );
+  const trainingPlanningSuggestions = normalizeStringArray(
+    parsed.trainingPlanningSuggestions ??
+      parsed.training_planning_suggestions ??
+      parsed.sugestoesPlanejamentoTreino ??
+      parsed.planningSuggestions
+  );
 
   const fallbackSummary = [
     ...trainingRelevantInformation,
@@ -188,6 +200,8 @@ function normalizeAnalysisResponse(parsedValue: any) {
     trainingRelevantInformation,
     explicitRestrictions,
     recommendations,
+    availableEquipmentSummary,
+    trainingPlanningSuggestions,
     bodyRegions: normalizeStringArray(parsed.bodyRegions ?? parsed.body_regions ?? parsed.regioesDoCorpo),
     questionsForProfessor,
     limitations,
@@ -213,7 +227,8 @@ type MemoryUpdateCategory =
   | "PREFERENCE_NEGATIVE"
   | "PERFORMANCE_SIGNAL"
   | "EXERCISE_AVOID"
-  | "EXERCISE_PREFERRED";
+  | "EXERCISE_PREFERRED"
+  | "EQUIPMENT_AVAILABLE";
 
 type NormalizedMemoryUpdate = {
   category: MemoryUpdateCategory;
@@ -234,6 +249,7 @@ const ALLOWED_MEMORY_CATEGORIES = new Set<MemoryUpdateCategory>([
   "PERFORMANCE_SIGNAL",
   "EXERCISE_AVOID",
   "EXERCISE_PREFERRED",
+  "EQUIPMENT_AVAILABLE",
 ]);
 
 function normalizeMemoryUpdates(value: unknown): NormalizedMemoryUpdate[] {
@@ -368,13 +384,15 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     trainingRelevantInformation: ["informação relevante para prescrição"],
     explicitRestrictions: ["somente restrições explicitamente presentes"],
     recommendations: ["somente recomendações explícitas"],
+    availableEquipmentSummary: "Resumo objetivo dos equipamentos disponíveis identificados nos anexos, ou texto vazio quando não houver equipamentos",
+    trainingPlanningSuggestions: ["sugestões objetivas para o professor considerar na montagem do próximo treino, sem prescrever automaticamente"],
     bodyRegions: ["regiões mencionadas"],
     questionsForProfessor: ["pontos que precisam ser confirmados"],
     summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e útil para a prescrição do treino",
     studentReplySuggestion: "Mensagem humana e cuidadosa para o professor revisar e enviar ao aluno no chat",
     memoryUpdates: [
       {
-        category: "HEALTH_PERMANENT|HEALTH_TEMPORARY|MEDICAL_GUIDANCE|PREFERENCE_POSITIVE|PREFERENCE_NEGATIVE|PERFORMANCE_SIGNAL|EXERCISE_AVOID|EXERCISE_PREFERRED",
+        category: "HEALTH_PERMANENT|HEALTH_TEMPORARY|MEDICAL_GUIDANCE|PREFERENCE_POSITIVE|PREFERENCE_NEGATIVE|PERFORMANCE_SIGNAL|EXERCISE_AVOID|EXERCISE_PREFERRED|EQUIPMENT_AVAILABLE",
         title: "Título curto e específico",
         summary: "Informação objetiva que deve ser lembrada nos próximos treinos",
         permanence: "PERMANENT|TEMPORARY|UNTIL_UPDATED",
@@ -401,11 +419,14 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     "Para vídeos, NÃO invente uma análise visual: use exclusivamente o resumo técnico escrito pelo professor no prompt.",
     "Não dê diagnóstico, não interprete além do conteúdo apresentado e não substitua avaliação médica.",
     "Extraia apenas informações objetivas que possam influenciar a segurança ou a prescrição de treino.",
+    "Quando houver fotos ou documentos de equipamentos, identifique o que está disponível, para quais tipos de movimento pode ser útil, suas limitações aparentes e quais perguntas o professor ainda precisa fazer.",
+    "Nesses casos, preencha availableEquipmentSummary e trainingPlanningSuggestions. Não invente marca, capacidade, carga máxima, estado de conservação ou segurança que não estejam visíveis.",
+    "Equipamentos confirmados devem entrar em memoryUpdates como EQUIPMENT_AVAILABLE, com permanence UNTIL_UPDATED e evidência do arquivo correspondente.",
     "Retorne somente JSON válido, sem markdown ou comentários. Salve ou entregue o resultado como arquivo TXT quando a plataforma permitir.",
     "Os campos summaryForTraining e studentReplySuggestion são obrigatórios e não podem ficar vazios.",
     "summaryForTraining deve resumir apenas implicações objetivas para o treino; studentReplySuggestion deve ser uma mensagem humana para o aluno, sem diagnóstico.",
     "Preencha memoryUpdates somente com informações úteis em treinos futuros e sustentadas pelos arquivos. Não transforme hipótese em fato.",
-    "Use HEALTH_PERMANENT apenas para condição duradoura explicitamente documentada; HEALTH_TEMPORARY para situação atual com prazo; MEDICAL_GUIDANCE para orientação expressa; preferências e sinais de desempenho apenas quando houver evidência clara.",
+    "Use HEALTH_PERMANENT apenas para condição duradoura explicitamente documentada; HEALTH_TEMPORARY para situação atual com prazo; MEDICAL_GUIDANCE para orientação expressa; preferências e sinais de desempenho apenas quando houver evidência clara; EQUIPMENT_AVAILABLE somente para equipamentos realmente identificados nos anexos ou informados pelo aluno.",
     "Se não houver uma nova memória confiável, devolva memoryUpdates como lista vazia.",
     "Preencha analysisMetadata para registrar modelo utilizado, data da análise, fontes efetivamente usadas e nível de confiança. Não invente esses dados; deixe texto vazio ou confiança nao_informada quando não souber.",
     "O professor revisará o resultado antes de salvar na memória técnica do aluno e antes de responder no chat.",
@@ -443,8 +464,6 @@ export async function POST(request: NextRequest) {
     const question = await getAccessibleQuestion(questionId, userId, role);
     if (!question?.student) return NextResponse.json({ error: "Conversa não encontrada ou sem permissão." }, { status: 404 });
 
-    const studentId = question.student.id;
-
     if (action === "SAVE_VIDEO_REVIEW") {
       const attachmentId = cleanText(body?.attachmentId);
       const summary = cleanText(body?.summary);
@@ -473,7 +492,7 @@ export async function POST(request: NextRequest) {
       const prompt = buildPrompt(question, items);
       const generatedAt = new Date().toISOString();
       const packageId = randomUUID();
-      const packageVersion = "3.2";
+      const packageVersion = "3.3";
       const imageCount = items.filter((item) => item.kind === "IMAGE").length;
       const documentCount = items.filter((item) => item.kind === "DOCUMENT").length;
       const videoCount = items.filter((item) => item.kind === "VIDEO").length;
@@ -768,6 +787,7 @@ export async function POST(request: NextRequest) {
         ? explicitMemoryUpdates
         : inferConservativeMemoryUpdates(normalized);
 
+      const studentId = question.student.id;
 
       const result = await prisma.$transaction(async (tx) => {
         await tx.studentTechnicalMemory.updateMany({

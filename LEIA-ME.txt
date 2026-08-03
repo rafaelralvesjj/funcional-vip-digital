@@ -1,21 +1,15 @@
-IMPLEMENTAÇÃO — COMUNICAÇÃO HUMANIZADA V2
+AJUSTE — ANÁLISE DE EQUIPAMENTOS E MEMÓRIA DO ALUNO
 
-Arquivos alterados/criados:
-- app/api/cron/saturday-communication/route.ts (novo)
-- app/api/cron/workout-engagement/route.ts
-- lib/student-experience.ts
-- vercel.json
-- Comunicacoes_Funcional_UP_Digital_v2.docx
+Arquivos alterados:
+- app/api/student-documents/route.ts
+- lib/student-technical-memory.ts
 
-Principais mudanças:
-- E-mail motivacional de sábado, diferente para semana completa, parcial ou sem treino.
-- E-mail ao professor quando houver aluno sem nenhum treino na semana atual.
-- Professor recebe e-mail já no segundo treino não realizado, não apenas no terceiro.
-- No terceiro treino pendente, orientação de ação de cuidado e avaliação de pausa de novas liberações.
-- E-mail de domingo mais motivador e com próximo passo claro.
-- Proteção contra duplicidade por semana.
-
-Novo cron:
-- Sábado 09h30 no horário de Brasília (12h30 UTC).
+O que muda:
+- O pacote de análise passa a pedir resumo dos equipamentos disponíveis.
+- A IA deve informar limitações aparentes e sugestões objetivas de planejamento.
+- Equipamentos confirmados entram na memória como EQUIPMENT_AVAILABLE.
+- Essa memória passa a aparecer nos pacotes de Montar Treino e Adaptar Treino.
+- O professor continua revisando antes de aplicar qualquer proposta.
+- A IA não pode inventar capacidade, carga máxima, segurança ou estado do equipamento.
 
 Não houve alteração no Prisma nem no banco.
