@@ -465,7 +465,17 @@ function buildPrompt(question: any, items: PackageItem[], technicalContextText: 
       confidence: "HIGH|MEDIUM|LOW|NOT_INFORMED"
     },
     bodyRegions: ["regiões mencionadas"],
-    questionsForProfessor: ["pontos que precisam ser confirmados"],
+    questionsForProfessor: ["somente perguntas ainda não respondidas no histórico"],
+    conversationState: {
+      previousQuestionsAnswered: ["perguntas anteriores do professor que já foram respondidas pelo aluno"],
+      newFactsLearned: ["novas informações objetivas aprendidas nesta mensagem"],
+      stillMissing: ["informações realmente ainda ausentes e relevantes"],
+      repeatedQuestionsAvoided: ["perguntas que não foram repetidas porque já estavam respondidas"],
+    },
+    nextBestAction: {
+      action: "ANSWER_AND_CONTINUE|ASK_MISSING_INFORMATION|READY_FOR_TRAINING|HUMAN_REVIEW",
+      reason: "motivo objetivo baseado na conversa completa",
+    },
     summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e útil para a prescrição do treino",
     studentReplySuggestion: "Mensagem humana e cuidadosa para o professor revisar e enviar ao aluno no chat",
     memoryUpdates: [
@@ -512,6 +522,14 @@ function buildPrompt(question: any, items: PackageItem[], technicalContextText: 
     "Use HEALTH_PERMANENT apenas para condição duradoura explicitamente documentada; HEALTH_TEMPORARY para situação atual com prazo; MEDICAL_GUIDANCE para orientação expressa; preferências e sinais de desempenho apenas quando houver evidência clara; EQUIPMENT_AVAILABLE somente para equipamentos realmente identificados nos anexos ou informados pelo aluno.",
     "Se não houver uma nova memória confiável, devolva memoryUpdates como lista vazia.",
     "Preencha analysisMetadata para registrar modelo utilizado, data da análise, fontes efetivamente usadas e nível de confiança. Não invente esses dados; deixe texto vazio ou confiança nao_informada quando não souber.",
+    "REGRA CRÍTICA DE CONTINUIDADE: leia TODO o HISTÓRICO RECENTE DO CHAT em ordem cronológica antes de escrever qualquer resposta.",
+    "Identifique quais perguntas anteriores do professor já foram respondidas pelo aluno. Nunca repita uma pergunta já respondida, mesmo que a resposta esteja em mensagem anterior e não na mensagem atual.",
+    "A mensagem atual deve ser interpretada como continuação da conversa, não como uma conversa nova.",
+    "Antes de finalizar studentReplySuggestion, confira se ela contém pergunta repetida, ignora fato já informado ou contradiz o histórico. Se contiver, reescreva.",
+    "Preencha conversationState com perguntas já respondidas, novos fatos aprendidos, informações ainda ausentes e perguntas repetidas que foram evitadas.",
+    "Em questionsForProfessor, inclua somente lacunas reais que ainda não estejam respondidas no histórico nem no contexto técnico.",
+    "Quando a mensagem do aluno responder uma pergunta anterior, reconheça a resposta e avance a conversa de forma natural.",
+    "Use nextBestAction para indicar se deve apenas responder e continuar, pedir informação realmente faltante, considerar o contexto pronto para treino ou exigir revisão humana.",
     "O professor revisará o resultado antes de salvar na memória técnica do aluno e antes de responder no chat.",
     "",
     `ALUNO: ${getStudentDisplayName(question.student)}`,
@@ -607,7 +625,7 @@ export async function POST(request: NextRequest) {
       const prompt = buildPrompt(question, items, technicalContextText, recentChatText);
       const generatedAt = new Date().toISOString();
       const packageId = randomUUID();
-      const packageVersion = "4.0";
+      const packageVersion = "5.0";
       const imageCount = items.filter((item) => item.kind === "IMAGE").length;
       const documentCount = items.filter((item) => item.kind === "DOCUMENT").length;
       const videoCount = items.filter((item) => item.kind === "VIDEO").length;
@@ -628,6 +646,8 @@ export async function POST(request: NextRequest) {
           "",
           "REGRAS:",
           "- Execute integralmente o arquivo prompt.txt.",
+          "- Leia o histórico recente em ordem cronológica e não repita perguntas que o aluno já respondeu.",
+          "- Trate a mensagem atual como continuação natural da conversa.",
           "- Caso existam vídeos, não invente análise visual. Use somente os resumos técnicos escritos pelo professor no prompt.txt.",
           "- Relacione cada achado ao nome exato do arquivo correspondente.",
           "- Não faça diagnóstico, não extrapole o conteúdo e não substitua avaliação médica ou profissional.",
@@ -700,7 +720,17 @@ export async function POST(request: NextRequest) {
             explicitRestrictions: ["somente restrições explicitamente presentes"],
             recommendations: ["somente recomendações explícitas"],
             bodyRegions: ["regiões mencionadas"],
-            questionsForProfessor: ["pontos que precisam ser confirmados"],
+            questionsForProfessor: ["somente perguntas ainda não respondidas no histórico"],
+            conversationState: {
+              previousQuestionsAnswered: ["perguntas anteriores já respondidas"],
+              newFactsLearned: ["novas informações objetivas aprendidas"],
+              stillMissing: ["informações realmente ainda ausentes"],
+              repeatedQuestionsAvoided: ["perguntas que não foram repetidas"],
+            },
+            nextBestAction: {
+              action: "ANSWER_AND_CONTINUE|ASK_MISSING_INFORMATION|READY_FOR_TRAINING|HUMAN_REVIEW",
+              reason: "motivo objetivo baseado na conversa completa",
+            },
             summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e útil para a prescrição do treino",
             studentReplySuggestion: "Mensagem humana e cuidadosa para o professor revisar e enviar ao aluno no chat",
             limitations: ["arquivos ilegíveis, ambiguidades, conflitos ou limites da análise"],

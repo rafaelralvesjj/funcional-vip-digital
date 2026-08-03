@@ -1,22 +1,14 @@
-IMPLEMENTAÇÃO — IA NO CHAT MESMO SEM ANEXOS
+CORREÇÃO — IA NÃO REPETIR PERGUNTAS JÁ RESPONDIDAS
 
-Arquivos alterados:
+Arquivo alterado:
 - app/api/student-documents/route.ts
-- components/DashboardConversationList.tsx
 
-Novo fluxo:
-1. O professor abre qualquer mensagem do aluno, com ou sem anexo.
-2. Clica em “Gerar pacote ZIP para IA”.
-3. O ZIP inclui a mensagem atual, objetivo, cadastro, memória técnica, preferências,
-   adesão, sinais de exercícios, eventos de cuidado e histórico recente do chat.
-4. Imagens e documentos entram quando existirem.
-5. A IA devolve JSON/TXT com resumo técnico e resposta sugerida.
-6. O professor importa, revisa e envia a resposta ao aluno.
-
-Regras preservadas:
-- A IA nunca responde automaticamente.
-- O professor revisa antes de enviar.
-- A conversa só é encerrada após a resposta real.
-- Vídeos continuam dependendo de resumo técnico do professor.
+O que muda:
+- A IA passa a ler obrigatoriamente todo o histórico recente em ordem cronológica.
+- A mensagem atual é tratada como continuação da conversa.
+- Perguntas já respondidas pelo aluno não podem ser repetidas.
+- O JSON passa a trazer conversationState e nextBestAction.
+- questionsForProfessor deve conter apenas lacunas realmente ainda abertas.
+- O pacote foi atualizado para a versão 5.0.
 
 Não houve alteração no Prisma nem no banco.
