@@ -1,15 +1,16 @@
-AJUSTE — ANÁLISE DE EQUIPAMENTOS E MEMÓRIA DO ALUNO
+IMPLEMENTAÇÃO — PERFIL PERMANENTE DO AMBIENTE DE TREINO
 
 Arquivos alterados:
 - app/api/student-documents/route.ts
 - lib/student-technical-memory.ts
 
 O que muda:
-- O pacote de análise passa a pedir resumo dos equipamentos disponíveis.
-- A IA deve informar limitações aparentes e sugestões objetivas de planejamento.
-- Equipamentos confirmados entram na memória como EQUIPMENT_AVAILABLE.
-- Essa memória passa a aparecer nos pacotes de Montar Treino e Adaptar Treino.
-- O professor continua revisando antes de aplicar qualquer proposta.
-- A IA não pode inventar capacidade, carga máxima, segurança ou estado do equipamento.
+- O prompt passa a considerar explicitamente o objetivo atual do aluno.
+- A IA retorna trainingOpportunities e missingEquipmentImpact.
+- A IA retorna trainingEnvironment com tipo de ambiente, nível, equipamentos confirmados, observações, data e confiança.
+- Equipamentos continuam sendo salvos individualmente como EQUIPMENT_AVAILABLE.
+- O ambiente consolidado passa a ser salvo como TRAINING_ENVIRONMENT, com validade até nova atualização.
+- Montar Treino e Adaptar Treino passam a receber esse perfil consolidado dentro da memória inteligente.
+- Informações antigas são preservadas e substituídas pela versão mais recente aprovada.
 
 Não houve alteração no Prisma nem no banco.

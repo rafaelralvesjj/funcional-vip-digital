@@ -135,17 +135,23 @@ function parseMemorySummary(value: string): {
   permanence?: string;
   confidence?: string;
   sourceEvidence?: string[];
+  structuredData?: Record<string, unknown>;
 } {
   try {
     const parsed = JSON.parse(value);
     if (parsed && typeof parsed === "object") {
+      const environmentSummary = Array.isArray(parsed.availableEquipment)
+        ? `Ambiente ${String(parsed.type || "UNKNOWN")}; nível ${String(parsed.equipmentLevel || "UNKNOWN")}; equipamentos: ${parsed.availableEquipment.map((item: unknown) => String(item)).join(", ") || "não informados"}.`
+        : "";
+
       return {
-        summary: String(parsed.summary || parsed.summaryForTraining || value).trim(),
+        summary: String(parsed.summary || parsed.summaryForTraining || environmentSummary || value).trim(),
         permanence: parsed.permanence ? String(parsed.permanence) : undefined,
         confidence: parsed.confidence ? String(parsed.confidence) : undefined,
         sourceEvidence: Array.isArray(parsed.sourceEvidence)
           ? parsed.sourceEvidence.map((item: unknown) => String(item)).slice(0, 10)
           : undefined,
+        structuredData: parsed,
       };
     }
   } catch {
@@ -165,6 +171,7 @@ function groupApprovedMemories(memories: TechnicalContext["approvedMemories"]) {
     preferredExercises: [],
     avoidedExercises: [],
     availableEquipment: [],
+    trainingEnvironment: [],
     documentAnalyses: [],
     other: [],
   };
@@ -179,6 +186,7 @@ function groupApprovedMemories(memories: TechnicalContext["approvedMemories"]) {
     EXERCISE_PREFERRED: "preferredExercises",
     EXERCISE_AVOID: "avoidedExercises",
     EQUIPMENT_AVAILABLE: "availableEquipment",
+    TRAINING_ENVIRONMENT: "trainingEnvironment",
     DOCUMENT_ANALYSIS: "documentAnalyses",
     DOCUMENT: "documentAnalyses",
   };
@@ -192,6 +200,7 @@ function groupApprovedMemories(memories: TechnicalContext["approvedMemories"]) {
       permanence: parsed.permanence || (item.validUntil ? "TEMPORARY" : "UNTIL_UPDATED"),
       confidence: parsed.confidence || "NOT_INFORMED",
       sourceEvidence: parsed.sourceEvidence || [],
+      structuredData: parsed.structuredData || null,
       sourceDocumentName: item.sourceDocumentName,
       validUntil: item.validUntil?.toISOString().slice(0, 10) || null,
       updatedAt: item.updatedAt.toISOString(),
@@ -224,6 +233,8 @@ export function formatStudentTechnicalContext(context: TechnicalContext): string
         "Não entendeu: preferir alternativa mais simples e orientação técnica clara.",
         "Sem equipamento: usar somente equipamento confirmado ou peso corporal.",
         "Equipamentos registrados em availableEquipment podem orientar a montagem, mas o professor deve validar disponibilidade, integridade e forma segura de uso.",
+        "O perfil consolidado em trainingEnvironment deve ser priorizado para definir local, nível de recursos e possibilidades de treino, sempre respeitando a data e a confiança registradas.",
+        "A ausência de equipamento não significa obrigação de compra; prefira alternativas compatíveis com os recursos confirmados.",
         "Falta de tempo: reduzir duração/volume preservando o objetivo principal.",
         "Informações de documentos só podem ser usadas quando estiverem APPROVED na memória técnica.",
         "Memórias permanentes continuam válidas até nova evidência aprovada que as substitua.",

@@ -144,6 +144,55 @@ function normalizeAnalysisResponse(parsedValue: any) {
       parsed.sugestoesPlanejamentoTreino ??
       parsed.planningSuggestions
   );
+  const trainingOpportunities = normalizeStringArray(
+    parsed.trainingOpportunities ??
+      parsed.training_opportunities ??
+      parsed.oportunidadesDeTreino
+  );
+  const missingEquipmentImpact = normalizeStringArray(
+    parsed.missingEquipmentImpact ??
+      parsed.missing_equipment_impact ??
+      parsed.impactoEquipamentosAusentes
+  );
+
+  const rawTrainingEnvironment =
+    parsed.trainingEnvironment &&
+    typeof parsed.trainingEnvironment === "object" &&
+    !Array.isArray(parsed.trainingEnvironment)
+      ? parsed.trainingEnvironment
+      : {};
+
+  const trainingEnvironment = {
+    type: firstNonEmptyText(
+      rawTrainingEnvironment.type,
+      rawTrainingEnvironment.environmentType,
+      rawTrainingEnvironment.tipo
+    ).toUpperCase(),
+    equipmentLevel: firstNonEmptyText(
+      rawTrainingEnvironment.equipmentLevel,
+      rawTrainingEnvironment.level,
+      rawTrainingEnvironment.nivelEquipamentos
+    ).toUpperCase(),
+    availableEquipment: normalizeStringArray(
+      rawTrainingEnvironment.availableEquipment ??
+        rawTrainingEnvironment.equipment ??
+        rawTrainingEnvironment.equipamentosDisponiveis
+    ),
+    observations: normalizeStringArray(
+      rawTrainingEnvironment.observations ??
+        rawTrainingEnvironment.notes ??
+        rawTrainingEnvironment.observacoes
+    ),
+    lastConfirmed: firstNonEmptyText(
+      rawTrainingEnvironment.lastConfirmed,
+      rawTrainingEnvironment.confirmedAt,
+      rawTrainingEnvironment.ultimaConfirmacao
+    ),
+    confidence: firstNonEmptyText(
+      rawTrainingEnvironment.confidence,
+      rawTrainingEnvironment.confianca
+    ).toUpperCase() || "NOT_INFORMED",
+  };
 
   const fallbackSummary = [
     ...trainingRelevantInformation,
@@ -202,6 +251,9 @@ function normalizeAnalysisResponse(parsedValue: any) {
     recommendations,
     availableEquipmentSummary,
     trainingPlanningSuggestions,
+    trainingOpportunities,
+    missingEquipmentImpact,
+    trainingEnvironment,
     bodyRegions: normalizeStringArray(parsed.bodyRegions ?? parsed.body_regions ?? parsed.regioesDoCorpo),
     questionsForProfessor,
     limitations,
@@ -228,7 +280,8 @@ type MemoryUpdateCategory =
   | "PERFORMANCE_SIGNAL"
   | "EXERCISE_AVOID"
   | "EXERCISE_PREFERRED"
-  | "EQUIPMENT_AVAILABLE";
+  | "EQUIPMENT_AVAILABLE"
+  | "TRAINING_ENVIRONMENT";
 
 type NormalizedMemoryUpdate = {
   category: MemoryUpdateCategory;
@@ -250,6 +303,7 @@ const ALLOWED_MEMORY_CATEGORIES = new Set<MemoryUpdateCategory>([
   "EXERCISE_AVOID",
   "EXERCISE_PREFERRED",
   "EQUIPMENT_AVAILABLE",
+  "TRAINING_ENVIRONMENT",
 ]);
 
 function normalizeMemoryUpdates(value: unknown): NormalizedMemoryUpdate[] {
@@ -337,7 +391,19 @@ async function getAccessibleQuestion(questionId: string, userId: string, role: s
   const question = await prisma.question.findUnique({
     where: { id: questionId },
     include: {
-      student: { select: { id: true, name: true, userId: true } },
+      student: {
+        select: {
+          id: true,
+          name: true,
+          preferredName: true,
+          userId: true,
+          avaliacoes: {
+            select: { objetivo: true, equipamentos: true, lesoes: true, createdAt: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      },
       attachments: { orderBy: { createdAt: "asc" } },
     },
   });
@@ -386,13 +452,23 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     recommendations: ["somente recomendações explícitas"],
     availableEquipmentSummary: "Resumo objetivo dos equipamentos disponíveis identificados nos anexos, ou texto vazio quando não houver equipamentos",
     trainingPlanningSuggestions: ["sugestões objetivas para o professor considerar na montagem do próximo treino, sem prescrever automaticamente"],
+    trainingOpportunities: ["oportunidades de treino viáveis com os equipamentos confirmados e coerentes com o objetivo atual"],
+    missingEquipmentImpact: ["impactos objetivos da ausência de equipamentos, sem inventar necessidade de compra"],
+    trainingEnvironment: {
+      type: "HOME|GYM_BASIC|GYM_COMPLETE|OUTDOOR|MIXED|UNKNOWN",
+      equipmentLevel: "BASIC|INTERMEDIATE|ADVANCED|UNKNOWN",
+      availableEquipment: ["equipamentos claramente identificados"],
+      observations: ["limitações aparentes, espaço, necessidade de confirmação ou observações relevantes"],
+      lastConfirmed: "YYYY-MM-DD ou texto vazio",
+      confidence: "HIGH|MEDIUM|LOW|NOT_INFORMED"
+    },
     bodyRegions: ["regiões mencionadas"],
     questionsForProfessor: ["pontos que precisam ser confirmados"],
     summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e útil para a prescrição do treino",
     studentReplySuggestion: "Mensagem humana e cuidadosa para o professor revisar e enviar ao aluno no chat",
     memoryUpdates: [
       {
-        category: "HEALTH_PERMANENT|HEALTH_TEMPORARY|MEDICAL_GUIDANCE|PREFERENCE_POSITIVE|PREFERENCE_NEGATIVE|PERFORMANCE_SIGNAL|EXERCISE_AVOID|EXERCISE_PREFERRED|EQUIPMENT_AVAILABLE",
+        category: "HEALTH_PERMANENT|HEALTH_TEMPORARY|MEDICAL_GUIDANCE|PREFERENCE_POSITIVE|PREFERENCE_NEGATIVE|PERFORMANCE_SIGNAL|EXERCISE_AVOID|EXERCISE_PREFERRED|EQUIPMENT_AVAILABLE|TRAINING_ENVIRONMENT",
         title: "Título curto e específico",
         summary: "Informação objetiva que deve ser lembrada nos próximos treinos",
         permanence: "PERMANENT|TEMPORARY|UNTIL_UPDATED",
@@ -419,9 +495,12 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     "Para vídeos, NÃO invente uma análise visual: use exclusivamente o resumo técnico escrito pelo professor no prompt.",
     "Não dê diagnóstico, não interprete além do conteúdo apresentado e não substitua avaliação médica.",
     "Extraia apenas informações objetivas que possam influenciar a segurança ou a prescrição de treino.",
+    "Antes de analisar os anexos, identifique o objetivo atual do aluno informado no contexto. Todas as oportunidades e sugestões devem ser coerentes com esse objetivo.",
     "Quando houver fotos ou documentos de equipamentos, identifique o que está disponível, para quais tipos de movimento pode ser útil, suas limitações aparentes e quais perguntas o professor ainda precisa fazer.",
-    "Nesses casos, preencha availableEquipmentSummary e trainingPlanningSuggestions. Não invente marca, capacidade, carga máxima, estado de conservação ou segurança que não estejam visíveis.",
-    "Equipamentos confirmados devem entrar em memoryUpdates como EQUIPMENT_AVAILABLE, com permanence UNTIL_UPDATED e evidência do arquivo correspondente.",
+    "Nesses casos, preencha availableEquipmentSummary, trainingPlanningSuggestions, trainingOpportunities, missingEquipmentImpact e trainingEnvironment.",
+    "Não invente marca, capacidade, carga máxima, estado de conservação, segurança, equipamento oculto ou necessidade de compra que não estejam claramente sustentados.",
+    "Equipamentos confirmados devem entrar em memoryUpdates como EQUIPMENT_AVAILABLE, com permanence UNTIL_UPDATED, confiança individual e evidência do arquivo correspondente.",
+    "Quando houver dados suficientes, registre também uma memória consolidada TRAINING_ENVIRONMENT com permanence UNTIL_UPDATED, resumindo tipo de ambiente, nível aproximado de equipamentos, lista confirmada e pontos que ainda precisam de validação.",
     "Retorne somente JSON válido, sem markdown ou comentários. Salve ou entregue o resultado como arquivo TXT quando a plataforma permitir.",
     "Os campos summaryForTraining e studentReplySuggestion são obrigatórios e não podem ficar vazios.",
     "summaryForTraining deve resumir apenas implicações objetivas para o treino; studentReplySuggestion deve ser uma mensagem humana para o aluno, sem diagnóstico.",
@@ -431,7 +510,10 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     "Preencha analysisMetadata para registrar modelo utilizado, data da análise, fontes efetivamente usadas e nível de confiança. Não invente esses dados; deixe texto vazio ou confiança nao_informada quando não souber.",
     "O professor revisará o resultado antes de salvar na memória técnica do aluno e antes de responder no chat.",
     "",
-    `ALUNO: ${question.student.name}`,
+    `ALUNO: ${question.student.preferredName || question.student.name}`,
+    `OBJETIVO ATUAL INFORMADO: ${question.student.avaliacoes?.[0]?.objetivo || "não informado"}`,
+    `EQUIPAMENTOS JÁ INFORMADOS NO CADASTRO: ${question.student.avaliacoes?.[0]?.equipamentos || "não informado"}`,
+    `LESÕES/OBSERVAÇÕES JÁ INFORMADAS: ${question.student.avaliacoes?.[0]?.lesoes || "não informado"}`,
     `MENSAGEM DO ALUNO: ${question.content || ""}`,
     `IMAGENS NO PACOTE: ${images.map((item) => item.name).join(", ") || "nenhuma"}`,
     `DOCUMENTOS NO PACOTE: ${documents.map((item) => item.name).join(", ") || "nenhum"}`,
@@ -785,8 +867,43 @@ export async function POST(request: NextRequest) {
 
       const explicitMemoryUpdates = normalized.memoryUpdates;
       const memoryUpdates = explicitMemoryUpdates.length
-        ? explicitMemoryUpdates
+        ? [...explicitMemoryUpdates]
         : inferConservativeMemoryUpdates(normalized);
+
+      const environment = normalized.trainingEnvironment;
+      const hasEnvironmentProfile =
+        Boolean(environment.type && environment.type !== "UNKNOWN") ||
+        environment.availableEquipment.length > 0 ||
+        environment.observations.length > 0;
+
+      if (
+        hasEnvironmentProfile &&
+        !memoryUpdates.some((item) => item.category === "TRAINING_ENVIRONMENT")
+      ) {
+        memoryUpdates.push({
+          category: "TRAINING_ENVIRONMENT",
+          title: "Ambiente de treino atual",
+          summary: JSON.stringify({
+            type: environment.type || "UNKNOWN",
+            equipmentLevel: environment.equipmentLevel || "UNKNOWN",
+            availableEquipment: environment.availableEquipment,
+            observations: environment.observations,
+            lastConfirmed: environment.lastConfirmed || new Date().toISOString().slice(0, 10),
+          }),
+          permanence: "UNTIL_UPDATED",
+          validUntil: null,
+          confidence:
+            environment.confidence === "LOW"
+              ? "LOW"
+              : environment.confidence === "MEDIUM"
+                ? "MEDIUM"
+                : "HIGH",
+          sourceEvidence: normalized.analyzedFiles
+            .map((item: any) => cleanText(item?.fileName))
+            .filter(Boolean)
+            .slice(0, 10),
+        });
+      }
 
       const result = await prisma.$transaction(async (tx) => {
         await tx.studentTechnicalMemory.updateMany({
@@ -862,6 +979,11 @@ export async function POST(request: NextRequest) {
           studentReplySuggestion: normalized.studentReplySuggestion,
           requiresUrgentHumanReview: normalized.requiresUrgentHumanReview,
           questionsForProfessor: normalized.questionsForProfessor,
+          availableEquipmentSummary: normalized.availableEquipmentSummary,
+          trainingPlanningSuggestions: normalized.trainingPlanningSuggestions,
+          trainingOpportunities: normalized.trainingOpportunities,
+          missingEquipmentImpact: normalized.missingEquipmentImpact,
+          trainingEnvironment: normalized.trainingEnvironment,
           limitations: normalized.limitations,
         },
         studentReplySuggestion: normalized.studentReplySuggestion || null,
