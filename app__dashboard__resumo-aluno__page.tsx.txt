@@ -36,6 +36,30 @@ type SummaryResponse = {
     requiresReviewBeforeRelease?: boolean;
     reviewAlerts?: string[];
   } | null;
+  technicalContext?: {
+    exerciseSignals?: {
+      easy?: Array<{ exerciseName: string; count: number }>;
+      difficult?: Array<{ exerciseName: string; count: number }>;
+      skipped?: Array<{ exerciseName: string; count: number; reasons: string[] }>;
+    };
+    adherence?: { completed?: number; partial?: number; pendingOrMissed?: number; summary?: string };
+    activePreferences?: Array<{ category: string; summary: string }>;
+    approvedMemories?: Array<{
+      category: string;
+      title: string;
+      summary: string;
+      sourceDocumentName?: string | null;
+      validUntil?: string | null;
+    }>;
+    openCareEvents?: Array<{ severity: string; title: string; description?: string | null }>;
+  } | null;
+  latestWorkout?: {
+    id: string;
+    date: string;
+    status: string;
+    notes?: string | null;
+    plan?: { id: string; name: string; date?: string | null } | null;
+  } | null;
   summaryText: string;
   aiPrompt: string;
 };
@@ -1014,7 +1038,7 @@ export default function ResumoAlunoPage() {
         workouts: [],
       };
       const manifest = {
-        packageVersion: "1.0",
+        packageVersion: "2.0",
         purpose: "MONTAR_TREINOS_DA_SEMANA",
         generatedAt: new Date().toISOString(),
         studentId: summary.student.id,
@@ -1028,6 +1052,11 @@ export default function ResumoAlunoPage() {
           "INSTRUCOES/RESPOSTA_AQUI.txt",
           "prompt.txt",
           "CONTEXTO/RESUMO_ALUNO.txt",
+          "CONTEXTO/MEMORIA_TECNICA.json",
+          "CONTEXTO/HISTORICO_RECENTE.json",
+          "CONTEXTO/PREFERENCIAS_ATIVAS.json",
+          "CONTEXTO/EVENTOS_DE_CUIDADO.json",
+          "CONTEXTO/ULTIMO_TREINO.json",
           "CONTEXTO/BIBLIOTECA_EXERCICIOS.json",
           "manifesto.json",
         ],
@@ -1037,7 +1066,9 @@ export default function ResumoAlunoPage() {
         "INSTRUCOES/LEIA_PRIMEIRO.txt",
         [
           "EXECUÇÃO DIRETA — LEIA E EXECUTE O prompt.txt.",
-          "Analise também os arquivos da pasta CONTEXTO.",
+          "Analise todos os arquivos da pasta CONTEXTO antes de montar os treinos.",
+          "A memória técnica aprovada, os eventos de cuidado e os feedbacks recentes têm prioridade sobre suposições.",
+          "Não trate um achado isolado como autorização automática para progressão.",
           "Retorne somente o JSON válido no formato de INSTRUCOES/MODELO_RESPOSTA.json.",
           "Não altere studentId, aiValidation, datas obrigatórias ou validationKey.",
           "Use somente exerciseId presentes na biblioteca permitida.",
@@ -1051,6 +1082,30 @@ export default function ResumoAlunoPage() {
       );
       zip.file("prompt.txt", prompt);
       zip.file("CONTEXTO/RESUMO_ALUNO.txt", summary.summaryText || "");
+      const technicalContext = summary.technicalContext || {};
+      zip.file(
+        "CONTEXTO/MEMORIA_TECNICA.json",
+        JSON.stringify(technicalContext.approvedMemories || [], null, 2)
+      );
+      zip.file(
+        "CONTEXTO/HISTORICO_RECENTE.json",
+        JSON.stringify({
+          adherence: technicalContext.adherence || null,
+          exerciseSignals: technicalContext.exerciseSignals || null,
+        }, null, 2)
+      );
+      zip.file(
+        "CONTEXTO/PREFERENCIAS_ATIVAS.json",
+        JSON.stringify(technicalContext.activePreferences || [], null, 2)
+      );
+      zip.file(
+        "CONTEXTO/EVENTOS_DE_CUIDADO.json",
+        JSON.stringify(technicalContext.openCareEvents || [], null, 2)
+      );
+      zip.file(
+        "CONTEXTO/ULTIMO_TREINO.json",
+        JSON.stringify(summary.latestWorkout || null, null, 2)
+      );
       zip.file(
         "CONTEXTO/BIBLIOTECA_EXERCICIOS.json",
         JSON.stringify(selectPromptLibrary(summary).map((exercise) => ({

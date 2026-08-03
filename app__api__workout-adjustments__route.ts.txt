@@ -548,7 +548,7 @@ function buildAdjustmentPrompt({
 
   const technicalContext = context.technicalContext || {};
   const adherence = technicalContext.adherence || {};
-  const exerciseHistory = technicalContext.exerciseHistory || {};
+  const exerciseHistory = technicalContext.exerciseSignals || technicalContext.exerciseHistory || {};
 
   const preferences = (context.activePreferences || [])
     .map((item: any) => cleanText(item.originalMessage || item.summary))
@@ -569,7 +569,7 @@ function buildAdjustmentPrompt({
       cleanText(`${item.title || ""}${item.description ? `: ${item.description}` : ""}`)
     )
     .filter(Boolean);
-  const approvedMemory = (technicalContext.approvedTechnicalMemory || [])
+  const approvedMemory = (technicalContext.approvedMemories || technicalContext.approvedTechnicalMemory || [])
     .map((item: any) => cleanText(item.summary || item.content || item.description))
     .filter(Boolean);
 
@@ -918,7 +918,7 @@ export async function POST(req: NextRequest) {
           })),
         };
         const manifest = {
-          packageVersion: "1.0",
+          packageVersion: "2.0",
           purpose: "ADAPTAR_TREINO_PENDENTE",
           generatedAt: new Date().toISOString(),
           studentId: context.preference.studentId,
@@ -932,6 +932,10 @@ export async function POST(req: NextRequest) {
             "INSTRUCOES/RESPOSTA_AQUI.txt",
             "prompt.txt",
             "CONTEXTO/TREINO_ATUAL.json",
+            "CONTEXTO/MEMORIA_TECNICA.json",
+            "CONTEXTO/HISTORICO_RECENTE.json",
+            "CONTEXTO/PREFERENCIAS_ATIVAS.json",
+            "CONTEXTO/EVENTOS_DE_CUIDADO.json",
             "CONTEXTO/BIBLIOTECA_EXERCICIOS.json",
             "manifesto.json",
           ],
@@ -941,7 +945,9 @@ export async function POST(req: NextRequest) {
           "INSTRUCOES/LEIA_PRIMEIRO.txt",
           [
             "EXECUÇÃO DIRETA — LEIA E EXECUTE O prompt.txt.",
-            "Analise também todos os arquivos da pasta CONTEXTO.",
+            "Analise todos os arquivos da pasta CONTEXTO antes de adaptar o treino.",
+            "A memória técnica aprovada, os eventos de cuidado e os feedbacks recentes têm prioridade sobre suposições.",
+            "Não faça progressão automática quando houver baixa adesão, dor, dificuldade ou informação insuficiente.",
             "Retorne somente o JSON válido no formato de INSTRUCOES/MODELO_RESPOSTA.json.",
             "Mantenha a data e o objetivo geral do treino.",
             "Use somente exerciseId presentes na biblioteca permitida.",
@@ -955,6 +961,26 @@ export async function POST(req: NextRequest) {
         );
         zip.file("prompt.txt", manualPrompt);
         zip.file("CONTEXTO/TREINO_ATUAL.json", JSON.stringify(model, null, 2));
+        const technicalContext = context.technicalContext || {};
+        zip.file(
+          "CONTEXTO/MEMORIA_TECNICA.json",
+          JSON.stringify(technicalContext.approvedMemories || [], null, 2)
+        );
+        zip.file(
+          "CONTEXTO/HISTORICO_RECENTE.json",
+          JSON.stringify({
+            adherence: technicalContext.adherence || null,
+            exerciseSignals: technicalContext.exerciseSignals || null,
+          }, null, 2)
+        );
+        zip.file(
+          "CONTEXTO/PREFERENCIAS_ATIVAS.json",
+          JSON.stringify(context.activePreferences || technicalContext.activePreferences || [], null, 2)
+        );
+        zip.file(
+          "CONTEXTO/EVENTOS_DE_CUIDADO.json",
+          JSON.stringify(technicalContext.openCareEvents || [], null, 2)
+        );
         zip.file(
           "CONTEXTO/BIBLIOTECA_EXERCICIOS.json",
           JSON.stringify(library.map((exercise: any) => ({
