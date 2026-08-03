@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/student-surveys",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/saturday-communication",
+      "schedule": "30 12 * * 6"
     }
   ]
 }

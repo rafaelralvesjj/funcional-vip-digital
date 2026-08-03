@@ -182,14 +182,14 @@ export function buildWorkoutReleaseCommunication(input: {
     : "Seus treinos da semana estão disponíveis";
 
   const message = input.isFirstWorkoutPackage
-    ? `Que bom ter você por aqui. Eu sou ${professor} e vou acompanhar seus treinos e sua evolução. Seus ${input.weeklyLimit} treino(s) da semana de ${input.weekLabel} já estão prontos. Antes de começar, reserve alguns minutos para olhar exercícios, imagens e orientações com calma.`
-    : `Seus ${input.weeklyLimit} treino(s) da semana de ${input.weekLabel} já estão prontos. Eles foram organizados para você seguir avançando com segurança, técnica e consistência.`;
+    ? `Que bom ter você por aqui! Eu sou ${professor} e vou acompanhar seus treinos e sua evolução. Seus ${input.weeklyLimit} treino(s) da semana de ${input.weekLabel} já estão prontos. Dê uma olhada com calma nas imagens e orientações e comece no seu ritmo — o importante é dar o primeiro passo.`
+    : `Seus ${input.weeklyLimit} treino(s) da semana de ${input.weekLabel} já estão liberados! Eles foram organizados considerando seu objetivo, seus registros e o que você vem compartilhando. Separe seus horários, escolha o melhor momento e vamos fazer essa semana acontecer.`;
 
-  const nextStep = "Abra o treino antes de começar e registre como se sentiu em cada exercício. Se houver dúvida, dor ou desconforto, fale com o professor pelo chat da plataforma.";
+  const nextStep = "Abra o treino antes de começar, registre como se sentiu em cada exercício e use o chat sempre que precisar. Facilidade, dificuldade, dor ou desconforto ajudam seu professor a cuidar melhor dos próximos passos.";
   const email = humanizeStudentEmail({
     studentName: student,
     senderName: professor,
-    headline: input.isFirstWorkoutPackage ? "Vamos começar essa jornada juntos? 💪" : "Sua semana de treino começou! ✨",
+    headline: input.isFirstWorkoutPackage ? "Bora começar essa jornada juntos? 💪" : "Treinos liberados: sua nova semana começa agora! 🚀",
     message,
     nextStep,
     automaticDisclosure: "Mensagem automática de acompanhamento enviada em nome do seu professor.",

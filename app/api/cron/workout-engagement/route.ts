@@ -749,7 +749,7 @@ async function notifyMissedWorkoutLevel({
             "",
             `${studentName} acumula ${missedCount} treino(s) sem conclusão e precisa de uma abordagem ativa de cuidado.`,
             "Converse pelo chat com escuta e sem cobrança. Entenda as barreiras, combine um próximo passo possível e avalie uma retomada mais simples ou ajuste da programação.",
-            "A gestão também receberá visibilidade para apoiar o acompanhamento, se necessário.",
+            "Se não houver retorno do aluno, registre a tentativa e avalie com a gestão se é necessário pausar novas liberações até uma conversa de retomada.",
           ].join("\n");
 
     await createNotice({
@@ -763,7 +763,7 @@ async function notifyMissedWorkoutLevel({
 
     professorNoticeCreated = true;
 
-    if (level >= 3) {
+    if (level >= 2) {
       try {
         professorEmailSent = await sendProfessorEmail({
           to: student.user.email,

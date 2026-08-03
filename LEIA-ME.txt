@@ -1,19 +1,21 @@
-IMPLEMENTAÇÃO — MEMÓRIA INTELIGENTE CLASSIFICADA
+IMPLEMENTAÇÃO — COMUNICAÇÃO HUMANIZADA V2
 
-Arquivos alterados:
-- app/api/student-documents/route.ts
-- lib/student-technical-memory.ts
+Arquivos alterados/criados:
+- app/api/cron/saturday-communication/route.ts (novo)
+- app/api/cron/workout-engagement/route.ts
+- lib/student-experience.ts
+- vercel.json
+- Comunicacoes_Funcional_UP_Digital_v2.docx
 
-O que muda:
-- O pacote de análise de documentos passa a pedir `memoryUpdates` estruturado.
-- A IA classifica informações em:
-  HEALTH_PERMANENT, HEALTH_TEMPORARY, MEDICAL_GUIDANCE,
-  PREFERENCE_POSITIVE, PREFERENCE_NEGATIVE, PERFORMANCE_SIGNAL,
-  EXERCISE_AVOID e EXERCISE_PREFERRED.
-- Cada memória registra permanência, validade, confiança e evidência.
-- Ao importar a análise, versões anteriores da mesma informação são preservadas como SUPERSEDED.
-- Memórias temporárias vencidas deixam de entrar no contexto dos próximos treinos.
-- Montar Treino e Adaptar Treino recebem a memória agrupada e a linha do tempo aprovada.
-- Se a IA antiga não trouxer `memoryUpdates`, somente restrições explícitas são inferidas de forma conservadora.
+Principais mudanças:
+- E-mail motivacional de sábado, diferente para semana completa, parcial ou sem treino.
+- E-mail ao professor quando houver aluno sem nenhum treino na semana atual.
+- Professor recebe e-mail já no segundo treino não realizado, não apenas no terceiro.
+- No terceiro treino pendente, orientação de ação de cuidado e avaliação de pausa de novas liberações.
+- E-mail de domingo mais motivador e com próximo passo claro.
+- Proteção contra duplicidade por semana.
 
-Não houve alteração no Prisma nem criação de tabela.
+Novo cron:
+- Sábado 09h30 no horário de Brasília (12h30 UTC).
+
+Não houve alteração no Prisma nem no banco.
