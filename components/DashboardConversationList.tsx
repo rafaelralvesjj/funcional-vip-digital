@@ -484,7 +484,7 @@ export default function DashboardConversationList({
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      setSuccessById((current) => ({ ...current, [conversation.id]: "Pacote ZIP gerado. Envie o ZIP completo para a IA externa e depois cole o JSON retornado abaixo." }));
+      setSuccessById((current) => ({ ...current, [conversation.id]: "Pacote ZIP gerado. Envie-o para a IA externa e depois cole o JSON retornado abaixo para preparar sua resposta ao aluno." }));
     } catch (error: any) {
       setErrorById((current) => ({ ...current, [conversation.id]: error?.message || "Erro ao gerar o pacote ZIP." }));
     } finally {
@@ -1053,11 +1053,11 @@ export default function DashboardConversationList({
               {!isExpanded && renderAttachmentIndicator(conversation)}
               {isExpanded && renderChatAttachmentViewer(conversation, `conversation-${conversation.id}`)}
 
-              {isExpanded && hasChatAttachment(conversation) && normalizeRole(currentRole) === "TEACHER" && (
+              {isExpanded && normalizeRole(currentRole) === "TEACHER" && (
                 <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 space-y-3">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300">Pacote de anexos para análise por IA</p>
-                    <p className="mt-1 text-xs text-[#d4d4d4]">O ZIP levará o prompt, imagens e documentos. Vídeos entram por meio do resumo técnico escrito pelo professor.</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300">Apoio da IA para responder ao aluno</p>
+                    <p className="mt-1 text-xs text-[#d4d4d4]">O ZIP levará a mensagem atual, o contexto técnico e o histórico recente do aluno. Imagens e documentos entram quando existirem; vídeos entram pelo resumo técnico do professor.</p>
                   </div>
 
                   {(conversation.attachments || []).filter((attachment) => attachment.kind === "VIDEO").map((attachment) => (
@@ -1075,10 +1075,10 @@ export default function DashboardConversationList({
                   ))}
 
                   <button type="button" onClick={() => handlePrepareDocumentPrompt(conversation)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg border border-amber-400/30 px-3 py-2 text-[11px] font-semibold text-amber-200 disabled:opacity-50">
-                    {documentLoadingId === conversation.id ? "Preparando..." : "Visualizar prompt do pacote"}
+                    {documentLoadingId === conversation.id ? "Preparando..." : "Visualizar prompt de apoio"}
                   </button>
                   <button type="button" onClick={() => handleDownloadAiPackage(conversation)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">
-                    {documentLoadingId === conversation.id ? "Gerando..." : "Gerar e baixar pacote ZIP para IA"}
+                    {documentLoadingId === conversation.id ? "Gerando..." : "Gerar pacote ZIP para IA"}
                   </button>
 
                   {documentPromptById[conversation.id] && (

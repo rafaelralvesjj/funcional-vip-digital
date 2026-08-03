@@ -6,6 +6,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 import { getStudentDisplayName } from "@/lib/display-name";
+import { getStudentTechnicalContext, formatStudentTechnicalContext } from "@/lib/student-technical-memory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -440,7 +441,7 @@ function collectItems(question: any): PackageItem[] {
   return items;
 }
 
-function buildPrompt(question: any, items: PackageItem[]): string {
+function buildPrompt(question: any, items: PackageItem[], technicalContextText: string, recentChatText: string): string {
   const documents = items.filter((item) => item.kind === "DOCUMENT");
   const images = items.filter((item) => item.kind === "IMAGE");
   const videos = items.filter((item) => item.kind === "VIDEO");
@@ -492,10 +493,12 @@ function buildPrompt(question: any, items: PackageItem[]): string {
 
   return [
     ...MANUAL_AI_EXECUTION_HEADER_LINES,
-    "Analise integralmente o prompt.txt e todos os arquivos de imagem e documento deste pacote ZIP.",
+    "Analise integralmente o prompt.txt e, quando existirem, todos os arquivos de imagem e documento deste pacote ZIP.",
+    "Este pacote também pode conter somente uma mensagem de texto. Nesse caso, use o contexto técnico e o histórico recente para preparar uma resposta apropriada ao aluno.",
     "Para vídeos, NÃO invente uma análise visual: use exclusivamente o resumo técnico escrito pelo professor no prompt.",
     "Não dê diagnóstico, não interprete além do conteúdo apresentado e não substitua avaliação médica.",
-    "Extraia apenas informações objetivas que possam influenciar a segurança ou a prescrição de treino.",
+    "Extraia apenas informações objetivas que possam influenciar a segurança, a resposta ao aluno ou a prescrição de treino.",
+    "A resposta ao aluno deve ser humana, clara, acolhedora e coerente com o histórico já conhecido. Não prometa resultado rápido nem transforme objetivo em garantia.",
     "Antes de analisar os anexos, identifique o objetivo atual do aluno informado no contexto. Todas as oportunidades e sugestões devem ser coerentes com esse objetivo.",
     "Quando houver fotos ou documentos de equipamentos, identifique o que está disponível, para quais tipos de movimento pode ser útil, suas limitações aparentes e quais perguntas o professor ainda precisa fazer.",
     "Nesses casos, preencha availableEquipmentSummary, trainingPlanningSuggestions, trainingOpportunities, missingEquipmentImpact e trainingEnvironment.",
@@ -515,7 +518,13 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     `OBJETIVO ATUAL INFORMADO: ${question.student.avaliacoes?.[0]?.objetivo || "não informado"}`,
     `EQUIPAMENTOS JÁ INFORMADOS NO CADASTRO: ${question.student.avaliacoes?.[0]?.equipamentos || "não informado"}`,
     `LESÕES/OBSERVAÇÕES JÁ INFORMADAS: ${question.student.avaliacoes?.[0]?.lesoes || "não informado"}`,
-    `MENSAGEM DO ALUNO: ${question.content || ""}`,
+    `MENSAGEM ATUAL DO ALUNO: ${question.content || ""}`,
+    "",
+    "CONTEXTO TÉCNICO CONSOLIDADO DO ALUNO:",
+    technicalContextText || "Nenhum contexto técnico adicional disponível.",
+    "",
+    "HISTÓRICO RECENTE DO CHAT:",
+    recentChatText || "Nenhuma mensagem anterior relevante disponível.",
     `IMAGENS NO PACOTE: ${images.map((item) => item.name).join(", ") || "nenhuma"}`,
     `DOCUMENTOS NO PACOTE: ${documents.map((item) => item.name).join(", ") || "nenhum"}`,
     "",
@@ -548,6 +557,29 @@ export async function POST(request: NextRequest) {
     if (!question?.student) return NextResponse.json({ error: "Conversa não encontrada ou sem permissão." }, { status: 404 });
     const studentId = question.student.id;
 
+    const [technicalContext, recentChat] = await Promise.all([
+      getStudentTechnicalContext(studentId),
+      prisma.question.findMany({
+        where: { studentId },
+        select: {
+          id: true,
+          content: true,
+          senderRole: true,
+          createdAt: true,
+          parentId: true,
+          resolvedAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+      }),
+    ]);
+    const technicalContextText = formatStudentTechnicalContext(technicalContext);
+    const recentChatText = recentChat
+      .slice()
+      .reverse()
+      .map((item: any) => `[${new Date(item.createdAt).toISOString()}] ${String(item.senderRole || "USUARIO")}: ${String(item.content || "").trim()}`)
+      .join("\n");
+
     if (action === "SAVE_VIDEO_REVIEW") {
       const attachmentId = cleanText(body?.attachmentId);
       const summary = cleanText(body?.summary);
@@ -565,18 +597,17 @@ export async function POST(request: NextRequest) {
     const videosWithoutReview = items.filter((item) => item.kind === "VIDEO" && !item.videoReviewSummary);
 
     if (action === "PREPARE_PROMPT") {
-      return NextResponse.json({ ok: true, manualPrompt: buildPrompt(question, items), videosWithoutReview: videosWithoutReview.map((item) => item.name) });
+      return NextResponse.json({ ok: true, manualPrompt: buildPrompt(question, items, technicalContextText, recentChatText), videosWithoutReview: videosWithoutReview.map((item) => item.name) });
     }
 
     if (action === "DOWNLOAD_PACKAGE") {
-      if (!items.some((item) => item.kind === "IMAGE" || item.kind === "DOCUMENT" || item.kind === "VIDEO")) return NextResponse.json({ error: "Não há anexos nesta conversa." }, { status: 422 });
       if (videosWithoutReview.length) return NextResponse.json({ error: `Preencha e salve o resumo técnico de todos os vídeos antes de gerar o pacote: ${videosWithoutReview.map((item) => item.name).join(", ")}.` }, { status: 422 });
 
       const zip = new JSZip();
-      const prompt = buildPrompt(question, items);
+      const prompt = buildPrompt(question, items, technicalContextText, recentChatText);
       const generatedAt = new Date().toISOString();
       const packageId = randomUUID();
-      const packageVersion = "3.3";
+      const packageVersion = "4.0";
       const imageCount = items.filter((item) => item.kind === "IMAGE").length;
       const documentCount = items.filter((item) => item.kind === "DOCUMENT").length;
       const videoCount = items.filter((item) => item.kind === "VIDEO").length;
@@ -590,7 +621,7 @@ export async function POST(request: NextRequest) {
           "1. prompt.txt",
           "2. RESUMO_DO_CASO.txt",
           "3. manifesto.json",
-          "4. todos os arquivos existentes nas pastas imagens e documentos, seguindo analysisOrder do manifesto.json",
+          "4. todos os arquivos existentes nas pastas imagens e documentos, quando houver, seguindo analysisOrder do manifesto.json",
           "5. INSTRUCOES/ERROS_E_LIMITACOES.txt",
           "6. INSTRUCOES/MODELO_RESPOSTA.json",
           "7. produzir a resposta final em INSTRUCOES/RESPOSTA_AQUI.txt quando a plataforma permitir",
@@ -693,7 +724,9 @@ export async function POST(request: NextRequest) {
           `Aluno: ${getStudentDisplayName(question.student)}`,
           `StudentId: ${question.student.id}`,
           `QuestionId: ${question.id}`,
-          `Mensagem original: ${question.content || ""}`,
+          `Mensagem atual: ${question.content || ""}`,
+          "",
+          "Contexto técnico e histórico recente já estão incluídos no prompt.txt.",
           `Imagens: ${imageCount}`,
           `Documentos: ${documentCount}`,
           `Vídeos: ${videoCount}`,
@@ -760,6 +793,7 @@ export async function POST(request: NextRequest) {
             studentName: getStudentDisplayName(question.student),
             questionId: question.id,
             generatedAt,
+            packagePurpose: items.length ? "ANALISE_DE_MENSAGEM_COM_ANEXOS" : "APOIO_A_RESPOSTA_DE_MENSAGEM_TEXTUAL",
             attachmentCount: items.length,
             containsImages: imageCount > 0,
             containsDocuments: documentCount > 0,

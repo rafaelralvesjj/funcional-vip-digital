@@ -1,17 +1,22 @@
-CORREÇÃO — NOME PREFERIDO DO ALUNO
-
-Regra aplicada nas principais comunicações com o aluno:
-1. Usa preferredName (Como gosta de ser chamado), quando preenchido.
-2. Se estiver vazio, usa apenas o primeiro nome.
-3. Nome completo permanece apenas em contextos internos/formais.
+IMPLEMENTAÇÃO — IA NO CHAT MESMO SEM ANEXOS
 
 Arquivos alterados:
-- components/StudentDashboardStatusCard.tsx
-- app/api/aluno/questions/route.ts
-- app/api/cron/release-workouts/route.ts
-- app/api/cron/saturday-communication/route.ts
-- app/api/student-care-events/route.ts
-- app/api/workout/mark-complete/route.ts
 - app/api/student-documents/route.ts
+- components/DashboardConversationList.tsx
+
+Novo fluxo:
+1. O professor abre qualquer mensagem do aluno, com ou sem anexo.
+2. Clica em “Gerar pacote ZIP para IA”.
+3. O ZIP inclui a mensagem atual, objetivo, cadastro, memória técnica, preferências,
+   adesão, sinais de exercícios, eventos de cuidado e histórico recente do chat.
+4. Imagens e documentos entram quando existirem.
+5. A IA devolve JSON/TXT com resumo técnico e resposta sugerida.
+6. O professor importa, revisa e envia a resposta ao aluno.
+
+Regras preservadas:
+- A IA nunca responde automaticamente.
+- O professor revisa antes de enviar.
+- A conversa só é encerrada após a resposta real.
+- Vídeos continuam dependendo de resumo técnico do professor.
 
 Não houve alteração no Prisma nem no banco.
