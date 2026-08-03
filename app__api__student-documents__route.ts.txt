@@ -443,6 +443,8 @@ export async function POST(request: NextRequest) {
     const question = await getAccessibleQuestion(questionId, userId, role);
     if (!question?.student) return NextResponse.json({ error: "Conversa não encontrada ou sem permissão." }, { status: 404 });
 
+    const studentId = question.student.id;
+
     if (action === "SAVE_VIDEO_REVIEW") {
       const attachmentId = cleanText(body?.attachmentId);
       const summary = cleanText(body?.summary);
@@ -766,7 +768,6 @@ export async function POST(request: NextRequest) {
         ? explicitMemoryUpdates
         : inferConservativeMemoryUpdates(normalized);
 
-      const studentId = question.student.id;
 
       const result = await prisma.$transaction(async (tx) => {
         await tx.studentTechnicalMemory.updateMany({
