@@ -351,7 +351,7 @@ export async function POST(request: NextRequest) {
       const prompt = buildPrompt(question, items);
       const generatedAt = new Date().toISOString();
       const packageId = randomUUID();
-      const packageVersion = "3.1";
+      const packageVersion = "3.2";
       const imageCount = items.filter((item) => item.kind === "IMAGE").length;
       const documentCount = items.filter((item) => item.kind === "DOCUMENT").length;
       const videoCount = items.filter((item) => item.kind === "VIDEO").length;
@@ -445,8 +445,17 @@ export async function POST(request: NextRequest) {
             recommendations: ["somente recomendações explícitas"],
             bodyRegions: ["regiões mencionadas"],
             questionsForProfessor: ["pontos que precisam ser confirmados"],
-            summaryForTraining: "Resumo curto, objetivo e sem diagnóstico",
-            studentReplySuggestion: "Mensagem humana, clara e cuidadosa para o professor revisar e enviar ao aluno no chat, sem diagnóstico e sem prometer resultado.",
+            summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e útil para a prescrição do treino",
+            studentReplySuggestion: "Mensagem humana e cuidadosa para o professor revisar e enviar ao aluno no chat",
+            limitations: ["arquivos ilegíveis, ambiguidades, conflitos ou limites da análise"],
+            analysisMetadata: {
+              modelUsed: "nome da IA ou modelo utilizado",
+              analysisCompletedAt: "data e hora ISO da conclusão, quando disponível",
+              usedImages: true,
+              usedDocuments: true,
+              usedProfessorVideoSummaries: false,
+              confidence: "alta | media | baixa | nao_informada",
+            },
             requiresUrgentHumanReview: false,
           },
           null,
