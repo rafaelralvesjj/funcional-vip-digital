@@ -651,7 +651,7 @@ export async function POST(request: NextRequest) {
           {
             packageVersion,
             packageId,
-            studentId: question.student.id,
+            studentId,
             studentName: question.student.name,
             questionId: question.id,
             generatedAt,
@@ -766,10 +766,12 @@ export async function POST(request: NextRequest) {
         ? explicitMemoryUpdates
         : inferConservativeMemoryUpdates(normalized);
 
+      const studentId = question.student.id;
+
       const result = await prisma.$transaction(async (tx) => {
         await tx.studentTechnicalMemory.updateMany({
           where: {
-            studentId: question.student.id,
+            studentId,
             sourceQuestionId: question.id,
             status: "APPROVED",
           },
@@ -778,7 +780,7 @@ export async function POST(request: NextRequest) {
 
         const analysisMemory = await tx.studentTechnicalMemory.create({
           data: {
-            studentId: question.student.id,
+            studentId,
             sourceQuestionId: question.id,
             category: "DOCUMENT_ANALYSIS",
             title: normalized.packageTitle,
@@ -795,7 +797,7 @@ export async function POST(request: NextRequest) {
         for (const item of memoryUpdates) {
           await tx.studentTechnicalMemory.updateMany({
             where: {
-              studentId: question.student.id,
+              studentId,
               category: item.category,
               title: item.title,
               status: "APPROVED",
@@ -805,7 +807,7 @@ export async function POST(request: NextRequest) {
 
           const created = await tx.studentTechnicalMemory.create({
             data: {
-              studentId: question.student.id,
+              studentId,
               sourceQuestionId: question.id,
               category: item.category,
               title: item.title,
