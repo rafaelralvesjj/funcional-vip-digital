@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
+import { humanizeStudentEmail } from "@/lib/student-experience";
 import { resolveProfessorRecipientEmail, resolveManagementRecipientEmails, resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import {
   isTeacherUserId,
@@ -1087,19 +1088,26 @@ export async function PUT(req: NextRequest) {
         if (studentEmail) {
           const studentName = rootQuestion.student.name || "aluno";
           const loginUrl = getAppLoginUrl();
+          const teacherName = rootQuestion.teacher?.name || "seu professor";
+          const emailContent = humanizeStudentEmail({
+            studentName,
+            senderName: teacherName,
+            headline: "Tem resposta nova para você 💬",
+            message:
+              "Sua mensagem foi lida com atenção e seu professor já respondeu no chat. A resposta fica registrada junto do seu histórico para que o acompanhamento continue com contexto.",
+            nextStep:
+              "Abra a conversa, leia com calma e responda pelo próprio chat caso ainda tenha alguma dúvida ou queira contar como está se sentindo.",
+            automaticDisclosure:
+              "Mensagem automática de acompanhamento enviada após a resposta do professor.",
+            actionUrl: loginUrl,
+            actionLabel: "Abrir minha conversa",
+          });
+
           await sendEmail({
             to: studentEmail,
-            subject: "Seu professor respondeu no Funcional UP Digital",
-            text: [
-              `Oi, ${studentName}!`,
-              "",
-              "Seu professor respondeu sua mensagem no chat.",
-              "",
-              `Acesse o sistema para visualizar: ${loginUrl}`,
-              "",
-              "Funcional UP Digital",
-            ].join("\n"),
-            html: `<div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;"><div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;"><h2 style="color:#00A19C;margin:0 0 16px;">Seu professor respondeu</h2><p style="color:#f5f5f5;">Oi, <strong>${escapeHtml(studentName)}</strong>!</p><p style="color:#d4d4d4;line-height:1.6;">Sua mensagem recebeu uma resposta no chat do Funcional UP Digital.</p><a href="${loginUrl}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Abrir conversa</a></div></div>`,
+            subject: `${teacherName} respondeu sua mensagem 💬`,
+            text: emailContent.text,
+            html: emailContent.html,
             eventType: "TEACHER_CHAT_REPLY",
             recipientType: "STUDENT",
             contextId: rootQuestion.id,

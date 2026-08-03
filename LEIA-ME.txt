@@ -1,0 +1,16 @@
+IMPLEMENTAÇÃO — HUMANIZAÇÃO DA EXPERIÊNCIA DO ALUNO
+
+Arquivos alterados:
+- lib/student-experience.ts
+- app/api/workout/mark-complete/route.ts
+- app/aluno/page.tsx
+- app/api/aluno/questions/route.ts
+
+Principais mudanças:
+- Motor central de mensagens motivacionais.
+- Resumo de conclusão contextual: primeiro treino, treino completo, parcial e semana concluída.
+- Card final com mensagem positiva, resumo do esforço e próximo passo.
+- E-mail de resposta do professor mais humano e personalizado.
+- Transparência preservada quando a mensagem é automática.
+
+Não houve alteração no Prisma ou no banco.
