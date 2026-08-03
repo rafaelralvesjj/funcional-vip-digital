@@ -160,6 +160,26 @@ function normalizeAnalysisResponse(parsedValue: any) {
     parsed.sugestaoRespostaAluno
   );
 
+  const rawMetadata =
+    parsed.analysisMetadata && typeof parsed.analysisMetadata === "object" && !Array.isArray(parsed.analysisMetadata)
+      ? parsed.analysisMetadata
+      : {};
+
+  const analysisMetadata = {
+    modelUsed: firstNonEmptyText(rawMetadata.modelUsed, rawMetadata.model, rawMetadata.modeloUtilizado),
+    analysisCompletedAt: firstNonEmptyText(
+      rawMetadata.analysisCompletedAt,
+      rawMetadata.completedAt,
+      rawMetadata.dataConclusao
+    ),
+    usedImages: Boolean(rawMetadata.usedImages ?? rawMetadata.usouImagens),
+    usedDocuments: Boolean(rawMetadata.usedDocuments ?? rawMetadata.usouDocumentos),
+    usedProfessorVideoSummaries: Boolean(
+      rawMetadata.usedProfessorVideoSummaries ?? rawMetadata.usouResumosDeVideoDoProfessor
+    ),
+    confidence: firstNonEmptyText(rawMetadata.confidence, rawMetadata.confianca) || "nao_informada",
+  };
+
   return {
     schemaVersion: "1.0",
     packageTitle: firstNonEmptyText(parsed.packageTitle, parsed.title, parsed.titulo) || "Análise de anexos do aluno",
@@ -173,6 +193,7 @@ function normalizeAnalysisResponse(parsedValue: any) {
     limitations,
     summaryForTraining,
     studentReplySuggestion,
+    analysisMetadata,
     requiresUrgentHumanReview: Boolean(
       parsed.requiresUrgentHumanReview ?? parsed.requires_urgent_human_review ?? parsed.requerRevisaoHumanaUrgente
     ),
@@ -246,6 +267,14 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e útil para a prescrição do treino",
     studentReplySuggestion: "Mensagem humana e cuidadosa para o professor revisar e enviar ao aluno no chat",
     limitations: ["arquivos ilegíveis, ambiguidades, conflitos ou limites da análise"],
+    analysisMetadata: {
+      modelUsed: "nome da IA ou modelo utilizado",
+      analysisCompletedAt: "data e hora ISO da conclusão, quando disponível",
+      usedImages: true,
+      usedDocuments: true,
+      usedProfessorVideoSummaries: false,
+      confidence: "alta | media | baixa",
+    },
     requiresUrgentHumanReview: false,
   };
 
@@ -258,6 +287,7 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     "Retorne somente JSON válido, sem markdown ou comentários. Salve ou entregue o resultado como arquivo TXT quando a plataforma permitir.",
     "Os campos summaryForTraining e studentReplySuggestion são obrigatórios e não podem ficar vazios.",
     "summaryForTraining deve resumir apenas implicações objetivas para o treino; studentReplySuggestion deve ser uma mensagem humana para o aluno, sem diagnóstico.",
+    "Preencha analysisMetadata para registrar modelo utilizado, data da análise, fontes efetivamente usadas e nível de confiança. Não invente esses dados; deixe texto vazio ou confiança nao_informada quando não souber.",
     "O professor revisará o resultado antes de salvar na memória técnica do aluno e antes de responder no chat.",
     "",
     `ALUNO: ${question.student.name}`,
@@ -321,7 +351,7 @@ export async function POST(request: NextRequest) {
       const prompt = buildPrompt(question, items);
       const generatedAt = new Date().toISOString();
       const packageId = randomUUID();
-      const packageVersion = "3.0";
+      const packageVersion = "3.1";
       const imageCount = items.filter((item) => item.kind === "IMAGE").length;
       const documentCount = items.filter((item) => item.kind === "DOCUMENT").length;
       const videoCount = items.filter((item) => item.kind === "VIDEO").length;
