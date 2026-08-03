@@ -253,6 +253,11 @@ function canCurrentUserCloseConversation(
 }
 
 
+
+function getAttachments(item: { attachments?: ConversationAttachment[] | null }): ConversationAttachment[] {
+  return Array.isArray(item.attachments) ? item.attachments : [];
+}
+
 function hasChatAttachment(item: {
   imageUrl?: string | null;
   videoUrl?: string | null;
@@ -263,7 +268,7 @@ function hasChatAttachment(item: {
     item.imageUrl ||
       item.videoUrl ||
       item.documentUrl ||
-      item.attachments?.length
+      getAttachments(item).length
   );
 }
 
@@ -365,7 +370,7 @@ export default function DashboardConversationList({
           )}
 
 
-          {(item.attachments || []).map((attachment) => {
+          {getAttachments(item).map((attachment) => {
             if (attachment.kind === "DOCUMENT") {
               return <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-300">Abrir {attachment.name || "documento"}</a>;
             }
@@ -1060,7 +1065,7 @@ export default function DashboardConversationList({
                     <p className="mt-1 text-xs text-[#d4d4d4]">O ZIP levará a mensagem atual, o contexto técnico e o histórico recente do aluno. Imagens e documentos entram quando existirem; vídeos entram pelo resumo técnico do professor.</p>
                   </div>
 
-                  {(conversation.attachments || []).filter((attachment) => attachment.kind === "VIDEO").map((attachment) => (
+                  {getAttachments(conversation).filter((attachment) => attachment.kind === "VIDEO").map((attachment) => (
                     <div key={attachment.id} className="rounded-lg border border-violet-400/20 bg-black/25 p-3 space-y-2">
                       <p className="text-[11px] font-semibold text-violet-200">Resumo técnico do vídeo: {attachment.name || "vídeo enviado"}</p>
                       <textarea
