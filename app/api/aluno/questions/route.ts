@@ -1088,7 +1088,9 @@ export async function PUT(req: NextRequest) {
         if (studentEmail) {
           const studentName = rootQuestion.student.name || "aluno";
           const loginUrl = getAppLoginUrl();
-          const teacherName = rootQuestion.teacher?.name || "seu professor";
+          const teacherName =
+            String(sessionUser?.name || "").trim() ||
+            (senderRole === "GESTOR" ? "a equipe de gestão" : "seu professor");
           const emailContent = humanizeStudentEmail({
             studentName,
             senderName: teacherName,
