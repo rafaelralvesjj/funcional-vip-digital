@@ -593,9 +593,95 @@ export default function ResumoAlunoPage() {
     return compactText(source).slice(0, 6000) || "Sem informações adicionais relevantes.";
   }
 
+  function parseApprovedMemorySummary(value?: string | null): { text: string; data: Record<string, unknown> | null } {
+    const raw = compactText(value);
+    if (!raw) return { text: "", data: null };
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        const data = parsed as Record<string, unknown>;
+        const text = compactText(
+          data.summary ||
+          data.summaryForTraining ||
+          (Array.isArray(data.availableEquipment)
+            ? `Equipamentos: ${data.availableEquipment.map((item) => String(item)).join(", ")}`
+            : raw)
+        );
+        return { text, data };
+      }
+    } catch {
+      // Memórias antigas podem conter texto simples.
+    }
+
+    return { text: raw, data: null };
+  }
+
+  function buildConsolidatedTrainingContext(summaryData: SummaryResponse) {
+    const memories = [...(summaryData.technicalContext?.approvedMemories || [])]
+      .map((memory) => ({
+        ...memory,
+        category: String(memory.category || "").toUpperCase(),
+        parsed: parseApprovedMemorySummary(memory.summary),
+      }));
+
+    const byCategory = (categories: string[]) => memories.filter((memory) => categories.includes(memory.category));
+    const latest = (categories: string[]) => byCategory(categories)[0] || null;
+    const equipmentMemories = byCategory(["EQUIPMENT_AVAILABLE"]);
+    const environmentMemory = latest(["TRAINING_ENVIRONMENT"]);
+    const goalMemory = latest(["GOAL", "TRAINING_GOAL", "OBJECTIVE"]);
+    const cardioMemory = latest(["CARDIO_ROUTINE"]);
+    const scheduleMemories = byCategory(["TRAINING_PREFERENCE", "PREFERENCE_POSITIVE"])
+      .filter((memory) => /(hor[aá]rio|dia|semana|06:00|manh[aã])/i.test(`${memory.title} ${memory.parsed.text}`));
+
+    const environmentData = environmentMemory?.parsed.data || null;
+    const environmentEquipment = Array.isArray(environmentData?.availableEquipment)
+      ? environmentData.availableEquipment.map((item) => String(item))
+      : [];
+    const individualEquipment = equipmentMemories.map((memory) => memory.title || memory.parsed.text).filter(Boolean);
+    const consolidatedEquipment = Array.from(new Set([...environmentEquipment, ...individualEquipment]));
+
+    const conflictsResolved: Array<{ field: string; previousSource: string; selectedSource: string; decision: string }> = [];
+    if (consolidatedEquipment.length > 0 && /nenhum equipamento|sem equipamento/i.test(summaryData.summaryText || "")) {
+      conflictsResolved.push({
+        field: "availableEquipment",
+        previousSource: "cadastro/onboarding antigo",
+        selectedSource: "memória técnica aprovada mais recente",
+        decision: `Usar equipamentos confirmados: ${consolidatedEquipment.join(", ")}. O conflito não bloqueia a montagem do treino.`,
+      });
+    }
+
+    return {
+      precedenceRules: [
+        "Evento de cuidado aberto com pausa bloqueia a geração.",
+        "Fora desse caso, nunca recuse montar o treino apenas por conflito entre cadastro antigo e memória técnica.",
+        "Memória técnica APPROVED mais recente prevalece sobre onboarding, cadastro antigo ou mensagem anterior.",
+        "Quando faltar um dado secundário, gere planejamento conservador e sinalize revisão humana; não deixe o aluno sem treino.",
+      ],
+      goal: goalMemory?.parsed.text || "Usar o objetivo cadastrado no RESUMO_ALUNO quando não houver memória aprovada mais recente.",
+      schedulePreferences: scheduleMemories.map((memory) => memory.parsed.text || memory.title),
+      cardioRoutine: cardioMemory?.parsed.text || null,
+      trainingEnvironment: environmentData || environmentMemory?.parsed.text || null,
+      availableEquipment: consolidatedEquipment,
+      activePreferences: summaryData.technicalContext?.activePreferences || [],
+      healthAndRestrictions: byCategory(["HEALTH_PERMANENT", "HEALTH_TEMPORARY", "MEDICAL_GUIDANCE", "EXERCISE_AVOID"])
+        .map((memory) => ({ category: memory.category, title: memory.title, summary: memory.parsed.text })),
+      conflictsResolved,
+      generationDecision: conflictsResolved.length
+        ? "GERAR_TREINO_USANDO_MEMORIA_MAIS_RECENTE"
+        : "GERAR_TREINO_COM_CONTEXTO_DISPONIVEL",
+    };
+  }
+
   function selectPromptLibrary(summaryData: SummaryResponse): LibraryExercise[] {
+    const consolidatedContext = buildConsolidatedTrainingContext(summaryData);
     const context = normalizePromptSearch(
-      [summaryData.summaryText, selectedStudent?.name, summaryData.evolutionContext?.reason]
+      [
+        summaryData.summaryText,
+        JSON.stringify(consolidatedContext),
+        selectedStudent?.name,
+        summaryData.evolutionContext?.reason,
+      ]
         .filter(Boolean)
         .join(" ")
     );
@@ -696,6 +782,7 @@ export default function ResumoAlunoPage() {
       .join(", ");
 
     const compactContext = getCompactStudentContext(summaryData);
+    const consolidatedContext = buildConsolidatedTrainingContext(summaryData);
     const evolution = summaryData.evolutionContext || {};
     const validationPayload = {
       studentId: validationContext.studentId,
@@ -713,6 +800,8 @@ export default function ResumoAlunoPage() {
       "Use somente exerciseId da biblioteca permitida. Não invente exercícios, cargas, equipamentos, lesões, restrições ou diagnósticos.",
       "Respeite objetivo, local, equipamentos, preferências, adesão, histórico e cuidados. Dor/desconforto impede progressão automática e exige revisão humana.",
       "Se os dados forem insuficientes ou a adesão estiver baixa, faça planejamento conservador e sinalize isso em evolutionDecision.",
+      "NÃO recuse gerar o treino por conflito entre cadastro antigo e memória técnica. Use a memória APPROVED mais recente e registre o conflito em reviewAlerts.",
+      "Só deixe de gerar quando houver pausa por cuidado aberta, biblioteca vazia ou validação imutável inválida.",
       "Calorias são faixa estimada e conservadora, nunca promessa. O professor revisará antes de liberar.",
       "",
       `ALUNO: ${summaryData.student.name} | studentId=${summaryData.student.id}`,
@@ -723,6 +812,7 @@ export default function ResumoAlunoPage() {
         reason: evolution.reason || "Revisar contexto antes da liberação.",
         alerts: evolution.reviewAlerts || [],
       })}`,
+      `CONTEXTO CONSOLIDADO E PRECEDÊNCIA: ${JSON.stringify(consolidatedContext)}`,
       `CONTEXTO ESSENCIAL DO ALUNO: ${compactContext}`,
       ...getExerciseLibraryPromptLines(summaryData),
       "",
@@ -1038,7 +1128,7 @@ export default function ResumoAlunoPage() {
         workouts: [],
       };
       const manifest = {
-        packageVersion: "2.0",
+        packageVersion: "2.1",
         purpose: "MONTAR_TREINOS_DA_SEMANA",
         generatedAt: new Date().toISOString(),
         studentId: summary.student.id,
@@ -1051,6 +1141,8 @@ export default function ResumoAlunoPage() {
           "INSTRUCOES/MODELO_RESPOSTA.json",
           "INSTRUCOES/RESPOSTA_AQUI.txt",
           "prompt.txt",
+          "CONTEXTO/CONTEXTO_CONSOLIDADO.json",
+          "CONTEXTO/CONFLITOS_RESOLVIDOS.json",
           "CONTEXTO/RESUMO_ALUNO.txt",
           "CONTEXTO/MEMORIA_TECNICA.json",
           "CONTEXTO/HISTORICO_RECENTE.json",
@@ -1067,6 +1159,9 @@ export default function ResumoAlunoPage() {
         [
           "EXECUÇÃO DIRETA — LEIA E EXECUTE O prompt.txt.",
           "Analise todos os arquivos da pasta CONTEXTO antes de montar os treinos.",
+          "Leia primeiro CONTEXTO/CONTEXTO_CONSOLIDADO.json.",
+          "A memória técnica APPROVED mais recente prevalece sobre cadastro/onboarding antigo quando houver conflito.",
+          "Não recuse gerar treino apenas por conflito de dados: aplique a precedência, gere de forma conservadora e inclua o alerta para revisão humana.",
           "A memória técnica aprovada, os eventos de cuidado e os feedbacks recentes têm prioridade sobre suposições.",
           "Não trate um achado isolado como autorização automática para progressão.",
           "Retorne somente o JSON válido no formato de INSTRUCOES/MODELO_RESPOSTA.json.",
@@ -1081,6 +1176,9 @@ export default function ResumoAlunoPage() {
         "Cole aqui somente o JSON final produzido pela IA e depois importe este TXT no Funcional UP Digital."
       );
       zip.file("prompt.txt", prompt);
+      const consolidatedContext = buildConsolidatedTrainingContext(summary);
+      zip.file("CONTEXTO/CONTEXTO_CONSOLIDADO.json", JSON.stringify(consolidatedContext, null, 2));
+      zip.file("CONTEXTO/CONFLITOS_RESOLVIDOS.json", JSON.stringify(consolidatedContext.conflictsResolved || [], null, 2));
       zip.file("CONTEXTO/RESUMO_ALUNO.txt", summary.summaryText || "");
       const technicalContext = summary.technicalContext || {};
       zip.file(

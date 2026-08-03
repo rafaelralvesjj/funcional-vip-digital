@@ -1,14 +1,15 @@
-CORREÇÃO — IA NÃO REPETIR PERGUNTAS JÁ RESPONDIDAS
+CORREÇÃO — MONTAR TREINO COM CONFLITO DE DADOS
 
 Arquivo alterado:
-- app/api/student-documents/route.ts
+- app/dashboard/resumo-aluno/page.tsx
 
 O que muda:
-- A IA passa a ler obrigatoriamente todo o histórico recente em ordem cronológica.
-- A mensagem atual é tratada como continuação da conversa.
-- Perguntas já respondidas pelo aluno não podem ser repetidas.
-- O JSON passa a trazer conversationState e nextBestAction.
-- questionsForProfessor deve conter apenas lacunas realmente ainda abertas.
-- O pacote foi atualizado para a versão 5.0.
+- O pacote de Montar Treino passa a gerar CONTEXTO/CONTEXTO_CONSOLIDADO.json.
+- Memória técnica APPROVED mais recente prevalece sobre cadastro/onboarding antigo.
+- Equipamentos confirmados por fotos e análises passam a orientar a seleção da biblioteca.
+- Conflitos são registrados em CONTEXTO/CONFLITOS_RESOLVIDOS.json.
+- A IA não pode recusar montar o treino apenas por conflito de dados.
+- Quando faltarem dados secundários, deve gerar planejamento conservador com revisão humana.
+- O treino só permanece bloqueado em pausa de cuidado aberta, biblioteca vazia ou validação imutável inválida.
 
 Não houve alteração no Prisma nem no banco.
