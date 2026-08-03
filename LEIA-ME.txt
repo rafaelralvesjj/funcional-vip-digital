@@ -1,17 +1,19 @@
-IMPLEMENTAÇÃO — MEMÓRIA INTELIGENTE E PACOTES IA V2
+IMPLEMENTAÇÃO — MEMÓRIA INTELIGENTE CLASSIFICADA
 
 Arquivos alterados:
+- app/api/student-documents/route.ts
 - lib/student-technical-memory.ts
-- app/api/students/[id]/ai-summary/route.ts
-- app/dashboard/resumo-aluno/page.tsx
-- app/api/workout-adjustments/route.ts
 
-O que mudou:
-- O resumo IA agora devolve também a memória técnica estruturada e o último treino.
-- O pacote de Montar Treino inclui memória técnica, histórico recente, preferências, eventos de cuidado e último treino.
-- O pacote de Adaptar Treino inclui memória técnica, histórico recente, preferências e eventos de cuidado.
-- Os prompts dão prioridade às informações aprovadas, aos eventos de cuidado e aos feedbacks recentes.
-- Corrigida a leitura das chaves reais exerciseSignals e approvedMemories no fluxo de adaptação.
-- Pacotes atualizados para a versão 2.0.
+O que muda:
+- O pacote de análise de documentos passa a pedir `memoryUpdates` estruturado.
+- A IA classifica informações em:
+  HEALTH_PERMANENT, HEALTH_TEMPORARY, MEDICAL_GUIDANCE,
+  PREFERENCE_POSITIVE, PREFERENCE_NEGATIVE, PERFORMANCE_SIGNAL,
+  EXERCISE_AVOID e EXERCISE_PREFERRED.
+- Cada memória registra permanência, validade, confiança e evidência.
+- Ao importar a análise, versões anteriores da mesma informação são preservadas como SUPERSEDED.
+- Memórias temporárias vencidas deixam de entrar no contexto dos próximos treinos.
+- Montar Treino e Adaptar Treino recebem a memória agrupada e a linha do tempo aprovada.
+- Se a IA antiga não trouxer `memoryUpdates`, somente restrições explícitas são inferidas de forma conservadora.
 
-Não houve alteração no Prisma nem no banco.
+Não houve alteração no Prisma nem criação de tabela.

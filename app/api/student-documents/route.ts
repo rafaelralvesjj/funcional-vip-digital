@@ -197,8 +197,114 @@ function normalizeAnalysisResponse(parsedValue: any) {
     requiresUrgentHumanReview: Boolean(
       parsed.requiresUrgentHumanReview ?? parsed.requires_urgent_human_review ?? parsed.requerRevisaoHumanaUrgente
     ),
+    memoryUpdates: normalizeMemoryUpdates(
+      parsed.memoryUpdates ?? parsed.memory_updates ?? parsed.atualizacoesDeMemoria
+    ),
     sourceResponse: parsed,
   };
+}
+
+
+type MemoryUpdateCategory =
+  | "HEALTH_PERMANENT"
+  | "HEALTH_TEMPORARY"
+  | "MEDICAL_GUIDANCE"
+  | "PREFERENCE_POSITIVE"
+  | "PREFERENCE_NEGATIVE"
+  | "PERFORMANCE_SIGNAL"
+  | "EXERCISE_AVOID"
+  | "EXERCISE_PREFERRED";
+
+type NormalizedMemoryUpdate = {
+  category: MemoryUpdateCategory;
+  title: string;
+  summary: string;
+  permanence: "PERMANENT" | "TEMPORARY" | "UNTIL_UPDATED";
+  validUntil: string | null;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  sourceEvidence: string[];
+};
+
+const ALLOWED_MEMORY_CATEGORIES = new Set<MemoryUpdateCategory>([
+  "HEALTH_PERMANENT",
+  "HEALTH_TEMPORARY",
+  "MEDICAL_GUIDANCE",
+  "PREFERENCE_POSITIVE",
+  "PREFERENCE_NEGATIVE",
+  "PERFORMANCE_SIGNAL",
+  "EXERCISE_AVOID",
+  "EXERCISE_PREFERRED",
+]);
+
+function normalizeMemoryUpdates(value: unknown): NormalizedMemoryUpdate[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((raw): NormalizedMemoryUpdate | null => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+      const item = raw as Record<string, unknown>;
+      const rawCategory = firstNonEmptyText(item.category, item.categoria).toUpperCase() as MemoryUpdateCategory;
+      if (!ALLOWED_MEMORY_CATEGORIES.has(rawCategory)) return null;
+
+      const title = firstNonEmptyText(item.title, item.titulo).slice(0, 180);
+      const summary = firstNonEmptyText(item.summary, item.resumo, item.description, item.descricao).slice(0, 4000);
+      if (!title || !summary) return null;
+
+      const rawPermanence = firstNonEmptyText(item.permanence, item.permanencia).toUpperCase();
+      const permanence: NormalizedMemoryUpdate["permanence"] =
+        rawPermanence === "TEMPORARY" || rawPermanence === "TEMPORARIA" || rawPermanence === "TEMPORÁRIO"
+          ? "TEMPORARY"
+          : rawPermanence === "UNTIL_UPDATED" || rawPermanence === "ATE_ATUALIZACAO" || rawPermanence === "ATÉ_ATUALIZAÇÃO"
+            ? "UNTIL_UPDATED"
+            : "PERMANENT";
+
+      const rawConfidence = firstNonEmptyText(item.confidence, item.confianca).toUpperCase();
+      const confidence: NormalizedMemoryUpdate["confidence"] =
+        rawConfidence === "LOW" || rawConfidence === "BAIXA"
+          ? "LOW"
+          : rawConfidence === "MEDIUM" || rawConfidence === "MEDIA" || rawConfidence === "MÉDIA"
+            ? "MEDIUM"
+            : "HIGH";
+
+      const validUntilText = firstNonEmptyText(item.validUntil, item.valid_until, item.validoAte, item.válidoAté);
+      const validUntil = /^\d{4}-\d{2}-\d{2}$/.test(validUntilText) ? validUntilText : null;
+
+      return {
+        category: rawCategory,
+        title,
+        summary,
+        permanence,
+        validUntil: permanence === "TEMPORARY" ? validUntil : null,
+        confidence,
+        sourceEvidence: normalizeStringArray(item.sourceEvidence ?? item.source_evidence ?? item.evidencias).slice(0, 10),
+      };
+    })
+    .filter((item): item is NormalizedMemoryUpdate => Boolean(item))
+    .slice(0, 30);
+}
+
+function inferConservativeMemoryUpdates(normalized: ReturnType<typeof normalizeAnalysisResponse>): NormalizedMemoryUpdate[] {
+  const inferred: NormalizedMemoryUpdate[] = [];
+
+  for (const restriction of normalized.explicitRestrictions.slice(0, 10)) {
+    inferred.push({
+      category: "MEDICAL_GUIDANCE",
+      title: restriction.slice(0, 120),
+      summary: restriction,
+      permanence: "UNTIL_UPDATED",
+      validUntil: null,
+      confidence: "HIGH",
+      sourceEvidence: normalized.analyzedFiles.map((item: any) => cleanText(item?.fileName)).filter(Boolean).slice(0, 5),
+    });
+  }
+
+  return inferred;
+}
+
+function parseMemoryValidUntil(item: NormalizedMemoryUpdate): Date | null {
+  if (item.permanence !== "TEMPORARY" || !item.validUntil) return null;
+  const date = new Date(`${item.validUntil}T23:59:59.999Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function safeFileName(value: string, fallback: string): string {
@@ -266,6 +372,17 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     questionsForProfessor: ["pontos que precisam ser confirmados"],
     summaryForTraining: "Resumo curto, objetivo, sem diagnóstico e útil para a prescrição do treino",
     studentReplySuggestion: "Mensagem humana e cuidadosa para o professor revisar e enviar ao aluno no chat",
+    memoryUpdates: [
+      {
+        category: "HEALTH_PERMANENT|HEALTH_TEMPORARY|MEDICAL_GUIDANCE|PREFERENCE_POSITIVE|PREFERENCE_NEGATIVE|PERFORMANCE_SIGNAL|EXERCISE_AVOID|EXERCISE_PREFERRED",
+        title: "Título curto e específico",
+        summary: "Informação objetiva que deve ser lembrada nos próximos treinos",
+        permanence: "PERMANENT|TEMPORARY|UNTIL_UPDATED",
+        validUntil: "YYYY-MM-DD ou null",
+        confidence: "HIGH|MEDIUM|LOW",
+        sourceEvidence: ["nome do arquivo ou trecho que sustenta a informação"]
+      }
+    ],
     limitations: ["arquivos ilegíveis, ambiguidades, conflitos ou limites da análise"],
     analysisMetadata: {
       modelUsed: "nome da IA ou modelo utilizado",
@@ -287,6 +404,9 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     "Retorne somente JSON válido, sem markdown ou comentários. Salve ou entregue o resultado como arquivo TXT quando a plataforma permitir.",
     "Os campos summaryForTraining e studentReplySuggestion são obrigatórios e não podem ficar vazios.",
     "summaryForTraining deve resumir apenas implicações objetivas para o treino; studentReplySuggestion deve ser uma mensagem humana para o aluno, sem diagnóstico.",
+    "Preencha memoryUpdates somente com informações úteis em treinos futuros e sustentadas pelos arquivos. Não transforme hipótese em fato.",
+    "Use HEALTH_PERMANENT apenas para condição duradoura explicitamente documentada; HEALTH_TEMPORARY para situação atual com prazo; MEDICAL_GUIDANCE para orientação expressa; preferências e sinais de desempenho apenas quando houver evidência clara.",
+    "Se não houver uma nova memória confiável, devolva memoryUpdates como lista vazia.",
     "Preencha analysisMetadata para registrar modelo utilizado, data da análise, fontes efetivamente usadas e nível de confiança. Não invente esses dados; deixe texto vazio ou confiança nao_informada quando não souber.",
     "O professor revisará o resultado antes de salvar na memória técnica do aluno e antes de responder no chat.",
     "",
@@ -641,24 +761,79 @@ export async function POST(request: NextRequest) {
         reviewedPackageFiles: items.map((item) => ({ name: item.name, kind: item.kind })),
       };
 
-      const memory = await prisma.studentTechnicalMemory.create({
-        data: {
-          studentId: question.student.id,
-          sourceQuestionId: question.id,
-          category: "DOCUMENT",
-          title: normalized.packageTitle,
-          summary: JSON.stringify(details, null, 2),
-          sourceDocumentName: firstDocument?.name || "Pacote de anexos",
-          sourceDocumentUrl: firstDocument?.url || null,
-          status: "APPROVED",
-          reviewedById: userId,
-          reviewedAt: new Date(),
-        },
+      const explicitMemoryUpdates = normalized.memoryUpdates;
+      const memoryUpdates = explicitMemoryUpdates.length
+        ? explicitMemoryUpdates
+        : inferConservativeMemoryUpdates(normalized);
+
+      const result = await prisma.$transaction(async (tx) => {
+        await tx.studentTechnicalMemory.updateMany({
+          where: {
+            studentId: question.student.id,
+            sourceQuestionId: question.id,
+            status: "APPROVED",
+          },
+          data: { status: "SUPERSEDED" },
+        });
+
+        const analysisMemory = await tx.studentTechnicalMemory.create({
+          data: {
+            studentId: question.student.id,
+            sourceQuestionId: question.id,
+            category: "DOCUMENT_ANALYSIS",
+            title: normalized.packageTitle,
+            summary: JSON.stringify(details, null, 2),
+            sourceDocumentName: firstDocument?.name || "Pacote de anexos",
+            sourceDocumentUrl: firstDocument?.url || null,
+            status: "APPROVED",
+            reviewedById: userId,
+            reviewedAt: new Date(),
+          },
+        });
+
+        const createdMemories = [];
+        for (const item of memoryUpdates) {
+          await tx.studentTechnicalMemory.updateMany({
+            where: {
+              studentId: question.student.id,
+              category: item.category,
+              title: item.title,
+              status: "APPROVED",
+            },
+            data: { status: "SUPERSEDED" },
+          });
+
+          const created = await tx.studentTechnicalMemory.create({
+            data: {
+              studentId: question.student.id,
+              sourceQuestionId: question.id,
+              category: item.category,
+              title: item.title,
+              summary: JSON.stringify({
+                summary: item.summary,
+                permanence: item.permanence,
+                confidence: item.confidence,
+                sourceEvidence: item.sourceEvidence,
+              }),
+              sourceDocumentName: firstDocument?.name || "Pacote de anexos",
+              sourceDocumentUrl: firstDocument?.url || null,
+              status: "APPROVED",
+              validUntil: parseMemoryValidUntil(item),
+              reviewedById: userId,
+              reviewedAt: new Date(),
+            },
+          });
+          createdMemories.push(created);
+        }
+
+        return { analysisMemory, createdMemories };
       });
 
       return NextResponse.json({
         ok: true,
-        memoryId: memory.id,
+        memoryId: result.analysisMemory.id,
+        structuredMemoryCount: result.createdMemories.length,
+        structuredMemories: memoryUpdates,
         normalizedAnalysis: {
           packageTitle: normalized.packageTitle,
           summaryForTraining: normalized.summaryForTraining,
@@ -671,7 +846,7 @@ export async function POST(request: NextRequest) {
         warning: normalized.studentReplySuggestion
           ? null
           : "A análise foi salva, mas a IA não trouxe uma sugestão de resposta ao aluno. Escreva a resposta manualmente no chat.",
-        message: "Análise validada, normalizada e salva na memória técnica do aluno.",
+        message: `Análise salva. ${result.createdMemories.length} memória(s) estruturada(s) foram atualizadas para os próximos treinos.`,
       });
     }
 

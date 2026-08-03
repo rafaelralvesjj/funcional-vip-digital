@@ -18,6 +18,7 @@ export type TechnicalContext = {
     title: string;
     summary: string;
     sourceDocumentName: string | null;
+    updatedAt: Date;
     validUntil: Date | null;
   }>;
   openCareEvents: Array<{ severity: string; title: string; description: string | null }>;
@@ -62,6 +63,7 @@ export async function getStudentTechnicalContext(studentId: string): Promise<Tec
         summary: true,
         sourceDocumentName: true,
         validUntil: true,
+        updatedAt: true,
       },
       orderBy: { updatedAt: "desc" },
       take: 30,
@@ -127,15 +129,90 @@ export async function getStudentTechnicalContext(studentId: string): Promise<Tec
   };
 }
 
+
+function parseMemorySummary(value: string): {
+  summary: string;
+  permanence?: string;
+  confidence?: string;
+  sourceEvidence?: string[];
+} {
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === "object") {
+      return {
+        summary: String(parsed.summary || parsed.summaryForTraining || value).trim(),
+        permanence: parsed.permanence ? String(parsed.permanence) : undefined,
+        confidence: parsed.confidence ? String(parsed.confidence) : undefined,
+        sourceEvidence: Array.isArray(parsed.sourceEvidence)
+          ? parsed.sourceEvidence.map((item: unknown) => String(item)).slice(0, 10)
+          : undefined,
+      };
+    }
+  } catch {
+    // Memórias antigas podem conter texto simples.
+  }
+  return { summary: value };
+}
+
+function groupApprovedMemories(memories: TechnicalContext["approvedMemories"]) {
+  const groups: Record<string, any[]> = {
+    permanentHealth: [],
+    temporaryHealth: [],
+    medicalGuidance: [],
+    positivePreferences: [],
+    negativePreferences: [],
+    performanceSignals: [],
+    preferredExercises: [],
+    avoidedExercises: [],
+    documentAnalyses: [],
+    other: [],
+  };
+
+  const categoryMap: Record<string, keyof typeof groups> = {
+    HEALTH_PERMANENT: "permanentHealth",
+    HEALTH_TEMPORARY: "temporaryHealth",
+    MEDICAL_GUIDANCE: "medicalGuidance",
+    PREFERENCE_POSITIVE: "positivePreferences",
+    PREFERENCE_NEGATIVE: "negativePreferences",
+    PERFORMANCE_SIGNAL: "performanceSignals",
+    EXERCISE_PREFERRED: "preferredExercises",
+    EXERCISE_AVOID: "avoidedExercises",
+    DOCUMENT_ANALYSIS: "documentAnalyses",
+    DOCUMENT: "documentAnalyses",
+  };
+
+  for (const item of memories) {
+    const parsed = parseMemorySummary(item.summary);
+    const group = categoryMap[String(item.category || "").toUpperCase()] || "other";
+    groups[group].push({
+      title: item.title,
+      summary: parsed.summary,
+      permanence: parsed.permanence || (item.validUntil ? "TEMPORARY" : "UNTIL_UPDATED"),
+      confidence: parsed.confidence || "NOT_INFORMED",
+      sourceEvidence: parsed.sourceEvidence || [],
+      sourceDocumentName: item.sourceDocumentName,
+      validUntil: item.validUntil?.toISOString().slice(0, 10) || null,
+      updatedAt: item.updatedAt.toISOString(),
+    });
+  }
+
+  return groups;
+}
+
 export function formatStudentTechnicalContext(context: TechnicalContext): string {
   return JSON.stringify(
     {
       adherence: context.adherence,
       exerciseHistory: context.exerciseSignals,
       activePreferences: context.activePreferences,
-      approvedTechnicalMemory: context.approvedMemories.map((item) => ({
-        ...item,
+      intelligentMemory: groupApprovedMemories(context.approvedMemories),
+      approvedTechnicalMemoryTimeline: context.approvedMemories.map((item) => ({
+        category: item.category,
+        title: item.title,
+        ...parseMemorySummary(item.summary),
+        sourceDocumentName: item.sourceDocumentName,
         validUntil: item.validUntil?.toISOString().slice(0, 10) || null,
+        updatedAt: item.updatedAt.toISOString(),
       })),
       openCareEvents: context.openCareEvents,
       interpretationRules: [
@@ -146,6 +223,10 @@ export function formatStudentTechnicalContext(context: TechnicalContext): string
         "Sem equipamento: usar somente equipamento confirmado ou peso corporal.",
         "Falta de tempo: reduzir duração/volume preservando o objetivo principal.",
         "Informações de documentos só podem ser usadas quando estiverem APPROVED na memória técnica.",
+        "Memórias permanentes continuam válidas até nova evidência aprovada que as substitua.",
+        "Memórias temporárias vencidas não devem orientar progressão ou restrição atual.",
+        "Preferências e sinais de desempenho não equivalem a diagnóstico ou restrição médica.",
+        "Quando houver conflito, priorizar a memória mais recente e sinalizar revisão humana.",
       ],
     },
     null,
