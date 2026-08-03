@@ -36,6 +36,16 @@ export async function resolveStudentRecipientEmail(input: {
     }
   }
 
+  if (!directEmail && input.studentId) {
+    const studentRecord = await prisma.student.findUnique({
+      where: { id: input.studentId },
+      select: { email: true },
+    });
+
+    const storedEmail = normalizeEmail(studentRecord?.email);
+    if (storedEmail) return storedEmail;
+  }
+
   if (!directEmail) return null;
 
   const internalOwner = await prisma.user.findFirst({

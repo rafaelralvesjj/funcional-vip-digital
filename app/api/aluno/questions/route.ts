@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 import { humanizeStudentEmail } from "@/lib/student-experience";
+import { notifyStudentAboutChatReply } from "@/lib/chat-communications";
 import { resolveProfessorRecipientEmail, resolveManagementRecipientEmails, resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import {
   isTeacherUserId,
@@ -1077,46 +1078,21 @@ export async function PUT(req: NextRequest) {
       },
     });
 
-    if (rootQuestion.studentId && rootQuestion.student) {
+    if (rootQuestion.studentId) {
+      const senderName =
+        String(sessionUser?.name || "").trim() ||
+        (senderRole === "GESTOR" ? "Equipe Funcional UP Digital" : "Seu professor");
+
       try {
-        const studentEmail = await resolveStudentRecipientEmail({
+        await notifyStudentAboutChatReply({
           studentId: rootQuestion.studentId,
-          studentEmail: rootQuestion.student.email,
-          userAuthId: rootQuestion.student.userAuthId,
+          authorId: userId,
+          senderName,
+          conversationId: rootQuestion.id,
+          replyText: answer,
         });
-
-        if (studentEmail) {
-          const studentName = rootQuestion.student.name || "aluno";
-          const loginUrl = getAppLoginUrl();
-          const teacherName =
-            String(sessionUser?.name || "").trim() ||
-            (senderRole === "GESTOR" ? "a equipe de gestão" : "seu professor");
-          const emailContent = humanizeStudentEmail({
-            studentName,
-            senderName: teacherName,
-            headline: "Tem resposta nova para você 💬",
-            message:
-              "Sua mensagem foi lida com atenção e seu professor já respondeu no chat. A resposta fica registrada junto do seu histórico para que o acompanhamento continue com contexto.",
-            nextStep:
-              "Abra a conversa, leia com calma e responda pelo próprio chat caso ainda tenha alguma dúvida ou queira contar como está se sentindo.",
-            automaticDisclosure:
-              "Mensagem automática de acompanhamento enviada após a resposta do professor.",
-            actionUrl: loginUrl,
-            actionLabel: "Abrir minha conversa",
-          });
-
-          await sendEmail({
-            to: studentEmail,
-            subject: `${teacherName} respondeu sua mensagem 💬`,
-            text: emailContent.text,
-            html: emailContent.html,
-            eventType: "TEACHER_CHAT_REPLY",
-            recipientType: "STUDENT",
-            contextId: rootQuestion.id,
-          });
-        }
-      } catch (emailError) {
-        console.error("Erro ao enviar e-mail de resposta ao aluno:", emailError);
+      } catch (communicationError) {
+        console.error("Erro ao gerar comunicação de resposta ao aluno:", communicationError);
       }
     }
 

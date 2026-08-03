@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
+import { notifyProfessorAboutStudentChatMessage, notifyStudentAboutChatReply } from "@/lib/chat-communications";
 import {
   isStudentAssignedToProfessor,
   isTeacherUserId,
@@ -1234,17 +1235,37 @@ export async function POST(req: NextRequest) {
       console.error("Erro ao criar evento de cuidado a partir do chat/dúvidas:", careEventError);
     }
 
-    if (!parentId) {
-      try {
+    try {
+      if (senderRole === "STUDENT" && studentId) {
+        await notifyProfessorAboutStudentChatMessage({
+          studentId,
+          professorId: teacherId,
+          authorId: userId,
+          conversationId: rootConversationId,
+          messageText: content,
+        });
+      } else if (isAnswerFromStaff && studentId) {
+        const senderName =
+          String(question.answeredBy?.name || question.teacher?.name || "").trim() ||
+          (senderRole === "GESTOR" ? "Equipe Funcional UP Digital" : "Seu professor");
+
+        await notifyStudentAboutChatReply({
+          studentId,
+          authorId: userId,
+          senderName,
+          conversationId: rootConversationId,
+          replyText: content,
+        });
+      } else if (!parentId) {
         await notifyNewConversationByEmail({
           senderRole,
           senderUserId: userId,
           studentId,
           teacherId,
         });
-      } catch (emailError) {
-        console.error("Erro ao enviar e-mail de nova conversa:", emailError);
       }
+    } catch (communicationError) {
+      console.error("Erro ao gerar comunicação do chat:", communicationError);
     }
 
     return NextResponse.json(question, { status: 201 });
