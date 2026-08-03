@@ -1,18 +1,22 @@
-MOTOR DE HUMANIZAÇÃO — FUNCIONAL UP DIGITAL
+IMPLEMENTAÇÃO — PACOTES ZIP PARA IA
 
-Arquivos:
-- lib/student-experience.ts
-- app/api/cron/release-workouts/route.ts
-- app/api/workout/mark-complete/route.ts
-- app/aluno/page.tsx
-- app/api/aluno/questions/route.ts
+Arquivos alterados:
+- app/dashboard/resumo-aluno/page.tsx
+- app/api/workout-adjustments/route.ts
+- components/DashboardConversationList.tsx
 
-Implementado:
-- Motor central para mensagens ao aluno.
-- Variações de conclusão de treino, primeiro treino, semana concluída, treino parcial e marcos de 5, 10, 20 e múltiplos de 25 treinos.
-- E-mail e aviso de treinos liberados com tom mais humano, nome do aluno e próximo passo claro.
-- Resposta do professor por e-mail com linguagem humanizada.
-- Transparência nas mensagens automáticas.
-- Logs padronizados no e-mail de liberação de treino.
+Novo fluxo — Montar treino:
+1. Gere o resumo do aluno.
+2. Clique em "Baixar pacote ZIP para IA".
+3. Envie o ZIP para a IA externa.
+4. Importe o TXT/JSON retornado.
+5. Valide e abra em Montar Treino.
 
+Novo fluxo — Adaptar treino:
+1. Clique em "Baixar pacote ZIP para adaptação".
+2. Envie o ZIP para a IA externa.
+3. Importe o TXT/JSON retornado.
+4. Valide, revise e confirme a substituição.
+
+Os pacotes incluem prompt, modelo de resposta, manifesto, contexto do aluno/treino e biblioteca permitida.
 Não houve alteração no Prisma ou no banco.

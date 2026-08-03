@@ -419,7 +419,7 @@ export default function DashboardConversationList({
       const response = await fetch("/api/student-documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "PREPARE_PROMPT", questionId: conversation.id }),
+        body: JSON.stringify({ action: "PREPARE_PACKAGE", questionId: conversation.id }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || "Não foi possível preparar o prompt.");
@@ -686,24 +686,35 @@ export default function DashboardConversationList({
         }),
       });
 
-      const data = await response.json().catch(() => null);
-
       if (!response.ok) {
+        const data = await response.json().catch(() => null);
         setErrorById((current) => ({
           ...current,
           [conversation.id]: getErrorMessage(
             data,
-            "Não foi possível preparar o prompt de adaptação."
+            "Não foi possível gerar o pacote de adaptação."
           ),
         }));
         return;
       }
 
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+      link.href = url;
+      link.download = filenameMatch?.[1] || `pacote-adaptar-treino-${conversation.id}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
       setAdjustmentDraftByConversationId((current) => ({
         ...current,
         [conversation.id]: {
           workoutId,
-          manualPrompt: data?.manualPrompt || "",
+          manualPrompt: "PACKAGE_READY",
           manualResponse: "",
           proposal: undefined,
         },
@@ -712,14 +723,13 @@ export default function DashboardConversationList({
       setSuccessById((current) => ({
         ...current,
         [conversation.id]:
-          data?.message ||
-          "Prompt preparado. Copie para a IA e cole a resposta JSON de volta no sistema.",
+          "Pacote ZIP gerado. Envie para a IA externa e depois importe o TXT retornado.",
       }));
     } catch (error) {
       console.error("Prepare workout adjustment prompt error:", error);
       setErrorById((current) => ({
         ...current,
-        [conversation.id]: "Erro ao preparar o prompt de adaptação.",
+        [conversation.id]: "Erro ao gerar o pacote de adaptação.",
       }));
     } finally {
       setAdjustmentLoadingKey(null);
@@ -747,6 +757,27 @@ export default function DashboardConversationList({
 
     setErrorById((current) => ({ ...current, [conversationId]: "" }));
     setSuccessById((current) => ({ ...current, [conversationId]: "" }));
+  }
+
+  async function handleImportAdjustmentResponseFile(
+    conversationId: string,
+    file?: File | null
+  ) {
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      handleManualResponseChange(conversationId, text);
+      setSuccessById((current) => ({
+        ...current,
+        [conversationId]: "Resposta da IA importada. Agora valide e revise o treino.",
+      }));
+    } catch {
+      setErrorById((current) => ({
+        ...current,
+        [conversationId]: "Não foi possível ler o arquivo selecionado.",
+      }));
+    }
   }
 
   async function handleValidateManualAdjustment(conversation: ConversationItem) {
@@ -1144,8 +1175,8 @@ export default function DashboardConversationList({
                                 className="rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-bold text-black transition hover:bg-[#007D79] disabled:opacity-50"
                               >
                                 {isPreparing
-                                  ? "Preparando prompt..."
-                                  : "Preparar prompt de adaptação"}
+                                  ? "Gerando pacote..."
+                                  : "Baixar pacote ZIP para adaptação"}
                               </button>
                             </div>
                           );
@@ -1228,28 +1259,38 @@ export default function DashboardConversationList({
                       <div className="space-y-4 rounded-xl border border-blue-500/25 bg-blue-500/10 p-4">
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-wide text-blue-200">
-                            Fluxo manual sem custo de API
+                            Pacote para IA externa
                           </p>
                           <p className="mt-2 text-xs leading-relaxed text-blue-100">
-                            1. Copie o prompt. 2. Cole na IA que você já usa. 3. Copie somente o JSON da resposta. 4. Cole abaixo e valide.
+                            1. O ZIP já foi baixado. 2. Envie o ZIP para a IA externa. 3. Baixe o TXT retornado. 4. Importe abaixo e valide.
                           </p>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            onClick={() => handleCopyManualPrompt(conversation.id)}
-                            className="rounded-lg border border-blue-400/30 px-3 py-2 text-[11px] font-semibold text-blue-200 hover:bg-blue-500/10"
+                            onClick={() => handlePrepareAdjustmentPrompt(conversation, adjustmentDraft.workoutId)}
+                            disabled={Boolean(adjustmentLoadingKey)}
+                            className="rounded-lg border border-blue-400/30 px-3 py-2 text-[11px] font-semibold text-blue-200 hover:bg-blue-500/10 disabled:opacity-50"
                           >
-                            Copiar prompt de adaptação
+                            Baixar pacote ZIP novamente
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadManualPrompt(conversation.id)}
-                            className="rounded-lg border border-blue-400/30 px-3 py-2 text-[11px] font-semibold text-blue-200 hover:bg-blue-500/10"
-                          >
-                            Baixar prompt em TXT
-                          </button>
+
+                          <label className="cursor-pointer rounded-lg border border-blue-400/30 px-3 py-2 text-[11px] font-semibold text-blue-200 hover:bg-blue-500/10">
+                            Importar resposta TXT/JSON
+                            <input
+                              type="file"
+                              accept=".txt,.json,text/plain,application/json"
+                              className="hidden"
+                              onChange={(event) => {
+                                void handleImportAdjustmentResponseFile(
+                                  conversation.id,
+                                  event.target.files?.[0]
+                                );
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
                         </div>
 
                         <div>
@@ -1257,7 +1298,7 @@ export default function DashboardConversationList({
                             htmlFor={`manual-adjustment-${conversation.id}`}
                             className="text-[11px] font-semibold text-[#f5f5f5]"
                           >
-                            Cole aqui a resposta JSON da IA
+                            Resposta da IA (importada do TXT ou colada)
                           </label>
                           <textarea
                             id={`manual-adjustment-${conversation.id}`}
