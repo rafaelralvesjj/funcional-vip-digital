@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import { NextRequest, NextResponse } from "next/server";
+import { getStudentDisplayName } from "@/lib/display-name";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
   const students = await prisma.student.findMany({
     where: { active: true },
     select: {
-      id: true, name: true, email: true, userAuthId: true, contractedTrainingDaysPerMonth: true,
+      id: true, name: true, preferredName: true, email: true, userAuthId: true, contractedTrainingDaysPerMonth: true,
       user: { select: { id: true, name: true, email: true, role: true } },
     },
     orderBy: { name: "asc" },
@@ -104,7 +105,8 @@ export async function GET(request: NextRequest) {
     });
     const planned = plans.length;
     const completed = plans.filter((item) => String(item.status).toUpperCase() === "CONCLUIDO").length;
-    const message = studentMessage(student.name || "Aluno", planned, completed);
+    const studentDisplayName = getStudentDisplayName(student);
+    const message = studentMessage(studentDisplayName, planned, completed);
     const title = `${message.title} — ${weekKey}`;
 
     const exists = await prisma.notice.findFirst({ where: { studentId: student.id, type: "SATURDAY_MOTIVATION", title }, select: { id: true } });
@@ -120,7 +122,7 @@ export async function GET(request: NextRequest) {
           eventType: "SATURDAY_MOTIVATION",
           recipientType: "STUDENT",
           contextId: student.id,
-          text: `Oi, ${firstName(student.name)}!\n\n${message.body}\n\n${message.next}\n\nConte comigo,\n${professor}\nFuncional UP Digital\n\nMensagem automática de acompanhamento enviada em nome do seu professor.\n${alunoUrl}`,
+          text: `Oi, ${studentDisplayName}!\n\n${message.body}\n\n${message.next}\n\nConte comigo,\n${professor}\nFuncional UP Digital\n\nMensagem automática de acompanhamento enviada em nome do seu professor.\n${alunoUrl}`,
           html: `<div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px"><div style="max-width:560px;margin:auto;background:#111;border:1px solid #2a2a2a;border-radius:18px;padding:26px"><h2 style="color:#00A19C">${escapeHtml(message.title)}</h2><p style="color:#ddd;line-height:1.65">${escapeHtml(message.body)}</p><div style="margin-top:18px;padding:14px;border-radius:12px;background:#00A19C12;border:1px solid #00A19C35;color:#ddd"><strong style="color:#00A19C">Próximo passo:</strong><br/>${escapeHtml(message.next)}</div><a href="${alunoUrl}" style="display:inline-block;margin-top:20px;background:#00A19C;color:#081312;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px">Abrir minha área</a><p style="color:#f5f5f5;margin-top:22px">Conte comigo,<br/><strong>${escapeHtml(professor)}</strong><br/><span style="color:#00A19C">Funcional UP Digital</span></p><p style="color:#666;font-size:11px">Mensagem automática de acompanhamento enviada em nome do seu professor.</p></div></div>`,
         });
       }

@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 import { resolveStudentProfessor } from "@/lib/student-professor";
+import { getStudentDisplayName } from "@/lib/display-name";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -400,6 +401,7 @@ async function getStudentForAccess(studentId: string) {
     select: {
       id: true,
       name: true,
+      preferredName: true,
       email: true,
       userId: true,
       userAuthId: true,
@@ -758,9 +760,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
     }
 
+    const studentDisplayName = getStudentDisplayName(student);
+
     const copy = getCareCopy({
       eventType,
-      studentName: student.name,
+      studentName: studentDisplayName,
       description,
     });
 
@@ -816,7 +820,7 @@ export async function POST(request: NextRequest) {
 
     const professorName = resolvedProfessor?.name || "seu professor";
     const studentNoticeContent = [
-      `Oi, ${student.name}!`,
+      `Oi, ${studentDisplayName}!`,
       "",
       copy.studentMessage,
       "",
@@ -875,9 +879,9 @@ export async function POST(request: NextRequest) {
       if (email) {
         await sendEmail({
           to: email,
-          subject: `${student.name}, ${copy.title.toLowerCase()}`,
+          subject: `${studentDisplayName}, ${copy.title.toLowerCase()}`,
           text: [
-            `Oi, ${student.name}!`,
+            `Oi, ${studentDisplayName}!`,
             "",
             copy.studentMessage,
             "",
@@ -895,7 +899,7 @@ export async function POST(request: NextRequest) {
             <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
               <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
                 <h2 style="color:#00A19C;margin:0 0 16px;">${escapeHtml(copy.title)}</h2>
-                <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(student.name)}</strong>!</p>
+                <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(studentDisplayName)}</strong>!</p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(copy.studentMessage)}</p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
                   <strong style="color:#f5f5f5;">${escapeHtml(professorName)}</strong> foi avisado e poderá acompanhar você pelo chat da plataforma.

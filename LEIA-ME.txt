@@ -1,16 +1,17 @@
-IMPLEMENTAÇÃO — PERFIL PERMANENTE DO AMBIENTE DE TREINO
+CORREÇÃO — NOME PREFERIDO DO ALUNO
+
+Regra aplicada nas principais comunicações com o aluno:
+1. Usa preferredName (Como gosta de ser chamado), quando preenchido.
+2. Se estiver vazio, usa apenas o primeiro nome.
+3. Nome completo permanece apenas em contextos internos/formais.
 
 Arquivos alterados:
+- components/StudentDashboardStatusCard.tsx
+- app/api/aluno/questions/route.ts
+- app/api/cron/release-workouts/route.ts
+- app/api/cron/saturday-communication/route.ts
+- app/api/student-care-events/route.ts
+- app/api/workout/mark-complete/route.ts
 - app/api/student-documents/route.ts
-- lib/student-technical-memory.ts
-
-O que muda:
-- O prompt passa a considerar explicitamente o objetivo atual do aluno.
-- A IA retorna trainingOpportunities e missingEquipmentImpact.
-- A IA retorna trainingEnvironment com tipo de ambiente, nível, equipamentos confirmados, observações, data e confiança.
-- Equipamentos continuam sendo salvos individualmente como EQUIPMENT_AVAILABLE.
-- O ambiente consolidado passa a ser salvo como TRAINING_ENVIRONMENT, com validade até nova atualização.
-- Montar Treino e Adaptar Treino passam a receber esse perfil consolidado dentro da memória inteligente.
-- Informações antigas são preservadas e substituídas pela versão mais recente aprovada.
 
 Não houve alteração no Prisma nem no banco.

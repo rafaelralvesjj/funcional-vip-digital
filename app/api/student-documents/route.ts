@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "crypto";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
+import { getStudentDisplayName } from "@/lib/display-name";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -510,7 +511,7 @@ function buildPrompt(question: any, items: PackageItem[]): string {
     "Preencha analysisMetadata para registrar modelo utilizado, data da análise, fontes efetivamente usadas e nível de confiança. Não invente esses dados; deixe texto vazio ou confiança nao_informada quando não souber.",
     "O professor revisará o resultado antes de salvar na memória técnica do aluno e antes de responder no chat.",
     "",
-    `ALUNO: ${question.student.preferredName || question.student.name}`,
+    `ALUNO: ${getStudentDisplayName(question.student)}`,
     `OBJETIVO ATUAL INFORMADO: ${question.student.avaliacoes?.[0]?.objetivo || "não informado"}`,
     `EQUIPAMENTOS JÁ INFORMADOS NO CADASTRO: ${question.student.avaliacoes?.[0]?.equipamentos || "não informado"}`,
     `LESÕES/OBSERVAÇÕES JÁ INFORMADAS: ${question.student.avaliacoes?.[0]?.lesoes || "não informado"}`,
@@ -689,7 +690,7 @@ export async function POST(request: NextRequest) {
       zip.file(
         "RESUMO_DO_CASO.txt",
         [
-          `Aluno: ${question.student.name}`,
+          `Aluno: ${getStudentDisplayName(question.student)}`,
           `StudentId: ${question.student.id}`,
           `QuestionId: ${question.id}`,
           `Mensagem original: ${question.content || ""}`,
@@ -756,7 +757,7 @@ export async function POST(request: NextRequest) {
             packageVersion,
             packageId,
             studentId,
-            studentName: question.student.name,
+            studentName: getStudentDisplayName(question.student),
             questionId: question.id,
             generatedAt,
             attachmentCount: items.length,

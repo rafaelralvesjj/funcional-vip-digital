@@ -3,12 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/sendEmail";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import { buildWorkoutReleaseCommunication } from "@/lib/student-experience";
+import { getStudentDisplayName } from "@/lib/display-name";
 
 export const maxDuration = 60;
 
 type StudentForRelease = {
   id: string;
   name: string | null;
+  preferredName: string | null;
   email: string | null;
   userAuthId: string | null;
   userId: string | null;
@@ -140,7 +142,7 @@ async function notifyWorkoutAvailableForCurrentWeek({
   isFirstWorkoutPackage: boolean;
   lastPlanName: string;
 }) {
-  const studentName = student.name || "Aluno";
+  const studentName = getStudentDisplayName(student);
   const professorName = student.user?.name || "seu professor";
   const studentEmail = await getStudentEmail(student);
   const authorId = await getFallbackNoticeAuthorId(student.userId);
@@ -233,6 +235,7 @@ export async function GET(request: NextRequest) {
     select: {
       id: true,
       name: true,
+      preferredName: true,
       email: true,
       userAuthId: true,
       userId: true,

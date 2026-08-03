@@ -107,7 +107,7 @@ export function StudentDashboardStatusCard({ summary }: Props) {
       <div className="mb-5">
         <p className="text-sm font-medium text-zinc-500">Meu acompanhamento</p>
         <h1 className="mt-1 text-2xl font-semibold text-zinc-950">
-          Olá, {summary.student.name}
+          Olá, {summary.student.displayName || summary.student.preferredName || summary.student.name.split(" ")[0]}
         </h1>
       </div>
 

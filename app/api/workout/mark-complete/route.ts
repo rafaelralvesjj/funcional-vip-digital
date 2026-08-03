@@ -9,6 +9,7 @@ import {
   registerTrainingPreferenceFromStudentMessage,
 } from "@/lib/student-training-preferences";
 import { buildWorkoutCompletionExperience } from "@/lib/student-experience";
+import { getStudentDisplayName } from "@/lib/display-name";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -725,6 +726,7 @@ async function notifyWorkoutCompleted({
   student: {
     id: string;
     name: string;
+    preferredName?: string | null;
     email: string | null;
     userId: string | null;
     contractedTrainingDaysPerMonth: number | null;
@@ -920,7 +922,7 @@ async function notifyWeekCompletedIfNeeded({
   const professorName = student.user?.name || "seu professor";
   const title = "Você concluiu sua semana de treinos 🔥";
   const content = [
-    `Parabéns, ${student.name || "Aluno"}! Você concluiu todos os treinos previstos para a semana de ${weekLabel}.`,
+    `Parabéns, ${getStudentDisplayName(student)}! Você concluiu todos os treinos previstos para a semana de ${weekLabel}.`,
     "",
     "Mais do que cumprir uma lista, esse registro mostra uma rotina construída com constância.",
     "Vou usar essas informações para acompanhar sua evolução e revisar os próximos passos com segurança.",
@@ -940,7 +942,7 @@ async function notifyWeekCompletedIfNeeded({
   try {
     emailSent = await sendStudentEmail({
       to: await getStudentEmail(student),
-      studentName: student.name || "Aluno",
+      studentName: getStudentDisplayName(student),
       professorName,
       subject: title,
       title,
