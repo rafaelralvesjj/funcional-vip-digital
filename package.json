@@ -12,7 +12,8 @@
     "db:prepare": "prisma migrate dev --name init",
     "db:seed": "prisma db seed",
     "health": "node scripts/check-health.mjs",
-    "reset:local": "node scripts/reset-local.mjs"
+    "reset:local": "node scripts/reset-local.mjs",
+    "audit:emails": "node scripts/audit-email-routes.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

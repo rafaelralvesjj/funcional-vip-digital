@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
+import { resolveProfessorRecipientEmail, resolveManagementRecipientEmails, resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import {
   isTeacherUserId,
   repairConversationProfessor,
@@ -113,62 +114,17 @@ async function notifyNewStudentQuestionByEmail({
   let recipients: StudentQuestionEmailRecipient[] = [];
 
   if (target === "PROFESSOR") {
-    const resolvedTeacherId = teacherId || (await resolveStudentProfessorId(studentId));
+    const professor = await resolveProfessorRecipientEmail({ professorId: teacherId, studentId });
 
-    if (!resolvedTeacherId) {
-      console.warn("E-mail de chat não enviado: aluno sem professor válido", { studentId });
+    if (!professor) {
+      console.warn("E-mail de chat não enviado: aluno sem professor ativo e com e-mail", { studentId, teacherId });
       return;
     }
 
-    const teacher = await prisma.user.findFirst({
-      where: {
-        id: resolvedTeacherId,
-        active: true,
-        role: {
-          in: ["PROFESSOR", "TEACHER"],
-        },
-        email: {
-          not: null,
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
-    });
-
-    if (!teacher) {
-      console.warn("E-mail de chat não enviado: professor inválido ou sem e-mail", {
-        studentId,
-        teacherId: resolvedTeacherId,
-      });
-      return;
-    }
-
-    recipients = [{ ...teacher, panelKind: "TEACHER" }];
+    recipients = [{ ...professor, panelKind: "TEACHER" }];
   } else {
-    const gestores = await prisma.user.findMany({
-      where: {
-        active: true,
-        role: {
-          in: ["GESTOR", "ADMIN"],
-        },
-        email: {
-          not: null,
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
-    });
-
-    recipients = gestores.map((gestor) => ({
-      ...gestor,
-      panelKind: "GESTOR" as const,
-    }));
+    const gestores = await resolveManagementRecipientEmails();
+    recipients = gestores.map((gestor) => ({ ...gestor, panelKind: "GESTOR" as const }));
   }
 
   const loginUrl = getAppLoginUrl();
@@ -218,6 +174,9 @@ async function notifyNewStudentQuestionByEmail({
           subject,
           text,
           html,
+          eventType: "STUDENT_CHAT_MESSAGE",
+          recipientType: isTeacher ? "TEACHER" : "MANAGEMENT",
+          contextId: studentId,
         });
       })
   );
@@ -963,16 +922,14 @@ export async function POST(req: NextRequest) {
       console.error("Erro ao registrar preferência de treino a partir do chat:", preferenceError);
     }
 
-    if (!rootQuestion) {
-      try {
-        await notifyNewStudentQuestionByEmail({
-          studentId: student.id,
-          teacherId,
-          target: sendToGestao ? "GESTAO" : "PROFESSOR",
-        });
-      } catch (emailError) {
-        console.error("Erro ao enviar e-mail de nova dúvida do aluno:", emailError);
-      }
+    try {
+      await notifyNewStudentQuestionByEmail({
+        studentId: student.id,
+        teacherId,
+        target: sendToGestao ? "GESTAO" : "PROFESSOR",
+      });
+    } catch (emailError) {
+      console.error("Erro ao enviar e-mail de mensagem do aluno:", emailError);
     }
 
     return NextResponse.json(question, { status: 201 });
@@ -1029,6 +986,9 @@ export async function PUT(req: NextRequest) {
           select: {
             id: true,
             userId: true,
+            userAuthId: true,
+            email: true,
+            name: true,
           },
         },
       },
@@ -1055,6 +1015,9 @@ export async function PUT(req: NextRequest) {
               select: {
                 id: true,
                 userId: true,
+                userAuthId: true,
+                email: true,
+                name: true,
               },
             },
           },
@@ -1112,6 +1075,40 @@ export async function PUT(req: NextRequest) {
         senderRole,
       },
     });
+
+    if (rootQuestion.studentId && rootQuestion.student) {
+      try {
+        const studentEmail = await resolveStudentRecipientEmail({
+          studentId: rootQuestion.studentId,
+          studentEmail: rootQuestion.student.email,
+          userAuthId: rootQuestion.student.userAuthId,
+        });
+
+        if (studentEmail) {
+          const studentName = rootQuestion.student.name || "aluno";
+          const loginUrl = getAppLoginUrl();
+          await sendEmail({
+            to: studentEmail,
+            subject: "Seu professor respondeu no Funcional UP Digital",
+            text: [
+              `Oi, ${studentName}!`,
+              "",
+              "Seu professor respondeu sua mensagem no chat.",
+              "",
+              `Acesse o sistema para visualizar: ${loginUrl}`,
+              "",
+              "Funcional UP Digital",
+            ].join("\n"),
+            html: `<div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;"><div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;"><h2 style="color:#00A19C;margin:0 0 16px;">Seu professor respondeu</h2><p style="color:#f5f5f5;">Oi, <strong>${escapeHtml(studentName)}</strong>!</p><p style="color:#d4d4d4;line-height:1.6;">Sua mensagem recebeu uma resposta no chat do Funcional UP Digital.</p><a href="${loginUrl}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Abrir conversa</a></div></div>`,
+            eventType: "TEACHER_CHAT_REPLY",
+            recipientType: "STUDENT",
+            contextId: rootQuestion.id,
+          });
+        }
+      } catch (emailError) {
+        console.error("Erro ao enviar e-mail de resposta ao aluno:", emailError);
+      }
+    }
 
     const updatedRoot = await prisma.question.findUnique({
       where: {
