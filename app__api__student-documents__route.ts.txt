@@ -584,20 +584,51 @@ export async function POST(request: NextRequest) {
       }
 
       const normalized = normalizeAnalysisResponse(parsed);
-      if (!normalized.summaryForTraining) {
+
+      const missingRequiredFields: string[] = [];
+      if (!normalized.summaryForTraining) missingRequiredFields.push("summaryForTraining");
+      if (!normalized.studentReplySuggestion) missingRequiredFields.push("studentReplySuggestion");
+
+      if (missingRequiredFields.length > 0) {
+        const pastedEmptyTemplate =
+          typeof parsed === "object" &&
+          parsed !== null &&
+          (Object.prototype.hasOwnProperty.call(parsed, "summaryForTraining") ||
+            Object.prototype.hasOwnProperty.call(parsed, "studentReplySuggestion")) &&
+          !firstNonEmptyText(parsed.summaryForTraining, parsed.studentReplySuggestion);
+
+        const fieldLabels: Record<string, string> = {
+          summaryForTraining: "summaryForTraining — resumo técnico objetivo para o treino",
+          studentReplySuggestion: "studentReplySuggestion — resposta humana para o aluno",
+        };
+
         return NextResponse.json(
           {
-            error: "A resposta da IA não trouxe um resumo utilizável para o treino.",
-            missingFields: ["summaryForTraining"],
-            acceptedAliases: [
-              "summaryForTraining",
-              "summary_for_training",
-              "trainingSummary",
-              "summary",
-              "resumoParaTreino",
-              "resumo",
-            ],
-            guidance: "Gere novamente a resposta usando o MODELO_RESPOSTA.json do pacote ou preencha um resumo objetivo das implicações para o treino.",
+            error: pastedEmptyTemplate
+              ? `Você colou o MODELO_RESPOSTA.json ainda vazio. Preencha os campos obrigatórios antes de salvar: ${missingRequiredFields.map((field) => fieldLabels[field]).join("; ")}.`
+              : `Não foi possível salvar a análise. Campo(s) obrigatório(s) ausente(s) ou vazio(s): ${missingRequiredFields.map((field) => fieldLabels[field]).join("; ")}.`,
+            missingFields: missingRequiredFields,
+            acceptedAliases: {
+              summaryForTraining: [
+                "summaryForTraining",
+                "summary_for_training",
+                "trainingSummary",
+                "summary",
+                "resumoParaTreino",
+                "resumo",
+              ],
+              studentReplySuggestion: [
+                "studentReplySuggestion",
+                "student_reply_suggestion",
+                "replySuggestion",
+                "suggestedStudentReply",
+                "respostaSugeridaAluno",
+                "sugestaoRespostaAluno",
+              ],
+            },
+            guidance: pastedEmptyTemplate
+              ? "Envie o pacote ZIP para a IA externa e cole no sistema a resposta preenchida por ela, não o modelo em branco."
+              : "Peça à IA para devolver novamente o JSON usando o MODELO_RESPOSTA.json do pacote e preenchendo os dois campos obrigatórios.",
           },
           { status: 422 }
         );
