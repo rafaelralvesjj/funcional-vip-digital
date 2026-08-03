@@ -6,9 +6,40 @@ export type WorkoutCompletionExperience = {
   badge: string;
 };
 
+export type StudentCommunication = {
+  title: string;
+  subject: string;
+  noticeContent: string;
+  text: string;
+  html: string;
+};
+
 function firstName(value?: string | null): string {
   const normalized = String(value || "").trim();
   return normalized ? normalized.split(/\s+/)[0] : "você";
+}
+
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function pickBySeed<T>(items: T[], seed: number): T {
+  return items[Math.abs(seed) % items.length];
+}
+
+function milestoneMessage(completedCount: number): string | null {
+  if (completedCount === 5) return "Cinco treinos já viraram história. Você está construindo consistência de verdade.";
+  if (completedCount === 10) return "Dez treinos concluídos! Olha o quanto você já avançou desde o primeiro passo.";
+  if (completedCount === 20) return "Vinte treinos! Sua constância já merece ser celebrada e revisada com carinho pelo professor.";
+  if (completedCount > 0 && completedCount % 25 === 0) {
+    return `${completedCount} treinos concluídos. Uma marca que mostra compromisso com você e com seu objetivo.`;
+  }
+  return null;
 }
 
 export function buildWorkoutCompletionExperience(input: {
@@ -21,14 +52,15 @@ export function buildWorkoutCompletionExperience(input: {
 }): WorkoutCompletionExperience {
   const name = firstName(input.studentName);
   const totalResolved = input.done + input.skipped;
+  const milestone = milestoneMessage(input.completedCount);
 
   if (input.weekCompleted) {
     return {
       title: `Semana concluída, ${name}! 🎉`,
       summary: `Você fechou a semana com ${input.done} exercício(s) realizado(s) neste treino${input.skipped ? ` e ${input.skipped} registrado(s) como não realizado(s)` : ""}.`,
-      motivation: "Consistência não é fazer tudo perfeito. É continuar aparecendo, aprendendo e cuidando de você. Hoje você fez exatamente isso.",
+      motivation: milestone || "Consistência não é fazer tudo perfeito. É continuar aparecendo, aprendendo e cuidando de você. Hoje você fez exatamente isso.",
       nextStep: "Agora é hora de se hidratar, descansar e registrar qualquer facilidade, dificuldade ou desconforto. Seu professor usará esse retorno nos próximos treinos.",
-      badge: "SEMANA CONCLUÍDA",
+      badge: milestone ? "MARCO ALCANÇADO" : "SEMANA CONCLUÍDA",
     };
   }
 
@@ -69,15 +101,19 @@ export function buildWorkoutCompletionExperience(input: {
       title: `Mais um passo, ${name}! 🌟`,
       motivation: "Cada sessão concluída reforça uma escolha importante: cuidar da sua saúde e seguir em direção ao seu objetivo.",
     },
+    {
+      title: `Você apareceu por você, ${name}! 🙌`,
+      motivation: "Nos dias fáceis e nos dias corridos, o que sustenta a evolução é voltar. Hoje você voltou e fez acontecer.",
+    },
   ];
-  const selected = options[input.completedCount % options.length];
+  const selected = pickBySeed(options, input.completedCount);
 
   return {
     title: selected.title,
     summary: `Você realizou ${input.done} exercício(s) e concluiu seu ${input.completedCount}º treino registrado.`,
-    motivation: selected.motivation,
+    motivation: milestone || selected.motivation,
     nextStep: "Agora se hidrate, recupere bem e marque como se sentiu nos exercícios. Seu professor acompanha essas informações.",
-    badge: "TREINO CONCLUÍDO",
+    badge: milestone ? "MARCO ALCANÇADO" : "TREINO CONCLUÍDO",
   };
 }
 
@@ -118,15 +154,65 @@ export function humanizeStudentEmail(input: {
   const html = `
     <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px">
       <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:18px;padding:26px">
-        <p style="margin:0 0 8px;color:#f5f5f5;font-size:15px">Oi, <strong>${student}</strong>!</p>
-        <h2 style="margin:0 0 16px;color:#00A19C;font-size:22px">${input.headline}</h2>
-        <p style="margin:0;color:#d4d4d4;font-size:15px;line-height:1.65">${input.message.replaceAll("\n","<br />")}</p>
-        ${nextStep ? `<div style="margin-top:18px;padding:14px;border-radius:12px;background:#00A19C12;border:1px solid #00A19C35;color:#d4d4d4;font-size:14px;line-height:1.6"><strong style="color:#00A19C">Próximo passo:</strong><br />${nextStep}</div>` : ""}
-        ${input.actionUrl ? `<a href="${input.actionUrl}" style="display:inline-block;margin-top:20px;background:#00A19C;color:#081312;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px">${input.actionLabel || "Acessar plataforma"}</a>` : ""}
-        <p style="margin:22px 0 0;color:#f5f5f5;font-size:14px">Conte com a gente nessa caminhada.<br /><strong>${sender}</strong><br /><span style="color:#00A19C">Funcional UP Digital</span></p>
-        <p style="margin:18px 0 0;color:#6b6b6b;font-size:11px">${disclosure}</p>
+        <p style="margin:0 0 8px;color:#f5f5f5;font-size:15px">Oi, <strong>${escapeHtml(student)}</strong>!</p>
+        <h2 style="margin:0 0 16px;color:#00A19C;font-size:22px">${escapeHtml(input.headline)}</h2>
+        <p style="margin:0;color:#d4d4d4;font-size:15px;line-height:1.65">${escapeHtml(input.message).replaceAll("\n","<br />")}</p>
+        ${nextStep ? `<div style="margin-top:18px;padding:14px;border-radius:12px;background:#00A19C12;border:1px solid #00A19C35;color:#d4d4d4;font-size:14px;line-height:1.6"><strong style="color:#00A19C">Próximo passo:</strong><br />${escapeHtml(nextStep)}</div>` : ""}
+        ${input.actionUrl ? `<a href="${escapeHtml(input.actionUrl)}" style="display:inline-block;margin-top:20px;background:#00A19C;color:#081312;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px">${escapeHtml(input.actionLabel || "Acessar plataforma")}</a>` : ""}
+        <p style="margin:22px 0 0;color:#f5f5f5;font-size:14px">Conte com a gente nessa caminhada.<br /><strong>${escapeHtml(sender)}</strong><br /><span style="color:#00A19C">Funcional UP Digital</span></p>
+        <p style="margin:18px 0 0;color:#6b6b6b;font-size:11px">${escapeHtml(disclosure)}</p>
       </div>
     </div>`;
 
   return { text, html };
+}
+
+export function buildWorkoutReleaseCommunication(input: {
+  studentName?: string | null;
+  professorName?: string | null;
+  weeklyLimit: number;
+  weekLabel: string;
+  isFirstWorkoutPackage: boolean;
+  loginUrl: string;
+}): StudentCommunication {
+  const student = firstName(input.studentName);
+  const professor = String(input.professorName || "seu professor").trim();
+  const title = input.isFirstWorkoutPackage
+    ? "Seus primeiros treinos já estão disponíveis"
+    : "Seus treinos da semana estão disponíveis";
+
+  const message = input.isFirstWorkoutPackage
+    ? `Que bom ter você por aqui. Eu sou ${professor} e vou acompanhar seus treinos e sua evolução. Seus ${input.weeklyLimit} treino(s) da semana de ${input.weekLabel} já estão prontos. Antes de começar, reserve alguns minutos para olhar exercícios, imagens e orientações com calma.`
+    : `Seus ${input.weeklyLimit} treino(s) da semana de ${input.weekLabel} já estão prontos. Eles foram organizados para você seguir avançando com segurança, técnica e consistência.`;
+
+  const nextStep = "Abra o treino antes de começar e registre como se sentiu em cada exercício. Se houver dúvida, dor ou desconforto, fale com o professor pelo chat da plataforma.";
+  const email = humanizeStudentEmail({
+    studentName: student,
+    senderName: professor,
+    headline: input.isFirstWorkoutPackage ? "Vamos começar essa jornada juntos? 💪" : "Sua semana de treino começou! ✨",
+    message,
+    nextStep,
+    automaticDisclosure: "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+    actionUrl: input.loginUrl,
+    actionLabel: "Ver meus treinos",
+  });
+
+  return {
+    title,
+    subject: input.isFirstWorkoutPackage ? `${student}, seus primeiros treinos estão prontos 💪` : `${student}, seus treinos da semana estão prontos ✨`,
+    noticeContent: [
+      `Oi, ${student}!`,
+      "",
+      message,
+      "",
+      nextStep,
+      "",
+      `Conte comigo,`,
+      professor,
+      "Funcional UP Digital",
+      "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+    ].join("\n"),
+    text: email.text,
+    html: email.html,
+  };
 }

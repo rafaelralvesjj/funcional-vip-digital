@@ -1,16 +1,18 @@
-IMPLEMENTAÇÃO — HUMANIZAÇÃO DA EXPERIÊNCIA DO ALUNO
+MOTOR DE HUMANIZAÇÃO — FUNCIONAL UP DIGITAL
 
-Arquivos alterados:
+Arquivos:
 - lib/student-experience.ts
+- app/api/cron/release-workouts/route.ts
 - app/api/workout/mark-complete/route.ts
 - app/aluno/page.tsx
 - app/api/aluno/questions/route.ts
 
-Principais mudanças:
-- Motor central de mensagens motivacionais.
-- Resumo de conclusão contextual: primeiro treino, treino completo, parcial e semana concluída.
-- Card final com mensagem positiva, resumo do esforço e próximo passo.
-- E-mail de resposta do professor mais humano e personalizado.
-- Transparência preservada quando a mensagem é automática.
+Implementado:
+- Motor central para mensagens ao aluno.
+- Variações de conclusão de treino, primeiro treino, semana concluída, treino parcial e marcos de 5, 10, 20 e múltiplos de 25 treinos.
+- E-mail e aviso de treinos liberados com tom mais humano, nome do aluno e próximo passo claro.
+- Resposta do professor por e-mail com linguagem humanizada.
+- Transparência nas mensagens automáticas.
+- Logs padronizados no e-mail de liberação de treino.
 
 Não houve alteração no Prisma ou no banco.
