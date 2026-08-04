@@ -550,7 +550,11 @@ export default function AlunoPage() {
 
         setPlans(
           rawPlans.filter((plan: any) =>
-            canStudentSeePlanByDate(plan.date || plan.createdAt)
+            canStudentSeePlanByDate(plan.date || plan.createdAt) &&
+            Array.isArray(plan.workouts) &&
+            plan.workouts.some((workout: any) =>
+              isStudentVisibleWorkoutStatus(workout?.status)
+            )
           )
         );
       }
@@ -652,7 +656,8 @@ export default function AlunoPage() {
 
         setWorkouts(
           rawWorkouts.filter((workout: any) =>
-            canStudentSeePlanByDate(workout.date || workout.createdAt)
+            canStudentSeePlanByDate(workout.date || workout.createdAt) &&
+            isStudentVisibleWorkoutStatus(workout?.status)
           )
         );
       }
@@ -1211,6 +1216,11 @@ export default function AlunoPage() {
 
   function isExpiredWorkoutDay(day: number): boolean {
     return hasPlan(day) && !isCompleted(day) && !canValidateWorkoutDay(day);
+  }
+
+  function isStudentVisibleWorkoutStatus(status?: string | null): boolean {
+    const value = String(status || "").toUpperCase();
+    return value !== "PRE_PLANEJADO" && value !== "PRECISA_REVISAO";
   }
 
   function canStudentSeePlanByDate(value?: string | null): boolean {

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
-import { expireOverduePendingWorkouts } from "@/lib/workout-status-lifecycle";
+import {
+  expireOverduePendingWorkouts,
+  releaseCurrentWeekPreplannedWorkouts,
+} from "@/lib/workout-status-lifecycle";
 
 function normalizeRole(role?: string | null) {
   const value = String(role || "").toUpperCase();
@@ -33,6 +36,12 @@ export async function GET(request: NextRequest) {
   if (access.role === "TEACHER") studentWhere.userId = access.userId;
   if (studentId) studentWhere.id = studentId;
   if (search) studentWhere.name = { contains: search, mode: "insensitive" };
+
+  // A semana atual deve aparecer como PENDENTE. Somente semanas futuras
+  // permanecem como PRE_PLANEJADO e invisíveis para o aluno.
+  await releaseCurrentWeekPreplannedWorkouts(
+    access.role === "TEACHER" ? { teacherUserId: access.userId } : {}
+  );
 
   // Garante que treinos de semanas encerradas deixem de aparecer como pendentes.
   await expireOverduePendingWorkouts(

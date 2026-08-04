@@ -5,6 +5,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 import { calculateAgeYears } from "@/lib/student-age";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
+import { releaseCurrentWeekPreplannedWorkouts } from "@/lib/workout-status-lifecycle";
 
 const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
 const WORKOUT_STATUS_PENDING = "PENDENTE";
@@ -1460,7 +1461,7 @@ export async function GET(req: NextRequest) {
     const isStudentUser = role === "STUDENT";
 
     if (id) {
-      const plan = await prisma.workoutPlan.findUnique({
+      let plan = await prisma.workoutPlan.findUnique({
         where: { id },
         include: {
           exercises: {
@@ -1502,6 +1503,42 @@ export async function GET(req: NextRequest) {
           return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
 
+        const releaseResult = await releaseCurrentWeekPreplannedWorkouts({
+          studentId: plan.studentId,
+        });
+
+        if (releaseResult.count > 0) {
+          plan = await prisma.workoutPlan.findUnique({
+            where: { id },
+            include: {
+              exercises: {
+                orderBy: { order: "asc" },
+                include: {
+                  libraryExercise: {
+                    select: { muscleGroup: true },
+                  },
+                },
+              },
+              workouts: {
+                select: {
+                  id: true,
+                  status: true,
+                  date: true,
+                  notes: true,
+                },
+                orderBy: { date: "asc" },
+              },
+            },
+          });
+
+          if (!plan) {
+            return NextResponse.json(
+              { error: "Workout plan not found" },
+              { status: 404 }
+            );
+          }
+        }
+
         const hasReleasedWorkout =
           plan.active &&
           plan.workouts.some((workout) =>
@@ -1537,6 +1574,10 @@ export async function GET(req: NextRequest) {
         if (!student || student.userAuthId !== currentUserId) {
           return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
+
+        // Se a semana já começou, qualquer treino ainda marcado como
+        // PRE_PLANEJADO é corrigido para PENDENTE antes da consulta.
+        await releaseCurrentWeekPreplannedWorkouts({ studentId });
 
         // Aluno só vê treinos que já passaram pela revisão/liberação final.
         // Treinos salvos como pré-planejamento ficam ocultos até o professor liberar.

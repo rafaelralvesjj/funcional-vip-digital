@@ -10,7 +10,10 @@ import {
 } from "@/lib/student-training-preferences";
 import { buildWorkoutCompletionExperience } from "@/lib/student-experience";
 import { getStudentDisplayName } from "@/lib/display-name";
-import { expireOverduePendingWorkouts } from "@/lib/workout-status-lifecycle";
+import {
+  expireOverduePendingWorkouts,
+  releaseCurrentWeekPreplannedWorkouts,
+} from "@/lib/workout-status-lifecycle";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -1290,6 +1293,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
+    // Corrige automaticamente qualquer treino da semana atual que tenha ficado
+    // como PRE_PLANEJADO. Treinos de semanas futuras continuam ocultos.
+    await releaseCurrentWeekPreplannedWorkouts({ studentId });
     await expireOverduePendingWorkouts({ studentId });
 
     const referenceMonth = Number.isFinite(month) && month >= 1 && month <= 12
@@ -1309,6 +1315,9 @@ export async function GET(req: NextRequest) {
           gte: start,
           lt: end,
         },
+        ...(role === "STUDENT"
+          ? { status: { notIn: ["PRE_PLANEJADO", "PRECISA_REVISAO"] } }
+          : {}),
       },
       include: {
         workoutPlan: {

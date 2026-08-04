@@ -9,6 +9,12 @@ type ExpireOverduePendingWorkoutsOptions = {
   referenceDate?: Date;
 };
 
+type ReleaseCurrentWeekPreplannedWorkoutsOptions = {
+  studentId?: string | null;
+  teacherUserId?: string | null;
+  referenceDate?: Date;
+};
+
 type LocalDateParts = {
   year: number;
   month: number;
@@ -83,6 +89,127 @@ function shiftLocalDate(parts: LocalDateParts, days: number): LocalDateParts {
     year: cursor.getUTCFullYear(),
     month: cursor.getUTCMonth() + 1,
     day: cursor.getUTCDate(),
+  };
+}
+
+
+export function getCurrentWorkoutWeekRange(referenceDate = new Date()): {
+  startOfWeek: Date;
+  endOfWeek: Date;
+} {
+  const today = getLocalDateParts(referenceDate);
+  const localCursor = new Date(Date.UTC(today.year, today.month - 1, today.day, 12, 0, 0, 0));
+  const weekday = localCursor.getUTCDay();
+  const diffToMonday = weekday === 0 ? -6 : 1 - weekday;
+
+  const startParts = shiftLocalDate(today, diffToMonday);
+  const endParts = shiftLocalDate(startParts, 7);
+
+  return {
+    startOfWeek: localMidnightToUtc(startParts),
+    endOfWeek: localMidnightToUtc(endParts),
+  };
+}
+
+/**
+ * Libera automaticamente os treinos da semana atual que ainda estejam como
+ * PRE_PLANEJADO. Treinos de semanas futuras permanecem ocultos para o aluno.
+ *
+ * A rotina é idempotente e não altera treinos concluídos, interrompidos ou
+ * marcados para revisão. Alunos com pausa ativa por baixa adesão continuam
+ * bloqueados até a retomada pelo professor.
+ */
+export async function releaseCurrentWeekPreplannedWorkouts(
+  options: ReleaseCurrentWeekPreplannedWorkoutsOptions = {}
+): Promise<{ count: number; startOfWeek: Date; endOfWeek: Date; status: string }> {
+  const { startOfWeek, endOfWeek } = getCurrentWorkoutWeekRange(
+    options.referenceDate || new Date()
+  );
+
+  const studentWhere: any = { active: true };
+
+  if (options.studentId) {
+    studentWhere.id = String(options.studentId);
+  } else if (options.teacherUserId) {
+    const teacherUserId = String(options.teacherUserId);
+    studentWhere.OR = [
+      { userId: teacherUserId },
+      {
+        contracts: {
+          some: {
+            professorId: teacherUserId,
+            status: "ACTIVE",
+            startDate: { lt: endOfWeek },
+            endDate: { gte: startOfWeek },
+          },
+        },
+      },
+    ];
+  }
+
+  const eligibleStudents = await prisma.student.findMany({
+    where: studentWhere,
+    select: { id: true },
+  });
+  const eligibleStudentIds = eligibleStudents.map((student) => student.id);
+
+  if (eligibleStudentIds.length === 0) {
+    return { count: 0, startOfWeek, endOfWeek, status: "PENDENTE" };
+  }
+
+  const pausedStudents = await prisma.studentCareEvent.findMany({
+    where: {
+      studentId: { in: eligibleStudentIds },
+      eventType: "PAUSA_BAIXA_ADERENCIA",
+      status: { not: "RESOLVIDO" },
+    },
+    select: { studentId: true },
+    distinct: ["studentId"],
+  });
+  const pausedStudentIds = new Set(pausedStudents.map((event) => event.studentId));
+  const releasableStudentIds = eligibleStudentIds.filter(
+    (studentId) => !pausedStudentIds.has(studentId)
+  );
+
+  if (releasableStudentIds.length === 0) {
+    return { count: 0, startOfWeek, endOfWeek, status: "PENDENTE" };
+  }
+
+  const candidates = await prisma.workout.findMany({
+    where: {
+      studentId: { in: releasableStudentIds },
+      status: "PRE_PLANEJADO",
+      date: { gte: startOfWeek, lt: endOfWeek },
+    },
+    select: {
+      id: true,
+      workoutPlan: {
+        select: { active: true },
+      },
+    },
+  });
+
+  const workoutIds = candidates
+    .filter((workout) => workout.workoutPlan?.active)
+    .map((workout) => workout.id);
+
+  if (workoutIds.length === 0) {
+    return { count: 0, startOfWeek, endOfWeek, status: "PENDENTE" };
+  }
+
+  const result = await prisma.workout.updateMany({
+    where: {
+      id: { in: workoutIds },
+      status: "PRE_PLANEJADO",
+    },
+    data: { status: "PENDENTE" },
+  });
+
+  return {
+    count: result.count,
+    startOfWeek,
+    endOfWeek,
+    status: "PENDENTE",
   };
 }
 
