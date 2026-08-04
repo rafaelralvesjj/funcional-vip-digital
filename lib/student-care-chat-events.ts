@@ -234,27 +234,6 @@ export async function registerCareEventFromStudentMessage({
     };
   }
 
-  const exactMessageEvent = await prisma.studentCareEvent.findFirst({
-    where: {
-      studentId,
-      source: "CHAT_DUVIDAS",
-      description: {
-        contains: `Mensagem: ${messageId}`,
-      },
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (exactMessageEvent) {
-    return {
-      action: "IGNORED",
-      eventId: exactMessageEvent.id,
-      reason: "Mensagem já registrada em evento de cuidado.",
-    };
-  }
-
   const student = await prisma.student.findUnique({
     where: { id: studentId },
     select: {
@@ -294,6 +273,133 @@ export async function registerCareEventFromStudentMessage({
   const professorMessage = buildProfessorMessage(
     careClassification.requiresTrainingPause
   );
+
+  const [exactMessageEvent, activePauseEvent] = await Promise.all([
+    prisma.studentCareEvent.findFirst({
+      where: {
+        studentId,
+        source: "CHAT_DUVIDAS",
+        description: {
+          contains: `Mensagem: ${messageId}`,
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+    prisma.studentCareEvent.findFirst({
+      where: {
+        studentId,
+        eventType: "PAUSA_POR_CUIDADO",
+        status: {
+          in: ["ABERTO", "REQUER_REVISAO", "EM_REVISAO"],
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+  ]);
+
+  if (exactMessageEvent) {
+    if (
+      activePauseEvent &&
+      exactMessageEvent.id !== activePauseEvent.id &&
+      exactMessageEvent.status !== "RESOLVIDO" &&
+      exactMessageEvent.createdAt >= activePauseEvent.createdAt
+    ) {
+      const duplicateDescription = String(exactMessageEvent.description || "").trim();
+      const currentPauseDescription = String(activePauseEvent.description || "").trim();
+      const mergedPauseDescription = duplicateDescription && !currentPauseDescription.includes(`Mensagem: ${messageId}`)
+        ? [
+            currentPauseDescription,
+            "",
+            "--- Relato mesclado automaticamente ao evento de pausa ---",
+            duplicateDescription,
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : currentPauseDescription;
+
+      const duplicateResolutionNote = [
+        exactMessageEvent.resolutionNotes,
+        `[${new Date().toLocaleDateString("pt-BR")}] Evento mesclado automaticamente à pausa por cuidado ${activePauseEvent.id}.`,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      await prisma.$transaction([
+        prisma.studentCareEvent.update({
+          where: { id: activePauseEvent.id },
+          data: {
+            description: mergedPauseDescription || activePauseEvent.description,
+            professorId: effectiveProfessorId || activePauseEvent.professorId,
+            authorId: authorId || activePauseEvent.authorId || null,
+            contractId: activePauseEvent.contractId || contractId,
+            weekStart: startOfWeek,
+            weekEnd: endOfWeek,
+          },
+        }),
+        prisma.studentCareEvent.update({
+          where: { id: exactMessageEvent.id },
+          data: {
+            status: "RESOLVIDO",
+            resolvedAt: new Date(),
+            resolutionNotes: duplicateResolutionNote,
+          },
+        }),
+      ]);
+
+      return {
+        action: "UPDATED",
+        eventId: activePauseEvent.id,
+        reason: "Evento duplicado mesclado à pausa por cuidado ativa.",
+      };
+    }
+
+    return {
+      action: "IGNORED",
+      eventId: exactMessageEvent.id,
+      reason: "Mensagem já registrada em evento de cuidado.",
+    };
+  }
+
+  if (activePauseEvent) {
+    const currentPauseDescription = String(activePauseEvent.description || "").trim();
+    const mergedPauseDescription = currentPauseDescription.includes(`Mensagem: ${messageId}`)
+      ? currentPauseDescription
+      : [
+          currentPauseDescription,
+          "",
+          "--- Atualização recebida no chat durante a pausa ---",
+          description,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+    const updatedPause = await prisma.studentCareEvent.update({
+      where: { id: activePauseEvent.id },
+      data: {
+        professorId: effectiveProfessorId || activePauseEvent.professorId,
+        authorId: authorId || activePauseEvent.authorId || null,
+        description: mergedPauseDescription,
+        studentMessage: content,
+        professorMessage: buildProfessorMessage(true),
+        contractId: activePauseEvent.contractId || contractId,
+        weekStart: startOfWeek,
+        weekEnd: endOfWeek,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return {
+      action: "UPDATED",
+      eventId: updatedPause.id,
+      reason: "Relato incorporado à pausa por cuidado ativa.",
+    };
+  }
 
   const openConversationEvent = await prisma.studentCareEvent.findFirst({
     where: {

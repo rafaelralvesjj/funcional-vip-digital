@@ -1170,7 +1170,8 @@ export async function PUT(request: NextRequest) {
       }
 
       const studentName = existing.student.name || "Aluno";
-      const pauseDescription = String(body?.pauseReason || existing.description || "").trim();
+      const originalDescription = String(existing.description || "").trim();
+      const pauseDescription = String(body?.pauseReason || "").trim();
       const notePrefix = `[${formatDatePtBr(new Date())}] Treinos pausados por cuidado pelo professor.`;
       const noteToAdd = pauseDescription
         ? `${notePrefix}
@@ -1183,7 +1184,7 @@ Motivo registrado: ${pauseDescription}`
       const copy = getCareCopy({
         eventType: "PAUSA_POR_CUIDADO",
         studentName,
-        description: pauseDescription || existing.description || null,
+        description: originalDescription || pauseDescription || null,
       });
 
       let contractId = existing.contractId || null;
@@ -1218,7 +1219,7 @@ Motivo registrado: ${pauseDescription}`
           severity: copy.severity,
           status: copy.status,
           title: copy.title,
-          description: pauseDescription || existing.description || null,
+          description: originalDescription || pauseDescription || null,
           studentMessage: copy.studentMessage,
           professorMessage: copy.professorMessage,
           resolutionNotes,
