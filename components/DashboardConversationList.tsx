@@ -93,10 +93,18 @@ type BatchAdjustmentProposal = {
   workouts: Array<AdjustmentProposal & { workoutId: string }>;
 };
 
+type BatchEligibleWorkout = {
+  workoutId: string;
+  name: string;
+  date: string;
+  status: string;
+};
+
 type BatchAdjustmentDraftState = {
   manualResponse: string;
   proposal?: BatchAdjustmentProposal;
   eligibleWorkoutCount?: number;
+  eligibleWorkouts?: BatchEligibleWorkout[];
   openCareEventCount?: number;
 };
 
@@ -705,8 +713,28 @@ export default function DashboardConversationList({
       link.href = url; link.download = match?.[1] || `pacote-alterar-treinos-${conversation.id}.zip`;
       document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
       const count = Number(response.headers.get("X-Eligible-Workout-Count") || 0);
-      setBatchAdjustmentByConversationId((current) => ({ ...current, [conversation.id]: { manualResponse: "", eligibleWorkoutCount: count } }));
-      setSuccessById((current) => ({ ...current, [conversation.id]: `Pacote gerado para ${count} treino(s) pendente(s) e futuro(s). Envie à IA e importe o TXT retornado.` }));
+      let eligibleWorkouts: BatchEligibleWorkout[] = [];
+      const encodedDetails = response.headers.get("X-Eligible-Workout-Details") || "";
+      if (encodedDetails) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(encodedDetails));
+          eligibleWorkouts = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          eligibleWorkouts = [];
+        }
+      }
+      setBatchAdjustmentByConversationId((current) => ({
+        ...current,
+        [conversation.id]: {
+          manualResponse: "",
+          eligibleWorkoutCount: count,
+          eligibleWorkouts,
+        },
+      }));
+      setSuccessById((current) => ({
+        ...current,
+        [conversation.id]: `Um único pacote foi gerado para ${count} treino(s). A IA deve devolver exatamente esses mesmos workoutId, sem usar códigos genéricos.`,
+      }));
     } catch (error) {
       console.error("Prepare conversation adjustment error:", error);
       setErrorById((current) => ({ ...current, [conversation.id]: "Erro ao gerar o pacote de alteração." }));
@@ -729,7 +757,16 @@ export default function DashboardConversationList({
       const response = await fetch("/api/workout-adjustments", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ action:"VALIDATE_CONVERSATION_BATCH", conversationId:conversation.id, manualResponse:draft.manualResponse }) });
       const data = await response.json().catch(()=>null);
       if (!response.ok) { setErrorById((current)=>({ ...current,[conversation.id]:getErrorMessage(data,"Não foi possível validar a adaptação.") })); return; }
-      setBatchAdjustmentByConversationId((current)=>({ ...current,[conversation.id]:{ ...draft, proposal:data.proposal, eligibleWorkoutCount:data.eligibleWorkoutCount, openCareEventCount:Array.isArray(data.openCareEvents)?data.openCareEvents.length:0 } }));
+      setBatchAdjustmentByConversationId((current)=>({
+        ...current,
+        [conversation.id]:{
+          ...draft,
+          proposal:data.proposal,
+          eligibleWorkoutCount:data.eligibleWorkoutCount,
+          eligibleWorkouts:Array.isArray(data.eligibleWorkouts) ? data.eligibleWorkouts : draft.eligibleWorkouts,
+          openCareEventCount:Array.isArray(data.openCareEvents)?data.openCareEvents.length:0,
+        },
+      }));
       setSuccessById((current)=>({ ...current,[conversation.id]:data.message||"Adaptação validada." }));
     } catch(error){ console.error(error); setErrorById((current)=>({ ...current,[conversation.id]:"Erro ao validar a adaptação." })); } finally { setAdjustmentLoadingKey(null); }
   }
@@ -1180,7 +1217,27 @@ export default function DashboardConversationList({
                     </button>
                     {batchAdjustmentDraft && (
                       <>
-                        <p className="text-[11px] text-cyan-100">Pacote preparado para {batchAdjustmentDraft.eligibleWorkoutCount || 0} treino(s).</p>
+                        <p className="text-[11px] text-cyan-100">
+                          Um único pacote preparado para {batchAdjustmentDraft.eligibleWorkoutCount || 0} treino(s).
+                        </p>
+                        {batchAdjustmentDraft.eligibleWorkouts?.length ? (
+                          <div className="space-y-2 rounded-lg border border-cyan-400/15 bg-black/20 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">
+                              Treinos que serão alterados
+                            </p>
+                            {batchAdjustmentDraft.eligibleWorkouts.map((workout) => (
+                              <div key={workout.workoutId} className="flex items-start justify-between gap-3 text-[11px]">
+                                <div>
+                                  <p className="font-semibold text-[#f5f5f5]">{workout.name}</p>
+                                  <p className="text-[#a1a1a1]">{formatDateTime(workout.date)} · {workout.status}</p>
+                                </div>
+                                <span className="max-w-[180px] break-all text-right font-mono text-[9px] text-cyan-200">
+                                  {workout.workoutId}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                         <input type="file" accept=".txt,.json,text/plain,application/json" onChange={(event) => handleImportBatchResponse(conversation.id, event.target.files?.[0])} className="block w-full text-[11px] text-[#d4d4d4]" />
                         <textarea rows={8} value={batchAdjustmentDraft.manualResponse} onChange={(event) => setBatchAdjustmentByConversationId((current)=>({ ...current,[conversation.id]:{ ...(current[conversation.id] || { manualResponse:"" }), manualResponse:event.target.value, proposal:undefined } }))} placeholder="Cole aqui o JSON ou importe o TXT devolvido pela IA" className="w-full rounded-lg border border-cyan-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none" />
                         <button type="button" onClick={() => handleValidateBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey) || !batchAdjustmentDraft.manualResponse.trim()} className="w-full rounded-lg border border-cyan-400/30 px-3 py-2 text-[11px] font-semibold text-cyan-200 disabled:opacity-50">Validar adaptação</button>
@@ -1254,65 +1311,24 @@ export default function DashboardConversationList({
                       </p>
                     </div>
 
-                    {adjustmentRequest.pendingWorkouts.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-semibold text-[#f5f5f5]">
-                          Treino(s) pendente(s) desta semana
-                        </p>
-
-                        {adjustmentRequest.pendingWorkouts.map((workout) => {
-                          const prepareKey = `${conversation.id}:${workout.workoutId}:prepare`;
-                          const isPreparing = adjustmentLoadingKey === prepareKey;
-
-                          return (
-                            <div
-                              key={workout.workoutId}
-                              className="flex flex-col gap-3 rounded-lg border border-[#ffffff10] bg-[#111111] p-3 sm:flex-row sm:items-center sm:justify-between"
-                            >
-                              <div>
-                                <p className="text-xs font-semibold text-[#f5f5f5]">
-                                  {workout.name || "Treino pendente"}
-                                </p>
-                                <p className="mt-1 text-[10px] text-[#a1a1a1]">
-                                  {formatDateTime(workout.date)} · {workout.status}
-                                </p>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handlePrepareAdjustmentPrompt(
-                                    conversation,
-                                    workout.workoutId
-                                  )
-                                }
-                                disabled={Boolean(adjustmentLoadingKey)}
-                                className="rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-bold text-black transition hover:bg-[#007D79] disabled:opacity-50"
-                              >
-                                {isPreparing
-                                  ? "Gerando pacote..."
-                                  : "Baixar pacote ZIP para adaptação"}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="rounded-lg border border-[#ffffff10] bg-black/20 p-3 text-xs text-[#a1a1a1]">
-                        Não há treino pendente desta semana para adaptar. A preferência continuará ativa para os próximos treinos.
+                    <div className="space-y-3 rounded-lg border border-amber-400/15 bg-black/20 p-3">
+                      <p className="text-[11px] leading-relaxed text-[#d4d4d4]">
+                        A adaptação será feita em um único pacote para todos os treinos pendentes da semana atual e todos os treinos futuros ainda não iniciados.
                       </p>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => handleFutureOnly(conversation)}
-                      disabled={Boolean(adjustmentLoadingKey)}
-                      className="w-full rounded-lg border border-[#ffffff20] px-3 py-2 text-[11px] font-semibold text-[#f5f5f5] transition hover:border-[#00A19C] hover:text-[#00A19C] disabled:opacity-50"
-                    >
-                      {adjustmentLoadingKey === `${conversation.id}:future-only`
-                        ? "Registrando decisão..."
-                        : "Manter treino atual e aplicar nos próximos"}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePrepareConversationAdjustment(conversation)}
+                        disabled={Boolean(adjustmentLoadingKey)}
+                        className="w-full rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-bold text-black transition hover:bg-[#007D79] disabled:opacity-50"
+                      >
+                        {adjustmentLoadingKey === `${conversation.id}:batch-prepare`
+                          ? "Gerando pacote único..."
+                          : "Alterar todos os treinos elegíveis com IA"}
+                      </button>
+                      <p className="text-[10px] leading-relaxed text-amber-100/70">
+                        O sistema preserva treinos concluídos, vencidos ou já iniciados. O pacote informa os workoutId reais que a IA deve devolver.
+                      </p>
+                    </div>
 
                     {adjustmentDraft?.proposal && (
                       <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4 space-y-3">

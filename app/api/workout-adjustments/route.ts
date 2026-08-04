@@ -896,6 +896,11 @@ export async function POST(req: NextRequest) {
           "Adapte TODOS os treinos elegíveis listados neste pacote com base no relato do aluno e em todo o contexto.",
           "Responda somente com JSON válido no formato de MODELO_RESPOSTA.json.",
           "Use somente exerciseId da biblioteca permitida. Não invente exercícios, cargas, lesões, restrições, equipamentos ou diagnósticos.",
+          "REGRA IMUTÁVEL DE IDENTIFICAÇÃO: cada workoutId devolvido deve ser copiado exatamente de CONTEXTO/TREINOS_ELEGIVEIS.json.",
+          `WorkoutId elegíveis obrigatórios: ${workoutPayload.map((w:any)=>w.workoutId).join(", ")}`,
+          "Não use ALL_PENDING_AND_FUTURE, ALL, CURRENT_WEEK, nomes de treino, datas ou qualquer código genérico no campo workoutId.",
+          "A quantidade de itens em workouts deve ser exatamente igual à quantidade de treinos elegíveis, sem omissões e sem duplicidades.",
+          "Mesmo quando a mudança for apenas de equipamento, preferência ou contexto, devolva cada treino elegível completo usando seu workoutId real.",
           "Não altere treinos concluídos, vencidos ou já iniciados. Preserve as datas e workoutId exatamente como fornecidos.",
           "Se houver evento de cuidado aberto, gere apenas o rascunho; a publicação ficará bloqueada até a resolução pelo professor.",
           "studentMessage deve explicar de forma humana que os próximos treinos foram revisados com base no relato do aluno.",
@@ -911,7 +916,22 @@ export async function POST(req: NextRequest) {
         zip.file("CONTEXTO/BIBLIOTECA_EXERCICIOS.json", JSON.stringify(library.map((e:any)=>({ exerciseId:e.id,name:e.name,group:e.muscleGroup,location:e.locationTags,equipment:e.equipmentTags,intensity:e.intensity })), null, 2));
         zip.file("manifesto.json", JSON.stringify({ packageType: "WORKOUT_ADJUSTMENT_FROM_CONVERSATION", conversationId, studentId: batchContext.student.id, studentName: batchContext.student.name, eligibleWorkoutIds: workoutPayload.map((w:any)=>w.workoutId), eligibleWorkoutDates: workoutPayload.map((w:any)=>w.date), openCareEventCount: batchContext.openCareEvents.length, generatedAt: new Date().toISOString() }, null, 2));
         const output = await zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
-        return new NextResponse(output, { status: 200, headers: { "Content-Type":"application/zip", "Content-Disposition": `attachment; filename="pacote-alterar-treinos-${batchContext.student.name.toLowerCase().replace(/[^a-z0-9]+/gi,"-")}.zip"`, "Cache-Control":"no-store", "X-Eligible-Workout-Count": String(workoutPayload.length) } });
+        const eligibleWorkoutDetails = workoutPayload.map((workout:any) => ({
+          workoutId: workout.workoutId,
+          name: workout.plan?.name || "Treino pendente",
+          date: workout.date,
+          status: workout.status,
+        }));
+        return new NextResponse(output, {
+          status: 200,
+          headers: {
+            "Content-Type":"application/zip",
+            "Content-Disposition": `attachment; filename="pacote-alterar-treinos-${batchContext.student.name.toLowerCase().replace(/[^a-z0-9]+/gi,"-")}.zip"`,
+            "Cache-Control":"no-store",
+            "X-Eligible-Workout-Count": String(workoutPayload.length),
+            "X-Eligible-Workout-Details": encodeURIComponent(JSON.stringify(eligibleWorkoutDetails)),
+          },
+        });
       }
 
       const parsedBatch = parseBatchProposal(body?.manualResponse || body?.proposal);
@@ -927,7 +947,21 @@ export async function POST(req: NextRequest) {
         normalizedWorkouts.push({ ...item, exercises: item.exercises.map((ex:any,index:number)=>({ ...ex, exerciseName: validation.normalizedExercises?.[index]?.name || "Exercício da biblioteca" })), _normalizedExercises: validation.normalizedExercises });
       }
       const normalizedBatch = { ...parsedBatch.proposal, workouts: normalizedWorkouts };
-      if (action === "VALIDATE_CONVERSATION_BATCH") return NextResponse.json({ ok:true, proposal: normalizedBatch, eligibleWorkoutCount: batchContext.workouts.length, openCareEvents: batchContext.openCareEvents, message: `Resposta validada para ${batchContext.workouts.length} treino(s). Revise antes de aplicar.` });
+      if (action === "VALIDATE_CONVERSATION_BATCH") {
+        return NextResponse.json({
+          ok:true,
+          proposal: normalizedBatch,
+          eligibleWorkoutCount: batchContext.workouts.length,
+          eligibleWorkouts: batchContext.workouts.map((workout:any) => ({
+            workoutId: workout.id,
+            name: workout.workoutPlan?.name || "Treino pendente",
+            date: workout.date.toISOString(),
+            status: workout.status,
+          })),
+          openCareEvents: batchContext.openCareEvents,
+          message: `Resposta validada para ${batchContext.workouts.length} treino(s). Revise antes de aplicar.`,
+        });
+      }
 
       if (batchContext.openCareEvents.length > 0) return NextResponse.json({ error: "Há evento de cuidado aberto. A adaptação foi preparada, mas a publicação permanece bloqueada até a resolução do evento." }, { status: 409 });
       const now = new Date();
