@@ -89,8 +89,15 @@ async function getConversationBatchContext({
   }
 
   const today = new Date(); today.setHours(0,0,0,0);
+  // A adaptação deve considerar TODOS os treinos pendentes da semana atual,
+  // inclusive os que ficaram para trás dentro da mesma semana, além dos futuros.
+  const weekStart = new Date(today);
+  const weekDay = weekStart.getDay();
+  const daysSinceMonday = weekDay === 0 ? 6 : weekDay - 1;
+  weekStart.setDate(weekStart.getDate() - daysSinceMonday);
+
   const workouts = await prisma.workout.findMany({
-    where: { studentId: conversation.student.id, status: "PENDENTE", date: { gte: today }, workoutPlanId: { not: null } },
+    where: { studentId: conversation.student.id, status: "PENDENTE", date: { gte: weekStart }, workoutPlanId: { not: null } },
     orderBy: { date: "asc" },
     include: { workoutPlan: { include: { exercises: { orderBy: { order: "asc" } } } } },
   });

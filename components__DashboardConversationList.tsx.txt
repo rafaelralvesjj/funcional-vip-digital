@@ -1330,6 +1330,70 @@ export default function DashboardConversationList({
                       </p>
                     </div>
 
+                    {batchAdjustmentDraft && (
+                      <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 p-4 space-y-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">Importar resposta da IA</p>
+                        <p className="text-[11px] leading-relaxed text-[#d4d4d4]">
+                          O pacote foi preparado para {batchAdjustmentDraft.eligibleWorkoutCount || 0} treino(s). Importe o TXT/JSON devolvido pela IA ou cole o conteúdo abaixo.
+                        </p>
+                        {batchAdjustmentDraft.eligibleWorkouts?.length ? (
+                          <div className="space-y-2 rounded-lg border border-cyan-400/15 bg-black/20 p-3">
+                            {batchAdjustmentDraft.eligibleWorkouts.map((workout) => (
+                              <div key={workout.workoutId} className="text-[11px]">
+                                <p className="font-semibold text-[#f5f5f5]">{workout.name}</p>
+                                <p className="text-[#a1a1a1]">{formatDateTime(workout.date)} · {workout.status}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        <input
+                          type="file"
+                          accept=".txt,.json,text/plain,application/json"
+                          onChange={(event) => handleImportBatchResponse(conversation.id, event.target.files?.[0])}
+                          className="block w-full text-[11px] text-[#d4d4d4]"
+                        />
+                        <textarea
+                          rows={8}
+                          value={batchAdjustmentDraft.manualResponse}
+                          onChange={(event) => setBatchAdjustmentByConversationId((current) => ({
+                            ...current,
+                            [conversation.id]: {
+                              ...(current[conversation.id] || { manualResponse: "" }),
+                              manualResponse: event.target.value,
+                              proposal: undefined,
+                            },
+                          }))}
+                          placeholder="Cole aqui o JSON ou importe o TXT devolvido pela IA"
+                          className="w-full rounded-lg border border-cyan-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleValidateBatchAdjustment(conversation)}
+                          disabled={Boolean(adjustmentLoadingKey) || !batchAdjustmentDraft.manualResponse.trim()}
+                          className="w-full rounded-lg border border-cyan-400/30 px-3 py-2 text-[11px] font-semibold text-cyan-200 disabled:opacity-50"
+                        >
+                          Validar adaptação
+                        </button>
+                        {batchAdjustmentDraft.proposal && (
+                          <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3 space-y-2">
+                            <p className="text-xs font-semibold text-emerald-300">{batchAdjustmentDraft.proposal.workouts.length} treino(s) prontos para alteração</p>
+                            {batchAdjustmentDraft.openCareEventCount ? (
+                              <p className="text-[11px] text-amber-300">Há evento de cuidado aberto. A publicação ficará bloqueada até a resolução.</p>
+                            ) : null}
+                            <p className="text-[11px] text-[#d4d4d4]">{batchAdjustmentDraft.proposal.rationale}</p>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyBatchAdjustment(conversation)}
+                              disabled={Boolean(adjustmentLoadingKey)}
+                              className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50"
+                            >
+                              Aplicar em todos os treinos elegíveis
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {adjustmentDraft?.proposal && (
                       <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4 space-y-3">
                         <div>

@@ -1,17 +1,16 @@
-CORREÇÃO — ADAPTAÇÃO EM PACOTE ÚNICO
+CORREÇÃO — IMPORTAÇÃO DA ADAPTAÇÃO E CONTAGEM DE TREINOS
 
 Arquivos alterados:
 - app/api/workout-adjustments/route.ts
 - components/DashboardConversationList.tsx
 
 O que muda:
-- A preferência no chat deixa de gerar um pacote por treino.
-- O professor baixa um único ZIP para todos os treinos elegíveis.
-- A tela mostra quantidade, nomes, datas e workoutId reais.
-- O prompt proíbe IDs genéricos como ALL_PENDING_AND_FUTURE.
-- A IA deve devolver exatamente todos os workoutId do pacote, sem omissões ou duplicidades.
-- Mesmo ajustes simples de equipamento ou preferência devem devolver cada treino elegível completo.
-- Treinos concluídos, vencidos ou iniciados continuam preservados.
-- Eventos de cuidado continuam bloqueando a publicação, mas não a preparação do rascunho.
+- A área para importar o TXT/JSON agora aparece dentro do próprio cartão de preferência.
+- Também é possível colar o JSON e validar sem sair da conversa.
+- Após validar, aparece o botão para aplicar em todos os treinos elegíveis.
+- A busca passa a considerar TODOS os treinos pendentes da semana atual,
+  inclusive os que ficaram pendentes em dias anteriores da mesma semana,
+  além de todos os treinos futuros ainda não iniciados.
+- Treinos concluídos ou já iniciados continuam preservados.
 
 Não houve alteração no Prisma nem no banco.
