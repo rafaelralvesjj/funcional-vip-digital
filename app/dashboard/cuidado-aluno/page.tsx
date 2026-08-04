@@ -374,6 +374,50 @@ export default function CuidadoAlunoPage() {
     setSavingId(null);
   }
 
+  async function activateCarePause(event: CareEvent) {
+    if (!canManageEvents) {
+      setMessage({ type: "error", text: "A gestão visualiza os eventos, mas somente o professor responsável pode pausar treinos por cuidado." });
+      return;
+    }
+
+    setSavingId(event.id);
+    setMessage(null);
+
+    const pauseReason = String(
+      resolutionNotesById[event.id] ?? event.resolutionNotes ?? event.description ?? ""
+    ).trim();
+
+    try {
+      const res = await fetch("/api/student-care-events", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: event.id,
+          action: "ACTIVATE_CARE_PAUSE",
+          pauseReason: pauseReason || event.description || null,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text: data?.message || "Treinos pausados por cuidado com sucesso.",
+        });
+        await loadEvents();
+      } else {
+        setMessage({ type: "error", text: data?.error || "Erro ao pausar treinos por cuidado." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao pausar treinos por cuidado." });
+    }
+
+    setSavingId(null);
+  }
+
   async function saveEventNotes(event: CareEvent) {
     if (!canManageEvents) {
       setMessage({ type: "error", text: "A gestão visualiza os eventos, mas somente o professor responsável pode salvar anotações." });
@@ -662,6 +706,17 @@ export default function CuidadoAlunoPage() {
                     </button>
                   )}
 
+                  {canManageEvents && event.eventType !== "PAUSA_POR_CUIDADO" && event.status !== "RESOLVIDO" && ["CUIDADO", "REVISAO"].includes(event.severity) && (
+                    <button
+                      type="button"
+                      disabled={savingId === event.id}
+                      onClick={() => activateCarePause(event)}
+                      className="text-xs px-3 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                    >
+                      Pausar treinos por cuidado
+                    </button>
+                  )}
+
                   {canManageEvents && event.status !== "RESOLVIDO" && (
                     <button
                       type="button"
@@ -795,9 +850,16 @@ export default function CuidadoAlunoPage() {
                 />
 
                 {canManageEvents && (
-                  <p className="mt-2 text-[11px] text-[#6b6b6b]">
-                    Salvar a anotação não resolve o evento nem altera o status atual.
-                  </p>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[11px] text-[#6b6b6b]">
+                      Salvar a anotação não resolve o evento nem altera o status atual.
+                    </p>
+                    {event.eventType !== "PAUSA_POR_CUIDADO" && event.status !== "RESOLVIDO" && ["CUIDADO", "REVISAO"].includes(event.severity) ? (
+                      <p className="text-[11px] text-red-300/80">
+                        Se decidir interromper os próximos treinos até nova liberação, use o botão “Pausar treinos por cuidado”. O aluno será avisado e verá o botão para sinalizar retorno quando estiver apto(a).
+                      </p>
+                    ) : null}
+                  </div>
                 )}
               </div>
             </div>
