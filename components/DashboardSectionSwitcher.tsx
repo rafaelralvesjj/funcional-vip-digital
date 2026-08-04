@@ -10,6 +10,7 @@ import {
   HeartPulse,
   Link2,
   MessageCircle,
+  RotateCcw,
   SlidersHorizontal,
   Users,
 } from "lucide-react";
@@ -57,6 +58,8 @@ function CardIcon({ id }: { id: string }) {
       return <Link2 className={className} />;
     case "missing-current-week-workouts":
       return <Dumbbell className={className} />;
+    case "care-return-preparation":
+      return <RotateCcw className={className} />;
     case "missing-next-week-workouts":
       return <CalendarDays className={className} />;
     case "pending-workouts":

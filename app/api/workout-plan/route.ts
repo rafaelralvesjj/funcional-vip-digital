@@ -11,6 +11,13 @@ const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
 const WORKOUT_STATUS_PENDING = "PENDENTE";
 const WORKOUT_STATUS_NEEDS_REVIEW = "PRECISA_REVISAO";
 const WORKOUT_STATUS_COMPLETED = "CONCLUIDO";
+const RETURN_AWAITING_WORKOUT_MARKER = "[RETOMADA_AGUARDANDO_NOVO_TREINO]";
+const RETURN_WORKOUT_RELEASED_MARKER = "[RETOMADA_TREINO_LIBERADO]";
+
+function extractCareConversationId(value?: string | null): string | null {
+  const match = String(value || "").match(/Conversa:\s*([0-9a-fA-F-]{36})/);
+  return match?.[1] || null;
+}
 
 function getAppLoginUrl(): string {
   const appUrl =
@@ -409,10 +416,12 @@ async function notifyWorkoutAvailable({
     select: {
       id: true,
       name: true,
+      preferredName: true,
       email: true,
       userAuthId: true,
       user: {
         select: {
+          id: true,
           name: true,
         },
       },
@@ -421,50 +430,89 @@ async function notifyWorkoutAvailable({
 
   if (!student) return;
 
-  const studentName = student.name || "Aluno";
+  const studentName = student.preferredName || student.name || "Aluno";
   const professorName = student.user?.name || "seu professor";
   const studentEmail = await getStudentEmail(student);
   const loginUrl = getAppLoginUrl();
 
+  const pendingCareReturn = await prisma.studentCareEvent.findFirst({
+    where: {
+      studentId,
+      eventType: "PAUSA_POR_CUIDADO",
+      status: "RESOLVIDO",
+      resolutionNotes: { contains: RETURN_AWAITING_WORKOUT_MARKER },
+    },
+    select: {
+      id: true,
+      description: true,
+      resolutionNotes: true,
+      resolvedAt: true,
+      professorId: true,
+    },
+    orderBy: [{ resolvedAt: "desc" }, { updatedAt: "desc" }],
+  });
+
+  const isCareReturnPackage = Boolean(
+    pendingCareReturn &&
+      !String(pendingCareReturn.resolutionNotes || "").includes(RETURN_WORKOUT_RELEASED_MARKER)
+  );
+
   const weekEndDisplay = new Date(endOfWeek.getTime() - 1);
   const weekLabel = `${formatDatePtBr(startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`;
 
-  const title = isFirstWorkoutPackage
-    ? "Seus primeiros treinos já estão disponíveis"
-    : "Seus treinos da semana estão disponíveis";
+  const title = isCareReturnPackage
+    ? "Sua retomada foi liberada e os novos treinos estão disponíveis"
+    : isFirstWorkoutPackage
+      ? "Seus primeiros treinos já estão disponíveis"
+      : "Seus treinos da semana estão disponíveis";
 
-  const content = isFirstWorkoutPackage
+  const content = isCareReturnPackage
     ? [
         `Oi, ${studentName}!`,
         "",
-        `Eu sou ${professorName} e vou acompanhar seus treinos e sua evolução no Funcional UP Digital.`,
-        `Seus ${weeklyLimit} treino(s) da semana de ${weekLabel} já estão disponíveis.`,
+        "Sua retomada foi liberada e seus novos treinos já estão disponíveis.",
+        `A programação da semana de ${weekLabel} foi preparada considerando o período de pausa e o retorno informado por você.`,
+        "Comece com atenção, respeite as orientações e não tente compensar o período parado aumentando carga, impacto ou volume por conta própria.",
+        "Se perceber dor, inchaço, limitação ou qualquer dificuldade durante a execução, interrompa o treino e me avise pelo chat da plataforma.",
+        "Quando estiver tudo certo, você pode encerrar a conversa de acompanhamento que iniciou no chat.",
         "",
-        "Como este é o seu primeiro treino, separe cerca de 10 minutos antes de começar para olhar tudo com calma: exercícios, imagens, orientações, séries, repetições e cuidados de execução.",
-        "Se surgir qualquer dúvida, fale comigo pelo chat da plataforma antes de executar. Esse será nosso principal canal de comunicação sobre treino, porque mantém o acompanhamento registrado e organizado.",
-        "Durante ou ao finalizar o treino, nunca deixe de registrar qualquer incômodo, dor ou desconforto, mesmo que pareça leve. Use o registro do próprio treino ao concluir a sessão. Se precisar falar antes, tiver dúvida sobre continuar ou não conseguir finalizar, use o chat da plataforma. Essas informações chegam ao professor e impactam diretamente a montagem dos próximos treinos.",
-        "Acompanhe também seus e-mails e os avisos da plataforma. Para dúvidas de treino, não responda pelo WhatsApp; esse canal fica reservado para contatos específicos da gestão.",
-        "",
-        "Conte comigo nesse processo. Vamos evoluir com segurança, consistência e respeitando o seu momento.",
-        "",
+        "Bom retorno!",
         professorName,
         "Funcional UP Digital",
-        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+        "Mensagem automática de retomada enviada em nome do seu professor.",
       ].join("\n")
-    : [
-        `Oi, ${studentName}!`,
-        "",
-        `Sou ${professorName}. Seus ${weeklyLimit} treino(s) da semana de ${weekLabel} já estão disponíveis.`,
-        "Antes de começar, confira as orientações, imagens, séries, repetições e cuidados de cada exercício.",
-        "Se tiver dúvida ou precisar contar como foi a execução, use o chat da plataforma. Assim, consigo acompanhar seu histórico e ajustar os próximos treinos com mais segurança.",
-        "Lembre-se de registrar no próprio treino qualquer incômodo, dor ou desconforto. Se precisar falar antes de concluir ou tiver dúvida sobre continuar, use o chat da plataforma. Seu relato faz parte do acompanhamento e influencia diretamente os próximos treinos.",
-        "Para assuntos de treino, não responda pelo WhatsApp. A gestão pode usar esse canal em situações específicas.",
-        "",
-        "Bom treino!",
-        professorName,
-        "Funcional UP Digital",
-        "Mensagem automática de acompanhamento enviada em nome do seu professor.",
-      ].join("\n");
+    : isFirstWorkoutPackage
+      ? [
+          `Oi, ${studentName}!`,
+          "",
+          `Eu sou ${professorName} e vou acompanhar seus treinos e sua evolução no Funcional UP Digital.`,
+          `Seus ${weeklyLimit} treino(s) da semana de ${weekLabel} já estão disponíveis.`,
+          "",
+          "Como este é o seu primeiro treino, separe cerca de 10 minutos antes de começar para olhar tudo com calma: exercícios, imagens, orientações, séries, repetições e cuidados de execução.",
+          "Se surgir qualquer dúvida, fale comigo pelo chat da plataforma antes de executar. Esse será nosso principal canal de comunicação sobre treino, porque mantém o acompanhamento registrado e organizado.",
+          "Durante ou ao finalizar o treino, nunca deixe de registrar qualquer incômodo, dor ou desconforto, mesmo que pareça leve. Use o registro do próprio treino ao concluir a sessão. Se precisar falar antes, tiver dúvida sobre continuar ou não conseguir finalizar, use o chat da plataforma. Essas informações chegam ao professor e impactam diretamente a montagem dos próximos treinos.",
+          "Acompanhe também seus e-mails e os avisos da plataforma. Para dúvidas de treino, não responda pelo WhatsApp; esse canal fica reservado para contatos específicos da gestão.",
+          "",
+          "Conte comigo nesse processo. Vamos evoluir com segurança, consistência e respeitando o seu momento.",
+          "",
+          professorName,
+          "Funcional UP Digital",
+          "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+        ].join("\n")
+      : [
+          `Oi, ${studentName}!`,
+          "",
+          `Sou ${professorName}. Seus ${weeklyLimit} treino(s) da semana de ${weekLabel} já estão disponíveis.`,
+          "Antes de começar, confira as orientações, imagens, séries, repetições e cuidados de cada exercício.",
+          "Se tiver dúvida ou precisar contar como foi a execução, use o chat da plataforma. Assim, consigo acompanhar seu histórico e ajustar os próximos treinos com mais segurança.",
+          "Lembre-se de registrar no próprio treino qualquer incômodo, dor ou desconforto. Se precisar falar antes de concluir ou tiver dúvida sobre continuar, use o chat da plataforma. Seu relato faz parte do acompanhamento e influencia diretamente os próximos treinos.",
+          "Para assuntos de treino, não responda pelo WhatsApp. A gestão pode usar esse canal em situações específicas.",
+          "",
+          "Bom treino!",
+          professorName,
+          "Funcional UP Digital",
+          "Mensagem automática de acompanhamento enviada em nome do seu professor.",
+        ].join("\n");
 
   const notificationTasks: Promise<unknown>[] = [];
 
@@ -473,7 +521,9 @@ async function notifyWorkoutAvailable({
       studentId,
       type: "WORKOUT",
       targetRole: "STUDENT",
-      title,
+      ...(isCareReturnPackage && pendingCareReturn?.resolvedAt
+        ? { createdAt: { gte: pendingCareReturn.resolvedAt } }
+        : {}),
       content: {
         contains: weekLabel,
       },
@@ -507,26 +557,35 @@ async function notifyWorkoutAvailable({
 
     const text = `${content}\n\nAcessar meus treinos: ${loginUrl}`;
 
-    const introHtml = isFirstWorkoutPackage
+    const introHtml = isCareReturnPackage
       ? `
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-            Eu sou <strong style="color:#f5f5f5;">${safeProfessorName}</strong> e vou acompanhar seus treinos e sua evolução no Funcional UP Digital.
+            Sua retomada foi liberada e seus novos treinos da semana de <strong style="color:#f5f5f5;">${safeWeekLabel}</strong> já estão disponíveis.
           </p>
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-            Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana de <strong style="color:#f5f5f5;">${safeWeekLabel}</strong> já estão disponíveis.
-          </p>
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-            Como este é o seu primeiro treino, separe cerca de 10 minutos antes de começar para conferir exercícios, imagens, orientações, séries, repetições e cuidados de execução.
+            A programação foi preparada considerando o período de pausa. Comece com atenção e não tente compensar o tempo parado aumentando carga, impacto ou volume por conta própria.
           </p>
         `
-      : `
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-            Sou <strong style="color:#f5f5f5;">${safeProfessorName}</strong>. Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana de <strong style="color:#f5f5f5;">${safeWeekLabel}</strong> já estão disponíveis.
-          </p>
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-            Antes de começar, confira as orientações, imagens, séries, repetições e cuidados de cada exercício.
-          </p>
-        `;
+      : isFirstWorkoutPackage
+        ? `
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+              Eu sou <strong style="color:#f5f5f5;">${safeProfessorName}</strong> e vou acompanhar seus treinos e sua evolução no Funcional UP Digital.
+            </p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+              Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana de <strong style="color:#f5f5f5;">${safeWeekLabel}</strong> já estão disponíveis.
+            </p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+              Como este é o seu primeiro treino, separe cerca de 10 minutos antes de começar para conferir exercícios, imagens, orientações, séries, repetições e cuidados de execução.
+            </p>
+          `
+        : `
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+              Sou <strong style="color:#f5f5f5;">${safeProfessorName}</strong>. Seus <strong style="color:#f5f5f5;">${weeklyLimit} treino(s)</strong> da semana de <strong style="color:#f5f5f5;">${safeWeekLabel}</strong> já estão disponíveis.
+            </p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
+              Antes de começar, confira as orientações, imagens, séries, repetições e cuidados de cada exercício.
+            </p>
+          `;
 
     const html = `
       <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
@@ -534,6 +593,7 @@ async function notifyWorkoutAvailable({
           <h2 style="color:#00A19C; margin:0 0 16px;">${escapeHtml(title)}</h2>
           <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>!</p>
           ${introHtml}
+          ${isCareReturnPackage ? `<p style="color:#f5f5f5; font-size:14px; line-height:1.6;">Se perceber dor, inchaço, limitação ou qualquer dificuldade, interrompa o treino e avise seu professor pelo chat. Quando estiver tudo certo, você pode encerrar a conversa de acompanhamento que iniciou.</p>` : ""}
           <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Se surgir qualquer dúvida, use o chat da plataforma antes de executar. Esse é o canal principal entre você e o professor, porque mantém o acompanhamento registrado e organizado.</p>
           <div style="background:#071413; border:1px solid #005D5A; border-radius:12px; padding:14px; margin:14px 0;">
             <p style="color:#00A19C; font-size:14px; font-weight:bold; margin:0 0 8px;">Seu relato ajuda a montar o próximo treino</p>
@@ -559,6 +619,63 @@ async function notifyWorkoutAvailable({
 
   if (notificationTasks.length > 0) {
     await Promise.allSettled(notificationTasks);
+  }
+
+  if (isCareReturnPackage && pendingCareReturn) {
+    const now = new Date();
+    const finalChatMessage = [
+      `${studentName}, sua retomada foi liberada e seus novos treinos já estão disponíveis.`,
+      "A programação foi preparada considerando o período de pausa. Comece com atenção e me avise pelo chat se perceber dor, inchaço, limitação ou qualquer dificuldade.",
+      "Quando estiver tudo certo, você pode encerrar esta conversa.",
+    ].join(" ");
+
+    let conversationId =
+      extractCareConversationId(pendingCareReturn.resolutionNotes) ||
+      extractCareConversationId(pendingCareReturn.description);
+
+    if (conversationId) {
+      const conversation = await prisma.question.findUnique({
+        where: { id: conversationId },
+        select: { id: true, parentId: true, studentId: true },
+      });
+
+      if (!conversation || conversation.studentId !== studentId) {
+        conversationId = null;
+      } else if (conversation.parentId) {
+        conversationId = conversation.parentId;
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (conversationId) {
+        await tx.question.create({
+          data: {
+            content: finalChatMessage,
+            parentId: conversationId,
+            studentId,
+            teacherId: authorId || student.user?.id || pendingCareReturn.professorId || null,
+            senderRole: "TEACHER",
+            answeredById: authorId || student.user?.id || pendingCareReturn.professorId || null,
+            answer: finalChatMessage,
+            answeredAt: now,
+          },
+        });
+      }
+
+      const releaseNote = [
+        RETURN_WORKOUT_RELEASED_MARKER,
+        `[${formatDatePtBr(now)}] Nova programação de retomada liberada para a semana de ${weekLabel}. Aviso e e-mail enviados ao aluno${conversationId ? "; mensagem final registrada no chat" : ""}.`,
+      ].join("\n");
+
+      await tx.studentCareEvent.update({
+        where: { id: pendingCareReturn.id },
+        data: {
+          resolutionNotes: [pendingCareReturn.resolutionNotes, releaseNote]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      });
+    });
   }
 }
 

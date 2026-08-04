@@ -117,7 +117,7 @@ function isReadOnlyWorkout(status?: string) {
 
 function isStudentVisibleWorkoutStatus(status?: string | null) {
   const value = normalizeStatus(status || undefined);
-  return value !== "PRE_PLANEJADO" && value !== "PRECISA_REVISAO";
+  return !["PRE_PLANEJADO", "PRECISA_REVISAO", "INTERROMPIDO_CUIDADO"].includes(value);
 }
 
 function getStartOfCurrentWeek(referenceDate = new Date()) {

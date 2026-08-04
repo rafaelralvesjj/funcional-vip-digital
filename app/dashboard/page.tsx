@@ -66,6 +66,10 @@ export default async function DashboardPage() {
       ? 'Alunos sem treino da semana atual'
       : 'Meus alunos sem treino da semana atual',
 
+    careReturnPreparationCard: isGestor
+      ? 'Retomadas aguardando novo treino'
+      : 'Minhas retomadas aguardando novo treino',
+
     missingNextWeekWorkoutsCard: isGestor
       ? 'Alunos sem pré-planejamento da próxima semana'
       : 'Meus alunos sem pré-planejamento da próxima semana',
@@ -133,6 +137,10 @@ export default async function DashboardPage() {
     missingCurrentWeekWorkoutsList: isGestor
       ? 'Alunos sem treino da semana atual'
       : 'Meus alunos sem treino da semana atual',
+
+    careReturnPreparationList: isGestor
+      ? 'Retomadas aguardando novo treino'
+      : 'Minhas retomadas aguardando novo treino',
 
     missingNextWeekWorkoutsList: isGestor
       ? 'Alunos sem pré-planejamento da próxima semana'
@@ -469,6 +477,74 @@ export default async function DashboardPage() {
   const studentsEligibleForCurrentWeek = getStudentsEligibleForWeek(currentWorkoutWeek);
   const studentsEligibleForNextWeek = getStudentsEligibleForWeek(nextWorkoutWeek);
 
+  const RETURN_AWAITING_WORKOUT_MARKER = '[RETOMADA_AGUARDANDO_NOVO_TREINO]';
+  const RETURN_WORKOUT_RELEASED_MARKER = '[RETOMADA_TREINO_LIBERADO]';
+
+  const careReturnPreparationEventsRaw = await prisma.studentCareEvent.findMany({
+    where: {
+      eventType: 'PAUSA_POR_CUIDADO',
+      status: 'RESOLVIDO',
+      resolutionNotes: {
+        contains: RETURN_AWAITING_WORKOUT_MARKER,
+      },
+      ...(isTeacher
+        ? {
+            OR: [
+              { professorId: userId },
+              { student: { userId } },
+            ],
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+      studentId: true,
+      resolvedAt: true,
+      resolutionNotes: true,
+      student: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+      professor: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: [
+      { resolvedAt: 'desc' },
+      { updatedAt: 'desc' },
+    ],
+  });
+
+  const careReturnPreparationEvents = Array.from(
+    careReturnPreparationEventsRaw
+      .filter(
+        (event) =>
+          !String(event.resolutionNotes || '').includes(RETURN_WORKOUT_RELEASED_MARKER)
+      )
+      .reduce((byStudent, event) => {
+        if (!byStudent.has(event.studentId)) {
+          byStudent.set(event.studentId, event);
+        }
+        return byStudent;
+      }, new Map<string, (typeof careReturnPreparationEventsRaw)[number]>())
+      .values()
+  );
+  const careReturnPreparationStudentIds = new Set(
+    careReturnPreparationEvents.map((event) => event.studentId)
+  );
+
   const eligibleStudentIds = Array.from(
     new Set(
       [
@@ -484,6 +560,7 @@ export default async function DashboardPage() {
           studentId: {
             in: eligibleStudentIds,
           },
+          active: true,
           date: {
             gte: currentWorkoutWeek.startOfWeek,
             lt: nextWorkoutWeek.endOfWeek,
@@ -546,14 +623,14 @@ export default async function DashboardPage() {
     currentWeekWorkoutPlansCountByStudent,
     currentWorkoutWeekLabel,
     formatDateInput(currentWorkoutWeek.startOfWeek)
-  );
+  ).filter((item) => !careReturnPreparationStudentIds.has(item.student.id));
 
   const studentsMissingNextWeekWorkouts = buildStudentsMissingWeeklyWorkouts(
     studentsEligibleForNextWeek,
     nextWeekWorkoutPlansCountByStudent,
     nextWorkoutWeekLabel,
     formatDateInput(nextWorkoutWeek.startOfWeek)
-  );
+  ).filter((item) => !careReturnPreparationStudentIds.has(item.student.id));
 
   const isWorkoutPlanningDeadlineToday = getWeekdayInSaoPaulo(new Date()) === 'Sat';
   const workoutPlanningDeadlineStatusLabel = isWorkoutPlanningDeadlineToday
@@ -1473,6 +1550,12 @@ export default async function DashboardPage() {
       value: studentsMissingCurrentWeekWorkouts.length,
     },
     {
+      id: 'care-return-preparation',
+      label: labels.careReturnPreparationCard,
+      value: careReturnPreparationEvents.length,
+      tone: careReturnPreparationEvents.length > 0 ? 'warning' : 'default',
+    },
+    {
       id: 'missing-next-week-workouts',
       label: labels.missingNextWeekWorkoutsCard,
       value: studentsMissingNextWeekWorkouts.length,
@@ -1871,6 +1954,95 @@ export default async function DashboardPage() {
                             className="inline-flex items-center justify-center text-[#00A19C] hover:text-[#008B87] text-xs px-3 py-1.5 rounded-lg hover:bg-[#00A19C]/5 transition"
                           >
                             Montar treino deste aluno
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-[#111111] border border-emerald-500/20 rounded-2xl p-6 md:p-8">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-[#f5f5f5]">
+                  {labels.careReturnPreparationList}
+                </h2>
+                <p className="text-sm text-[#a1a1a1] mt-1">
+                  O aluno já teve a retomada autorizada pelo professor, mas ainda precisa receber uma nova programação. Os treinos interrompidos durante a pausa permanecem arquivados e não voltam ao calendário.
+                </p>
+              </div>
+            </div>
+
+            {careReturnPreparationEvents.length === 0 ? (
+              <p className="text-[#a1a1a1]">
+                Nenhuma retomada aguardando novo treino.
+              </p>
+            ) : (
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
+                {careReturnPreparationEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    className="bg-[#111111] border border-emerald-500/20 rounded-xl overflow-hidden"
+                  >
+                    <div className="p-4">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-emerald-500/30 bg-[#1a1a1a] flex items-center justify-center">
+                            {event.student.image ? (
+                              <img
+                                src={event.student.image}
+                                alt={event.student.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-xs font-bold text-emerald-300">
+                                {getStudentInitials(event.student.name)}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                                RETOMADA LIBERADA
+                              </span>
+                              <span className="text-sm font-bold text-[#f5f5f5] truncate">
+                                {event.student.name}
+                              </span>
+                            </div>
+                            <p className="text-xs text-[#a1a1a1] mt-1">
+                              Professor: <span className="text-[#00A19C]">{event.professor?.name || event.student.user?.name || 'Não informado'}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="text-[10px] text-emerald-300 shrink-0">
+                          Liberada em {event.resolvedAt ? formatDate(event.resolvedAt) : '-'}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <p className="text-xs text-[#a1a1a1]">
+                          Monte a nova programação pelo fluxo já existente. Quando a quantidade semanal estiver completa e for liberada, o sistema enviará aviso, e-mail e uma mensagem final no chat informando que a retomada está disponível.
+                        </p>
+
+                        {isTeacher && (
+                          <Link
+                            href={{
+                              pathname: '/dashboard/montar-treino',
+                              query: {
+                                studentId: event.studentId,
+                                date: formatDateInput(currentWorkoutWeek.startOfWeek),
+                                returnMode: 'care',
+                              },
+                            }}
+                            prefetch={false}
+                            className="inline-flex items-center justify-center rounded-lg bg-[#00A19C] px-4 py-2 text-xs font-semibold text-[#0a0a0a] hover:bg-[#008B87] transition"
+                          >
+                            Montar treino de retomada
                           </Link>
                         )}
                       </div>

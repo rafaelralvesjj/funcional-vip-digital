@@ -358,11 +358,12 @@ export default function CuidadoAlunoPage() {
 
       if (res.ok) {
         const adjustmentMessage = data?.commercialAdjustment?.message;
+        const flowMessage = data?.message;
         setMessage({
           type: "success",
-          text: adjustmentMessage
-            ? `Evento atualizado com sucesso. ${adjustmentMessage}`
-            : "Evento atualizado com sucesso.",
+          text: [flowMessage || "Evento atualizado com sucesso.", adjustmentMessage]
+            .filter(Boolean)
+            .join(" "),
         });
         await loadEvents();
       } else {

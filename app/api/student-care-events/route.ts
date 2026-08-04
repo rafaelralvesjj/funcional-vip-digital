@@ -547,6 +547,9 @@ function extractConversationId(value?: string | null): string | null {
 }
 
 const RETURN_CONFIRMATION_MARKER = "[CONFIRMACAO_RETORNADA_ENVIADA]";
+const RETURN_AWAITING_WORKOUT_MARKER = "[RETOMADA_AGUARDANDO_NOVO_TREINO]";
+const CARE_INTERRUPTABLE_WORKOUT_STATUSES = ["PENDENTE", "PRE_PLANEJADO", "PRECISA_REVISAO"];
+
 
 function normalizeEvent(event: any) {
   return {
@@ -1364,84 +1367,127 @@ Motivo registrado: ${pauseDescription}`
         contractId = activeContract?.id || null;
       }
 
-      const updated = await prisma.studentCareEvent.update({
-        where: {
-          id,
-        },
-        data: {
-          eventType: "PAUSA_POR_CUIDADO",
-          severity: copy.severity,
-          status: copy.status,
-          title: copy.title,
-          description: originalDescription || pauseDescription || null,
-          studentMessage: copy.studentMessage,
-          professorMessage: copy.professorMessage,
-          resolutionNotes,
-          contractId,
-          resolvedAt: null,
-          resolvedById: null,
-        },
-        include: {
-          student: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
+      const pauseWeek = getWeekRange(existing.createdAt || new Date());
+      const pauseFrom = existing.weekStart || pauseWeek.startOfWeek;
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const interruptedWorkouts = await tx.workout.findMany({
+          where: {
+            studentId: existing.studentId,
+            status: { in: CARE_INTERRUPTABLE_WORKOUT_STATUSES },
+            date: { gte: pauseFrom },
+          },
+          select: {
+            id: true,
+            workoutPlanId: true,
+          },
+        });
+
+        if (interruptedWorkouts.length > 0) {
+          await tx.workout.updateMany({
+            where: {
+              id: { in: interruptedWorkouts.map((workout) => workout.id) },
+            },
+            data: {
+              status: "INTERROMPIDO_CUIDADO",
+            },
+          });
+
+          const workoutPlanIds = Array.from(
+            new Set(
+              interruptedWorkouts
+                .map((workout) => workout.workoutPlanId)
+                .filter((workoutPlanId): workoutPlanId is string => Boolean(workoutPlanId))
+            )
+          );
+
+          if (workoutPlanIds.length > 0) {
+            await tx.workoutPlan.updateMany({
+              where: { id: { in: workoutPlanIds } },
+              data: { active: false },
+            });
+          }
+        }
+
+        return tx.studentCareEvent.update({
+          where: {
+            id,
+          },
+          data: {
+            eventType: "PAUSA_POR_CUIDADO",
+            severity: copy.severity,
+            status: copy.status,
+            title: copy.title,
+            description: originalDescription || pauseDescription || null,
+            studentMessage: copy.studentMessage,
+            professorMessage: copy.professorMessage,
+            resolutionNotes,
+            contractId,
+            resolvedAt: null,
+            resolvedById: null,
+          },
+          include: {
+            student: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+                userAuth: {
+                  select: {
+                    email: true,
+                  },
                 },
               },
-              userAuth: {
-                select: {
-                  email: true,
+            },
+            professor: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            relatedWorkoutPlan: {
+              select: {
+                id: true,
+                name: true,
+                date: true,
+              },
+            },
+            relatedWorkout: {
+              select: {
+                id: true,
+                date: true,
+                status: true,
+              },
+            },
+            contract: {
+              select: {
+                id: true,
+                type: true,
+                status: true,
+                commercialStatus: true,
+                startDate: true,
+                endDate: true,
+                priceCents: true,
+                workoutsPerWeek: true,
+                workoutsPerMonth: true,
+                totalContractedWorkouts: true,
+                plan: {
+                  select: {
+                    name: true,
+                  },
                 },
               },
             },
           },
-          professor: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          relatedWorkoutPlan: {
-            select: {
-              id: true,
-              name: true,
-              date: true,
-            },
-          },
-          relatedWorkout: {
-            select: {
-              id: true,
-              date: true,
-              status: true,
-            },
-          },
-          contract: {
-            select: {
-              id: true,
-              type: true,
-              status: true,
-              commercialStatus: true,
-              startDate: true,
-              endDate: true,
-              priceCents: true,
-              workoutsPerWeek: true,
-              workoutsPerMonth: true,
-              totalContractedWorkouts: true,
-              plan: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
+        });
       });
 
       const currentProfessor = await resolveStudentProfessor(existing.studentId);
@@ -1816,7 +1862,7 @@ Motivo registrado: ${pauseDescription}`
     }
 
     const status = String(body?.status || "").trim().toUpperCase();
-    const resolutionNotes = String(body?.resolutionNotes || "").trim() || null;
+    const requestedResolutionNotes = String(body?.resolutionNotes || "").trim() || null;
 
     if (!["ABERTO", "EM_REVISAO", "REQUER_REVISAO", "RESOLVIDO"].includes(status)) {
       return NextResponse.json({ error: "Status inválido." }, { status: 400 });
@@ -1855,6 +1901,23 @@ Motivo registrado: ${pauseDescription}`
 
     const resolvedAt = status === "RESOLVIDO" ? new Date() : null;
     let commercialAdjustment: any = null;
+    const isCareReturnRelease =
+      Boolean(resolvedAt) &&
+      existing.eventType === "PAUSA_POR_CUIDADO" &&
+      existing.status !== "RESOLVIDO";
+
+    let resolutionNotes = requestedResolutionNotes;
+
+    if (isCareReturnRelease && !String(resolutionNotes || existing.resolutionNotes || "").includes(RETURN_AWAITING_WORKOUT_MARKER)) {
+      const markerNote = [
+        RETURN_AWAITING_WORKOUT_MARKER,
+        `[${formatDatePtBr(resolvedAt as Date)}] Retomada liberada para preparação de uma nova programação. Os treinos interrompidos pela pausa permanecem arquivados e não voltam ao calendário do aluno.`,
+      ].join("\n");
+
+      resolutionNotes = [resolutionNotes || existing.resolutionNotes, markerNote]
+        .filter(Boolean)
+        .join("\n\n");
+    }
 
     const data: any = {
       status,
@@ -1876,7 +1939,46 @@ Motivo registrado: ${pauseDescription}`
       });
     }
 
-    const updated = await prisma.studentCareEvent.update({
+    const updated = await prisma.$transaction(async (tx) => {
+      if (isCareReturnRelease) {
+        const returnWeek = getWeekRange(existing.createdAt || new Date());
+        const interruptFrom = existing.weekStart || returnWeek.startOfWeek;
+        const remainingWorkouts = await tx.workout.findMany({
+          where: {
+            studentId: existing.studentId,
+            status: { in: CARE_INTERRUPTABLE_WORKOUT_STATUSES },
+            date: { gte: interruptFrom },
+          },
+          select: {
+            id: true,
+            workoutPlanId: true,
+          },
+        });
+
+        if (remainingWorkouts.length > 0) {
+          await tx.workout.updateMany({
+            where: { id: { in: remainingWorkouts.map((workout) => workout.id) } },
+            data: { status: "INTERROMPIDO_CUIDADO" },
+          });
+
+          const workoutPlanIds = Array.from(
+            new Set(
+              remainingWorkouts
+                .map((workout) => workout.workoutPlanId)
+                .filter((workoutPlanId): workoutPlanId is string => Boolean(workoutPlanId))
+            )
+          );
+
+          if (workoutPlanIds.length > 0) {
+            await tx.workoutPlan.updateMany({
+              where: { id: { in: workoutPlanIds } },
+              data: { active: false },
+            });
+          }
+        }
+      }
+
+      return tx.studentCareEvent.update({
       where: {
         id,
       },
@@ -1942,12 +2044,17 @@ Motivo registrado: ${pauseDescription}`
           },
         },
       },
+      });
     });
 
     return NextResponse.json({
       ok: true,
       event: normalizeEvent(updated),
       commercialAdjustment,
+      returnPreparationRequired: isCareReturnRelease,
+      message: isCareReturnRelease
+        ? "Retomada liberada para preparação. Monte uma nova programação; os treinos interrompidos pela pausa não voltarão ao calendário do aluno."
+        : undefined,
     });
   } catch (error: any) {
     console.error("PUT /api/student-care-events error:", error);

@@ -160,7 +160,7 @@ export async function releaseCurrentWeekPreplannedWorkouts(
   const pausedStudents = await prisma.studentCareEvent.findMany({
     where: {
       studentId: { in: eligibleStudentIds },
-      eventType: "PAUSA_BAIXA_ADERENCIA",
+      eventType: { in: ["PAUSA_BAIXA_ADERENCIA", "PAUSA_POR_CUIDADO"] },
       status: { not: "RESOLVIDO" },
     },
     select: { studentId: true },

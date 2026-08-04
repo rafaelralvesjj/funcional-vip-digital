@@ -1220,7 +1220,7 @@ export default function AlunoPage() {
 
   function isStudentVisibleWorkoutStatus(status?: string | null): boolean {
     const value = String(status || "").toUpperCase();
-    return value !== "PRE_PLANEJADO" && value !== "PRECISA_REVISAO";
+    return !["PRE_PLANEJADO", "PRECISA_REVISAO", "INTERROMPIDO_CUIDADO"].includes(value);
   }
 
   function canStudentSeePlanByDate(value?: string | null): boolean {
