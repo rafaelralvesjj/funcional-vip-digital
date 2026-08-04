@@ -69,7 +69,12 @@ export async function getStudentTechnicalContext(studentId: string): Promise<Tec
       take: 30,
     }),
     prisma.studentCareEvent.findMany({
-      where: { studentId, status: "ABERTO" },
+      where: {
+        studentId,
+        status: {
+          in: ["ABERTO", "REQUER_REVISAO", "EM_REVISAO"],
+        },
+      },
       select: { severity: true, title: true, description: true },
       orderBy: { createdAt: "desc" },
       take: 20,

@@ -230,6 +230,7 @@ export default function CuidadoAlunoPage() {
     label: "Carregando permissões...",
   });
   const [loading, setLoading] = useState(true);
+  const [signalsRecovered, setSignalsRecovered] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -257,6 +258,13 @@ export default function CuidadoAlunoPage() {
     setMessage(null);
 
     try {
+      await fetch("/api/student-message-signals/recover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: 60 }),
+      }).catch(() => null);
+      setSignalsRecovered(true);
+
       const url = status === "TODOS" ? "/api/student-care-events" : `/api/student-care-events?status=${status}`;
       const res = await fetch(url, {
         cache: "no-store",
@@ -732,7 +740,13 @@ export default function CuidadoAlunoPage() {
       )}
 
       {activeTab === "PREFERENCES" && (
-        <StudentTrainingPreferencesPanel />
+        signalsRecovered ? (
+          <StudentTrainingPreferencesPanel />
+        ) : (
+          <div className="rounded-xl border border-[#ffffff10] bg-[#111111] p-5 text-sm text-[#a1a1a1]">
+            Atualizando os sinais recentes do chat...
+          </div>
+        )
       )}
     </div>
   );

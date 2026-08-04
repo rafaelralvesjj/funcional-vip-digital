@@ -12,6 +12,8 @@ import {
   repairInvalidConversationProfessors,
   resolveStudentProfessorId,
 } from "@/lib/student-professor";
+import { registerTrainingPreferenceFromStudentMessage } from "@/lib/student-training-preferences";
+import { registerCareEventFromStudentMessage } from "@/lib/student-care-chat-events";
 
 type SenderRole = "GESTOR" | "TEACHER" | "STUDENT";
 
@@ -171,198 +173,6 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function normalizeSearchText(value: string): string {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function hasCareSignal(content: string): boolean {
-  return classifyCareSignal(content).hasSignal;
-}
-
-type CareSignalClassification = {
-  hasSignal: boolean;
-  isCritical: boolean;
-  requiresTrainingPause: boolean;
-  eventType: "RELATO_DOR_DUVIDA" | "PAUSA_POR_CUIDADO";
-  severity: "ALERTA" | "CUIDADO";
-  status: "ABERTO" | "REQUER_REVISAO";
-};
-
-function classifyCareSignal(content: string): CareSignalClassification {
-  const text = normalizeSearchText(content);
-  const paddedText = ` ${text} `;
-
-  const trainingPauseKeywords = [
-    "nao consigo treinar",
-    "nao consigo fazer treino",
-    "nao consigo fazer o treino",
-    "nao consigo me exercitar",
-    "nao vou conseguir treinar",
-    "nao posso treinar",
-    "sem condicao de treinar",
-    "sem condicoes de treinar",
-    "sem condicao para treinar",
-    "sem condicoes para treinar",
-    "impossibilitado de treinar",
-    "impossibilitada de treinar",
-    "preciso parar de treinar",
-    "vou ter que parar de treinar",
-    "medico mandou parar",
-    "medica mandou parar",
-    "fisioterapeuta mandou parar",
-    "estou de repouso",
-    "repouso medico",
-    "atestado",
-    "fratura",
-    "fraturei",
-    "quebrei",
-    "gesso",
-    "imobilizado",
-    "imobilizada",
-    "bota ortopedica",
-    "muleta",
-    "cirurgia",
-    "operei",
-    "operacao",
-    "hospital",
-    "emergencia",
-    "acidente",
-    "cai e machuquei",
-    "cai e nao consigo",
-    "nao consigo apoiar",
-    "nao consigo andar",
-    "nao consigo levantar",
-    "nao consigo mexer",
-    "nao consigo mover",
-  ];
-
-  const requiresTrainingPause = trainingPauseKeywords.some((keyword) => text.includes(keyword));
-
-  const generalCareKeywords = [
-    "dor",
-    "doendo",
-    "dolorido",
-    "dolorida",
-    "desconforto",
-    "machuquei",
-    "machucou",
-    "machucado",
-    "machucada",
-    "lesao",
-    "lesionei",
-    "torci",
-    "torceu",
-    "torsao",
-    "torcao",
-    "lombar",
-    "coluna",
-    "ciatico",
-    "cervical",
-    "ombro",
-    "joelho",
-    "tornozelo",
-    "punho",
-    "quadril",
-    "panturrilha",
-    "tontura",
-    "tonto",
-    "falta de ar",
-    "formigamento",
-    "fisgada",
-    "travou",
-    "inchado",
-    "inchada",
-    "inflamado",
-    "inflamada",
-  ];
-
-  const hasShortFootSignal = /(^|\s)pe(\s|$)/.test(paddedText);
-  const hasGeneralCareSignal =
-    generalCareKeywords.some((keyword) => text.includes(keyword)) || hasShortFootSignal || requiresTrainingPause;
-
-  if (!hasGeneralCareSignal) {
-    return {
-      hasSignal: false,
-      isCritical: false,
-      requiresTrainingPause: false,
-      eventType: "RELATO_DOR_DUVIDA",
-      severity: "ALERTA",
-      status: "ABERTO",
-    };
-  }
-
-  const criticalCareKeywords = [
-    "dor forte",
-    "dor intensa",
-    "dor aguda",
-    "dor insuportavel",
-    "muita dor",
-    "muito dolorido",
-    "muito dolorida",
-    "nao consigo",
-    "torci",
-    "torceu",
-    "torsao",
-    "torcao",
-    "inchado",
-    "inchada",
-    "inchou",
-    "inchei",
-    "fisgada",
-    "travou",
-    "travei",
-    "queda",
-    "cai",
-    "caiu",
-    "machuquei",
-    "lesionei",
-    "lesao",
-    "tontura",
-    "tonto",
-    "falta de ar",
-    "formigamento",
-    "desmaio",
-    "desmaiei",
-  ];
-
-  const isCritical = requiresTrainingPause || criticalCareKeywords.some((keyword) => text.includes(keyword));
-
-  return {
-    hasSignal: true,
-    isCritical,
-    requiresTrainingPause,
-    eventType: requiresTrainingPause ? "PAUSA_POR_CUIDADO" : "RELATO_DOR_DUVIDA",
-    severity: isCritical ? "CUIDADO" : "ALERTA",
-    status: isCritical ? "REQUER_REVISAO" : "ABERTO",
-  };
-}
-function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
-  const date = new Date(referenceDate);
-  date.setHours(0, 0, 0, 0);
-
-  const day = date.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-
-  const startOfWeek = new Date(date);
-  startOfWeek.setDate(date.getDate() + diffToMonday);
-  startOfWeek.setHours(0, 0, 0, 0);
-
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 7);
-  endOfWeek.setHours(0, 0, 0, 0);
-
-  return { startOfWeek, endOfWeek };
-}
-
-function addDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
 }
 
 type ConversationEmailRecipient = {
@@ -587,199 +397,33 @@ async function isStudentLinkedToTeacher(studentId: string, teacherId: string): P
   return isStudentAssignedToProfessor(studentId, teacherId);
 }
 
-async function findActiveContractIdForCareEvent(studentId: string): Promise<string | null> {
-  const now = new Date();
-
-  const contract = await prisma.studentContract.findFirst({
-    where: {
-      studentId,
-      status: "ACTIVE",
-      startDate: {
-        lte: now,
-      },
-      endDate: {
-        gte: now,
-      },
-    },
-    orderBy: {
-      endDate: "desc",
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  return contract?.id || null;
-}
-
 async function maybeCreateCareEventFromQuestion({
   rootConversationId,
+  messageId,
   studentId,
   professorId,
   authorId,
+  content,
+  createdAt,
 }: {
   rootConversationId: string;
+  messageId: string;
   studentId: string | null;
   professorId: string | null;
   authorId: string;
+  content: string;
+  createdAt?: Date | null;
 }) {
-  if (!studentId) return;
+  if (!studentId) return null;
 
-  const rootConversation = await prisma.question.findUnique({
-    where: {
-      id: rootConversationId,
-    },
-    select: {
-      id: true,
-      content: true,
-      senderRole: true,
-      createdAt: true,
-      children: {
-        orderBy: {
-          createdAt: "asc",
-        },
-        select: {
-          id: true,
-          content: true,
-          senderRole: true,
-          createdAt: true,
-        },
-      },
-    },
-  });
-
-  if (!rootConversation) return;
-
-  const messages = [
-    {
-      id: rootConversation.id,
-      content: rootConversation.content,
-      senderRole: rootConversation.senderRole,
-      createdAt: rootConversation.createdAt,
-    },
-    ...rootConversation.children,
-  ];
-
-  const studentCareMessages = messages.filter(
-    (message) => normalizeRole(message.senderRole) === "STUDENT" && hasCareSignal(message.content)
-  );
-
-  if (studentCareMessages.length === 0) return;
-
-  const firstCareMessage = studentCareMessages[0];
-  const careClassification = classifyCareSignal(firstCareMessage.content);
-
-  if (!careClassification.hasSignal) return;
-
-  const alreadyExists = await prisma.studentCareEvent.findFirst({
-    where: {
-      studentId,
-      source: "CHAT_DUVIDAS",
-      eventType: careClassification.eventType,
-      status: {
-        in: ["ABERTO", "REQUER_REVISAO", "EM_REVISAO"],
-      },
-      description: {
-        contains: `Conversa: ${rootConversationId}`,
-      },
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (alreadyExists) return;
-
-  const student = await prisma.student.findUnique({
-    where: {
-      id: studentId,
-    },
-    select: {
-      id: true,
-      name: true,
-      userId: true,
-    },
-  });
-
-  const effectiveProfessorId =
-    professorId && (await isTeacherUserId(professorId))
-      ? professorId
-      : await resolveStudentProfessorId(studentId);
-  const { startOfWeek, endOfWeek } = getWeekRange(firstCareMessage.createdAt || new Date());
-  const contractId = await findActiveContractIdForCareEvent(studentId);
-  const title = careClassification.requiresTrainingPause
-    ? "Pausa por cuidado: aluno sem condição de treinar"
-    : careClassification.isCritical
-      ? "Relato crítico de dor/desconforto em dúvida do aluno"
-      : "Relato de dor/desconforto em dúvida do aluno";
-  const description = [
-    `Conversa: ${rootConversationId}`,
-    `Mensagem: ${firstCareMessage.id}`,
-    careClassification.requiresTrainingPause
-      ? "O aluno registrou uma mensagem indicando que está sem condição de treinar ou precisa pausar por cuidado."
-      : "O aluno registrou uma mensagem com possível dor, desconforto, torção, lesão ou sinal físico sensível no chat/dúvidas.",
-    careClassification.requiresTrainingPause
-      ? "Não liberar novo treino normal enquanto este evento estiver aberto. O aluno deve informar aptidão para retomada e o professor deve revisar antes de voltar a prescrever."
-      : "Antes de evoluir, repetir ou liberar a próxima semana de treinos, o professor deve revisar o relato e ajustar a prescrição se necessário.",
-    "Relato do aluno:",
-    firstCareMessage.content,
-  ].join("\n");
-
-  let professorNoticeId: string | null = null;
-
-  if (effectiveProfessorId) {
-    try {
-      const notice = await prisma.notice.create({
-        data: {
-          title,
-          content: [
-            careClassification.requiresTrainingPause
-              ? `${student?.name || "Aluno"} sinalizou que está sem condição de treinar e pode precisar de pausa por cuidado.`
-              : `${student?.name || "Aluno"} registrou ${careClassification.isCritical ? "um possível cuidado crítico" : "um alerta"} de dor/desconforto no chat/dúvidas.`,
-            careClassification.requiresTrainingPause
-              ? "Não libere novo treino normal enquanto o alerta de pausa estiver aberto. Oriente retomada segura e, se necessário, avaliação profissional."
-              : "Revise a conversa antes de liberar ou evoluir a próxima semana de treinos.",
-            "",
-            `Relato: ${firstCareMessage.content}`,
-          ].join("\n"),
-          type: "CUIDADO_ALUNO",
-          targetRole: "TEACHER",
-          studentId,
-          professorId: effectiveProfessorId,
-          authorId,
-          expiresAt: addDays(new Date(), 30),
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      professorNoticeId = notice.id;
-    } catch (noticeError) {
-      console.error("Erro ao criar aviso de cuidado para professor:", noticeError);
-    }
-  }
-
-  await prisma.studentCareEvent.create({
-    data: {
-      studentId,
-      professorId: effectiveProfessorId,
-      authorId,
-      eventType: careClassification.eventType,
-      severity: careClassification.severity,
-      status: careClassification.status,
-      source: "CHAT_DUVIDAS",
-      title,
-      description,
-      studentMessage: firstCareMessage.content,
-      professorMessage: careClassification.requiresTrainingPause
-        ? "Aluno sinalizou que está sem condição de treinar. Não liberar treino normal enquanto o evento estiver aberto. Orientar avaliação profissional quando necessário e revisar retomada segura quando o aluno informar aptidão."
-        : "Revisar relato de dor/desconforto antes de liberar, evoluir carga, impacto, volume, complexidade ou intensidade da próxima semana.",
-      contractId,
-      weekStart: startOfWeek,
-      weekEnd: endOfWeek,
-      professorNoticeId,
-    },
+  return registerCareEventFromStudentMessage({
+    rootConversationId,
+    messageId,
+    studentId,
+    professorId,
+    authorId,
+    content,
+    createdAt,
   });
 }
 
@@ -1225,14 +869,35 @@ export async function POST(req: NextRequest) {
     const rootConversationId = parentId || question.id;
 
     try {
-      await maybeCreateCareEventFromQuestion({
-        rootConversationId,
-        studentId,
-        professorId: teacherId,
-        authorId: userId,
-      });
+      if (senderRole === "STUDENT") {
+        await maybeCreateCareEventFromQuestion({
+          rootConversationId,
+          messageId: question.id,
+          studentId,
+          professorId: teacherId,
+          authorId: userId,
+          content: question.content,
+          createdAt: question.createdAt,
+        });
+      }
     } catch (careEventError) {
       console.error("Erro ao criar evento de cuidado a partir do chat/dúvidas:", careEventError);
+    }
+
+    try {
+      if (senderRole === "STUDENT" && studentId) {
+        await registerTrainingPreferenceFromStudentMessage({
+          sourceMessageId: question.id,
+          sourceConversationId: rootConversationId,
+          studentId,
+          professorId: teacherId,
+          content: question.content,
+          source: "CHAT",
+          referenceDate: question.createdAt,
+        });
+      }
+    } catch (preferenceError) {
+      console.error("Erro ao registrar mudança de treino a partir do chat/dúvidas:", preferenceError);
     }
 
     try {

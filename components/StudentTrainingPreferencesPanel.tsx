@@ -80,6 +80,9 @@ function getCategoryLabel(category: string): string {
   const labels: Record<string, string> = {
     CARDIO_CORRIDA: "Cardio e corrida",
     AMBIENTE_TREINO: "Ambiente de treino",
+    EQUIPAMENTOS: "Equipamentos e recursos",
+    OBJETIVO_TREINO: "Objetivo de treino",
+    INTENSIDADE_VOLUME: "Intensidade, carga e volume",
     EXERCICIO_EVITAR: "Exercício a evitar",
     EXERCICIO_PRIORIZAR: "Prioridade de treino",
     ROTINA_TREINO: "Rotina de treino",

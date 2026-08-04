@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 export type TrainingPreferenceCategory =
   | "CARDIO_CORRIDA"
   | "AMBIENTE_TREINO"
+  | "EQUIPAMENTOS"
+  | "OBJETIVO_TREINO"
+  | "INTENSIDADE_VOLUME"
   | "EXERCICIO_EVITAR"
   | "EXERCICIO_PRIORIZAR"
   | "ROTINA_TREINO"
@@ -71,9 +74,27 @@ function includesAnyPhrase(text: string, phrases: string[]): boolean {
   return phrases.some((phrase) => includesPhrase(text, phrase));
 }
 
+function matchesAnyPattern(text: string, patterns: RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function hasTrainingReference(text: string): boolean {
+  return includesAnyPhrase(text, [
+    "treino",
+    "treinos",
+    "treinar",
+    "exercicio",
+    "exercicios",
+    "atividade fisica",
+    "academia",
+    "musculacao",
+    "corrida",
+    "correr",
+  ]);
+}
+
 export function classifyCareSignal(content: string): CareSignalClassification {
   const text = normalizeTrainingPreferenceText(content);
-  const paddedText = ` ${text} `;
 
   const emptyResult: CareSignalClassification = {
     hasSignal: false,
@@ -86,157 +107,170 @@ export function classifyCareSignal(content: string): CareSignalClassification {
 
   if (!text) return emptyResult;
 
-  const trainingPauseKeywords = [
-    "nao consigo treinar",
-    "nao consigo fazer treino",
-    "nao consigo fazer o treino",
-    "nao consigo me exercitar",
-    "nao vou conseguir treinar",
-    "nao posso treinar",
-    "sem condicao de treinar",
-    "sem condicoes de treinar",
-    "sem condicao para treinar",
-    "sem condicoes para treinar",
-    "impossibilitado de treinar",
-    "impossibilitada de treinar",
-    "preciso parar de treinar",
-    "vou ter que parar de treinar",
-    "medico mandou parar",
-    "medica mandou parar",
-    "fisioterapeuta mandou parar",
-    "estou de repouso",
-    "repouso medico",
-    "atestado",
-    "fratura",
-    "fraturei",
-    "quebrei",
-    "gesso",
-    "imobilizado",
-    "imobilizada",
-    "bota ortopedica",
-    "muleta",
-    "cirurgia",
-    "operei",
-    "operacao",
-    "hospital",
-    "emergencia",
-    "acidente",
-    "cai e machuquei",
-    "cai e nao consigo",
-    "nao consigo apoiar",
-    "nao consigo andar",
-    "nao consigo levantar",
-    "nao consigo mexer",
-    "nao consigo mover",
+  const bodyAreaPatterns = [
+    /\bcabeca\b/,
+    /\bpescoco\b/,
+    /\bcervical\b/,
+    /\bombro?s?\b/,
+    /\bbraco?s?\b/,
+    /\bcotovelo?s?\b/,
+    /\bpunho?s?\b/,
+    /\bmao?s?\b/,
+    /\bdedo?s?\b/,
+    /\bpeito\b/,
+    /\btorax\b/,
+    /\bcostas?\b/,
+    /\bcoluna\b/,
+    /\blombar\b/,
+    /\bciatico\b/,
+    /\bquadril\b/,
+    /\bvirilha\b/,
+    /\bgluteo?s?\b/,
+    /\bcoxa?s?\b/,
+    /\bjoelho?s?\b/,
+    /\bpanturrilha?s?\b/,
+    /\bcanela?s?\b/,
+    /\btornozelo?s?\b/,
+    /\bcalcanhar(?:es)?\b/,
+    /\bpes?\b/,
+    /\bperna?s?\b/,
   ];
 
-  const requiresTrainingPause = includesAny(text, trainingPauseKeywords);
-
-  /*
-   * Partes do corpo, sozinhas, não são sinal de cuidado.
-   * Ex.: "prefiro treinar ombro na terça" não cria evento.
-   * É necessário haver dor, desconforto, lesão, alteração física ou limitação.
-   */
-  const bodyAreas = [
-    "lombar",
-    "coluna",
-    "ciatico",
-    "cervical",
-    "ombro",
-    "joelho",
-    "tornozelo",
-    "punho",
-    "quadril",
-    "panturrilha",
-    "cotovelo",
-    "braco",
-    "perna",
-    "coxa",
-    "calcanhar",
+  const symptomPatterns = [
+    /\bdor(?:es)?\b/,
+    /\bdoendo\b/,
+    /\bdolori(?:do|da|dos|das)\b/,
+    /\bdesconforto\b/,
+    /\bincomodo\b/,
+    /\bfisgada\b/,
+    /\bformigamento\b/,
+    /\bqueimacao\b/,
+    /\bardencia\b/,
+    /\bincha(?:do|da|dos|das|co|cou|ei)\b/,
+    /\binflama(?:do|da|cao)\b/,
+    /\btrava(?:do|da|dos|das|ou|ei)\b/,
+    /\blimita(?:cao|do|da)\b/,
+    /\bsem movimento\b/,
+    /\bperdi movimento\b/,
+    /\bnao consigo apoiar\b/,
+    /\bnao consigo andar\b/,
+    /\bnao consigo mexer\b/,
+    /\bnao consigo mover\b/,
+    /\btontura\b/,
+    /\btonto\b/,
+    /\bfalta de ar\b/,
+    /\bdesmaio\b/,
+    /\bdesmaiei\b/,
+    /\bsangramento\b/,
   ];
 
-  const physicalCareTerms = [
-    "dor",
-    "doendo",
-    "dolorido",
-    "dolorida",
-    "desconforto",
-    "machuquei",
-    "machucou",
-    "machucado",
-    "machucada",
-    "lesao",
-    "lesionei",
-    "torci",
-    "torceu",
-    "torsao",
-    "torcao",
-    "tontura",
-    "tonto",
-    "falta de ar",
-    "formigamento",
-    "fisgada",
-    "travou",
-    "travado",
-    "travada",
-    "inchado",
-    "inchada",
-    "inchou",
-    "inflamado",
-    "inflamada",
-    "desmaio",
-    "desmaiei",
-    "sangramento",
-    "queimacao",
-    "ardencia",
-    "limitacao de movimento",
-    "nao consigo apoiar",
-    "nao consigo mexer",
-    "nao consigo mover",
+  const injuryPatterns = [
+    /\bmachu(?:quei|cou|cado|cada|car)\b/,
+    /\bles(?:ao|ionei|ionado|ionada)\b/,
+    /\bfratur(?:a|ei|ado|ada)\b/,
+    /\bquebrei\b/,
+    /\btorc(?:i|eu|endo|ao|ido|ida)\b/,
+    /\bentorse\b/,
+    /\bdistensao\b/,
   ];
 
-  const mentionsBodyArea = includesAny(text, bodyAreas) || /(^|\s)pe(\s|$)/.test(paddedText);
-  const hasPhysicalCareTerm = includesAny(text, physicalCareTerms);
-  const hasBodyAreaWithCareContext = mentionsBodyArea && hasPhysicalCareTerm;
-  const hasGeneralCareSignal = requiresTrainingPause || hasPhysicalCareTerm || hasBodyAreaWithCareContext;
-
-  if (!hasGeneralCareSignal) return emptyResult;
-
-  const criticalCareKeywords = [
-    "dor forte",
-    "dor intensa",
-    "dor aguda",
-    "dor insuportavel",
-    "muita dor",
-    "muito dolorido",
-    "muito dolorida",
-    "nao consigo",
-    "torci",
-    "torceu",
-    "torsao",
-    "torcao",
-    "inchado",
-    "inchada",
-    "inchou",
-    "inchei",
-    "fisgada",
-    "travou",
-    "travei",
-    "queda",
-    "cai",
-    "caiu",
-    "machuquei",
-    "lesionei",
-    "lesao",
-    "tontura",
-    "tonto",
-    "falta de ar",
-    "formigamento",
-    "desmaio",
-    "desmaiei",
+  const accidentPatterns = [
+    /\bacidente\b/,
+    /\bqueda\b/,
+    /\bcai\b/,
+    /\bcaiu\b/,
+    /\bescorreguei\b/,
+    /\btropecei\b/,
+    /\bbati\b/,
   ];
 
-  const isCritical = requiresTrainingPause || includesAny(text, criticalCareKeywords);
+  const medicalPausePatterns = [
+    /\bmedic[oa] mandou parar\b/,
+    /\bfisioterapeuta mandou parar\b/,
+    /\borientacao medic[ao]\b/,
+    /\brepouso medic[oa]\b/,
+    /\bestou de repouso\b/,
+    /\batestado\b/,
+    /\bgesso\b/,
+    /\bimobiliza(?:do|da)\b/,
+    /\bbota ortopedica\b/,
+    /\bmuleta\b/,
+    /\bcirurgia\b/,
+    /\boperei\b/,
+    /\bhospital\b/,
+    /\bemergencia\b/,
+  ];
+
+  const explicitTrainingStopPatterns = [
+    /\bnao consigo treinar\b/,
+    /\bnao consigo fazer (?:o )?treino\b/,
+    /\bnao consigo me exercitar\b/,
+    /\bnao vou conseguir treinar\b/,
+    /\bnao posso treinar\b/,
+    /\bsem condic(?:ao|oes) (?:de|para) treinar\b/,
+    /\bimpossibilitad[oa] de treinar\b/,
+    /\bpreciso parar de treinar\b/,
+    /\bter que parar de treinar\b/,
+  ];
+
+  const trainingUncertaintyPatterns = [
+    /\bnao sei se (?:eu )?(?:vou conseguir|consigo|posso|devo) treinar\b/,
+    /\bnao se se (?:eu )?(?:vou conseguir|consigo|posso|devo) treinar\b/,
+    /\bsera que (?:eu )?(?:vou conseguir|consigo|posso|devo) treinar\b/,
+    /\bacho que nao (?:vou conseguir|consigo|posso) treinar\b/,
+    /\btalvez (?:eu )?nao (?:consiga|possa) treinar\b/,
+    /\btenho duvida se (?:vou conseguir|consigo|posso|devo) treinar\b/,
+    /\b(?:posso|consigo|devo) treinar (?:hoje|amanha|depois)?\??\b/,
+    /\bda para treinar (?:hoje|amanha|depois)?\??\b/,
+  ];
+
+  const severePatterns = [
+    /\bdor (?:muito )?(?:forte|intensa|aguda|insuportavel)\b/,
+    /\bmuita dor\b/,
+    /\bnao consigo apoiar\b/,
+    /\bnao consigo andar\b/,
+    /\bnao consigo levantar\b/,
+    /\bdesmaio\b/,
+    /\bdesmaiei\b/,
+    /\bfalta de ar\b/,
+    /\bsangramento\b/,
+    /\bfratur(?:a|ei|ado|ada)\b/,
+    /\bquebrei\b/,
+  ];
+
+  const mentionsBodyArea = matchesAnyPattern(text, bodyAreaPatterns);
+  const hasSymptom = matchesAnyPattern(text, symptomPatterns);
+  const hasInjuryWord = matchesAnyPattern(text, injuryPatterns);
+  const hasAccidentWord = matchesAnyPattern(text, accidentPatterns);
+  const hasMedicalPause = matchesAnyPattern(text, medicalPausePatterns);
+  const explicitTrainingStop = matchesAnyPattern(text, explicitTrainingStopPatterns);
+  const hasTrainingUncertainty =
+    hasTrainingReference(text) && matchesAnyPattern(text, trainingUncertaintyPatterns);
+
+  const injuryInPhysicalContext =
+    hasInjuryWord && (mentionsBodyArea || hasSymptom || hasAccidentWord);
+  const accidentInPhysicalContext =
+    hasAccidentWord && (mentionsBodyArea || hasSymptom || hasInjuryWord);
+  const physicalSignal =
+    hasSymptom ||
+    injuryInPhysicalContext ||
+    accidentInPhysicalContext ||
+    hasMedicalPause ||
+    explicitTrainingStop;
+
+  if (!physicalSignal) return emptyResult;
+
+  const isAcuteInjury = injuryInPhysicalContext || accidentInPhysicalContext;
+  const requiresTrainingPause =
+    explicitTrainingStop ||
+    hasMedicalPause ||
+    matchesAnyPattern(text, severePatterns) ||
+    (isAcuteInjury && hasTrainingUncertainty);
+
+  const isCritical =
+    requiresTrainingPause ||
+    isAcuteInjury ||
+    matchesAnyPattern(text, severePatterns);
 
   return {
     hasSignal: true,
@@ -260,148 +294,225 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
 
   if (!text) return noPreference;
 
-  /*
-   * Relatos de experiência ou nível não são, por si só, pedidos de mudança.
-   * Ex.: "estou acostumado com um nível mais avançado de treino".
-   * Eles permanecem na conversa, mas não abrem evento de preferência.
-   */
-  const experienceOrLevelCues = [
-    "estou acostumado",
-    "estou acostumada",
-    "sou acostumado",
-    "sou acostumada",
-    "tenho experiencia",
-    "ja tenho experiencia",
-    "tenho bastante experiencia",
-    "ja treino ha",
-    "treino ha anos",
-    "meu nivel e",
-    "meu nivel de treino",
-    "nivel iniciante",
-    "nivel intermediario",
-    "nivel avancado",
-    "sou iniciante",
-    "sou intermediario",
-    "sou intermediaria",
-    "sou avancado",
-    "sou avancada",
+  const explicitChangePatterns = [
+    /\bquero\b/,
+    /\bgostaria\b/,
+    /\bprefiro\b/,
+    /\bnao quero\b/,
+    /\bnao gosto\b/,
+    /\bevito\b/,
+    /\bpreciso ajustar\b/,
+    /\bpreciso mudar\b/,
+    /\bpode adaptar\b/,
+    /\badapte\b/,
+    /\badaptar\b/,
+    /\bpode trocar\b/,
+    /\bquero trocar\b/,
+    /\bquero substituir\b/,
+    /\bpode substituir\b/,
+    /\bquero incluir\b/,
+    /\bpode incluir\b/,
+    /\bquero retirar\b/,
+    /\bpode retirar\b/,
+    /\bpode tirar\b/,
+    /\bquero aumentar\b/,
+    /\bquero diminuir\b/,
+    /\bquero focar\b/,
+    /\bquero priorizar\b/,
+    /\bpara mim e melhor\b/,
+    /\bfunciona melhor para mim\b/,
   ];
 
-  /*
-   * Para virar preferência, o texto precisa demonstrar escolha, restrição,
-   * prioridade ou pedido de ajuste. Apenas descrever capacidade não basta.
-   */
-  const actionablePreferenceCues = [
-    "eu prefiro",
-    "prefiro",
-    "eu quero",
-    "quero",
-    "gostaria",
-    "nao quero",
-    "nao gostaria",
-    "nao gosto",
-    "gosto mais",
-    "quero focar",
-    "quero priorizar",
-    "priorizar",
-    "focar na",
-    "focar no",
-    "focar em",
-    "foco na",
-    "foco no",
-    "foco em",
-    "somente",
-    "apenas",
-    "so no",
-    "so na",
-    "evito",
-    "prefiro evitar",
-    "quero evitar",
-    "pode incluir",
-    "pode tirar",
-    "pode retirar",
-    "quero incluir",
-    "quero retirar",
-    "quero trocar",
-    "quero substituir",
-    "quero aumentar",
-    "quero diminuir",
-    "preciso ajustar",
-    "para mim e melhor",
-    "funciona melhor para mim",
+  const environmentPatterns = [
+    /\bem casa\b/,
+    /\bna academia\b/,
+    /\bao ar livre\b/,
+    /\bno parque\b/,
+    /\bno hotel\b/,
+    /\bno condominio\b/,
+    /\bviajando\b/,
+    /\bviagem\b/,
   ];
 
-  const habitCues = ["eu costumo", "costumo"];
-  const habitWithChoiceCues = [
-    "somente",
-    "apenas",
-    "so no",
-    "so na",
-    "nao quero",
-    "nao gosto",
-    "evito",
-    "focar na",
-    "focar no",
-    "focar em",
-    "foco na",
-    "foco no",
-    "foco em",
-    "priorizo",
-    "quando vou",
-    "nos dias",
+  const environmentChangePatterns = [
+    /\b(?:agora|este mes|esse mes|essa semana|temporariamente) (?:eu )?(?:vou )?(?:treinar|fazer os treinos?) (?:em casa|na academia|ao ar livre|no parque|no hotel|no condominio)\b/,
+    /\b(?:vou|passarei a) (?:treinar|fazer os treinos?) (?:em casa|na academia|ao ar livre|no parque|no hotel|no condominio)\b/,
+    /\bmudei (?:para|de) (?:academia|casa|local)\b/,
+    /\bnao vou mais (?:para a academia|treinar na academia|treinar em casa)\b/,
+    /\bso vou (?:treinar|fazer treino) (?:em casa|na academia|ao ar livre)\b/,
   ];
 
-  const trainingTopics = [
-    "treino",
-    "treinos",
-    "academia",
-    "musculacao",
-    "cardio",
-    "corrida",
-    "correr",
-    "exercicio",
-    "exercicios",
-    "carga",
-    "cargas",
-    "serie",
-    "series",
-    "repeticao",
-    "repeticoes",
-    "intensidade",
-    "alongamento",
-    "mobilidade",
-    "funcional",
-    "bicicleta",
+  const equipmentTerms = [
+    "halter",
+    "halteres",
+    "anilha",
+    "anilhas",
+    "colchonete",
+    "elastico",
+    "faixa elastica",
+    "mini band",
+    "miniband",
+    "trx",
+    "banco",
+    "degrau",
     "esteira",
+    "bicicleta",
     "bike",
-    "ombro",
-    "joelho",
-    "perna",
-    "braco",
-    "costas",
-    "peito",
+    "caneleira",
+    "bola",
+    "medicine ball",
+    "kettlebell",
+    "barra",
+    "polia",
+    "leg press",
+    "maquina",
+    "maquinas",
+    "aparelho",
+    "aparelhos",
+    "equipamento",
+    "equipamentos",
   ];
 
-  const hasTrainingTopic = includesAnyPhrase(text, trainingTopics);
-  if (!hasTrainingTopic) return noPreference;
+  const equipmentChangePatterns = [
+    /\b(?:tenho|possuo|comprei|ganhei|adquiri|arrumei|consegui)\b/,
+    /\b(?:nao tenho|nao possuo|estou sem|fiquei sem|nao funciona|quebrou|quebraram)\b/,
+    /\b(?:a academia|o local|o hotel) (?:tem|nao tem|possui|nao possui)\b/,
+    /\bso tenho\b/,
+  ];
 
-  const hasExperienceOrLevelStatement = includesAnyPhrase(text, experienceOrLevelCues);
-  const hasActionablePreference = includesAnyPhrase(text, actionablePreferenceCues);
-  const hasHabitCue = includesAnyPhrase(text, habitCues);
-  const habitExpressesChoice =
-    hasHabitCue && includesAnyPhrase(text, habitWithChoiceCues);
+  const routinePatterns = [
+    /\b(?:agora|este mes|esse mes|essa semana) (?:so )?(?:posso|consigo|vou conseguir) treinar\b/,
+    /\bnao consigo mais treinar\b/,
+    /\bmudei (?:meus )?(?:dias|horario|rotina)\b/,
+    /\b(?:segunda|terca|quarta|quinta|sexta|sabado|domingo)(?:-feira)?\b/,
+    /\bde manha\b/,
+    /\ba tarde\b/,
+    /\ba noite\b/,
+    /\b\d+\s*(?:x|vezes) por semana\b/,
+  ];
 
-  /*
-   * Uma declaração de nível/experiência só vira preferência quando também
-   * contém um pedido claro, por exemplo:
-   * "sou avançado e prefiro treinos mais intensos".
-   */
-  if (hasExperienceOrLevelStatement && !hasActionablePreference) {
+  const goalPatterns = [
+    /\bmeu objetivo mudou\b/,
+    /\bnovo objetivo\b/,
+    /\bquero emagrecer\b/,
+    /\bquero ganhar massa\b/,
+    /\bquero ganhar forca\b/,
+    /\bquero melhorar (?:a )?corrida\b/,
+    /\bquero correr\b/,
+    /\bme inscrevi (?:em|para) (?:uma )?(?:prova|corrida|meia maratona|maratona)\b/,
+    /\btenho (?:uma )?(?:prova|corrida|meia maratona|maratona)\b/,
+    /\bpreparar para (?:uma )?(?:prova|corrida|meia maratona|maratona)\b/,
+  ];
+
+  const intensityPatterns = [
+    /\bmuito leve\b/,
+    /\bmuito facil\b/,
+    /\bmuito dificil\b/,
+    /\bmais intenso\b/,
+    /\bmais intensidade\b/,
+    /\bmenos intenso\b/,
+    /\bmenos intensidade\b/,
+    /\baumentar (?:a )?(?:carga|volume|series|repeticoes)\b/,
+    /\bdiminuir (?:a )?(?:carga|volume|series|repeticoes)\b/,
+    /\breduzir (?:a )?(?:carga|volume|series|repeticoes)\b/,
+  ];
+
+  const exerciseAvoidPatterns = [
+    /\bnao quero\b/,
+    /\bnao gosto\b/,
+    /\bevito\b/,
+    /\bprefiro evitar\b/,
+    /\bquero evitar\b/,
+    /\bquero retirar\b/,
+    /\bpode tirar\b/,
+    /\bpode retirar\b/,
+    /\bquero substituir\b/,
+    /\bpode substituir\b/,
+  ];
+
+  const exercisePriorityPatterns = [
+    /\bprefiro\b/,
+    /\bquero focar\b/,
+    /\bquero priorizar\b/,
+    /\bpriorizar\b/,
+    /\bfocar (?:na|no|em)\b/,
+    /\bgosto mais\b/,
+    /\bpode incluir\b/,
+    /\bquero incluir\b/,
+  ];
+
+  const experienceOnlyPatterns = [
+    /\bestou acostumad[oa]\b/,
+    /\bsou acostumad[oa]\b/,
+    /\btenho experiencia\b/,
+    /\bja tenho experiencia\b/,
+    /\bmeu nivel e\b/,
+    /\bnivel (?:iniciante|intermediario|avancado)\b/,
+    /\bsou (?:iniciante|intermediari[oa]|avancad[oa])\b/,
+  ];
+
+  const hasExplicitChange = matchesAnyPattern(text, explicitChangePatterns);
+  const mentionsEnvironment = matchesAnyPattern(text, environmentPatterns);
+  const hasEnvironmentChange = matchesAnyPattern(text, environmentChangePatterns);
+  const mentionsEquipment = includesAnyPhrase(text, equipmentTerms);
+  const hasEquipmentChange =
+    mentionsEquipment && matchesAnyPattern(text, equipmentChangePatterns);
+  const hasRoutineChange = matchesAnyPattern(text, routinePatterns);
+  const hasGoalChange = matchesAnyPattern(text, goalPatterns);
+  const hasIntensityChange = matchesAnyPattern(text, intensityPatterns);
+  const experienceOnly = matchesAnyPattern(text, experienceOnlyPatterns);
+
+  const mentionsTrainingTopic =
+    hasTrainingReference(text) ||
+    mentionsEnvironment ||
+    mentionsEquipment ||
+    hasGoalChange ||
+    hasIntensityChange;
+
+  if (!mentionsTrainingTopic) return noPreference;
+
+  if (
+    experienceOnly &&
+    !hasExplicitChange &&
+    !hasEnvironmentChange &&
+    !hasEquipmentChange &&
+    !hasRoutineChange &&
+    !hasGoalChange &&
+    !hasIntensityChange
+  ) {
     return noPreference;
   }
 
-  if (!hasActionablePreference && !habitExpressesChoice) {
-    return noPreference;
+  if (hasEquipmentChange) {
+    return {
+      hasSignal: true,
+      category: "EQUIPAMENTOS",
+      summary: `Mudança de equipamento ou recurso informada pelo aluno: ${original}`,
+    };
+  }
+
+  if (hasEnvironmentChange || (mentionsEnvironment && hasExplicitChange)) {
+    return {
+      hasSignal: true,
+      category: "AMBIENTE_TREINO",
+      summary: `Mudança ou preferência de ambiente de treino: ${original}`,
+    };
+  }
+
+  if (hasGoalChange) {
+    return {
+      hasSignal: true,
+      category: "OBJETIVO_TREINO",
+      summary: `Novo objetivo ou meta de treino informada pelo aluno: ${original}`,
+    };
+  }
+
+  if (hasIntensityChange) {
+    return {
+      hasSignal: true,
+      category: "INTENSIDADE_VOLUME",
+      summary: `Pedido de ajuste de intensidade, carga ou volume: ${original}`,
+    };
   }
 
   const mentionsCardio = includesAnyPhrase(text, [
@@ -418,7 +529,12 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
     "forca",
   ]);
 
-  if (mentionsCardio && mentionsRunning && mentionsGymStrength) {
+  if (
+    hasExplicitChange &&
+    mentionsCardio &&
+    mentionsRunning &&
+    mentionsGymStrength
+  ) {
     return {
       hasSignal: true,
       category: "CARDIO_CORRIDA",
@@ -427,26 +543,25 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
     };
   }
 
-  if (includesAnyPhrase(text, ["em casa", "na academia", "ao ar livre", "parque"])) {
+  if (
+    hasRoutineChange &&
+    (hasExplicitChange ||
+      includesAnyPhrase(text, [
+        "agora",
+        "este mes",
+        "esse mes",
+        "essa semana",
+        "nao consigo mais",
+      ]))
+  ) {
     return {
       hasSignal: true,
-      category: "AMBIENTE_TREINO",
-      summary: `Preferência de ambiente registrada pelo aluno: ${original}`,
+      category: "ROTINA_TREINO",
+      summary: `Mudança de rotina, dias ou horário informada pelo aluno: ${original}`,
     };
   }
 
-  if (
-    includesAnyPhrase(text, [
-      "nao quero",
-      "nao gosto",
-      "evito",
-      "prefiro evitar",
-      "quero evitar",
-      "quero retirar",
-      "pode tirar",
-      "pode retirar",
-    ])
-  ) {
+  if (hasExplicitChange && matchesAnyPattern(text, exerciseAvoidPatterns)) {
     return {
       hasSignal: true,
       category: "EXERCICIO_EVITAR",
@@ -454,21 +569,7 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
     };
   }
 
-  if (
-    includesAnyPhrase(text, [
-      "prefiro",
-      "quero focar",
-      "quero priorizar",
-      "priorizar",
-      "focar na",
-      "focar no",
-      "focar em",
-      "foco na",
-      "foco no",
-      "foco em",
-      "gosto mais",
-    ])
-  ) {
+  if (hasExplicitChange && matchesAnyPattern(text, exercisePriorityPatterns)) {
     return {
       hasSignal: true,
       category: "EXERCICIO_PRIORIZAR",
@@ -476,19 +577,15 @@ export function classifyTrainingPreference(content: string): TrainingPreferenceC
     };
   }
 
-  if (includesAnyPhrase(text, ["dias", "horario", "rotina", "quando vou"])) {
+  if (hasExplicitChange) {
     return {
       hasSignal: true,
-      category: "ROTINA_TREINO",
-      summary: `Preferência de rotina registrada pelo aluno: ${original}`,
+      category: "PREFERENCIA_GERAL",
+      summary: `Pedido de mudança no treino registrado pelo aluno: ${original}`,
     };
   }
 
-  return {
-    hasSignal: true,
-    category: "PREFERENCIA_GERAL",
-    summary: `Preferência de treino registrada pelo aluno: ${original}`,
-  };
+  return noPreference;
 }
 
 function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
