@@ -69,7 +69,9 @@ export default async function GestorDashboardPage() {
     ? await prisma.workout.findMany({
         where: {
           studentId: { in: allStudentIds },
-          status: "PENDENTE",
+          status: {
+            in: ["PENDENTE", "PRE_PLANEJADO"],
+          },
           date: {
             gte: workoutWindow.startOfWeek,
             lt: workoutWindow.endOfWeek,
@@ -79,6 +81,7 @@ export default async function GestorDashboardPage() {
           id: true,
           studentId: true,
           date: true,
+          status: true,
           workoutPlan: { select: { name: true } },
           student: {
             select: { id: true, name: true, userId: true, user: { select: { name: true } } },
@@ -265,6 +268,9 @@ export default async function GestorDashboardPage() {
                         <span className="w-1 h-1 rounded-full bg-red-500/50" />
                         <span>{w.workoutPlan?.name || "Treino"}</span>
                         <span className="text-[#525252]">{new Date(w.date).toLocaleDateString("pt-BR")}</span>
+                        {String(w.status).toUpperCase() === "PRE_PLANEJADO" && (
+                          <span className="text-amber-400">aguardando liberação</span>
+                        )}
                       </div>
                     ))}
                     {s.workouts.length > 5 && (

@@ -568,7 +568,9 @@ export default async function DashboardPage() {
   const pendingWorkouts = isWorkoutCompletionWindowOpen
     ? await prisma.workout.findMany({
         where: {
-          status: 'PENDENTE',
+          status: {
+            in: ['PENDENTE', 'PRE_PLANEJADO'],
+          },
           date: {
             gte: currentWorkoutWeek.startOfWeek,
             lt: currentWorkoutWeek.endOfWeek,
@@ -577,7 +579,14 @@ export default async function DashboardPage() {
         },
         select: {
           id: true,
+          status: true,
+          date: true,
           createdAt: true,
+          workoutPlan: {
+            select: {
+              name: true,
+            },
+          },
           student: {
             select: {
               id: true,
@@ -2030,7 +2039,9 @@ export default async function DashboardPage() {
                       <div className="flex justify-between items-start gap-4 mb-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-900/30 text-amber-400 border border-amber-500/20">
-                            TREINO
+                            {String(workout.status).toUpperCase() === 'PRE_PLANEJADO'
+                              ? 'AGUARDANDO LIBERAÇÃO'
+                              : 'PENDENTE'}
                           </span>
 
                           <span className="text-sm font-bold text-[#f5f5f5] truncate">
@@ -2043,8 +2054,14 @@ export default async function DashboardPage() {
                         </span>
                       </div>
 
-                      <p className="text-sm text-[#f5f5f5] mb-3">
-                        Treino pendente de análise.
+                      <p className="text-sm text-[#f5f5f5] mb-2">
+                        {String(workout.status).toUpperCase() === 'PRE_PLANEJADO'
+                          ? 'Treino da semana atual ainda não liberado para o aluno.'
+                          : 'Treino liberado e ainda não concluído pelo aluno.'}
+                      </p>
+
+                      <p className="text-xs text-[#777] mb-3">
+                        {workout.workoutPlan?.name || 'Treino'} · {new Date(workout.date).toLocaleDateString('pt-BR')}
                       </p>
 
                       <p className="text-xs text-[#a1a1a1] mb-3">

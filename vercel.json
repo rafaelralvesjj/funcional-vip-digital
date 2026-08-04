@@ -6,6 +6,10 @@
       "schedule": "0 18 * * 0"
     },
     {
+      "path": "/api/cron/release-workouts-catchup",
+      "schedule": "15 10 * * 1-5"
+    },
+    {
       "path": "/api/cron/workout-engagement",
       "schedule": "0 10 * * *"
     },

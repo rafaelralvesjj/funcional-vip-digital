@@ -5,6 +5,8 @@ import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import { buildWorkoutReleaseCommunication } from "@/lib/student-experience";
 import { getStudentDisplayName } from "@/lib/display-name";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export const maxDuration = 60;
 
 type StudentForRelease = {
@@ -78,12 +80,27 @@ function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date
   return { startOfWeek, endOfWeek };
 }
 
+function getSaoPauloWeekdayAndHour(referenceDate: Date): { weekday: string; hour: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(referenceDate);
+
+  const weekday = parts.find((part) => part.type === "weekday")?.value || "";
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
+
+  return { weekday, hour };
+}
+
 function getWeekToRelease(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
   const currentWeek = getWeekRange(referenceDate);
+  const saoPauloTime = getSaoPauloWeekdayAndHour(referenceDate);
 
-  // Este cron roda aos domingos, às 15h no horário de Brasília.
-  // Nesse momento, liberamos a semana que começa na segunda-feira seguinte.
-  if (referenceDate.getUTCDay() === 0) {
+  // No domingo, somente a partir das 15h de Brasília a próxima semana é liberada.
+  // Nas execuções de recuperação durante a semana, o cron atua na semana atual.
+  if (saoPauloTime.weekday === "Sun" && saoPauloTime.hour >= 15) {
     const startOfWeek = new Date(currentWeek.endOfWeek);
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 7);
@@ -367,6 +384,19 @@ export async function GET(request: NextRequest) {
         (plan: { workouts: Array<{ id: string }> }) =>
           plan.workouts.map((workout: { id: string }) => workout.id)
       );
+      const prePlannedWorkoutIds = plansThisWeek.flatMap(
+        (plan: { workouts: Array<{ id: string; status: string }> }) =>
+          plan.workouts
+            .filter((workout) => String(workout.status).toUpperCase() === "PRE_PLANEJADO")
+            .map((workout) => workout.id)
+      );
+      const pendingWorkoutCount = plansThisWeek.reduce(
+        (total, plan: { workouts: Array<{ status: string }> }) =>
+          total + plan.workouts.filter(
+            (workout) => String(workout.status).toUpperCase() === "PENDENTE"
+          ).length,
+        0
+      );
 
       if (workoutIds.length === 0) {
         skipped.push({
@@ -378,38 +408,51 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      // Mesma regra usada pela liberação manual da semana:
-      // todos os workouts dos planos selecionados passam para PENDENTE.
-      const releasedWorkouts = await prisma.workout.updateMany({
-        where: {
-          id: {
-            in: workoutIds,
-          },
+      if (prePlannedWorkoutIds.length === 0 && pendingWorkoutCount === 0) {
+        skipped.push({
           studentId: student.id,
-          workoutPlanId: {
-            in: planIds,
-          },
-        },
-        data: {
-          status: "PENDENTE",
-        },
-      });
+          studentName: student.name,
+          contractId: activeContract?.id || null,
+          reason: "A semana não possui treinos pré-planejados ou pendentes para liberar",
+        });
+        continue;
+      }
 
-      // Confirma no banco antes de avisar o aluno.
-      const hiddenAfterRelease = await prisma.workout.count({
-        where: {
-          id: {
-            in: workoutIds,
-          },
-          status: {
-            not: "PENDENTE",
-          },
-        },
-      });
+      // A rotina é idempotente: somente PRE_PLANEJADO muda para PENDENTE.
+      // Treinos concluídos, parcialmente concluídos ou interrompidos nunca são reabertos.
+      const releasedWorkouts = prePlannedWorkoutIds.length
+        ? await prisma.workout.updateMany({
+            where: {
+              id: {
+                in: prePlannedWorkoutIds,
+              },
+              studentId: student.id,
+              workoutPlanId: {
+                in: planIds,
+              },
+              status: "PRE_PLANEJADO",
+            },
+            data: {
+              status: "PENDENTE",
+            },
+          })
+        : { count: 0 };
+
+      // Confirma no banco apenas os registros que deveriam ter sido liberados.
+      const hiddenAfterRelease = prePlannedWorkoutIds.length
+        ? await prisma.workout.count({
+            where: {
+              id: {
+                in: prePlannedWorkoutIds,
+              },
+              status: "PRE_PLANEJADO",
+            },
+          })
+        : 0;
 
       if (hiddenAfterRelease > 0) {
         throw new Error(
-          `Falha ao confirmar a liberação: ${hiddenAfterRelease} treino(s) ainda não estão como PENDENTE.`
+          `Falha ao confirmar a liberação: ${hiddenAfterRelease} treino(s) continuam como PRE_PLANEJADO.`
         );
       }
 
