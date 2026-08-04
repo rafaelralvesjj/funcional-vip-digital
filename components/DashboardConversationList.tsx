@@ -752,6 +752,8 @@ export default function DashboardConversationList({
   async function handleValidateBatchAdjustment(conversation: ConversationItem) {
     const draft = batchAdjustmentByConversationId[conversation.id];
     if (!draft?.manualResponse.trim()) { setErrorById((current) => ({ ...current, [conversation.id]: "Cole ou importe a resposta da IA antes de validar." })); return; }
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+    setSuccessById((current) => ({ ...current, [conversation.id]: "" }));
     setAdjustmentLoadingKey(`${conversation.id}:batch-validate`);
     try {
       const response = await fetch("/api/workout-adjustments", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ action:"VALIDATE_CONVERSATION_BATCH", conversationId:conversation.id, manualResponse:draft.manualResponse }) });
@@ -776,11 +778,14 @@ export default function DashboardConversationList({
     if (!draft?.proposal) return;
     const count = draft.proposal.workouts.length;
     if (!window.confirm(`Esta adaptação será aplicada a ${count} treino(s) pendente(s) da semana atual e futuros ainda não iniciados. Treinos concluídos, vencidos ou iniciados não serão alterados. Confirmar?`)) return;
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+    setSuccessById((current) => ({ ...current, [conversation.id]: "" }));
     setAdjustmentLoadingKey(`${conversation.id}:batch-apply`);
     try {
       const response = await fetch("/api/workout-adjustments", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ action:"APPLY_CONVERSATION_BATCH", conversationId:conversation.id, proposal:draft.proposal }) });
       const data = await response.json().catch(()=>null);
       if (!response.ok) { setErrorById((current)=>({ ...current,[conversation.id]:getErrorMessage(data,"Não foi possível aplicar a adaptação.") })); return; }
+      setErrorById((current)=>({ ...current,[conversation.id]:"" }));
       setSuccessById((current)=>({ ...current,[conversation.id]:data.message||"Treinos ajustados." }));
       setBatchAdjustmentByConversationId((current)=>({ ...current,[conversation.id]:null }));
       router.refresh();

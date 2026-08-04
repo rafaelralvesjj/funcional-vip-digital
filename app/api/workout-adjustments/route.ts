@@ -121,19 +121,60 @@ async function getConversationBatchContext({
 }
 
 function parseBatchProposal(rawValue: unknown): { proposal?: BatchAdjustmentProposal; error?: string } {
-  const raw = cleanText(rawValue);
-  if (!raw) return { error: "Cole a resposta da IA antes de validar." };
-  let jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  const first = jsonText.indexOf("{"); const last = jsonText.lastIndexOf("}");
-  if (first >= 0 && last > first) jsonText = jsonText.slice(first, last + 1);
-  try {
-    const parsed = JSON.parse(jsonText);
-    if (!parsed || !Array.isArray(parsed.workouts) || parsed.workouts.length === 0) return { error: "A resposta precisa conter o campo workouts com ao menos um treino." };
-    if (typeof parsed.rationale !== "string" || typeof parsed.studentMessage !== "string") return { error: "A resposta precisa conter rationale e studentMessage." };
-    return { proposal: parsed as BatchAdjustmentProposal };
-  } catch {
-    return { error: "A resposta da IA não contém JSON válido." };
+  let parsed: unknown;
+
+  if (typeof rawValue === "string") {
+    const raw = rawValue.trim();
+
+    if (!raw) {
+      return { error: "Cole a resposta da IA antes de validar." };
+    }
+
+    let jsonText = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+    const first = jsonText.indexOf("{");
+    const last = jsonText.lastIndexOf("}");
+
+    if (first >= 0 && last > first) {
+      jsonText = jsonText.slice(first, last + 1);
+    }
+
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      return { error: "A resposta da IA não contém JSON válido." };
+    }
+  } else if (rawValue && typeof rawValue === "object") {
+    // Na validação, a proposta chega como texto. Na aplicação, o front-end
+    // devolve a proposta já convertida em objeto. Os dois formatos precisam
+    // ser aceitos para que a confirmação grave as alterações no banco.
+    parsed = rawValue;
+  } else {
+    return { error: "Cole a resposta da IA antes de validar." };
   }
+
+  const candidate = parsed as Partial<BatchAdjustmentProposal> | null;
+
+  if (
+    !candidate ||
+    !Array.isArray(candidate.workouts) ||
+    candidate.workouts.length === 0
+  ) {
+    return {
+      error: "A resposta precisa conter o campo workouts com ao menos um treino.",
+    };
+  }
+
+  if (
+    typeof candidate.rationale !== "string" ||
+    typeof candidate.studentMessage !== "string"
+  ) {
+    return { error: "A resposta precisa conter rationale e studentMessage." };
+  }
+
+  return { proposal: candidate as BatchAdjustmentProposal };
 }
 
 function normalizeRole(value?: string | null): string {
