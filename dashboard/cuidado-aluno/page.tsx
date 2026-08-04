@@ -54,8 +54,6 @@ type CareEvent = {
   resolutionNotes?: string | null;
   commercialImpact?: CommercialImpact | null;
   createdAt: string;
-  sourceConversationId?: string | null;
-  awaitingStudentReply?: boolean;
 };
 
 type CarePermissions = {
@@ -232,6 +230,7 @@ export default function CuidadoAlunoPage() {
     label: "Carregando permissões...",
   });
   const [loading, setLoading] = useState(true);
+  const [signalsRecovered, setSignalsRecovered] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -259,6 +258,13 @@ export default function CuidadoAlunoPage() {
     setMessage(null);
 
     try {
+      await fetch("/api/student-message-signals/recover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: 60 }),
+      }).catch(() => null);
+      setSignalsRecovered(true);
+
       const url = status === "TODOS" ? "/api/student-care-events" : `/api/student-care-events?status=${status}`;
       const res = await fetch(url, {
         cache: "no-store",
@@ -363,6 +369,98 @@ export default function CuidadoAlunoPage() {
       }
     } catch {
       setMessage({ type: "error", text: "Erro ao atualizar evento." });
+    }
+
+    setSavingId(null);
+  }
+
+  async function activateCarePause(event: CareEvent) {
+    if (!canManageEvents) {
+      setMessage({ type: "error", text: "A gestão visualiza os eventos, mas somente o professor responsável pode pausar treinos por cuidado." });
+      return;
+    }
+
+    setSavingId(event.id);
+    setMessage(null);
+
+    const pauseReason = String(
+      resolutionNotesById[event.id] ?? event.resolutionNotes ?? event.description ?? ""
+    ).trim();
+
+    try {
+      const res = await fetch("/api/student-care-events", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: event.id,
+          action: "ACTIVATE_CARE_PAUSE",
+          pauseReason: pauseReason || event.description || null,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text: data?.message || "Treinos pausados por cuidado com sucesso.",
+        });
+        await loadEvents();
+      } else {
+        setMessage({ type: "error", text: data?.error || "Erro ao pausar treinos por cuidado." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao pausar treinos por cuidado." });
+    }
+
+    setSavingId(null);
+  }
+
+  async function saveEventNotes(event: CareEvent) {
+    if (!canManageEvents) {
+      setMessage({ type: "error", text: "A gestão visualiza os eventos, mas somente o professor responsável pode salvar anotações." });
+      return;
+    }
+
+    setSavingId(event.id);
+    setMessage(null);
+
+    const resolutionNotes = String(
+      resolutionNotesById[event.id] ?? event.resolutionNotes ?? ""
+    ).trim();
+
+    try {
+      const res = await fetch("/api/student-care-events", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: event.id,
+          status: event.status,
+          resolutionNotes: resolutionNotes || null,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.event) {
+        setEvents((current) =>
+          current.map((item) => (item.id === event.id ? data.event : item))
+        );
+        setResolutionNotesById((current) => {
+          const next = { ...current };
+          delete next[event.id];
+          return next;
+        });
+        setMessage({ type: "success", text: "Anotação salva. O evento continua com o mesmo status." });
+      } else {
+        setMessage({ type: "error", text: data?.error || "Erro ao salvar anotação." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao salvar anotação." });
     }
 
     setSavingId(null);
@@ -545,12 +643,6 @@ export default function CuidadoAlunoPage() {
                     <span className="text-[10px] px-2 py-1 rounded-full bg-[#00A19C]/10 text-[#00A19C]">
                       {getEventTypeLabel(event.eventType)}
                     </span>
-
-                    {event.awaitingStudentReply && (
-                      <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                        AGUARDANDO RESPOSTA AO ALUNO
-                      </span>
-                    )}
                   </div>
 
                   <h2 className="text-lg font-semibold text-[#f5f5f5]">
@@ -595,15 +687,6 @@ export default function CuidadoAlunoPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {event.sourceConversationId && (
-                    <Link
-                      href={`/dashboard?conversationId=${encodeURIComponent(event.sourceConversationId)}#duvidas-sem-resposta`}
-                      className="text-xs px-3 py-2 rounded-lg bg-[#00A19C]/10 text-[#00A19C] hover:bg-[#00A19C]/20 border border-[#00A19C]/20"
-                    >
-                      Responder no chat
-                    </Link>
-                  )}
-
                   <button
                     type="button"
                     onClick={() => copyAiContext(event)}
@@ -620,6 +703,17 @@ export default function CuidadoAlunoPage() {
                       className="text-xs px-3 py-2 rounded-lg bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20"
                     >
                       Marcar em revisão
+                    </button>
+                  )}
+
+                  {canManageEvents && event.eventType !== "PAUSA_POR_CUIDADO" && event.status !== "RESOLVIDO" && ["CUIDADO", "REVISAO"].includes(event.severity) && (
+                    <button
+                      type="button"
+                      disabled={savingId === event.id}
+                      onClick={() => activateCarePause(event)}
+                      className="text-xs px-3 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                    >
+                      Pausar treinos por cuidado
                     </button>
                   )}
 
@@ -725,9 +819,23 @@ export default function CuidadoAlunoPage() {
               )}
 
               <div>
-                <label className="text-xs text-[#a1a1a1] block mb-1">
-                  Anotação de resolução/revisão
-                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                  <label className="text-xs text-[#a1a1a1]">
+                    Anotação de resolução/revisão
+                  </label>
+
+                  {canManageEvents && (
+                    <button
+                      type="button"
+                      disabled={savingId === event.id}
+                      onClick={() => saveEventNotes(event)}
+                      className="self-start sm:self-auto text-xs px-3 py-2 rounded-lg bg-[#00A19C]/15 text-[#4fd1cc] border border-[#00A19C]/30 hover:bg-[#00A19C]/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingId === event.id ? "Salvando..." : "Salvar anotação"}
+                    </button>
+                  )}
+                </div>
+
                 <textarea
                   value={resolutionNotesById[event.id] ?? event.resolutionNotes ?? ""}
                   onChange={(input) =>
@@ -740,6 +848,19 @@ export default function CuidadoAlunoPage() {
                   disabled={!canManageEvents}
                   className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C] disabled:opacity-60 disabled:cursor-not-allowed"
                 />
+
+                {canManageEvents && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[11px] text-[#6b6b6b]">
+                      Salvar a anotação não resolve o evento nem altera o status atual.
+                    </p>
+                    {event.eventType !== "PAUSA_POR_CUIDADO" && event.status !== "RESOLVIDO" && ["CUIDADO", "REVISAO"].includes(event.severity) ? (
+                      <p className="text-[11px] text-red-300/80">
+                        Se decidir interromper os próximos treinos até nova liberação, use o botão “Pausar treinos por cuidado”. O aluno será avisado e verá o botão para sinalizar retorno quando estiver apto(a).
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </div>
           ))
@@ -749,7 +870,13 @@ export default function CuidadoAlunoPage() {
       )}
 
       {activeTab === "PREFERENCES" && (
-        <StudentTrainingPreferencesPanel />
+        signalsRecovered ? (
+          <StudentTrainingPreferencesPanel />
+        ) : (
+          <div className="rounded-xl border border-[#ffffff10] bg-[#111111] p-5 text-sm text-[#a1a1a1]">
+            Atualizando os sinais recentes do chat...
+          </div>
+        )
       )}
     </div>
   );

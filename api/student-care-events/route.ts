@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 import { resolveStudentProfessor } from "@/lib/student-professor";
+import { getStudentDisplayName } from "@/lib/display-name";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -400,6 +401,7 @@ async function getStudentForAccess(studentId: string) {
     select: {
       id: true,
       name: true,
+      preferredName: true,
       email: true,
       userId: true,
       userAuthId: true,
@@ -537,14 +539,6 @@ function buildCommercialImpact(event: any) {
   };
 }
 
-
-function extractConversationId(value?: string | null): string | null {
-  const text = String(value || "");
-  const explicit = text.match(/Conversa:\s*([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i);
-  if (explicit?.[1]) return explicit[1];
-  return null;
-}
-
 function normalizeEvent(event: any) {
   return {
     id: event.id,
@@ -571,8 +565,6 @@ function normalizeEvent(event: any) {
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
     commercialImpact: buildCommercialImpact(event),
-    sourceConversationId: event.sourceConversationId || extractConversationId(event.description),
-    awaitingStudentReply: Boolean(event.awaitingStudentReply),
   };
 }
 
@@ -715,42 +707,8 @@ export async function GET(request: NextRequest) {
       take: 100,
     });
 
-    const conversationIds = Array.from(new Set(events.map((event) => extractConversationId(event.description)).filter(Boolean))) as string[];
-    const conversationStates = new Map<string, boolean>();
-
-    if (conversationIds.length > 0) {
-      const conversations = await prisma.question.findMany({
-        where: { id: { in: conversationIds }, parentId: null },
-        select: {
-          id: true,
-          resolvedAt: true,
-          senderRole: true,
-          createdAt: true,
-          children: { select: { senderRole: true, createdAt: true }, orderBy: { createdAt: "asc" } },
-        },
-      });
-
-      for (const conversation of conversations) {
-        const messages = [conversation, ...(conversation.children || [])].sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-        const lastMessage = messages[messages.length - 1];
-        conversationStates.set(
-          conversation.id,
-          !conversation.resolvedAt && normalizeRole(lastMessage?.senderRole) === "STUDENT"
-        );
-      }
-    }
-
     return NextResponse.json({
-      events: events.map((event) => {
-        const sourceConversationId = extractConversationId(event.description);
-        return normalizeEvent({
-          ...event,
-          sourceConversationId,
-          awaitingStudentReply: sourceConversationId ? conversationStates.get(sourceConversationId) === true : false,
-        });
-      }),
+      events: events.map(normalizeEvent),
       permissions: getCarePermissions(role),
     });
   } catch (error: any) {
@@ -802,9 +760,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
     }
 
+    const studentDisplayName = getStudentDisplayName(student);
+
     const copy = getCareCopy({
       eventType,
-      studentName: student.name,
+      studentName: studentDisplayName,
       description,
     });
 
@@ -860,7 +820,7 @@ export async function POST(request: NextRequest) {
 
     const professorName = resolvedProfessor?.name || "seu professor";
     const studentNoticeContent = [
-      `Oi, ${student.name}!`,
+      `Oi, ${studentDisplayName}!`,
       "",
       copy.studentMessage,
       "",
@@ -919,9 +879,9 @@ export async function POST(request: NextRequest) {
       if (email) {
         await sendEmail({
           to: email,
-          subject: `${student.name}, ${copy.title.toLowerCase()}`,
+          subject: `${studentDisplayName}, ${copy.title.toLowerCase()}`,
           text: [
-            `Oi, ${student.name}!`,
+            `Oi, ${studentDisplayName}!`,
             "",
             copy.studentMessage,
             "",
@@ -939,7 +899,7 @@ export async function POST(request: NextRequest) {
             <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
               <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
                 <h2 style="color:#00A19C;margin:0 0 16px;">${escapeHtml(copy.title)}</h2>
-                <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(student.name)}</strong>!</p>
+                <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(studentDisplayName)}</strong>!</p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(copy.studentMessage)}</p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
                   <strong style="color:#f5f5f5;">${escapeHtml(professorName)}</strong> foi avisado e poderá acompanhar você pelo chat da plataforma.
@@ -1106,6 +1066,352 @@ export async function PUT(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: "ID do evento é obrigatório." }, { status: 400 });
+    }
+
+    if (action === "ACTIVATE_CARE_PAUSE") {
+      if (role !== "TEACHER") {
+        return NextResponse.json(
+          { error: "Somente o professor responsável pode pausar treinos por cuidado." },
+          { status: 403 }
+        );
+      }
+
+      const existing = await prisma.studentCareEvent.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              userId: true,
+              userAuthId: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+              userAuth: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          professor: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          relatedWorkoutPlan: {
+            select: {
+              id: true,
+              name: true,
+              date: true,
+            },
+          },
+          relatedWorkout: {
+            select: {
+              id: true,
+              date: true,
+              status: true,
+            },
+          },
+          contract: {
+            select: {
+              id: true,
+              type: true,
+              status: true,
+              commercialStatus: true,
+              startDate: true,
+              endDate: true,
+              priceCents: true,
+              workoutsPerWeek: true,
+              workoutsPerMonth: true,
+              totalContractedWorkouts: true,
+              plan: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!existing) {
+        return NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
+      }
+
+      if (existing.student.userId !== userId && existing.professorId !== userId) {
+        return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+      }
+
+      if (existing.status === "RESOLVIDO") {
+        return NextResponse.json(
+          { error: "Este evento já foi resolvido e não pode ser pausado novamente." },
+          { status: 400 }
+        );
+      }
+
+      if (existing.eventType === "PAUSA_POR_CUIDADO") {
+        return NextResponse.json(
+          { error: "Este caso já está em pausa por cuidado." },
+          { status: 400 }
+        );
+      }
+
+      const studentName = existing.student.name || "Aluno";
+      const pauseDescription = String(body?.pauseReason || existing.description || "").trim();
+      const notePrefix = `[${formatDatePtBr(new Date())}] Treinos pausados por cuidado pelo professor.`;
+      const noteToAdd = pauseDescription
+        ? `${notePrefix}
+Motivo registrado: ${pauseDescription}`
+        : notePrefix;
+      const resolutionNotes = [existing.resolutionNotes, noteToAdd]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const copy = getCareCopy({
+        eventType: "PAUSA_POR_CUIDADO",
+        studentName,
+        description: pauseDescription || existing.description || null,
+      });
+
+      let contractId = existing.contractId || null;
+      if (!contractId) {
+        const activeContract = await prisma.studentContract.findFirst({
+          where: {
+            studentId: existing.studentId,
+            status: "ACTIVE",
+            startDate: {
+              lte: new Date(),
+            },
+            endDate: {
+              gte: new Date(),
+            },
+          },
+          orderBy: {
+            endDate: "desc",
+          },
+          select: {
+            id: true,
+          },
+        });
+        contractId = activeContract?.id || null;
+      }
+
+      const updated = await prisma.studentCareEvent.update({
+        where: {
+          id,
+        },
+        data: {
+          eventType: "PAUSA_POR_CUIDADO",
+          severity: copy.severity,
+          status: copy.status,
+          title: copy.title,
+          description: pauseDescription || existing.description || null,
+          studentMessage: copy.studentMessage,
+          professorMessage: copy.professorMessage,
+          resolutionNotes,
+          contractId,
+          resolvedAt: null,
+          resolvedById: null,
+        },
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+              userAuth: {
+                select: {
+                  email: true,
+                },
+              },
+            },
+          },
+          professor: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          relatedWorkoutPlan: {
+            select: {
+              id: true,
+              name: true,
+              date: true,
+            },
+          },
+          relatedWorkout: {
+            select: {
+              id: true,
+              date: true,
+              status: true,
+            },
+          },
+          contract: {
+            select: {
+              id: true,
+              type: true,
+              status: true,
+              commercialStatus: true,
+              startDate: true,
+              endDate: true,
+              priceCents: true,
+              workoutsPerWeek: true,
+              workoutsPerMonth: true,
+              totalContractedWorkouts: true,
+              plan: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const currentProfessor = await resolveStudentProfessor(existing.studentId);
+      const professorId = currentProfessor?.id || existing.professorId || null;
+      const professorEmail = currentProfessor?.email || existing.professor?.email || null;
+      const professorName = currentProfessor?.name || existing.professor?.name || "professor(a)";
+      const studentEmail = getStudentEmail(existing.student);
+      const authorId = await getNoticeAuthorId(userId);
+
+      const studentNoticeContent = [
+        `Oi, ${studentName}!`,
+        "",
+        copy.studentMessage,
+        "",
+        pauseDescription ? `Motivo registrado: ${pauseDescription}` : "",
+        "Quando se sentir apto(a) para retomar, use o botão da sua área de aluno para sinalizar a retomada.",
+      ].filter(Boolean).join("
+");
+
+      await prisma.notice.create({
+        data: {
+          title: copy.title,
+          content: studentNoticeContent,
+          type: "CUIDADO_ALUNO",
+          authorId,
+          studentId: existing.studentId,
+          targetRole: "ALUNO",
+          expiresAt: addDays(21),
+        },
+      });
+
+      if (professorId) {
+        await prisma.notice.create({
+          data: {
+            title: `Pausa por cuidado ativada para ${studentName}`,
+            content: [
+              `Olá, ${professorName}.`,
+              "",
+              `${studentName} foi colocado(a) em pausa por cuidado.`,
+              pauseDescription ? `Motivo registrado: ${pauseDescription}` : "",
+              "Não libere treino normal enquanto o evento estiver aberto. Aguarde o aluno sinalizar aptidão para retomar e resolva o evento somente após revisar a retomada com segurança.",
+            ].filter(Boolean).join("
+"),
+            type: "CUIDADO_ALUNO",
+            authorId,
+            studentId: existing.studentId,
+            professorId,
+            targetRole: "TEACHER",
+            expiresAt: addDays(21),
+          },
+        });
+      }
+
+      if (studentEmail) {
+        try {
+          await sendEmail({
+            to: studentEmail,
+            subject: `${studentName}, seus treinos foram pausados por cuidado`,
+            text: [
+              `Oi, ${studentName}!`,
+              "",
+              copy.studentMessage,
+              "",
+              pauseDescription ? `Motivo registrado: ${pauseDescription}` : "",
+              "Quando se sentir apto(a) para retomar, entre na sua área de aluno e use o botão de retomada.",
+              `Acessar minha área: ${getAppAlunoUrl()}`,
+              "",
+              "Funcional UP Digital",
+            ].filter(Boolean).join("
+"),
+            html: `
+              <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+                <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+                  <h2 style="color:#00A19C;margin:0 0 16px;">Treinos pausados por cuidado</h2>
+                  <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${escapeHtml(studentName)}</strong>!</p>
+                  <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(copy.studentMessage)}</p>
+                  ${pauseDescription ? `<p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong>Motivo registrado:</strong> ${escapeHtml(pauseDescription)}</p>` : ""}
+                  <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Quando se sentir apto(a) para retomar, entre na sua área e use o botão de retomada.</p>
+                  <a href="${getAppAlunoUrl()}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir minha área</a>
+                </div>
+              </div>
+            `,
+          });
+        } catch (error) {
+          console.error("Erro ao enviar e-mail de pausa por cuidado para o aluno:", error);
+        }
+      }
+
+      if (professorEmail) {
+        try {
+          await sendEmail({
+            to: professorEmail,
+            subject: `Pausa por cuidado ativada para ${studentName}`,
+            text: [
+              `Olá, ${professorName}!`,
+              "",
+              `${studentName} foi colocado(a) em pausa por cuidado.`,
+              pauseDescription ? `Motivo registrado: ${pauseDescription}` : "",
+              "Aguarde o aluno sinalizar aptidão para retomar. Depois revise o caso e resolva o evento quando for seguro liberar a retomada.",
+              getAppCareUrl(),
+            ].filter(Boolean).join("
+"),
+            html: `
+              <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+                <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
+                  <h2 style="color:#00A19C;margin:0 0 16px;">Pausa por cuidado ativada</h2>
+                  <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Olá, ${escapeHtml(professorName)}!</p>
+                  <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">${escapeHtml(studentName)} foi colocado(a) em pausa por cuidado.</p>
+                  ${pauseDescription ? `<p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong>Motivo registrado:</strong> ${escapeHtml(pauseDescription)}</p>` : ""}
+                  <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">Aguarde o aluno sinalizar aptidão para retomar. Depois revise o caso e resolva o evento quando for seguro liberar a retomada.</p>
+                  <a href="${getAppCareUrl()}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Abrir Central de Cuidado</a>
+                </div>
+              </div>
+            `,
+          });
+        } catch (error) {
+          console.error("Erro ao enviar e-mail de pausa por cuidado para o professor:", error);
+        }
+      }
+
+      return NextResponse.json({
+        ok: true,
+        event: normalizeEvent(updated),
+        message: "Treinos pausados por cuidado. O aluno foi avisado e poderá sinalizar a retomada quando estiver apto(a).",
+      });
     }
 
     if (action === "REQUEST_RETURN") {
