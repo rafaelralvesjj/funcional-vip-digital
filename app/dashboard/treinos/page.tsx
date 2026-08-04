@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Exercise = { id?: string; libraryExerciseId?: string | null; name: string; series?: number | null; reps?: string | null; weight?: string | null; restTime?: string | null; notes?: string | null; order?: number };
-type Plan = { id: string; name: string; description?: string | null; objective?: string | null; focusAreas?: string | null; intensity?: string | null; estimatedDurationMinutes?: number | null; estimatedCaloriesMin?: number | null; estimatedCaloriesMax?: number | null; studentSummary?: string | null; safetyNote?: string | null; notes?: string | null; date?: string | null; exercises: Exercise[]; workouts: { id: string; date: string; status: string }[] };
+type Plan = { id: string; active?: boolean; name: string; description?: string | null; objective?: string | null; focusAreas?: string | null; intensity?: string | null; estimatedDurationMinutes?: number | null; estimatedCaloriesMin?: number | null; estimatedCaloriesMax?: number | null; studentSummary?: string | null; safetyNote?: string | null; notes?: string | null; date?: string | null; exercises: Exercise[]; workouts: { id: string; date: string; status: string }[] };
 type Student = { id: string; name: string; email?: string | null; workoutPlans: Plan[] };
 type LibraryExercise = { id: string; name: string; muscleGroup?: string | null };
 
@@ -50,6 +50,13 @@ export default function TreinosPage() {
     return students.find((student) => student.id === selectedStudentId) || null;
   }, [students, selectedStudentId]);
 
+  const visibleWorkoutPlans = useMemo(() => {
+    if (!selectedStudent) return [];
+    return selectedStudent.workoutPlans.filter(
+      (plan) => plan.active !== false && plan.workouts.length > 0
+    );
+  }, [selectedStudent]);
+
   const filteredLibrary = useMemo(() => {
     const term = librarySearch.trim().toLowerCase();
     return library.filter((item) => !term || `${item.name} ${item.muscleGroup || ""}`.toLowerCase().includes(term)).slice(0, 30);
@@ -95,9 +102,9 @@ export default function TreinosPage() {
       {error && <div className="border border-red-500/20 bg-red-500/10 text-red-300 rounded-xl p-3 text-sm">{error}</div>}
       {loading ? <div className="bg-[#111] rounded-2xl p-6 text-[#a1a1a1]">Carregando...</div> : !selectedStudent ? <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-6 text-[#a1a1a1]">Selecione um aluno para visualizar os treinos.</div> : <section key={selectedStudent.id} className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4 md:p-5">
         <div className="mb-4"><h2 className="font-bold text-lg">{selectedStudent.name}</h2><p className="text-xs text-[#777]">{selectedStudent.email || "Sem e-mail"}</p></div>
-        {selectedStudent.workoutPlans.length === 0 ? <p className="text-sm text-[#777]">Nenhum treino gerado.</p> : <div className="grid gap-3">{selectedStudent.workoutPlans.map((plan) => {
+        {visibleWorkoutPlans.length === 0 ? <p className="text-sm text-[#777]">Nenhum treino ativo gerado.</p> : <div className="grid gap-3">{visibleWorkoutPlans.map((plan) => {
           const completed = plan.workouts.some((w) => String(w.status).toUpperCase() === "CONCLUIDO");
-          const status = plan.workouts[0]?.status || "PENDENTE";
+          const status = plan.workouts[0]?.status;
           const date = plan.date || plan.workouts[0]?.date;
           return <div key={plan.id} className="bg-[#181818] border border-[#ffffff10] rounded-xl p-4 flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex-1"><div className="flex flex-wrap gap-2 items-center"><h3 className="font-semibold">{plan.name}</h3><span className="text-[11px] border border-[#00A19C]/30 text-[#00A19C] rounded-full px-2 py-1">{statusLabel(status)}</span></div><p className="text-xs text-[#888] mt-2">{date ? new Date(date).toLocaleDateString("pt-BR") : "Sem data"} · {plan.exercises.length} exercício(s)</p></div>

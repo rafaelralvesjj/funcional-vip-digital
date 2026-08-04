@@ -1020,7 +1020,32 @@ export async function POST(req: NextRequest) {
           const oldPlan = workout.workoutPlan;
           const newPlan = await tx.workoutPlan.create({ data: { studentId: oldPlan.studentId, name: cleanText(item.name)||oldPlan.name, description: cleanText(item.description)||null, active:true, date: oldPlan.date||workout.date, objective:cleanText(item.objective)||oldPlan.objective, focusAreas:cleanText(item.focusAreas)||null, intensity:cleanText(item.intensity)||null, estimatedDurationMinutes:cleanPositiveInteger(item.estimatedDurationMinutes,oldPlan.estimatedDurationMinutes||0)||null, estimatedCaloriesMin:cleanPositiveInteger(item.estimatedCaloriesMin,oldPlan.estimatedCaloriesMin||0)||null, estimatedCaloriesMax:cleanPositiveInteger(item.estimatedCaloriesMax,oldPlan.estimatedCaloriesMax||0)||null, studentSummary:cleanText(item.studentSummary)||null, safetyNote:cleanText(item.safetyNote)||null, contractId:oldPlan.contractId||workout.contractId||null, notes:[cleanText(item.notes),`Adaptado a partir da conversa ${conversationId}.`,`Plano anterior preservado: ${oldPlan.id}`].filter(Boolean).join("\n\n") } });
           await tx.exercise.createMany({ data: item._normalizedExercises.map((exercise:any)=>({ workoutPlanId:newPlan.id, ...exercise })) });
-          await tx.workout.update({ where:{id:workout.id}, data:{workoutPlanId:newPlan.id, notes:[cleanText(workout.notes),`Treino adaptado em ${now.toISOString()} a partir do relato no chat.`].filter(Boolean).join("\n\n")} });
+          await tx.workout.update({
+            where: { id: workout.id },
+            data: {
+              workoutPlanId: newPlan.id,
+              notes: [
+                cleanText(workout.notes),
+                `Treino adaptado em ${now.toISOString()} a partir do relato no chat.`,
+              ]
+                .filter(Boolean)
+                .join("\n\n"),
+            },
+          });
+
+          // A substituição mantém o plano anterior apenas como histórico.
+          // Quando nenhum Workout continua vinculado a ele, ele deixa de ser ativo
+          // e não pode reaparecer como se fosse outro treino pendente.
+          const remainingOldPlanWorkouts = await tx.workout.count({
+            where: { workoutPlanId: oldPlan.id },
+          });
+
+          if (remainingOldPlanWorkouts === 0) {
+            await tx.workoutPlan.update({
+              where: { id: oldPlan.id },
+              data: { active: false },
+            });
+          }
         }
         await tx.question.create({ data:{ content:cleanText(normalizedBatch.studentMessage), answer:cleanText(normalizedBatch.studentMessage), answeredAt:now, answeredById:userId, parentId:conversationId, studentId:batchContext.student.id, teacherId:batchContext.conversation.teacherId||batchContext.student.userId, senderRole:role==="TEACHER"?"TEACHER":"GESTOR" } });
       });
@@ -1409,7 +1434,11 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      if (plan.workouts.length === 1 && plan.workouts[0]?.id === context.workout.id) {
+      const remainingOldPlanWorkouts = await tx.workout.count({
+        where: { workoutPlanId: plan.id },
+      });
+
+      if (remainingOldPlanWorkouts === 0) {
         await tx.workoutPlan.update({
           where: { id: plan.id },
           data: { active: false },

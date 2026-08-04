@@ -33,6 +33,19 @@ export async function GET(request: NextRequest) {
   if (studentId) studentWhere.id = studentId;
   if (search) studentWhere.name = { contains: search, mode: "insensitive" };
 
+  // Corrige também versões antigas que ficaram ativas após uma substituição,
+  // mas já não possuem nenhum Workout vinculado.
+  await prisma.workoutPlan.updateMany({
+    where: {
+      active: true,
+      workouts: { none: {} },
+      ...(access.role === "TEACHER"
+        ? { student: { userId: access.userId } }
+        : {}),
+    },
+    data: { active: false },
+  });
+
   const students = await prisma.student.findMany({
     where: studentWhere,
     orderBy: { name: "asc" },
@@ -42,6 +55,10 @@ export async function GET(request: NextRequest) {
       preferredName: true,
       email: true,
       workoutPlans: {
+        where: {
+          active: true,
+          workouts: { some: {} },
+        },
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         include: {
           exercises: { orderBy: { order: "asc" } },
@@ -67,6 +84,12 @@ export async function PUT(request: NextRequest) {
     include: { student: { select: { userId: true } }, workouts: true },
   });
   if (!plan) return NextResponse.json({ error: "Treino não encontrado" }, { status: 404 });
+  if (!plan.active || plan.workouts.length === 0) {
+    return NextResponse.json(
+      { error: "Esta é uma versão histórica já substituída e não pode ser editada." },
+      { status: 409 }
+    );
+  }
   if (access.role === "TEACHER" && plan.student.userId !== access.userId) {
     return NextResponse.json({ error: "Você não pode editar o treino deste aluno" }, { status: 403 });
   }

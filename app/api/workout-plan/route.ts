@@ -975,6 +975,8 @@ async function releaseWorkoutWeek({
     where: {
       studentId,
       contractId: activeContract.id,
+      active: true,
+      workouts: { some: {} },
       date: {
         gte: week.startOfWeek,
         lt: week.endOfWeek,
@@ -1074,6 +1076,8 @@ async function releaseWorkoutWeek({
       where: {
         studentId,
         contractId: activeContract.id,
+        active: true,
+        workouts: { some: {} },
         date: {
           lt: week.startOfWeek,
         },
@@ -1245,6 +1249,8 @@ export async function POST(req: NextRequest) {
       where: {
         studentId,
         contractId: activeContract.id,
+        active: true,
+        workouts: { some: {} },
       },
     });
 
@@ -1272,6 +1278,8 @@ export async function POST(req: NextRequest) {
       where: {
         studentId,
         contractId: activeContract.id,
+        active: true,
+        workouts: { some: {} },
         date: {
           gte: startOfWeek,
           lt: endOfWeek,
@@ -1494,9 +1502,11 @@ export async function GET(req: NextRequest) {
           return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
 
-        const hasReleasedWorkout = plan.workouts.some((workout) =>
-          isWorkoutReleasedForStudent(workout.status)
-        );
+        const hasReleasedWorkout =
+          plan.active &&
+          plan.workouts.some((workout) =>
+            isWorkoutReleasedForStudent(workout.status)
+          );
 
         if (!hasReleasedWorkout) {
           return NextResponse.json(
@@ -1510,7 +1520,11 @@ export async function GET(req: NextRequest) {
     }
 
     if (studentId) {
-      const where: any = { studentId };
+      const where: any = {
+        studentId,
+        active: true,
+        workouts: { some: {} },
+      };
 
       if (isStudentUser) {
         const student = await prisma.student.findUnique({
@@ -1584,6 +1598,8 @@ export async function GET(req: NextRequest) {
             where: {
               studentId,
               contractId: activeContract.id,
+              active: true,
+              workouts: { some: {} },
               date: {
                 gte: startOfWeek,
                 lt: endOfWeek,
