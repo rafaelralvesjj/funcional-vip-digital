@@ -27,6 +27,7 @@ export async function notifyStudentAboutChatReply(input: {
   senderName: string;
   conversationId: string;
   replyText: string;
+  includeReplyTextInEmail?: boolean;
 }): Promise<{ noticeCreated: boolean; emailSent: boolean; email: string | null }> {
   const student = await prisma.student.findUnique({
     where: { id: input.studentId },
@@ -86,6 +87,7 @@ export async function notifyStudentAboutChatReply(input: {
     `Oi, ${studentName}!`,
     "",
     `${input.senderName} leu sua mensagem e já respondeu pelo chat do Funcional UP Digital.`,
+    ...(input.includeReplyTextInEmail ? ["", input.replyText] : []),
     "",
     "Abra a conversa, leia com calma e continue por lá se ainda quiser contar alguma coisa ou tirar outra dúvida.",
     "",
@@ -101,6 +103,7 @@ export async function notifyStudentAboutChatReply(input: {
         <h2 style="color:#00A19C;margin:0 0 16px;">Tem resposta nova para você 💬</h2>
         <p style="color:#f5f5f5;line-height:1.6;">Oi, <strong>${escapeHtml(studentName)}</strong>!</p>
         <p style="color:#d4d4d4;line-height:1.6;"><strong>${escapeHtml(input.senderName)}</strong> leu sua mensagem e já respondeu pelo chat.</p>
+        ${input.includeReplyTextInEmail ? `<div style="margin:16px 0;padding:14px 16px;border-left:3px solid #00A19C;background:#0a0a0a;border-radius:8px;color:#f5f5f5;font-size:14px;line-height:1.6;">${escapeHtml(input.replyText)}</div>` : ""}
         <p style="color:#d4d4d4;line-height:1.6;">Abra a conversa, leia com calma e continue por lá se ainda quiser contar alguma coisa ou tirar outra dúvida.</p>
         <a href="${loginUrl}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Abrir minha conversa</a>
         <p style="color:#6b7280;font-size:11px;line-height:1.5;margin-top:18px;">Mensagem automática enviada depois de uma resposta real do professor.</p>

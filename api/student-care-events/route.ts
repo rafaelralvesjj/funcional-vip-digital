@@ -6,6 +6,7 @@ import { sendEmail } from "@/lib/sendEmail";
 import { resolveStudentProfessor } from "@/lib/student-professor";
 import { getStudentDisplayName } from "@/lib/display-name";
 import { consolidateActiveCareEvents } from "@/lib/student-care-event-consolidation";
+import { notifyStudentAboutChatReply } from "@/lib/chat-communications";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -540,6 +541,13 @@ function buildCommercialImpact(event: any) {
   };
 }
 
+function extractConversationId(value?: string | null): string | null {
+  const match = String(value || "").match(/Conversa:\s*([0-9a-fA-F-]{36})/);
+  return match?.[1] || null;
+}
+
+const RETURN_CONFIRMATION_MARKER = "[CONFIRMACAO_RETORNADA_ENVIADA]";
+
 function normalizeEvent(event: any) {
   return {
     id: event.id,
@@ -563,6 +571,7 @@ function normalizeEvent(event: any) {
     weekEnd: event.weekEnd,
     resolvedAt: event.resolvedAt,
     resolutionNotes: event.resolutionNotes,
+    returnConfirmationSent: String(event.resolutionNotes || "").includes(RETURN_CONFIRMATION_MARKER),
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
     commercialImpact: buildCommercialImpact(event),
@@ -1071,6 +1080,146 @@ export async function PUT(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: "ID do evento é obrigatório." }, { status: 400 });
+    }
+
+    if (action === "SEND_RETURN_CONFIRMATION") {
+      if (role !== "TEACHER") {
+        return NextResponse.json(
+          { error: "Somente o professor responsável pode confirmar as condições de retomada." },
+          { status: 403 }
+        );
+      }
+
+      const existing = await prisma.studentCareEvent.findUnique({
+        where: { id },
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              preferredName: true,
+              email: true,
+              userId: true,
+              userAuthId: true,
+              user: { select: { id: true, name: true, email: true } },
+              userAuth: { select: { id: true, name: true, email: true } },
+            },
+          },
+          professor: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      if (!existing) {
+        return NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
+      }
+
+      if (existing.student.userId !== userId && existing.professorId !== userId) {
+        return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+      }
+
+      if (existing.eventType !== "PAUSA_POR_CUIDADO" || existing.status !== "EM_REVISAO") {
+        return NextResponse.json(
+          { error: "A confirmação só pode ser enviada depois que o aluno solicitar a retomada." },
+          { status: 400 }
+        );
+      }
+
+      if (String(existing.resolutionNotes || "").includes(RETURN_CONFIRMATION_MARKER)) {
+        return NextResponse.json({
+          ok: true,
+          alreadySent: true,
+          message: "A confirmação de retomada já foi enviada ao aluno.",
+        });
+      }
+
+      const studentDisplayName = getStudentDisplayName(existing.student);
+      const professorName = String(existing.professor?.name || user?.name || "Professor").trim() || "Professor";
+      const confirmationMessage = [
+        `${studentDisplayName}, que bom que você sinalizou que está se sentindo bem para voltar.`,
+        "Antes de retomarmos, preciso confirmar como você está hoje em relação à situação que motivou a pausa: ainda existe dor, inchaço ou alguma limitação?",
+        "Você consegue realizar seus movimentos normalmente? Teve alguma orientação de um profissional de saúde?",
+        "Com sua resposta, reviso sua retomada e preparo os próximos treinos com segurança.",
+      ].join(" ");
+
+      let rootConversationId = extractConversationId(existing.description);
+
+      if (rootConversationId) {
+        const rootConversation = await prisma.question.findUnique({
+          where: { id: rootConversationId },
+          select: { id: true, studentId: true, parentId: true },
+        });
+
+        if (!rootConversation || rootConversation.studentId !== existing.studentId) {
+          rootConversationId = null;
+        } else if (rootConversation.parentId) {
+          rootConversationId = rootConversation.parentId;
+        }
+      }
+
+      const now = new Date();
+      const result = await prisma.$transaction(async (tx) => {
+        const chatMessage = await tx.question.create({
+          data: {
+            content: confirmationMessage,
+            parentId: rootConversationId,
+            studentId: existing.studentId,
+            teacherId: existing.professorId || userId,
+            senderRole: "TEACHER",
+            answeredById: userId,
+            answer: confirmationMessage,
+            answeredAt: now,
+          },
+          select: { id: true, parentId: true },
+        });
+
+        const conversationId = rootConversationId || chatMessage.id;
+        const note = [
+          RETURN_CONFIRMATION_MARKER,
+          `[${formatDatePtBr(now)}] Confirmação de condições para retomada enviada pelo chat e encaminhada por e-mail.`,
+          `Mensagem: ${confirmationMessage}`,
+          `Conversa: ${conversationId}`,
+        ].join("\n");
+
+        const resolutionNotes = [existing.resolutionNotes, note]
+          .filter(Boolean)
+          .join("\n\n");
+
+        const updatedEvent = await tx.studentCareEvent.update({
+          where: { id: existing.id },
+          data: {
+            status: "EM_REVISAO",
+            resolutionNotes,
+            resolvedAt: null,
+            resolvedById: null,
+          },
+        });
+
+        return { conversationId, updatedEvent };
+      });
+
+      const communication = await notifyStudentAboutChatReply({
+        studentId: existing.studentId,
+        authorId: userId,
+        senderName: professorName,
+        conversationId: result.conversationId,
+        replyText: confirmationMessage,
+        includeReplyTextInEmail: true,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        event: normalizeEvent({
+          ...result.updatedEvent,
+          student: existing.student,
+          professor: existing.professor,
+        }),
+        conversationId: result.conversationId,
+        emailSent: communication.emailSent,
+        noticeCreated: communication.noticeCreated,
+        message: communication.emailSent
+          ? "Mensagem enviada no chat e por e-mail. Aguarde a resposta do aluno antes de liberar a retomada."
+          : "Mensagem enviada no chat. O e-mail não pôde ser confirmado, mas o aluno recebeu o aviso na plataforma.",
+      });
     }
 
     if (action === "ACTIVATE_CARE_PAUSE") {

@@ -52,6 +52,7 @@ type CareEvent = {
   weekEnd?: string | null;
   resolvedAt?: string | null;
   resolutionNotes?: string | null;
+  returnConfirmationSent?: boolean;
   commercialImpact?: CommercialImpact | null;
   createdAt: string;
 };
@@ -374,6 +375,45 @@ export default function CuidadoAlunoPage() {
     setSavingId(null);
   }
 
+  async function sendReturnConfirmation(event: CareEvent) {
+    if (!canManageEvents) {
+      setMessage({ type: "error", text: "A gestão visualiza os eventos, mas somente o professor responsável pode confirmar a retomada." });
+      return;
+    }
+
+    setSavingId(event.id);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/student-care-events", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: event.id,
+          action: "SEND_RETURN_CONFIRMATION",
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text: data?.message || "Confirmação de retomada enviada ao aluno.",
+        });
+        await loadEvents();
+      } else {
+        setMessage({ type: "error", text: data?.error || "Erro ao enviar confirmação de retomada." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao enviar confirmação de retomada." });
+    }
+
+    setSavingId(null);
+  }
+
   async function activateCarePause(event: CareEvent) {
     if (!canManageEvents) {
       setMessage({ type: "error", text: "A gestão visualiza os eventos, mas somente o professor responsável pode pausar treinos por cuidado." });
@@ -654,11 +694,18 @@ export default function CuidadoAlunoPage() {
                   </p>
 
                   {["PAUSA_POR_CUIDADO", "PAUSA_BAIXA_ADERENCIA"].includes(event.eventType) && event.status === "EM_REVISAO" && (
-                    <p className="text-xs text-green-300 mt-2 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
-                      {event.eventType === "PAUSA_BAIXA_ADERENCIA"
-                        ? "Aluno pediu para voltar. Converse pelo chat, combine uma programação possível e resolva o evento quando estiver pronto para montar a retomada."
-                        : "Aluno sinalizou aptidão para retomar. Revise e resolva o evento somente quando puder liberar a retomada com segurança."}
-                    </p>
+                    <div className="mt-2 space-y-2">
+                      <p className="text-xs text-green-300 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
+                        {event.eventType === "PAUSA_BAIXA_ADERENCIA"
+                          ? "Aluno pediu para voltar. Converse pelo chat, combine uma programação possível e resolva o evento quando estiver pronto para montar a retomada."
+                          : "Aluno sinalizou aptidão para retomar. Confirme as condições atuais pelo botão da tela e resolva o evento somente depois da resposta do aluno."}
+                      </p>
+                      {event.eventType === "PAUSA_POR_CUIDADO" && event.returnConfirmationSent ? (
+                        <p className="text-xs text-[#4fd1cc] bg-[#00A19C]/10 border border-[#00A19C]/20 rounded-lg px-3 py-2">
+                          A mensagem de confirmação já foi enviada pelo chat e encaminhada por e-mail. Aguarde a resposta do aluno antes de liberar a retomada.
+                        </p>
+                      ) : null}
+                    </div>
                   )}
 
                   {event.relatedWorkoutPlanName && (
@@ -715,6 +762,23 @@ export default function CuidadoAlunoPage() {
                     >
                       Pausar treinos por cuidado
                     </button>
+                  )}
+
+                  {canManageEvents && event.eventType === "PAUSA_POR_CUIDADO" && event.status === "EM_REVISAO" && (
+                    event.returnConfirmationSent ? (
+                      <span className="text-xs px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                        Confirmação enviada
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={savingId === event.id}
+                        onClick={() => sendReturnConfirmation(event)}
+                        className="text-xs px-3 py-2 rounded-lg bg-[#00A19C]/15 text-[#4fd1cc] border border-[#00A19C]/30 hover:bg-[#00A19C]/25 disabled:opacity-50"
+                      >
+                        {savingId === event.id ? "Enviando..." : "Confirmar condições para retomada"}
+                      </button>
+                    )
                   )}
 
                   {canManageEvents && event.status !== "RESOLVIDO" && (
