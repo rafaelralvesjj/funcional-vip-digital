@@ -1,15 +1,17 @@
-CORREÇÃO FINAL — RESUMO DO ALUNO COM EQUIPAMENTOS CONSOLIDADOS
+IMPLEMENTAÇÃO — ALTERAR TREINO COM IA DIRETO NA CONVERSA
 
-Arquivo alterado:
-- app/dashboard/resumo-aluno/page.tsx
+Arquivos alterados:
+- app/api/workout-adjustments/route.ts
+- components/DashboardConversationList.tsx
 
-O que muda:
-- CONTEXTO/RESUMO_ALUNO.txt passa a substituir o texto antigo de equipamentos
-  pelos equipamentos confirmados na memória técnica mais recente.
-- O prompt do pacote também passa a usar esse resumo consolidado.
-- Se o resumo não tiver uma linha de equipamentos, o sistema acrescenta uma
-  seção de contexto consolidado.
-- O onboarding antigo continua preservado no banco, mas não prevalece sobre
-  a memória técnica aprovada na montagem do treino.
+Novo comportamento:
+- O professor vê "Alterar treino com IA" em qualquer conversa do aluno.
+- O sistema gera ZIP com conversa, memória técnica, eventos de cuidado, biblioteca e todos os treinos elegíveis.
+- São elegíveis todos os treinos PENDENTES a partir de hoje que ainda não foram iniciados.
+- A IA deve devolver adaptação para TODOS os treinos elegíveis, preservando workoutId e datas.
+- O professor importa/cola o JSON, valida e confirma.
+- Treinos concluídos, vencidos ou já iniciados não são alterados.
+- Se houver evento de cuidado aberto, o rascunho pode ser gerado e validado, mas a aplicação fica bloqueada até a resolução.
+- Após aplicar, uma única mensagem humanizada é registrada no chat e enviada por e-mail ao aluno, quando houver e-mail válido.
 
 Não houve alteração no Prisma nem no banco.

@@ -13,7 +13,10 @@ type AdjustmentAction =
   | "PREPARE_PACKAGE"
   | "VALIDATE_MANUAL"
   | "APPLY"
-  | "FUTURE_ONLY";
+  | "FUTURE_ONLY"
+  | "PREPARE_CONVERSATION_PACKAGE"
+  | "VALIDATE_CONVERSATION_BATCH"
+  | "APPLY_CONVERSATION_BATCH";
 
 type ProposedExercise = {
   exerciseId: string;
@@ -50,6 +53,81 @@ type AdjustmentProposal = {
   studentMessage: string;
   exercises: ProposedExercise[];
 };
+
+
+
+type BatchAdjustmentProposal = {
+  rationale: string;
+  studentMessage: string;
+  workouts: Array<AdjustmentProposal & { workoutId: string }>;
+};
+
+async function getConversationBatchContext({
+  conversationId,
+  userId,
+  role,
+}: {
+  conversationId: string;
+  userId: string;
+  role: string;
+}) {
+  const conversation = await prisma.question.findUnique({
+    where: { id: conversationId },
+    include: {
+      student: {
+        select: {
+          id: true, name: true, email: true, userId: true, notes: true,
+          userAuth: { select: { email: true, birthDate: true } },
+        },
+      },
+      children: { orderBy: { createdAt: "asc" }, select: { content: true, senderRole: true, createdAt: true } },
+    },
+  });
+  if (!conversation?.student) return { error: "Conversa ou aluno não localizado.", status: 404 as const };
+  if (role === "TEACHER" && conversation.teacherId && conversation.teacherId !== userId && conversation.student.userId !== userId) {
+    return { error: "Você não tem permissão para adaptar os treinos deste aluno.", status: 403 as const };
+  }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const workouts = await prisma.workout.findMany({
+    where: { studentId: conversation.student.id, status: "PENDENTE", date: { gte: today }, workoutPlanId: { not: null } },
+    orderBy: { date: "asc" },
+    include: { workoutPlan: { include: { exercises: { orderBy: { order: "asc" } } } } },
+  });
+  const eligible = [] as typeof workouts;
+  for (const workout of workouts) {
+    if (!workout.workoutPlan) continue;
+    const dayStart = new Date(workout.date); dayStart.setHours(0,0,0,0);
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate()+1);
+    const started = await prisma.workoutExerciseProgress.count({
+      where: { studentId: conversation.student.id, workoutPlanId: workout.workoutPlan.id, workoutDate: { gte: dayStart, lt: dayEnd }, status: { not: "PENDENTE" } },
+    });
+    if (started === 0) eligible.push(workout);
+  }
+  const technicalContext = await getStudentTechnicalContext(conversation.student.id);
+  const openCareEvents = await prisma.studentCareEvent.findMany({
+    where: { studentId: conversation.student.id, status: "ABERTO" },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, eventType: true, severity: true, title: true, description: true },
+  });
+  return { conversation, student: conversation.student, workouts: eligible, technicalContext, openCareEvents };
+}
+
+function parseBatchProposal(rawValue: unknown): { proposal?: BatchAdjustmentProposal; error?: string } {
+  const raw = cleanText(rawValue);
+  if (!raw) return { error: "Cole a resposta da IA antes de validar." };
+  let jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const first = jsonText.indexOf("{"); const last = jsonText.lastIndexOf("}");
+  if (first >= 0 && last > first) jsonText = jsonText.slice(first, last + 1);
+  try {
+    const parsed = JSON.parse(jsonText);
+    if (!parsed || !Array.isArray(parsed.workouts) || parsed.workouts.length === 0) return { error: "A resposta precisa conter o campo workouts com ao menos um treino." };
+    if (typeof parsed.rationale !== "string" || typeof parsed.studentMessage !== "string") return { error: "A resposta precisa conter rationale e studentMessage." };
+    return { proposal: parsed as BatchAdjustmentProposal };
+  } catch {
+    return { error: "A resposta da IA não contém JSON válido." };
+  }
+}
 
 function normalizeRole(value?: string | null): string {
   const role = String(value || "").toUpperCase();
@@ -789,6 +867,85 @@ export async function POST(req: NextRequest) {
     const action = String(body?.action || "").toUpperCase() as AdjustmentAction;
     const preferenceId = cleanId(body?.preferenceId);
     const workoutId = cleanId(body?.workoutId);
+    const conversationId = cleanId(body?.conversationId);
+
+    if (["PREPARE_CONVERSATION_PACKAGE", "VALIDATE_CONVERSATION_BATCH", "APPLY_CONVERSATION_BATCH"].includes(action)) {
+      if (!conversationId) return NextResponse.json({ error: "Conversa inválida." }, { status: 400 });
+      const batchContext = await getConversationBatchContext({ conversationId, userId, role });
+      if ("error" in batchContext) return NextResponse.json({ error: batchContext.error }, { status: batchContext.status });
+
+      if (action === "PREPARE_CONVERSATION_PACKAGE") {
+        if (batchContext.workouts.length === 0) return NextResponse.json({ error: "Não há treinos pendentes ou futuros elegíveis para adaptação." }, { status: 409 });
+        const library = await prisma.exerciseLibrary.findMany({ where: { active: true }, orderBy: { name: "asc" } });
+        const history = [
+          { role: batchContext.conversation.senderRole, content: batchContext.conversation.content, createdAt: batchContext.conversation.createdAt },
+          ...batchContext.conversation.children,
+        ];
+        const workoutPayload = batchContext.workouts.map((workout: any) => ({
+          workoutId: workout.id, date: workout.date.toISOString().slice(0,10), status: workout.status,
+          plan: {
+            name: workout.workoutPlan?.name, description: workout.workoutPlan?.description, objective: workout.workoutPlan?.objective,
+            focusAreas: workout.workoutPlan?.focusAreas, intensity: workout.workoutPlan?.intensity,
+            estimatedDurationMinutes: workout.workoutPlan?.estimatedDurationMinutes,
+            exercises: workout.workoutPlan?.exercises.map((exercise: any) => ({ exerciseId: exercise.libraryExerciseId, name: exercise.name, series: exercise.series, reps: exercise.reps, weight: exercise.weight, restTime: exercise.restTime, notes: exercise.notes, order: exercise.order })),
+          },
+        }));
+        const model = { rationale: "", studentMessage: "", workouts: workoutPayload.map((w: any) => ({ workoutId: w.workoutId, name: w.plan.name || "", description: w.plan.description || "", objective: w.plan.objective || "", focusAreas: w.plan.focusAreas || "", intensity: w.plan.intensity || "", estimatedDurationMinutes: w.plan.estimatedDurationMinutes || 0, estimatedCaloriesMin: 0, estimatedCaloriesMax: 0, studentSummary: "", safetyNote: "", notes: "", rationale: "", studentMessage: "", exercises: [] })) };
+        const prompt = [
+          ...MANUAL_AI_EXECUTION_HEADER_LINES,
+          "Adapte TODOS os treinos elegíveis listados neste pacote com base no relato do aluno e em todo o contexto.",
+          "Responda somente com JSON válido no formato de MODELO_RESPOSTA.json.",
+          "Use somente exerciseId da biblioteca permitida. Não invente exercícios, cargas, lesões, restrições, equipamentos ou diagnósticos.",
+          "Não altere treinos concluídos, vencidos ou já iniciados. Preserve as datas e workoutId exatamente como fornecidos.",
+          "Se houver evento de cuidado aberto, gere apenas o rascunho; a publicação ficará bloqueada até a resolução pelo professor.",
+          "studentMessage deve explicar de forma humana que os próximos treinos foram revisados com base no relato do aluno.",
+          "Cada item de workouts deve conter todos os campos do treino e exercises completos.",
+        ].join("\n");
+        const zip = new JSZip();
+        zip.file("LEIA_PRIMEIRO.txt", prompt);
+        zip.file("MODELO_RESPOSTA.json", JSON.stringify(model, null, 2));
+        zip.file("CONTEXTO/CONVERSA.json", JSON.stringify(history, null, 2));
+        zip.file("CONTEXTO/MEMORIA_TECNICA.json", JSON.stringify(batchContext.technicalContext || {}, null, 2));
+        zip.file("CONTEXTO/EVENTOS_DE_CUIDADO.json", JSON.stringify(batchContext.openCareEvents, null, 2));
+        zip.file("CONTEXTO/TREINOS_ELEGIVEIS.json", JSON.stringify(workoutPayload, null, 2));
+        zip.file("CONTEXTO/BIBLIOTECA_EXERCICIOS.json", JSON.stringify(library.map((e:any)=>({ exerciseId:e.id,name:e.name,group:e.muscleGroup,location:e.locationTags,equipment:e.equipmentTags,intensity:e.intensity })), null, 2));
+        zip.file("manifesto.json", JSON.stringify({ packageType: "WORKOUT_ADJUSTMENT_FROM_CONVERSATION", conversationId, studentId: batchContext.student.id, studentName: batchContext.student.name, eligibleWorkoutIds: workoutPayload.map((w:any)=>w.workoutId), eligibleWorkoutDates: workoutPayload.map((w:any)=>w.date), openCareEventCount: batchContext.openCareEvents.length, generatedAt: new Date().toISOString() }, null, 2));
+        const output = await zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
+        return new NextResponse(output, { status: 200, headers: { "Content-Type":"application/zip", "Content-Disposition": `attachment; filename="pacote-alterar-treinos-${batchContext.student.name.toLowerCase().replace(/[^a-z0-9]+/gi,"-")}.zip"`, "Cache-Control":"no-store", "X-Eligible-Workout-Count": String(workoutPayload.length) } });
+      }
+
+      const parsedBatch = parseBatchProposal(body?.manualResponse || body?.proposal);
+      if (parsedBatch.error || !parsedBatch.proposal) return NextResponse.json({ error: parsedBatch.error || "Resposta inválida." }, { status: 422 });
+      const eligibleIds = new Set(batchContext.workouts.map((w:any)=>w.id));
+      const returnedIds = parsedBatch.proposal.workouts.map((w:any)=>cleanId(w.workoutId));
+      if (returnedIds.some((id:any)=>!id || !eligibleIds.has(id))) return NextResponse.json({ error: "A IA retornou treino que não está entre os elegíveis." }, { status: 422 });
+      if (new Set(returnedIds).size !== eligibleIds.size || returnedIds.length !== eligibleIds.size) return NextResponse.json({ error: "A resposta precisa adaptar todos os treinos elegíveis do pacote, sem omissões ou duplicidades." }, { status: 422 });
+      const normalizedWorkouts:any[] = [];
+      for (const item of parsedBatch.proposal.workouts) {
+        const validation = await validateProposal(item);
+        if (validation.error || !validation.normalizedExercises) return NextResponse.json({ error: `Treino ${item.workoutId}: ${validation.error || "proposta inválida"}` }, { status: 422 });
+        normalizedWorkouts.push({ ...item, exercises: item.exercises.map((ex:any,index:number)=>({ ...ex, exerciseName: validation.normalizedExercises?.[index]?.name || "Exercício da biblioteca" })), _normalizedExercises: validation.normalizedExercises });
+      }
+      const normalizedBatch = { ...parsedBatch.proposal, workouts: normalizedWorkouts };
+      if (action === "VALIDATE_CONVERSATION_BATCH") return NextResponse.json({ ok:true, proposal: normalizedBatch, eligibleWorkoutCount: batchContext.workouts.length, openCareEvents: batchContext.openCareEvents, message: `Resposta validada para ${batchContext.workouts.length} treino(s). Revise antes de aplicar.` });
+
+      if (batchContext.openCareEvents.length > 0) return NextResponse.json({ error: "Há evento de cuidado aberto. A adaptação foi preparada, mas a publicação permanece bloqueada até a resolução do evento." }, { status: 409 });
+      const now = new Date();
+      const byWorkoutId = new Map(batchContext.workouts.map((w:any)=>[w.id,w]));
+      await prisma.$transaction(async (tx) => {
+        for (const item of normalizedWorkouts) {
+          const workout:any = byWorkoutId.get(item.workoutId);
+          const oldPlan = workout.workoutPlan;
+          const newPlan = await tx.workoutPlan.create({ data: { studentId: oldPlan.studentId, name: cleanText(item.name)||oldPlan.name, description: cleanText(item.description)||null, active:true, date: oldPlan.date||workout.date, objective:cleanText(item.objective)||oldPlan.objective, focusAreas:cleanText(item.focusAreas)||null, intensity:cleanText(item.intensity)||null, estimatedDurationMinutes:cleanPositiveInteger(item.estimatedDurationMinutes,oldPlan.estimatedDurationMinutes||0)||null, estimatedCaloriesMin:cleanPositiveInteger(item.estimatedCaloriesMin,oldPlan.estimatedCaloriesMin||0)||null, estimatedCaloriesMax:cleanPositiveInteger(item.estimatedCaloriesMax,oldPlan.estimatedCaloriesMax||0)||null, studentSummary:cleanText(item.studentSummary)||null, safetyNote:cleanText(item.safetyNote)||null, contractId:oldPlan.contractId||workout.contractId||null, notes:[cleanText(item.notes),`Adaptado a partir da conversa ${conversationId}.`,`Plano anterior preservado: ${oldPlan.id}`].filter(Boolean).join("\n\n") } });
+          await tx.exercise.createMany({ data: item._normalizedExercises.map((exercise:any)=>({ workoutPlanId:newPlan.id, ...exercise })) });
+          await tx.workout.update({ where:{id:workout.id}, data:{workoutPlanId:newPlan.id, notes:[cleanText(workout.notes),`Treino adaptado em ${now.toISOString()} a partir do relato no chat.`].filter(Boolean).join("\n\n")} });
+        }
+        await tx.question.create({ data:{ content:cleanText(normalizedBatch.studentMessage), answer:cleanText(normalizedBatch.studentMessage), answeredAt:now, answeredById:userId, parentId:conversationId, studentId:batchContext.student.id, teacherId:batchContext.conversation.teacherId||batchContext.student.userId, senderRole:role==="TEACHER"?"TEACHER":"GESTOR" } });
+      });
+      const studentEmail = cleanText(batchContext.student.email)||cleanText(batchContext.student.userAuth?.email)||null;
+      if (studentEmail) { try { await sendEmail({ to:studentEmail, subject:"Seus próximos treinos foram ajustados 💪", text:cleanText(normalizedBatch.studentMessage), html:`<div style="font-family:Arial,sans-serif"><p>${escapeHtml(cleanText(normalizedBatch.studentMessage)).replaceAll("\n","<br />")}</p></div>` }); } catch(e){ console.error("Falha ao enviar e-mail da adaptação em lote:",e); } }
+      return NextResponse.json({ ok:true, action:"BATCH_ADAPTED", adjustedWorkoutCount:normalizedWorkouts.length, message:`${normalizedWorkouts.length} treino(s) pendente(s) e futuro(s) foram ajustados. O aluno recebeu a resposta no chat.` });
+    }
 
     if (
       !preferenceId ||

@@ -87,6 +87,19 @@ type AdjustmentDraftState = {
   manualResponse?: string;
 };
 
+type BatchAdjustmentProposal = {
+  rationale: string;
+  studentMessage: string;
+  workouts: Array<AdjustmentProposal & { workoutId: string }>;
+};
+
+type BatchAdjustmentDraftState = {
+  manualResponse: string;
+  proposal?: BatchAdjustmentProposal;
+  eligibleWorkoutCount?: number;
+  openCareEventCount?: number;
+};
+
 type ConversationItem = {
   id: string;
   studentId?: string | null;
@@ -317,6 +330,9 @@ export default function DashboardConversationList({
   const [videoReviewByAttachmentId, setVideoReviewByAttachmentId] = useState<Record<string, string>>({});
   const [adjustmentDraftByConversationId, setAdjustmentDraftByConversationId] = useState<
     Record<string, AdjustmentDraftState | null>
+  >({});
+  const [batchAdjustmentByConversationId, setBatchAdjustmentByConversationId] = useState<
+    Record<string, BatchAdjustmentDraftState | null>
   >({});
 
   useEffect(() => {
@@ -666,6 +682,73 @@ export default function DashboardConversationList({
     }
   }
 
+
+  async function handlePrepareConversationAdjustment(conversation: ConversationItem) {
+    setAdjustmentLoadingKey(`${conversation.id}:batch-prepare`);
+    setErrorById((current) => ({ ...current, [conversation.id]: "" }));
+    setSuccessById((current) => ({ ...current, [conversation.id]: "" }));
+    try {
+      const response = await fetch("/api/workout-adjustments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "PREPARE_CONVERSATION_PACKAGE", conversationId: conversation.id }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        setErrorById((current) => ({ ...current, [conversation.id]: getErrorMessage(data, "Não foi possível gerar o pacote de alteração.") }));
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      link.href = url; link.download = match?.[1] || `pacote-alterar-treinos-${conversation.id}.zip`;
+      document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+      const count = Number(response.headers.get("X-Eligible-Workout-Count") || 0);
+      setBatchAdjustmentByConversationId((current) => ({ ...current, [conversation.id]: { manualResponse: "", eligibleWorkoutCount: count } }));
+      setSuccessById((current) => ({ ...current, [conversation.id]: `Pacote gerado para ${count} treino(s) pendente(s) e futuro(s). Envie à IA e importe o TXT retornado.` }));
+    } catch (error) {
+      console.error("Prepare conversation adjustment error:", error);
+      setErrorById((current) => ({ ...current, [conversation.id]: "Erro ao gerar o pacote de alteração." }));
+    } finally { setAdjustmentLoadingKey(null); }
+  }
+
+  async function handleImportBatchResponse(conversationId: string, file?: File | null) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setBatchAdjustmentByConversationId((current) => ({ ...current, [conversationId]: { ...(current[conversationId] || { manualResponse: "" }), manualResponse: text, proposal: undefined } }));
+    } catch { setErrorById((current) => ({ ...current, [conversationId]: "Não foi possível ler o arquivo selecionado." })); }
+  }
+
+  async function handleValidateBatchAdjustment(conversation: ConversationItem) {
+    const draft = batchAdjustmentByConversationId[conversation.id];
+    if (!draft?.manualResponse.trim()) { setErrorById((current) => ({ ...current, [conversation.id]: "Cole ou importe a resposta da IA antes de validar." })); return; }
+    setAdjustmentLoadingKey(`${conversation.id}:batch-validate`);
+    try {
+      const response = await fetch("/api/workout-adjustments", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ action:"VALIDATE_CONVERSATION_BATCH", conversationId:conversation.id, manualResponse:draft.manualResponse }) });
+      const data = await response.json().catch(()=>null);
+      if (!response.ok) { setErrorById((current)=>({ ...current,[conversation.id]:getErrorMessage(data,"Não foi possível validar a adaptação.") })); return; }
+      setBatchAdjustmentByConversationId((current)=>({ ...current,[conversation.id]:{ ...draft, proposal:data.proposal, eligibleWorkoutCount:data.eligibleWorkoutCount, openCareEventCount:Array.isArray(data.openCareEvents)?data.openCareEvents.length:0 } }));
+      setSuccessById((current)=>({ ...current,[conversation.id]:data.message||"Adaptação validada." }));
+    } catch(error){ console.error(error); setErrorById((current)=>({ ...current,[conversation.id]:"Erro ao validar a adaptação." })); } finally { setAdjustmentLoadingKey(null); }
+  }
+
+  async function handleApplyBatchAdjustment(conversation: ConversationItem) {
+    const draft = batchAdjustmentByConversationId[conversation.id];
+    if (!draft?.proposal) return;
+    const count = draft.proposal.workouts.length;
+    if (!window.confirm(`Esta adaptação será aplicada a ${count} treino(s) pendente(s) da semana atual e futuros ainda não iniciados. Treinos concluídos, vencidos ou iniciados não serão alterados. Confirmar?`)) return;
+    setAdjustmentLoadingKey(`${conversation.id}:batch-apply`);
+    try {
+      const response = await fetch("/api/workout-adjustments", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ action:"APPLY_CONVERSATION_BATCH", conversationId:conversation.id, proposal:draft.proposal }) });
+      const data = await response.json().catch(()=>null);
+      if (!response.ok) { setErrorById((current)=>({ ...current,[conversation.id]:getErrorMessage(data,"Não foi possível aplicar a adaptação.") })); return; }
+      setSuccessById((current)=>({ ...current,[conversation.id]:data.message||"Treinos ajustados." }));
+      setBatchAdjustmentByConversationId((current)=>({ ...current,[conversation.id]:null }));
+      router.refresh();
+    } catch(error){ console.error(error); setErrorById((current)=>({ ...current,[conversation.id]:"Erro ao aplicar a adaptação." })); } finally { setAdjustmentLoadingKey(null); }
+  }
 
   async function handlePrepareAdjustmentPrompt(
     conversation: ConversationItem,
@@ -1025,6 +1108,7 @@ export default function DashboardConversationList({
         );
         const adjustmentRequest = conversation.adjustmentRequest || null;
         const adjustmentDraft = adjustmentDraftByConversationId[conversation.id] || null;
+        const batchAdjustmentDraft = batchAdjustmentByConversationId[conversation.id] || null;
         const canManageAdjustment =
           normalizeRole(currentRole) === "TEACHER" && Boolean(adjustmentRequest);
 
@@ -1085,6 +1169,32 @@ export default function DashboardConversationList({
                   <button type="button" onClick={() => handleDownloadAiPackage(conversation)} disabled={documentLoadingId === conversation.id} className="w-full rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">
                     {documentLoadingId === conversation.id ? "Gerando..." : "Gerar pacote ZIP para IA"}
                   </button>
+
+                  <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 p-3 space-y-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">Alteração de treino pelo professor</p>
+                      <p className="mt-1 text-xs text-[#d4d4d4]">Use quando você identificar necessidade de adaptação, mesmo sem evento automático. O pacote incluirá todos os treinos pendentes da semana atual e todos os treinos futuros ainda não iniciados.</p>
+                    </div>
+                    <button type="button" onClick={() => handlePrepareConversationAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey)} className="w-full rounded-lg bg-cyan-400 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">
+                      {adjustmentLoadingKey === `${conversation.id}:batch-prepare` ? "Gerando pacote..." : "Alterar treino com IA"}
+                    </button>
+                    {batchAdjustmentDraft && (
+                      <>
+                        <p className="text-[11px] text-cyan-100">Pacote preparado para {batchAdjustmentDraft.eligibleWorkoutCount || 0} treino(s).</p>
+                        <input type="file" accept=".txt,.json,text/plain,application/json" onChange={(event) => handleImportBatchResponse(conversation.id, event.target.files?.[0])} className="block w-full text-[11px] text-[#d4d4d4]" />
+                        <textarea rows={8} value={batchAdjustmentDraft.manualResponse} onChange={(event) => setBatchAdjustmentByConversationId((current)=>({ ...current,[conversation.id]:{ ...(current[conversation.id] || { manualResponse:"" }), manualResponse:event.target.value, proposal:undefined } }))} placeholder="Cole aqui o JSON ou importe o TXT devolvido pela IA" className="w-full rounded-lg border border-cyan-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none" />
+                        <button type="button" onClick={() => handleValidateBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey) || !batchAdjustmentDraft.manualResponse.trim()} className="w-full rounded-lg border border-cyan-400/30 px-3 py-2 text-[11px] font-semibold text-cyan-200 disabled:opacity-50">Validar adaptação</button>
+                        {batchAdjustmentDraft.proposal && (
+                          <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3 space-y-2">
+                            <p className="text-xs font-semibold text-emerald-300">{batchAdjustmentDraft.proposal.workouts.length} treino(s) prontos para alteração</p>
+                            {batchAdjustmentDraft.openCareEventCount ? <p className="text-[11px] text-amber-300">Há evento de cuidado aberto. A publicação ficará bloqueada até a resolução.</p> : null}
+                            <p className="text-[11px] text-[#d4d4d4]">{batchAdjustmentDraft.proposal.rationale}</p>
+                            <button type="button" onClick={() => handleApplyBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey)} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Aplicar em todos os treinos elegíveis</button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
 
                   {documentPromptById[conversation.id] && (
                     <>
