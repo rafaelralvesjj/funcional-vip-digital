@@ -374,6 +374,54 @@ export default function CuidadoAlunoPage() {
     setSavingId(null);
   }
 
+  async function saveEventNotes(event: CareEvent) {
+    if (!canManageEvents) {
+      setMessage({ type: "error", text: "A gestão visualiza os eventos, mas somente o professor responsável pode salvar anotações." });
+      return;
+    }
+
+    setSavingId(event.id);
+    setMessage(null);
+
+    const resolutionNotes = String(
+      resolutionNotesById[event.id] ?? event.resolutionNotes ?? ""
+    ).trim();
+
+    try {
+      const res = await fetch("/api/student-care-events", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: event.id,
+          status: event.status,
+          resolutionNotes: resolutionNotes || null,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.event) {
+        setEvents((current) =>
+          current.map((item) => (item.id === event.id ? data.event : item))
+        );
+        setResolutionNotesById((current) => {
+          const next = { ...current };
+          delete next[event.id];
+          return next;
+        });
+        setMessage({ type: "success", text: "Anotação salva. O evento continua com o mesmo status." });
+      } else {
+        setMessage({ type: "error", text: data?.error || "Erro ao salvar anotação." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao salvar anotação." });
+    }
+
+    setSavingId(null);
+  }
+
   async function copyAiContext(event: CareEvent) {
     try {
       await navigator.clipboard.writeText(buildContextForAi(event));
@@ -716,9 +764,23 @@ export default function CuidadoAlunoPage() {
               )}
 
               <div>
-                <label className="text-xs text-[#a1a1a1] block mb-1">
-                  Anotação de resolução/revisão
-                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                  <label className="text-xs text-[#a1a1a1]">
+                    Anotação de resolução/revisão
+                  </label>
+
+                  {canManageEvents && (
+                    <button
+                      type="button"
+                      disabled={savingId === event.id}
+                      onClick={() => saveEventNotes(event)}
+                      className="self-start sm:self-auto text-xs px-3 py-2 rounded-lg bg-[#00A19C]/15 text-[#4fd1cc] border border-[#00A19C]/30 hover:bg-[#00A19C]/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingId === event.id ? "Salvando..." : "Salvar anotação"}
+                    </button>
+                  )}
+                </div>
+
                 <textarea
                   value={resolutionNotesById[event.id] ?? event.resolutionNotes ?? ""}
                   onChange={(input) =>
@@ -731,6 +793,12 @@ export default function CuidadoAlunoPage() {
                   disabled={!canManageEvents}
                   className="w-full min-h-[80px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none focus:border-[#00A19C] disabled:opacity-60 disabled:cursor-not-allowed"
                 />
+
+                {canManageEvents && (
+                  <p className="mt-2 text-[11px] text-[#6b6b6b]">
+                    Salvar a anotação não resolve o evento nem altera o status atual.
+                  </p>
+                )}
               </div>
             </div>
           ))
