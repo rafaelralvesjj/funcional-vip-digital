@@ -10,6 +10,7 @@ import {
 } from "@/lib/student-training-preferences";
 import { buildWorkoutCompletionExperience } from "@/lib/student-experience";
 import { getStudentDisplayName } from "@/lib/display-name";
+import { expireOverduePendingWorkouts } from "@/lib/workout-status-lifecycle";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -1289,6 +1290,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
+    await expireOverduePendingWorkouts({ studentId });
+
     const referenceMonth = Number.isFinite(month) && month >= 1 && month <= 12
       ? month
       : new Date().getMonth() + 1;
@@ -1398,6 +1401,8 @@ export async function POST(req: NextRequest) {
     if (!hasAccess) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
+
+    await expireOverduePendingWorkouts({ studentId });
 
     const plan = await prisma.workoutPlan.findFirst({
       where: {

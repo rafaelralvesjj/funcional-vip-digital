@@ -10,6 +10,10 @@
       "schedule": "15 10 * * 1-5"
     },
     {
+      "path": "/api/cron/expire-workouts",
+      "schedule": "10 3 * * *"
+    },
+    {
       "path": "/api/cron/workout-engagement",
       "schedule": "0 10 * * *"
     },

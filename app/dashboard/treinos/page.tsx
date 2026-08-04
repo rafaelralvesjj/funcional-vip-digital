@@ -7,12 +7,43 @@ type Plan = { id: string; active?: boolean; name: string; description?: string |
 type Student = { id: string; name: string; email?: string | null; workoutPlans: Plan[] };
 type LibraryExercise = { id: string; name: string; muscleGroup?: string | null };
 
+function normalizeStatus(status?: string) {
+  return String(status || "").toUpperCase();
+}
+
 function statusLabel(status?: string) {
-  const value = String(status || "").toUpperCase();
+  const value = normalizeStatus(status);
   if (value === "CONCLUIDO") return "Concluído";
+  if (value === "CONCLUIDO_PARCIALMENTE") return "Concluído parcialmente";
+  if (value === "NAO_REALIZADO") return "Não realizado";
+  if (value === "NAO_CONCLUIDO_COM_RELATO") return "Não concluído com relato";
+  if (value === "INTERROMPIDO_CUIDADO") return "Interrompido por cuidado";
   if (value === "PRE_PLANEJADO") return "Pré-planejado";
   if (value === "PRECISA_REVISAO") return "Precisa de revisão";
-  return "Pendente";
+  if (value === "PENDENTE") return "Pendente";
+  return value ? value.replaceAll("_", " ") : "Sem status";
+}
+
+function statusClass(status?: string) {
+  const value = normalizeStatus(status);
+  if (value === "CONCLUIDO") return "border-green-500/30 text-green-400";
+  if (value === "CONCLUIDO_PARCIALMENTE") return "border-lime-400/30 text-lime-300";
+  if (value === "NAO_REALIZADO") return "border-red-500/30 text-red-400";
+  if (value === "NAO_CONCLUIDO_COM_RELATO") return "border-amber-500/30 text-amber-300";
+  if (value === "INTERROMPIDO_CUIDADO") return "border-rose-500/30 text-rose-300";
+  if (value === "PRE_PLANEJADO") return "border-sky-500/30 text-sky-300";
+  if (value === "PRECISA_REVISAO") return "border-yellow-500/30 text-yellow-300";
+  return "border-[#00A19C]/30 text-[#00A19C]";
+}
+
+function isReadOnlyWorkout(status?: string) {
+  return [
+    "CONCLUIDO",
+    "CONCLUIDO_PARCIALMENTE",
+    "NAO_REALIZADO",
+    "NAO_CONCLUIDO_COM_RELATO",
+    "INTERROMPIDO_CUIDADO",
+  ].includes(normalizeStatus(status));
 }
 
 export default function TreinosPage() {
@@ -103,12 +134,12 @@ export default function TreinosPage() {
       {loading ? <div className="bg-[#111] rounded-2xl p-6 text-[#a1a1a1]">Carregando...</div> : !selectedStudent ? <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-6 text-[#a1a1a1]">Selecione um aluno para visualizar os treinos.</div> : <section key={selectedStudent.id} className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4 md:p-5">
         <div className="mb-4"><h2 className="font-bold text-lg">{selectedStudent.name}</h2><p className="text-xs text-[#777]">{selectedStudent.email || "Sem e-mail"}</p></div>
         {visibleWorkoutPlans.length === 0 ? <p className="text-sm text-[#777]">Nenhum treino ativo gerado.</p> : <div className="grid gap-3">{visibleWorkoutPlans.map((plan) => {
-          const completed = plan.workouts.some((w) => String(w.status).toUpperCase() === "CONCLUIDO");
           const status = plan.workouts[0]?.status;
+          const readOnly = isReadOnlyWorkout(status);
           const date = plan.date || plan.workouts[0]?.date;
           return <div key={plan.id} className="bg-[#181818] border border-[#ffffff10] rounded-xl p-4 flex flex-col md:flex-row md:items-center gap-4">
-            <div className="flex-1"><div className="flex flex-wrap gap-2 items-center"><h3 className="font-semibold">{plan.name}</h3><span className="text-[11px] border border-[#00A19C]/30 text-[#00A19C] rounded-full px-2 py-1">{statusLabel(status)}</span></div><p className="text-xs text-[#888] mt-2">{date ? new Date(date).toLocaleDateString("pt-BR") : "Sem data"} · {plan.exercises.length} exercício(s)</p></div>
-            <button onClick={() => openEditor(selectedStudent, plan, completed)} className="px-4 py-2 rounded-lg bg-[#00A19C] text-black font-semibold">{completed ? "Visualizar treino" : "Editar manualmente"}</button>
+            <div className="flex-1"><div className="flex flex-wrap gap-2 items-center"><h3 className="font-semibold">{plan.name}</h3><span className={`text-[11px] border rounded-full px-2 py-1 ${statusClass(status)}`}>{statusLabel(status)}</span></div><p className="text-xs text-[#888] mt-2">{date ? new Date(date).toLocaleDateString("pt-BR") : "Sem data"} · {plan.exercises.length} exercício(s)</p></div>
+            <button onClick={() => openEditor(selectedStudent, plan, readOnly)} className="px-4 py-2 rounded-lg bg-[#00A19C] text-black font-semibold">{readOnly ? "Visualizar treino" : "Editar manualmente"}</button>
           </div>})}</div>}
       </section>}
     </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
+import { expireOverduePendingWorkouts } from "@/lib/workout-status-lifecycle";
 
 function normalizeRole(role?: string | null) {
   const value = String(role || "").toUpperCase();
@@ -32,6 +33,11 @@ export async function GET(request: NextRequest) {
   if (access.role === "TEACHER") studentWhere.userId = access.userId;
   if (studentId) studentWhere.id = studentId;
   if (search) studentWhere.name = { contains: search, mode: "insensitive" };
+
+  // Garante que treinos de semanas encerradas deixem de aparecer como pendentes.
+  await expireOverduePendingWorkouts(
+    access.role === "TEACHER" ? { teacherUserId: access.userId } : {}
+  );
 
   // Corrige também versões antigas que ficaram ativas após uma substituição,
   // mas já não possuem nenhum Workout vinculado.
@@ -93,8 +99,25 @@ export async function PUT(request: NextRequest) {
   if (access.role === "TEACHER" && plan.student.userId !== access.userId) {
     return NextResponse.json({ error: "Você não pode editar o treino deste aluno" }, { status: 403 });
   }
-  if (plan.workouts.some((workout) => String(workout.status).toUpperCase() === "CONCLUIDO")) {
-    return NextResponse.json({ error: "Treino concluído não pode ser alterado" }, { status: 409 });
+  await expireOverduePendingWorkouts({ studentId: plan.studentId });
+
+  const currentWorkouts = await prisma.workout.findMany({
+    where: { workoutPlanId },
+    select: { status: true },
+  });
+  const readOnlyStatuses = new Set([
+    "CONCLUIDO",
+    "CONCLUIDO_PARCIALMENTE",
+    "NAO_REALIZADO",
+    "NAO_CONCLUIDO_COM_RELATO",
+    "INTERROMPIDO_CUIDADO",
+  ]);
+
+  if (currentWorkouts.some((workout) => readOnlyStatuses.has(String(workout.status).toUpperCase()))) {
+    return NextResponse.json(
+      { error: "Treino encerrado fica disponível somente para consulta." },
+      { status: 409 }
+    );
   }
 
   const exercises = Array.isArray(body?.exercises) ? body.exercises : [];
