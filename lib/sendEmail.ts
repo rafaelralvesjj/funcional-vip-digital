@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { ensureFuncionalUpEmailHtml } from "@/lib/email-brand";
 
 type SendEmailInput = {
   to: string;
@@ -50,7 +51,7 @@ export async function sendEmail({ to, subject, text, html, eventType = "UNSPECIF
       to: normalizedTo,
       subject,
       text,
-      html,
+      html: ensureFuncionalUpEmailHtml({ subject, html }),
     });
 
     console.info("EMAIL_SENT", {

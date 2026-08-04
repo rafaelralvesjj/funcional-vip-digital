@@ -18,6 +18,15 @@ function normalizeEmail(email?: string | null) {
   return email?.trim().toLowerCase() || null;
 }
 
+function escapeHtml(value?: string | null) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function buildStudentWhere(userId?: string | null, email?: string | null) {
   const orWhere: any[] = [];
   const normalizedEmail = normalizeEmail(email);
@@ -199,13 +208,19 @@ export async function POST() {
             "Mensagem automática gerada a partir da manifestação do aluno.",
           ].join("\n"),
           html: `
-            <div style="font-family: Arial, sans-serif; line-height:1.6; color:#222;">
-              <h2>${studentName} quer continuar com o acompanhamento</h2>
-              <p>Olá, equipe de gestão.</p>
-              <p><strong>${studentName}</strong> sinalizou, pelo painel, que deseja continuar após a experiência gratuita.</p>
-              <p><strong>E-mail:</strong> ${studentEmail || "não informado"}</p>
-              <p>Próximo passo: acessar o Financeiro, avaliar o plano mais adequado e entrar em contato para orientar a continuidade.</p>
-              <p style="font-size:12px; color:#666;">Mensagem automática gerada a partir da manifestação do aluno.</p>
+            <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+              <div style="max-width:580px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:18px;padding:26px;">
+                <p style="margin:0 0 8px;color:#f5f5f5;font-size:15px;">Olá, <strong>equipe de gestão</strong>.</p>
+                <h2 style="margin:0 0 16px;color:#00A19C;font-size:24px;line-height:1.25;">Aluno quer continuar com o acompanhamento</h2>
+                <p style="margin:0;color:#d4d4d4;font-size:15px;line-height:1.65;"><strong style="color:#f5f5f5;">${escapeHtml(studentName)}</strong> sinalizou, pelo painel, que deseja continuar após a experiência gratuita.</p>
+                <div style="margin-top:18px;padding:14px;border-radius:12px;background:#071413;border:1px solid #005D5A;color:#d4d4d4;font-size:14px;line-height:1.6;">
+                  <strong style="color:#00A19C;">Contato do aluno:</strong><br />
+                  ${escapeHtml(studentEmail || "não informado")}
+                </div>
+                <p style="margin:18px 0 0;color:#d4d4d4;font-size:14px;line-height:1.65;">Acesse o Financeiro, avalie o plano mais adequado e entre em contato para orientar a continuidade.</p>
+                <a href="${(process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://funcional-up-digital.vercel.app").replace(/\/$/, "")}/dashboard/financeiro" style="display:inline-block;margin-top:20px;background:#00A19C;color:#081312;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:10px;">Abrir Financeiro</a>
+                <p style="margin:18px 0 0;color:#6b6b6b;font-size:11px;">Mensagem automática gerada a partir da manifestação do aluno.</p>
+              </div>
             </div>
           `,
         });

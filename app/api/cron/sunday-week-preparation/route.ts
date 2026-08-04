@@ -190,15 +190,20 @@ async function sendPreparationEmail({
     subject: NOTICE_TITLE,
     text: `${content}\n\nAcessar a plataforma: ${appUrl}`,
     html: `
-      <div style="font-family:Arial,sans-serif;background:#111111;color:#f5f5f5;padding:28px;border-radius:16px;line-height:1.6;max-width:640px;margin:0 auto;">
-        <p>Oi, <strong>${safeStudentName}</strong>!</p>
-        <p style="font-size:18px;color:#f5a623;font-weight:700;">${safePhrase}</p>
-        <p>Amanhã, <strong>${safeMondayLabel}</strong>, seus treinos da nova semana estarão disponíveis na plataforma. Organize sua agenda, separe seus horários e comece a semana preparado para cuidar de você.</p>
-        <p>Antes de iniciar, confira as orientações, imagens, séries, repetições e cuidados de execução. Se surgir qualquer dúvida, use o chat da plataforma para falar com seu professor.</p>
-        <p>Desejamos uma ótima semana e bons treinos!</p>
-        <p style="margin-top:24px;">${safeProfessorName}<br/>Funcional UP Digital</p>
-        <a href="${appUrl}" style="display:inline-block;margin-top:14px;background:#f5a623;color:#111111;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:10px;">Acessar a plataforma</a>
-        <p style="margin-top:24px;color:#a3a3a3;font-size:12px;">Mensagem automática de preparação para a semana enviada em nome do seu professor.</p>
+      <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+        <div style="max-width:580px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:18px;padding:26px;">
+          <p style="margin:0 0 8px;color:#f5f5f5;font-size:15px;">Oi, <strong>${safeStudentName}</strong>!</p>
+          <h2 style="margin:0 0 16px;color:#00A19C;font-size:24px;line-height:1.25;">Sua nova semana começa amanhã ✨</h2>
+          <p style="margin:0 0 16px;color:#d4d4d4;font-size:15px;line-height:1.65;">${safePhrase}</p>
+          <p style="margin:0 0 14px;color:#d4d4d4;font-size:15px;line-height:1.65;">Amanhã, <strong style="color:#f5f5f5;">${safeMondayLabel}</strong>, seus treinos da nova semana estarão disponíveis na plataforma. Organize sua agenda, separe seus horários e comece a semana preparado para cuidar de você.</p>
+          <div style="margin-top:18px;padding:14px;border-radius:12px;background:#071413;border:1px solid #005D5A;color:#d4d4d4;font-size:14px;line-height:1.6;">
+            <strong style="color:#00A19C;">Antes de começar:</strong><br />
+            Confira as orientações, imagens, séries, repetições e cuidados de execução. Se surgir qualquer dúvida, use o chat da plataforma para falar com seu professor.
+          </div>
+          <a href="${appUrl}" style="display:inline-block;margin-top:20px;background:#00A19C;color:#081312;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:10px;">Acessar a plataforma</a>
+          <p style="margin:22px 0 0;color:#f5f5f5;font-size:14px;">Desejamos uma ótima semana e bons treinos!<br /><strong>${safeProfessorName}</strong><br /><span style="color:#00A19C;">Funcional UP Digital</span></p>
+          <p style="margin:18px 0 0;color:#6b6b6b;font-size:11px;">Mensagem automática de preparação para a semana enviada em nome do seu professor.</p>
+        </div>
       </div>
     `,
   });

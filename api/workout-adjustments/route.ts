@@ -1050,7 +1050,50 @@ export async function POST(req: NextRequest) {
         await tx.question.create({ data:{ content:cleanText(normalizedBatch.studentMessage), answer:cleanText(normalizedBatch.studentMessage), answeredAt:now, answeredById:userId, parentId:conversationId, studentId:batchContext.student.id, teacherId:batchContext.conversation.teacherId||batchContext.student.userId, senderRole:role==="TEACHER"?"TEACHER":"GESTOR" } });
       });
       const studentEmail = cleanText(batchContext.student.email)||cleanText(batchContext.student.userAuth?.email)||null;
-      if (studentEmail) { try { await sendEmail({ to:studentEmail, subject:"Seus próximos treinos foram ajustados 💪", text:cleanText(normalizedBatch.studentMessage), html:`<div style="font-family:Arial,sans-serif"><p>${escapeHtml(cleanText(normalizedBatch.studentMessage)).replaceAll("\n","<br />")}</p></div>` }); } catch(e){ console.error("Falha ao enviar e-mail da adaptação em lote:",e); } }
+      if (studentEmail) {
+        const alunoUrl = getAppAlunoUrl();
+        const studentMessage = cleanText(normalizedBatch.studentMessage);
+        const safeStudentName = escapeHtml(cleanText(batchContext.student.name) || "aluno");
+        const safeStudentMessage = escapeHtml(studentMessage).replaceAll("\n", "<br />");
+
+        try {
+          await sendEmail({
+            to: studentEmail,
+            subject: "Seus próximos treinos foram ajustados 💪",
+            text: [
+              `Oi, ${cleanText(batchContext.student.name) || "aluno"}!`,
+              "",
+              studentMessage,
+              "",
+              `${normalizedWorkouts.length} treino(s) foram atualizados.`,
+              `Confira os detalhes na plataforma: ${alunoUrl}`,
+              "",
+              "Funcional UP Digital",
+            ].join("\n"),
+            html: `
+              <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
+                <div style="max-width:580px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:18px;padding:26px;">
+                  <p style="margin:0 0 8px;color:#f5f5f5;font-size:15px;">Oi, <strong>${safeStudentName}</strong>!</p>
+                  <h2 style="margin:0 0 16px;color:#00A19C;font-size:24px;line-height:1.25;">Seus próximos treinos foram ajustados 💪</h2>
+                  <p style="margin:0;color:#d4d4d4;font-size:15px;line-height:1.65;">${safeStudentMessage}</p>
+                  <div style="margin-top:18px;padding:14px;border-radius:12px;background:#071413;border:1px solid #005D5A;color:#d4d4d4;font-size:14px;line-height:1.6;">
+                    <strong style="color:#00A19C;">Atualização concluída:</strong><br />
+                    ${normalizedWorkouts.length} treino(s) revisado(s) e atualizados na plataforma.
+                  </div>
+                  <a href="${alunoUrl}" style="display:inline-block;margin-top:20px;background:#00A19C;color:#081312;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Ver meus treinos</a>
+                  <p style="margin:22px 0 0;color:#f5f5f5;font-size:14px;">Conte com a gente nessa caminhada.<br /><span style="color:#00A19C;">Funcional UP Digital</span></p>
+                  <p style="margin:18px 0 0;color:#6b6b6b;font-size:11px;">Mensagem automática enviada após a confirmação da adaptação dos treinos.</p>
+                </div>
+              </div>
+            `,
+            eventType: "WORKOUT_BATCH_ADJUSTED",
+            recipientType: "STUDENT",
+            contextId: conversationId,
+          });
+        } catch(e) {
+          console.error("Falha ao enviar e-mail da adaptação em lote:",e);
+        }
+      }
       return NextResponse.json({ ok:true, action:"BATCH_ADAPTED", adjustedWorkoutCount:normalizedWorkouts.length, message:`${normalizedWorkouts.length} treino(s) pendente(s) e futuro(s) foram ajustados. O aluno recebeu a resposta no chat.` });
     }
 
