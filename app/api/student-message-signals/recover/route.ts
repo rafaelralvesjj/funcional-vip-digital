@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { registerCareEventFromStudentMessage } from "@/lib/student-care-chat-events";
 import { registerTrainingPreferenceFromStudentMessage } from "@/lib/student-training-preferences";
+import { consolidateActiveCareEvents } from "@/lib/student-care-event-consolidation";
 
 function normalizeRole(value?: string | null): string {
   const role = String(value || "").toUpperCase();
@@ -194,12 +195,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const consolidation = await consolidateActiveCareEvents({ studentIds });
+
     return NextResponse.json({
       success: true,
       scanned: messages.length,
       careCreated,
       careUpdated,
       changesRecovered,
+      duplicatesResolved: consolidation.duplicatesResolved,
       errors: errors.slice(0, 20),
     });
   } catch (error: any) {

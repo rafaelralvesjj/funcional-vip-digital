@@ -9,6 +9,7 @@ import DashboardAutoRefresh from '@/components/DashboardAutoRefresh';
 import DashboardSectionSwitcher from '@/components/DashboardSectionSwitcher';
 import TrialContinuationDashboardShortcut from '@/components/gestor/TrialContinuationDashboardShortcut';
 import ProfilePhotoEditor from '@/components/ProfilePhotoEditor';
+import { consolidateActiveCareEvents } from '@/lib/student-care-event-consolidation';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -605,6 +606,10 @@ export default async function DashboardPage() {
         },
       })
     : [];
+
+  await consolidateActiveCareEvents({
+    studentIds: isTeacher ? myStudentIds : undefined,
+  });
 
   const openCareEvents = await prisma.studentCareEvent.findMany({
     where: {

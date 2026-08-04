@@ -5,6 +5,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 import { resolveStudentProfessor } from "@/lib/student-professor";
 import { getStudentDisplayName } from "@/lib/display-name";
+import { consolidateActiveCareEvents } from "@/lib/student-care-event-consolidation";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -631,6 +632,10 @@ export async function GET(request: NextRequest) {
     } else if (role !== "GESTOR" && role !== "ADMIN") {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
+
+    await consolidateActiveCareEvents({
+      studentIds: studentIdParam ? [studentIdParam] : undefined,
+    });
 
     const events = await prisma.studentCareEvent.findMany({
       where,
