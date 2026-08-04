@@ -1303,8 +1303,7 @@ Motivo registrado: ${pauseDescription}`
         "",
         pauseDescription ? `Motivo registrado: ${pauseDescription}` : "",
         "Quando se sentir apto(a) para retomar, use o botão da sua área de aluno para sinalizar a retomada.",
-      ].filter(Boolean).join("
-");
+      ].filter(Boolean).join("\n");
 
       await prisma.notice.create({
         data: {
@@ -1328,8 +1327,7 @@ Motivo registrado: ${pauseDescription}`
               `${studentName} foi colocado(a) em pausa por cuidado.`,
               pauseDescription ? `Motivo registrado: ${pauseDescription}` : "",
               "Não libere treino normal enquanto o evento estiver aberto. Aguarde o aluno sinalizar aptidão para retomar e resolva o evento somente após revisar a retomada com segurança.",
-            ].filter(Boolean).join("
-"),
+            ].filter(Boolean).join("\n"),
             type: "CUIDADO_ALUNO",
             authorId,
             studentId: existing.studentId,
@@ -1355,8 +1353,7 @@ Motivo registrado: ${pauseDescription}`
               `Acessar minha área: ${getAppAlunoUrl()}`,
               "",
               "Funcional UP Digital",
-            ].filter(Boolean).join("
-"),
+            ].filter(Boolean).join("\n"),
             html: `
               <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
                 <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
@@ -1387,8 +1384,7 @@ Motivo registrado: ${pauseDescription}`
               pauseDescription ? `Motivo registrado: ${pauseDescription}` : "",
               "Aguarde o aluno sinalizar aptidão para retomar. Depois revise o caso e resolva o evento quando for seguro liberar a retomada.",
               getAppCareUrl(),
-            ].filter(Boolean).join("
-"),
+            ].filter(Boolean).join("\n"),
             html: `
               <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
                 <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
