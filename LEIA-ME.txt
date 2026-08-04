@@ -1,16 +1,15 @@
-CORREÇÃO — EQUIPAMENTOS NO CONTEXTO CONSOLIDADO
+CORREÇÃO FINAL — RESUMO DO ALUNO COM EQUIPAMENTOS CONSOLIDADOS
 
 Arquivo alterado:
 - app/dashboard/resumo-aluno/page.tsx
 
 O que muda:
-- O contexto consolidado passa a buscar equipamentos em:
-  1. memórias EQUIPMENT_AVAILABLE;
-  2. memória TRAINING_ENVIRONMENT;
-  3. análises DOCUMENT_ANALYSIS/DOCUMENT com trainingEnvironment;
-  4. sourceResponse.trainingEnvironment, quando a análise antiga estiver aninhada.
-- O campo availableEquipment deixa de ficar vazio quando os equipamentos já foram confirmados nas fotos.
-- A memória mais recente continua prevalecendo sobre o onboarding antigo.
-- O conflito “nenhum equipamento” x equipamentos confirmados passa a ser registrado sem bloquear a montagem do treino.
+- CONTEXTO/RESUMO_ALUNO.txt passa a substituir o texto antigo de equipamentos
+  pelos equipamentos confirmados na memória técnica mais recente.
+- O prompt do pacote também passa a usar esse resumo consolidado.
+- Se o resumo não tiver uma linha de equipamentos, o sistema acrescenta uma
+  seção de contexto consolidado.
+- O onboarding antigo continua preservado no banco, mas não prevalece sobre
+  a memória técnica aprovada na montagem do treino.
 
 Não houve alteração no Prisma nem no banco.

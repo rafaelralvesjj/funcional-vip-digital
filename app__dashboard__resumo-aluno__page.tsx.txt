@@ -701,6 +701,35 @@ export default function ResumoAlunoPage() {
     };
   }
 
+  function buildConsolidatedSummaryText(
+    summaryData: SummaryResponse,
+    consolidatedContext: ReturnType<typeof buildConsolidatedTrainingContext>
+  ): string {
+    const source = String(summaryData.summaryText || "");
+    const equipment = Array.isArray(consolidatedContext.availableEquipment)
+      ? consolidatedContext.availableEquipment.map((item) => compactText(item)).filter(Boolean)
+      : [];
+
+    if (equipment.length === 0) return source;
+
+    const consolidatedLine = `Equipamentos/materiais disponíveis: ${equipment.join(", ")}`;
+    const patterns = [
+      /^Equipamentos\/materiais disponíveis:.*$/im,
+      /^Equipamentos disponíveis:.*$/im,
+      /^Materiais disponíveis:.*$/im,
+    ];
+
+    for (const pattern of patterns) {
+      if (pattern.test(source)) {
+        return source.replace(pattern, consolidatedLine);
+      }
+    }
+
+    return [source.trim(), "", "Contexto consolidado mais recente:", consolidatedLine]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   function selectPromptLibrary(summaryData: SummaryResponse): LibraryExercise[] {
     const consolidatedContext = buildConsolidatedTrainingContext(summaryData);
     const context = normalizePromptSearch(
@@ -1122,7 +1151,10 @@ export default function ResumoAlunoPage() {
     }
 
     try {
-      const prompt = getJsonPrompt(summary);
+      const consolidatedContext = buildConsolidatedTrainingContext(summary);
+      const consolidatedSummaryText = buildConsolidatedSummaryText(summary, consolidatedContext);
+      const packageSummary: SummaryResponse = { ...summary, summaryText: consolidatedSummaryText };
+      const prompt = getJsonPrompt(packageSummary);
       const zip = new JSZip();
       const safeStudentName = summary.student.name
         .normalize("NFD")
@@ -1204,10 +1236,9 @@ export default function ResumoAlunoPage() {
         "Cole aqui somente o JSON final produzido pela IA e depois importe este TXT no Funcional UP Digital."
       );
       zip.file("prompt.txt", prompt);
-      const consolidatedContext = buildConsolidatedTrainingContext(summary);
       zip.file("CONTEXTO/CONTEXTO_CONSOLIDADO.json", JSON.stringify(consolidatedContext, null, 2));
       zip.file("CONTEXTO/CONFLITOS_RESOLVIDOS.json", JSON.stringify(consolidatedContext.conflictsResolved || [], null, 2));
-      zip.file("CONTEXTO/RESUMO_ALUNO.txt", summary.summaryText || "");
+      zip.file("CONTEXTO/RESUMO_ALUNO.txt", consolidatedSummaryText);
       const technicalContext = summary.technicalContext || {};
       zip.file(
         "CONTEXTO/MEMORIA_TECNICA.json",
