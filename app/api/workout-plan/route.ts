@@ -23,13 +23,24 @@ const WEEKLY_CAPACITY_EXCLUDED_STATUSES = [
   "SUBSTITUTED",
 ] as const;
 
-function getDateKey(value: Date | string): string {
+function getDateKey(value: Date | string | null | undefined): string {
+  if (!value) return "";
+
   const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
   return date.toISOString().slice(0, 10);
 }
 
-function countDistinctPlanDates(plans: Array<{ date: Date | string }>): number {
-  return new Set(plans.map((plan) => getDateKey(plan.date))).size;
+function countDistinctPlanDates(
+  plans: Array<{ date: Date | string | null | undefined }>
+): number {
+  return new Set(
+    plans
+      .map((plan) => getDateKey(plan.date))
+      .filter((dateKey): dateKey is string => Boolean(dateKey))
+  ).size;
 }
 
 
