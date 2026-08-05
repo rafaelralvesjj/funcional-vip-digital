@@ -13,6 +13,25 @@ const WORKOUT_STATUS_NEEDS_REVIEW = "PRECISA_REVISAO";
 const WORKOUT_STATUS_COMPLETED = "CONCLUIDO";
 const RETURN_AWAITING_WORKOUT_MARKER = "[RETOMADA_AGUARDANDO_NOVO_TREINO]";
 const RETURN_WORKOUT_RELEASED_MARKER = "[RETOMADA_TREINO_LIBERADO]";
+const WEEKLY_CAPACITY_EXCLUDED_STATUSES = [
+  "INTERROMPIDO_CUIDADO",
+  "ARQUIVADO",
+  "ARCHIVED",
+  "CANCELADO",
+  "CANCELLED",
+  "SUBSTITUIDO",
+  "SUBSTITUTED",
+] as const;
+
+function getDateKey(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toISOString().slice(0, 10);
+}
+
+function countDistinctPlanDates(plans: Array<{ date: Date | string }>): number {
+  return new Set(plans.map((plan) => getDateKey(plan.date))).size;
+}
+
 
 function extractCareConversationId(value?: string | null): string | null {
   const match = String(value || "").match(/Conversa:\s*([0-9a-fA-F-]{36})/);
@@ -1094,7 +1113,11 @@ async function releaseWorkoutWeek({
       studentId,
       contractId: activeContract.id,
       active: true,
-      workouts: { some: {} },
+      workouts: {
+        some: {
+          status: { notIn: [...WEEKLY_CAPACITY_EXCLUDED_STATUSES] },
+        },
+      },
       date: {
         gte: week.startOfWeek,
         lt: week.endOfWeek,
@@ -1103,6 +1126,7 @@ async function releaseWorkoutWeek({
     select: {
       id: true,
       name: true,
+      date: true,
       createdAt: true,
       updatedAt: true,
       workouts: {
@@ -1117,10 +1141,12 @@ async function releaseWorkoutWeek({
     },
   });
 
-  if (plans.length < weeklyLimit) {
+  const distinctPlannedDates = countDistinctPlanDates(plans);
+
+  if (distinctPlannedDates < weeklyLimit) {
     return NextResponse.json(
       {
-        error: `A semana ainda não está completa. Existem ${plans.length}/${weeklyLimit} treino(s) planejados.`,
+        error: `A semana ainda não está completa. Existem ${distinctPlannedDates}/${weeklyLimit} data(s) de treino planejadas.`,
       },
       { status: 400 }
     );
@@ -1229,7 +1255,7 @@ async function releaseWorkoutWeek({
       label: `${formatDatePtBr(week.startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}`,
     },
     weeklyLimit,
-    releasedPlans: plans.length,
+    releasedPlans: distinctPlannedDates,
     emailSent,
     reviewContext,
     message: `Semana liberada para o aluno: ${formatDatePtBr(week.startOfWeek)} a ${formatDatePtBr(weekEndDisplay)}.`,
@@ -1368,7 +1394,11 @@ export async function POST(req: NextRequest) {
         studentId,
         contractId: activeContract.id,
         active: true,
-        workouts: { some: {} },
+        workouts: {
+          some: {
+            status: { notIn: [...WEEKLY_CAPACITY_EXCLUDED_STATUSES] },
+          },
+        },
       },
     });
 
@@ -1392,23 +1422,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(getSafeWindowBlockedPayload(), { status: 409 });
     }
 
-    const workoutPlansThisWeek = await prisma.workoutPlan.count({
+    const eligibleWorkoutPlansThisWeek = await prisma.workoutPlan.findMany({
       where: {
         studentId,
         contractId: activeContract.id,
         active: true,
-        workouts: { some: {} },
+        workouts: {
+          some: {
+            status: { notIn: [...WEEKLY_CAPACITY_EXCLUDED_STATUSES] },
+          },
+        },
         date: {
           gte: startOfWeek,
           lt: endOfWeek,
         },
       },
+      select: {
+        id: true,
+        date: true,
+      },
     });
+
+    const workoutPlansThisWeek = countDistinctPlanDates(eligibleWorkoutPlansThisWeek);
+    const selectedWorkoutDateKey = getDateKey(workoutDate);
+    const selectedDateAlreadyPlanned = eligibleWorkoutPlansThisWeek.some(
+      (plan) => getDateKey(plan.date) === selectedWorkoutDateKey
+    );
+
+    if (selectedDateAlreadyPlanned) {
+      return NextResponse.json(
+        {
+          error: `Já existe um treino ativo em ${formatDatePtBr(workoutDate)}. Abra o treino existente para editar ou escolha outra data válida.`,
+          code: "WORKOUT_DATE_ALREADY_PLANNED",
+        },
+        { status: 409 }
+      );
+    }
 
     if (workoutPlansThisWeek >= weeklyLimit) {
       return NextResponse.json(
         {
-          error: `Este aluno já recebeu ${workoutPlansThisWeek} treino(s) na semana de ${formatDatePtBr(
+          error: `Este aluno já possui ${workoutPlansThisWeek} data(s) de treino válidas na semana de ${formatDatePtBr(
             startOfWeek
           )} a ${formatDatePtBr(
             new Date(endOfWeek.getTime() - 1)
@@ -1751,27 +1805,56 @@ export async function GET(req: NextRequest) {
         : referenceDate;
       const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
 
-      const weeklyPlansCount = activeContract
-        ? await prisma.workoutPlan.count({
+      const eligibleWeeklyPlans = activeContract
+        ? await prisma.workoutPlan.findMany({
             where: {
               studentId,
               contractId: activeContract.id,
               active: true,
-              workouts: { some: {} },
+              workouts: {
+                some: {
+                  status: { notIn: [...WEEKLY_CAPACITY_EXCLUDED_STATUSES] },
+                },
+              },
               date: {
                 gte: startOfWeek,
                 lt: endOfWeek,
               },
             },
+            include: {
+              exercises: {
+                orderBy: { order: "asc" },
+                include: {
+                  libraryExercise: {
+                    select: { muscleGroup: true },
+                  },
+                },
+              },
+              workouts: {
+                where: {
+                  status: { notIn: [...WEEKLY_CAPACITY_EXCLUDED_STATUSES] },
+                },
+                select: {
+                  id: true,
+                  status: true,
+                  date: true,
+                  notes: true,
+                },
+                orderBy: { date: "asc" },
+              },
+            },
+            orderBy: { createdAt: "desc" },
           })
-        : 0;
+        : [];
+
+      const weeklyPlansCount = countDistinctPlanDates(eligibleWeeklyPlans);
 
       const selectedDateBeforeContractStart = Boolean(
         activeContract && referenceDate < activeContract.startDate
       );
 
       return NextResponse.json({
-        plans,
+        plans: eligibleWeeklyPlans,
         activeContract: serializeWorkoutContract(activeContract),
         weeklyLimit,
         weeklyPlansCount,

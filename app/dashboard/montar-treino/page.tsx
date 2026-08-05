@@ -764,8 +764,15 @@ export default function MontarTreinoPage() {
 
         const data = (await res.json()) as WorkoutWeekSummary;
 
-        setWeeklyPlansCount(Number(data.weeklyPlansCount || 0));
-        setWeeklyPlans(Array.isArray(data.plans) ? data.plans : []);
+        const validWeeklyPlans = Array.isArray(data.plans) ? data.plans : [];
+        const uniqueValidPlanDates = new Set(
+          validWeeklyPlans
+            .map((plan) => getPlanDateInput(plan))
+            .filter((planDate): planDate is string => Boolean(planDate))
+        ).size;
+
+        setWeeklyPlansCount(uniqueValidPlanDates);
+        setWeeklyPlans(validWeeklyPlans);
         setActiveWorkoutContract(data.activeContract || null);
         setContractWarning(data.message || null);
       } catch (error) {
@@ -2208,7 +2215,7 @@ export default function MontarTreinoPage() {
           {exercises.length} exercício{exercises.length !== 1 ? "s" : ""}
           {selectedStudent && ` • Aluno: ${students.find((s) => s.id === selectedStudent)?.name || ""}`}
           {selectedStudentInfo?.ageYears !== null && selectedStudentInfo?.ageYears !== undefined && ` • Idade: ${selectedStudentInfo.ageYears} ano(s)`}
-          {date && ` • Data: ${new Date(date).toLocaleDateString("pt-BR")}`}
+          {date && ` • Data: ${formatDatePtBr(new Date(`${date}T12:00:00`))}`}
           {weeklyWorkoutLimit && ` • Semana: ${weeklyPlansCount}/${weeklyWorkoutLimit}`}
           {studentSummary && " • Resumo inteligente preenchido"}
         </p>
