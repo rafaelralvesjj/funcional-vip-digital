@@ -13,6 +13,7 @@ const WORKOUT_STATUS_NEEDS_REVIEW = "PRECISA_REVISAO";
 const WORKOUT_STATUS_COMPLETED = "CONCLUIDO";
 const RETURN_AWAITING_WORKOUT_MARKER = "[RETOMADA_AGUARDANDO_NOVO_TREINO]";
 const RETURN_WORKOUT_RELEASED_MARKER = "[RETOMADA_TREINO_LIBERADO]";
+const RETURN_WORKOUT_VALIDATED_MARKER = "[RETOMADA_TREINO_VALIDADO]";
 const WEEKLY_CAPACITY_EXCLUDED_STATUSES = [
   "INTERROMPIDO_CUIDADO",
   "ARQUIVADO",
@@ -41,6 +42,53 @@ function countDistinctPlanDates(
       .map((plan) => getDateKey(plan.date))
       .filter((dateKey): dateKey is string => Boolean(dateKey))
   ).size;
+}
+
+function startOfLocalDay(value: Date): Date {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+async function getPendingCareReturnPlanningContext(studentId: string) {
+  const event = await prisma.studentCareEvent.findFirst({
+    where: {
+      studentId,
+      eventType: "PAUSA_POR_CUIDADO",
+      status: "RESOLVIDO",
+      resolutionNotes: { contains: RETURN_AWAITING_WORKOUT_MARKER },
+    },
+    select: {
+      id: true,
+      resolvedAt: true,
+      resolutionNotes: true,
+    },
+    orderBy: [{ resolvedAt: "desc" }, { updatedAt: "desc" }],
+  });
+
+  if (!event?.resolvedAt) return null;
+
+  if (String(event.resolutionNotes || "").includes(RETURN_WORKOUT_VALIDATED_MARKER)) {
+    return null;
+  }
+
+  return {
+    id: event.id,
+    resolvedAt: event.resolvedAt,
+    resolutionNotes: event.resolutionNotes,
+    planningStart: startOfLocalDay(event.resolvedAt),
+  };
+}
+
+function getEffectiveCareReturnWeekStart(
+  weekStart: Date,
+  careReturnPlanningStart?: Date | null
+): Date {
+  if (!careReturnPlanningStart) return weekStart;
+
+  return careReturnPlanningStart.getTime() > weekStart.getTime()
+    ? careReturnPlanningStart
+    : weekStart;
 }
 
 
@@ -484,7 +532,7 @@ async function notifyWorkoutAvailable({
 
   const isCareReturnPackage = Boolean(
     pendingCareReturn &&
-      !String(pendingCareReturn.resolutionNotes || "").includes(RETURN_WORKOUT_RELEASED_MARKER)
+      !String(pendingCareReturn.resolutionNotes || "").includes(RETURN_WORKOUT_VALIDATED_MARKER)
   );
 
   const weekEndDisplay = new Date(endOfWeek.getTime() - 1);
@@ -546,11 +594,30 @@ async function notifyWorkoutAvailable({
 
   const notificationTasks: Promise<unknown>[] = [];
 
+  if (isCareReturnPackage && pendingCareReturn?.resolvedAt) {
+    await prisma.notice.updateMany({
+      where: {
+        studentId,
+        type: "WORKOUT",
+        targetRole: "STUDENT",
+        createdAt: { gte: pendingCareReturn.resolvedAt },
+        content: { contains: "Sua retomada foi liberada" },
+      },
+      data: {
+        expiresAt: new Date(),
+      },
+    });
+  }
+
   const existingWeekNotice = await prisma.notice.findFirst({
     where: {
       studentId,
       type: "WORKOUT",
       targetRole: "STUDENT",
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: new Date() } },
+      ],
       ...(isCareReturnPackage && pendingCareReturn?.resolvedAt
         ? { createdAt: { gte: pendingCareReturn.resolvedAt } }
         : {}),
@@ -694,6 +761,7 @@ async function notifyWorkoutAvailable({
 
       const releaseNote = [
         RETURN_WORKOUT_RELEASED_MARKER,
+        RETURN_WORKOUT_VALIDATED_MARKER,
         `[${formatDatePtBr(now)}] Nova programação de retomada liberada para a semana de ${weekLabel}. Aviso e e-mail enviados ao aluno${conversationId ? "; mensagem final registrada no chat" : ""}.`,
       ].join("\n");
 
@@ -1115,6 +1183,12 @@ async function releaseWorkoutWeek({
     );
   }
 
+  const careReturnContext = await getPendingCareReturnPlanningContext(studentId);
+  const effectivePlanningStart = getEffectiveCareReturnWeekStart(
+    week.startOfWeek,
+    careReturnContext?.planningStart
+  );
+
   if (isUnsafeCurrentWeekPlanningWindow(week.startOfWeek)) {
     return NextResponse.json(getSafeWindowBlockedPayload(), { status: 409 });
   }
@@ -1129,8 +1203,11 @@ async function releaseWorkoutWeek({
           status: { notIn: [...WEEKLY_CAPACITY_EXCLUDED_STATUSES] },
         },
       },
+      ...(careReturnContext
+        ? { createdAt: { gte: careReturnContext.resolvedAt } }
+        : {}),
       date: {
-        gte: week.startOfWeek,
+        gte: effectivePlanningStart,
         lt: week.endOfWeek,
       },
     },
@@ -1428,6 +1505,21 @@ export async function POST(req: NextRequest) {
     }
 
     const { startOfWeek, endOfWeek } = getWeekRange(workoutDate);
+    const careReturnContext = await getPendingCareReturnPlanningContext(studentId);
+    const effectivePlanningStart = getEffectiveCareReturnWeekStart(
+      startOfWeek,
+      careReturnContext?.planningStart
+    );
+
+    if (careReturnContext && workoutDate.getTime() < effectivePlanningStart.getTime()) {
+      return NextResponse.json(
+        {
+          error: `Na retomada, escolha uma data a partir de ${formatDatePtBr(effectivePlanningStart)}. Treinos anteriores à liberação não contam como nova programação.`,
+          code: "CARE_RETURN_DATE_BEFORE_RELEASE",
+        },
+        { status: 409 }
+      );
+    }
 
     if (isUnsafeCurrentWeekPlanningWindow(startOfWeek)) {
       return NextResponse.json(getSafeWindowBlockedPayload(), { status: 409 });
@@ -1443,8 +1535,11 @@ export async function POST(req: NextRequest) {
             status: { notIn: [...WEEKLY_CAPACITY_EXCLUDED_STATUSES] },
           },
         },
+        ...(careReturnContext
+          ? { createdAt: { gte: careReturnContext.resolvedAt } }
+          : {}),
         date: {
-          gte: startOfWeek,
+          gte: effectivePlanningStart,
           lt: endOfWeek,
         },
       },
@@ -1815,6 +1910,11 @@ export async function GET(req: NextRequest) {
         ? normalizeWorkoutDateInsideContract(referenceDate, activeContract)
         : referenceDate;
       const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
+      const careReturnContext = await getPendingCareReturnPlanningContext(studentId);
+      const effectivePlanningStart = getEffectiveCareReturnWeekStart(
+        startOfWeek,
+        careReturnContext?.planningStart
+      );
 
       const eligibleWeeklyPlans = activeContract
         ? await prisma.workoutPlan.findMany({
@@ -1827,8 +1927,11 @@ export async function GET(req: NextRequest) {
                   status: { notIn: [...WEEKLY_CAPACITY_EXCLUDED_STATUSES] },
                 },
               },
+              ...(careReturnContext
+                ? { createdAt: { gte: careReturnContext.resolvedAt } }
+                : {}),
               date: {
-                gte: startOfWeek,
+                gte: effectivePlanningStart,
                 lt: endOfWeek,
               },
             },

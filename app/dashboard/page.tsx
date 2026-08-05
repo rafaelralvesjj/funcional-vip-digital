@@ -479,6 +479,7 @@ export default async function DashboardPage() {
 
   const RETURN_AWAITING_WORKOUT_MARKER = '[RETOMADA_AGUARDANDO_NOVO_TREINO]';
   const RETURN_WORKOUT_RELEASED_MARKER = '[RETOMADA_TREINO_LIBERADO]';
+  const RETURN_WORKOUT_VALIDATED_MARKER = '[RETOMADA_TREINO_VALIDADO]';
 
   const careReturnPreparationEventsRaw = await prisma.studentCareEvent.findMany({
     where: {
@@ -527,11 +528,41 @@ export default async function DashboardPage() {
     ],
   });
 
+  const prematureReturnReleaseEvents = careReturnPreparationEventsRaw.filter((event) => {
+    const notes = String(event.resolutionNotes || '');
+    return (
+      notes.includes(RETURN_WORKOUT_RELEASED_MARKER) &&
+      !notes.includes(RETURN_WORKOUT_VALIDATED_MARKER)
+    );
+  });
+
+  if (prematureReturnReleaseEvents.length > 0) {
+    const earliestResolvedAt = prematureReturnReleaseEvents
+      .map((event) => event.resolvedAt)
+      .filter((value): value is Date => Boolean(value))
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+
+    await prisma.notice.updateMany({
+      where: {
+        studentId: {
+          in: Array.from(new Set(prematureReturnReleaseEvents.map((event) => event.studentId))),
+        },
+        type: 'WORKOUT',
+        targetRole: 'STUDENT',
+        ...(earliestResolvedAt ? { createdAt: { gte: earliestResolvedAt } } : {}),
+        content: { contains: 'Sua retomada foi liberada' },
+      },
+      data: {
+        expiresAt: new Date(),
+      },
+    });
+  }
+
   const careReturnPreparationEvents = Array.from(
     careReturnPreparationEventsRaw
       .filter(
         (event) =>
-          !String(event.resolutionNotes || '').includes(RETURN_WORKOUT_RELEASED_MARKER)
+          !String(event.resolutionNotes || '').includes(RETURN_WORKOUT_VALIDATED_MARKER)
       )
       .reduce((byStudent, event) => {
         if (!byStudent.has(event.studentId)) {
