@@ -181,6 +181,47 @@ function parseExpectedWorkoutDatesParam(value?: string | null): string[] {
     .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item));
 }
 
+function normalizeCurrentWeekExpectedDatesFallback(
+  expectedDates: string[],
+  weekStartIso: string
+): string[] {
+  if (!Array.isArray(expectedDates) || expectedDates.length === 0) {
+    return [];
+  }
+
+  const todayIso = getSaoPauloCivilDateInput();
+  const currentWeekStartIso = resolveWeekStartIso(todayIso);
+
+  if (weekStartIso !== currentWeekStartIso) {
+    return expectedDates;
+  }
+
+  const todayWeekday = getSaoPauloWeekday();
+
+  if (todayWeekday < 1 || todayWeekday > 5) {
+    return expectedDates;
+  }
+
+  const weekStartDate = parseDateInput(weekStartIso);
+  if (!weekStartDate) {
+    return expectedDates;
+  }
+
+  const fridayIso = formatIsoDate(addDays(weekStartDate, 4));
+  const datesStillValid = expectedDates.filter(
+    (date) => date >= todayIso && date <= fridayIso
+  );
+
+  if (datesStillValid.length > 0) {
+    return datesStillValid;
+  }
+
+  // Em semana corrente, uma data de novo treino que já passou nunca volta
+  // para o pacote da IA. Se existe uma pendência e hoje ainda é dia útil,
+  // usamos hoje como fallback seguro.
+  return [todayIso];
+}
+
 function getWeekdayNameFromDateInput(value: string): string {
   const parsedDate = parseDateInput(value);
 
@@ -605,9 +646,17 @@ export default function ResumoAlunoPage() {
     const editTargetDates = workoutIdFromUrl && weekDateFromUrl
       ? [weekDateFromUrl]
       : expectedDatesFromUrl;
+    const safeTargetDates = workoutIdFromUrl
+      ? editTargetDates
+      : normalizeCurrentWeekExpectedDatesFallback(
+          editTargetDates,
+          safeWeek.weekStartIso
+        );
 
     setTargetWeekStart(safeWeek.weekStartIso);
-    setTargetExpectedWorkoutDates(safeWeek.redirectedToNextWeek ? [] : editTargetDates);
+    setTargetExpectedWorkoutDates(
+      safeWeek.redirectedToNextWeek ? [] : safeTargetDates
+    );
     setTargetWorkoutId(workoutIdFromUrl || null);
     setSafeWindowNotice(safeWeek.reason || null);
 
@@ -1273,10 +1322,16 @@ export default function ResumoAlunoPage() {
       const careReturnRemainingDates = selectedStudentId
         ? await resolveCareReturnPlanningTarget(selectedStudentId)
         : null;
-      const authoritativeExpectedDates =
+      const authoritativeExpectedDatesRaw =
         careReturnRemainingDates !== null
           ? careReturnRemainingDates
           : targetExpectedWorkoutDates;
+      const authoritativeExpectedDates = targetWorkoutId
+        ? authoritativeExpectedDatesRaw
+        : normalizeCurrentWeekExpectedDatesFallback(
+            authoritativeExpectedDatesRaw,
+            targetWeekStart || resolveWeekStartIso(getSaoPauloCivilDateInput())
+          );
 
       if (careReturnRemainingDates && careReturnRemainingDates.length === 0) {
         setMessage({
@@ -1510,10 +1565,16 @@ export default function ResumoAlunoPage() {
       const careReturnRemainingDates = selectedStudentId
         ? await resolveCareReturnPlanningTarget(selectedStudentId)
         : null;
-      const authoritativeExpectedDates =
+      const authoritativeExpectedDatesRaw =
         careReturnRemainingDates !== null
           ? careReturnRemainingDates
           : targetExpectedWorkoutDates;
+      const authoritativeExpectedDates = targetWorkoutId
+        ? authoritativeExpectedDatesRaw
+        : normalizeCurrentWeekExpectedDatesFallback(
+            authoritativeExpectedDatesRaw,
+            targetWeekStart || resolveWeekStartIso(getSaoPauloCivilDateInput())
+          );
 
       if (careReturnRemainingDates && careReturnRemainingDates.length === 0) {
         setMessage({
