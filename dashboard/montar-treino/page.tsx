@@ -257,7 +257,8 @@ function getPreferredWorkoutOffsets(weeklyLimit?: number | null): number[] {
 function getExpectedWorkoutDatesForWeek(
   startOfWeek: Date,
   weeklyLimit?: number | null,
-  activeContract?: ActiveWorkoutContract | null
+  activeContract?: ActiveWorkoutContract | null,
+  existingPlans: WorkoutPlanSummary[] = []
 ): string[] {
   const limit = Math.max(Number(weeklyLimit || 0), 0);
 
@@ -273,9 +274,29 @@ function getExpectedWorkoutDatesForWeek(
   const contractStartInput = getDateInputFromRaw(activeContract?.startDate);
   const contractEndInput = getDateInputFromRaw(activeContract?.endDate);
 
-  const effectiveStartInput = contractStartInput && contractStartInput > weekStartInput
-    ? contractStartInput
-    : weekStartInput;
+  const hasCarryOverWorkoutFromPreviousContract = Boolean(
+    contractStartInput &&
+      existingPlans.some((plan) => {
+        const planDate = getPlanDateInput(plan);
+        return Boolean(
+          planDate &&
+            planDate >= weekStartInput &&
+            planDate < contractStartInput
+        );
+      })
+  );
+
+  /*
+   * Quando há troca de contrato no meio da semana (ex.: experiência -> pago),
+   * os treinos já criados antes da conversão continuam compondo a mesma semana.
+   * Nesse caso, mantemos a grade semanal original (ex.: seg/qua/sex), em vez de
+   * inventar sábado/domingo só porque o novo contrato começou na sexta.
+   */
+  const effectiveStartInput = hasCarryOverWorkoutFromPreviousContract
+    ? weekStartInput
+    : contractStartInput && contractStartInput > weekStartInput
+      ? contractStartInput
+      : weekStartInput;
 
   const effectiveEndExclusiveInput = contractEndInput && contractEndInput < weekEndExclusiveInput
     ? contractEndInput
@@ -612,13 +633,22 @@ export default function MontarTreinoPage() {
       setPendingWeekLabelFromUrl("semana selecionada no dashboard");
     }
 
-    if (dateFromUrl) {
-      const safeDate = getNextSafePlanningDateInput(dateFromUrl);
-      setDate(safeDate.dateInput || dateFromUrl);
+    const dashboardDate =
+      weekFromUrl === "current"
+        ? formatDateInput(getWeekRange(new Date()).startOfWeek)
+        : weekFromUrl === "next"
+          ? formatDateInput(getWeekRange(new Date()).endOfWeek)
+          : dateFromUrl;
+
+    if (dashboardDate) {
+      const safeDate = getNextSafePlanningDateInput(dashboardDate);
+      setDate(safeDate.dateInput || dashboardDate);
 
       if (safeDate.redirected && safeDate.message) {
         setSafeWindowNotice(safeDate.message);
         setPendingWeekLabelFromUrl("próxima semana por janela segura");
+      } else {
+        setSafeWindowNotice(null);
       }
     }
   }
@@ -691,7 +721,8 @@ export default function MontarTreinoPage() {
   const expectedWorkoutDates = getExpectedWorkoutDatesForWeek(
     startOfWeek,
     weeklyWorkoutLimit,
-    activeWorkoutContract
+    activeWorkoutContract,
+    weeklyPlans
   );
   const firstMissingExpectedDate = getFirstMissingExpectedDate(
     expectedWorkoutDates,
@@ -699,6 +730,18 @@ export default function MontarTreinoPage() {
   );
   const selectedDateIsExpected =
     !date || expectedWorkoutDates.length === 0 || expectedWorkoutDates.includes(date);
+  const activeContractStartInput = getDateInputFromRaw(activeWorkoutContract?.startDate);
+  const hasCarryOverWorkoutFromPreviousContract = Boolean(
+    activeContractStartInput &&
+      weeklyPlans.some((plan) => {
+        const planDate = getPlanDateInput(plan);
+        return Boolean(
+          planDate &&
+            planDate >= formatDateInput(startOfWeek) &&
+            planDate < activeContractStartInput
+        );
+      })
+  );
   const selectedDateHasUnsafeWindow = isUnsafeCurrentWeekPlanningDate(date);
   const weeklyRemaining =
     weeklyWorkoutLimit == null ? null : Math.max(weeklyWorkoutLimit - weeklyPlansCount, 0);
@@ -1592,7 +1635,9 @@ export default function MontarTreinoPage() {
 
                       {activeWorkoutContract?.startDate && getDateInputFromRaw(activeWorkoutContract.startDate) && getDateInputFromRaw(activeWorkoutContract.startDate)! > formatDateInput(startOfWeek) && (
                         <p className="text-[11px] text-[#a1a1a1] mt-2">
-                          O contrato começou no meio da semana. Por isso, o sistema removeu datas anteriores ao início da experiência.
+                          {hasCarryOverWorkoutFromPreviousContract
+                            ? "O plano mudou no meio da semana. Os treinos anteriores continuam contando e a nova meta semanal já vale nesta semana."
+                            : "O contrato começou no meio da semana. Por isso, o sistema considera somente datas a partir do início do contrato."}
                         </p>
                       )}
 
