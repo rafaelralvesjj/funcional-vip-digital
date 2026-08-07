@@ -1799,7 +1799,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     const studentId = searchParams.get("studentId");
-    const includeSummary = searchParams.get("summary") === "1";
+    const includeSummary =
+      searchParams.get("summary") === "1" ||
+      searchParams.get("includeSummary") === "1" ||
+      searchParams.get("includeSummary") === "true";
     const referenceDateParam = searchParams.get("date");
     const referenceDate = referenceDateParam
       ? new Date(`${referenceDateParam}T12:00:00`)

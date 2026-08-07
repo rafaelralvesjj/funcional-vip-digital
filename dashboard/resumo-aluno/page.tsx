@@ -992,7 +992,7 @@ export default function ResumoAlunoPage() {
     return exerciseLibrary.find((item) => item.id === exerciseId) || null;
   }
 
-  function getJsonPrompt(summaryData: SummaryResponse): string {
+  function getJsonPrompt(summaryData: SummaryResponse, expectedWorkoutDatesOverride?: string[]): string {
     if (hasOpenCarePause(summaryData)) {
       return getCarePauseBlockedText(summaryData);
     }
@@ -1003,13 +1003,20 @@ export default function ResumoAlunoPage() {
       contractedTrainingDaysPerMonth: contractedDays,
       weekStartIso: targetWeekStart,
       fallbackWorkoutCount: summaryData.student.weeklyLimit,
-      expectedWorkoutDatesOverride: targetExpectedWorkoutDates,
+      expectedWorkoutDatesOverride:
+        expectedWorkoutDatesOverride !== undefined
+          ? expectedWorkoutDatesOverride
+          : targetExpectedWorkoutDates,
     });
     const schedule = validationContext.expectedWorkoutDates.length > 0
       ? getTrainingScheduleFromExpectedDates(validationContext.expectedWorkoutDates)
       : getTrainingSchedule(contractedDays, validationContext.weekStart);
-    const scheduleDescription = targetExpectedWorkoutDates.length > 0
-      ? `Planejamento complementar/retomada: usar somente as datas obrigatórias desta solicitação (${targetExpectedWorkoutDates.join(", ")}).`
+    const effectiveExpectedDates =
+      expectedWorkoutDatesOverride !== undefined
+        ? expectedWorkoutDatesOverride
+        : targetExpectedWorkoutDates;
+    const scheduleDescription = effectiveExpectedDates.length > 0
+      ? `Planejamento complementar/retomada: usar somente as datas obrigatórias desta solicitação (${effectiveExpectedDates.join(", ")}).`
       : getTrainingScheduleDescription(contractedDays);
     const expectedWorkoutCount = validationContext.expectedWorkoutCount;
     const scheduleLines = schedule.length
@@ -1081,7 +1088,7 @@ export default function ResumoAlunoPage() {
     return JSON.parse(candidate);
   }
 
-  function normalizeAiWorkoutPayload(payload: any): any {
+  function normalizeAiWorkoutPayload(payload: any, expectedWorkoutDatesOverride?: string[]): any {
     const workouts = Array.isArray(payload?.workouts)
       ? payload.workouts
       : Array.isArray(payload?.treinos)
@@ -1111,7 +1118,10 @@ export default function ResumoAlunoPage() {
       studentId: selectedStudentId,
       contractedTrainingDaysPerMonth: contractedDays,
       weekStartIso: targetWeekStart,
-      expectedWorkoutDatesOverride: targetExpectedWorkoutDates,
+      expectedWorkoutDatesOverride:
+        expectedWorkoutDatesOverride !== undefined
+          ? expectedWorkoutDatesOverride
+          : targetExpectedWorkoutDates,
     });
     const aiValidation = payload?.aiValidation || payload?.security || null;
 
@@ -1247,7 +1257,7 @@ export default function ResumoAlunoPage() {
     };
   }
 
-  function openJsonInWorkoutBuilder() {
+  async function openJsonInWorkoutBuilder() {
     if (hasOpenCarePause(summary)) {
       setMessage({
         type: "error",
@@ -1257,8 +1267,27 @@ export default function ResumoAlunoPage() {
     }
 
     try {
+      // Reconsulta a programação real imediatamente antes de validar o JSON.
+      // Assim, uma URL antiga (ex.: 03/08) nunca prevalece sobre uma retomada
+      // já liberada em 05/08 com treino restante em 07/08.
+      const careReturnRemainingDates = selectedStudentId
+        ? await resolveCareReturnPlanningTarget(selectedStudentId)
+        : null;
+      const authoritativeExpectedDates =
+        careReturnRemainingDates !== null
+          ? careReturnRemainingDates
+          : targetExpectedWorkoutDates;
+
+      if (careReturnRemainingDates && careReturnRemainingDates.length === 0) {
+        setMessage({
+          type: "success",
+          text: "A programação de retomada desta semana já está completa. Não há treino restante para importar.",
+        });
+        return;
+      }
+
       const parsed = extractJsonFromText(aiJsonText);
-      const normalized = normalizeAiWorkoutPayload(parsed);
+      const normalized = normalizeAiWorkoutPayload(parsed, authoritativeExpectedDates);
 
       localStorage.setItem("aiWorkoutDraftBatch", JSON.stringify(normalized));
       setMessage({
@@ -1285,7 +1314,7 @@ export default function ResumoAlunoPage() {
 
     try {
       const res = await fetch(
-        `/api/workout-plan?studentId=${encodeURIComponent(studentId)}&date=${encodeURIComponent(referenceDate)}&includeSummary=true`,
+        `/api/workout-plan?studentId=${encodeURIComponent(studentId)}&date=${encodeURIComponent(referenceDate)}&summary=1`,
         { cache: "no-store" }
       );
 
@@ -1308,7 +1337,23 @@ export default function ResumoAlunoPage() {
       );
 
       const remainingDates = fullReturnSchedule.filter((date) => !createdDates.has(date));
+
+      // A API/DB é a fonte de verdade da retomada. URL antiga ou pacote anterior
+      // não pode reintroduzir datas anteriores à liberação.
       setTargetExpectedWorkoutDates(remainingDates);
+      setAiJsonText("");
+      setMessage(null);
+
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        if (remainingDates.length > 0) {
+          url.searchParams.set("date", remainingDates[0]);
+          url.searchParams.set("expectedWorkoutDates", remainingDates.join(","));
+        } else {
+          url.searchParams.delete("expectedWorkoutDates");
+        }
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      }
 
       return remainingDates;
     } catch {
@@ -1395,10 +1440,30 @@ export default function ResumoAlunoPage() {
     }
 
     try {
+      const careReturnRemainingDates = selectedStudentId
+        ? await resolveCareReturnPlanningTarget(selectedStudentId)
+        : null;
+      const authoritativeExpectedDates =
+        careReturnRemainingDates !== null
+          ? careReturnRemainingDates
+          : targetExpectedWorkoutDates;
+
+      if (careReturnRemainingDates && careReturnRemainingDates.length === 0) {
+        setMessage({
+          type: "success",
+          text: "A programação de retomada desta semana já está completa. Não há novo pacote para gerar.",
+        });
+        return;
+      }
+
+      const packageSchedule = authoritativeExpectedDates.length > 0
+        ? getTrainingScheduleFromExpectedDates(authoritativeExpectedDates)
+        : displaySchedule;
+
       const consolidatedContext = buildConsolidatedTrainingContext(summary);
       const consolidatedSummaryText = buildConsolidatedSummaryText(summary, consolidatedContext);
       const packageSummary: SummaryResponse = { ...summary, summaryText: consolidatedSummaryText };
-      const prompt = getJsonPrompt(packageSummary);
+      const prompt = getJsonPrompt(packageSummary, authoritativeExpectedDates);
       const zip = new JSZip();
       const safeStudentName = summary.student.name
         .normalize("NFD")
@@ -1414,14 +1479,14 @@ export default function ResumoAlunoPage() {
           studentId: summary.student.id,
           weekStart: displayWeekStart,
           weekEnd: displayWeekEnd,
-          expectedWorkoutCount: displaySchedule.length,
-          expectedWorkoutDates: displaySchedule.map((item) => item.date),
+          expectedWorkoutCount: packageSchedule.length,
+          expectedWorkoutDates: packageSchedule.map((item) => item.date),
           validationKey: [
             "FVD",
             summary.student.id,
             displayWeekStart,
-            String(displaySchedule.length),
-            displaySchedule.map((item) => item.date).join("_"),
+            String(packageSchedule.length),
+            packageSchedule.map((item) => item.date).join("_"),
           ].join("|"),
         },
         evolutionDecision: {
@@ -1441,7 +1506,7 @@ export default function ResumoAlunoPage() {
         ...(targetWorkoutId ? { workoutId: targetWorkoutId } : {}),
         weekStart: displayWeekStart,
         weekEnd: displayWeekEnd,
-        expectedWorkoutDates: displaySchedule.map((item) => item.date),
+        expectedWorkoutDates: packageSchedule.map((item) => item.date),
         files: [
           "INSTRUCOES/LEIA_PRIMEIRO.txt",
           "INSTRUCOES/MODELO_RESPOSTA.json",
@@ -1530,7 +1595,7 @@ export default function ResumoAlunoPage() {
       const link = document.createElement("a");
       link.href = url;
       link.download = targetWorkoutId
-        ? `pacote-alterar-treino-${safeStudentName}-${displaySchedule[0]?.date || displayWeekStart}.zip`
+        ? `pacote-alterar-treino-${safeStudentName}-${packageSchedule[0]?.date || displayWeekStart}.zip`
         : `pacote-montar-treino-${safeStudentName}-${displayWeekStart}.zip`;
       document.body.appendChild(link);
       link.click();
