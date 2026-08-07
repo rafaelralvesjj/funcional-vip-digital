@@ -1666,7 +1666,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const workoutDate = normalizeWorkoutDateInsideContract(requestedWorkoutDate, activeContract);
+    let workoutDate = normalizeWorkoutDateInsideContract(requestedWorkoutDate, activeContract);
 
     const existingWorkoutPlanCount = await prisma.workoutPlan.count({
       where: {
@@ -1705,16 +1705,6 @@ export async function POST(req: NextRequest) {
       careReturnContext?.planningStart
     );
 
-    if (careReturnContext && workoutDate.getTime() < effectivePlanningStart.getTime()) {
-      return NextResponse.json(
-        {
-          error: `Na retomada, escolha uma data a partir de ${formatDatePtBr(effectivePlanningStart)}. Treinos anteriores à liberação não contam como nova programação.`,
-          code: "CARE_RETURN_DATE_BEFORE_RELEASE",
-        },
-        { status: 409 }
-      );
-    }
-
     if (isUnsafeCurrentWeekPlanningWindow(startOfWeek)) {
       return NextResponse.json(getSafeWindowBlockedPayload(), { status: 409 });
     }
@@ -1745,6 +1735,71 @@ export async function POST(req: NextRequest) {
     });
 
     const workoutPlansThisWeek = countDistinctPlanDates(eligibleWorkoutPlansThisWeek);
+    const createdDateKeysThisWeek = new Set<string>(
+      eligibleWorkoutPlansThisWeek
+        .map((plan) => getDateKey(plan.date))
+        .filter((dateKey): dateKey is string => Boolean(dateKey))
+    );
+    const authoritativeRemainingDates = buildExpectedWorkoutDatesForWeek({
+      startOfWeek,
+      endOfWeek,
+      effectivePlanningStart,
+      weeklyLimit,
+      createdDateKeys: createdDateKeysThisWeek,
+    });
+
+    /*
+     * Defesa final no backend:
+     * se a tela/rascunho da IA ainda trouxer uma data antiga (ex.: 03/08),
+     * mas o banco indicar que existe exatamente UMA data restante válida
+     * (ex.: 07/08), salvamos nessa data real em vez de rejeitar a montagem.
+     *
+     * Só fazemos a correção automática quando há uma única opção inequívoca.
+     * Com duas ou mais opções, mantemos a validação normal para não escolher
+     * uma data pelo professor.
+     */
+    const requestedWorkoutDateKey = getDateKey(workoutDate);
+    const uniqueRemainingDate =
+      authoritativeRemainingDates.length === 1
+        ? authoritativeRemainingDates[0]
+        : null;
+    const selectedDateAlreadyPlannedBeforeNormalization =
+      createdDateKeysThisWeek.has(requestedWorkoutDateKey);
+    const selectedDateBeforeCareReturn =
+      Boolean(careReturnContext) &&
+      workoutDate.getTime() < effectivePlanningStart.getTime();
+    const selectedDateNotAuthoritative =
+      Boolean(uniqueRemainingDate) &&
+      requestedWorkoutDateKey !== uniqueRemainingDate &&
+      !createdDateKeysThisWeek.has(uniqueRemainingDate!);
+
+    if (
+      uniqueRemainingDate &&
+      (
+        selectedDateBeforeCareReturn ||
+        selectedDateAlreadyPlannedBeforeNormalization ||
+        selectedDateNotAuthoritative
+      )
+    ) {
+      const normalizedRemainingDate = parseCivilDateInput(uniqueRemainingDate);
+
+      if (normalizedRemainingDate) {
+        normalizedRemainingDate.setHours(12, 0, 0, 0);
+        workoutDate = normalizedRemainingDate;
+      }
+    }
+
+    if (careReturnContext && workoutDate.getTime() < effectivePlanningStart.getTime()) {
+      return NextResponse.json(
+        {
+          error: `Na retomada, escolha uma data a partir de ${formatDatePtBr(effectivePlanningStart)}. Treinos anteriores à liberação não contam como nova programação.`,
+          code: "CARE_RETURN_DATE_BEFORE_RELEASE",
+          expectedWorkoutDates: authoritativeRemainingDates,
+        },
+        { status: 409 }
+      );
+    }
+
     const selectedWorkoutDateKey = getDateKey(workoutDate);
     const selectedDateAlreadyPlanned = eligibleWorkoutPlansThisWeek.some(
       (plan) => getDateKey(plan.date) === selectedWorkoutDateKey
