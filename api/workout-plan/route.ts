@@ -81,6 +81,39 @@ async function getPendingCareReturnPlanningContext(studentId: string) {
   };
 }
 
+async function getCareReturnPlanningContextForWeek(
+  studentId: string,
+  weekStart: Date,
+  weekEnd: Date
+) {
+  const event = await prisma.studentCareEvent.findFirst({
+    where: {
+      studentId,
+      eventType: "PAUSA_POR_CUIDADO",
+      status: "RESOLVIDO",
+      resolvedAt: {
+        gte: weekStart,
+        lt: weekEnd,
+      },
+    },
+    select: {
+      id: true,
+      resolvedAt: true,
+      resolutionNotes: true,
+    },
+    orderBy: [{ resolvedAt: "desc" }, { updatedAt: "desc" }],
+  });
+
+  if (!event?.resolvedAt) return null;
+
+  return {
+    id: event.id,
+    resolvedAt: event.resolvedAt,
+    resolutionNotes: event.resolutionNotes,
+    planningStart: startOfLocalDay(event.resolvedAt),
+  };
+}
+
 function getEffectiveCareReturnWeekStart(
   weekStart: Date,
   careReturnPlanningStart?: Date | null
@@ -1210,7 +1243,11 @@ async function releaseWorkoutWeek({
     );
   }
 
-  const careReturnContext = await getPendingCareReturnPlanningContext(studentId);
+  const careReturnContext = await getCareReturnPlanningContextForWeek(
+    studentId,
+    week.startOfWeek,
+    week.endOfWeek
+  );
   const effectivePlanningStart = getEffectiveCareReturnWeekStart(
     week.startOfWeek,
     careReturnContext?.planningStart
@@ -1532,7 +1569,11 @@ export async function POST(req: NextRequest) {
     }
 
     const { startOfWeek, endOfWeek } = getWeekRange(workoutDate);
-    const careReturnContext = await getPendingCareReturnPlanningContext(studentId);
+    const careReturnContext = await getCareReturnPlanningContextForWeek(
+      studentId,
+      startOfWeek,
+      endOfWeek
+    );
     const effectivePlanningStart = getEffectiveCareReturnWeekStart(
       startOfWeek,
       careReturnContext?.planningStart
@@ -1938,7 +1979,11 @@ export async function GET(req: NextRequest) {
         ? normalizeWorkoutDateInsideContract(referenceDate, activeContract)
         : referenceDate;
       const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
-      const careReturnContext = await getPendingCareReturnPlanningContext(studentId);
+      const careReturnContext = await getCareReturnPlanningContextForWeek(
+        studentId,
+        startOfWeek,
+        endOfWeek
+      );
       const effectivePlanningStart = getEffectiveCareReturnWeekStart(
         startOfWeek,
         careReturnContext?.planningStart
