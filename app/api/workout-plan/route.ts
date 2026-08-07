@@ -81,6 +81,39 @@ async function getPendingCareReturnPlanningContext(studentId: string) {
   };
 }
 
+async function getCareReturnPlanningContextForWeek(
+  studentId: string,
+  weekStart: Date,
+  weekEnd: Date
+) {
+  const event = await prisma.studentCareEvent.findFirst({
+    where: {
+      studentId,
+      eventType: "PAUSA_POR_CUIDADO",
+      status: "RESOLVIDO",
+      resolvedAt: {
+        gte: weekStart,
+        lt: weekEnd,
+      },
+    },
+    select: {
+      id: true,
+      resolvedAt: true,
+      resolutionNotes: true,
+    },
+    orderBy: [{ resolvedAt: "desc" }, { updatedAt: "desc" }],
+  });
+
+  if (!event?.resolvedAt) return null;
+
+  return {
+    id: event.id,
+    resolvedAt: event.resolvedAt,
+    resolutionNotes: event.resolutionNotes,
+    planningStart: startOfLocalDay(event.resolvedAt),
+  };
+}
+
 function getEffectiveCareReturnWeekStart(
   weekStart: Date,
   careReturnPlanningStart?: Date | null
@@ -158,6 +191,132 @@ function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date
   endOfWeek.setHours(0, 0, 0, 0);
 
   return { startOfWeek, endOfWeek };
+}
+
+
+function getCanonicalWeekdayOffsets(weeklyLimit: number): number[] {
+  if (weeklyLimit <= 1) return [0];
+  if (weeklyLimit === 2) return [0, 2];
+  if (weeklyLimit === 3) return [0, 2, 4];
+  if (weeklyLimit === 4) return [0, 1, 3, 4];
+  return [0, 1, 2, 3, 4];
+}
+
+function addDaysForPlanning(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function buildExpectedWorkoutDatesForWeek({
+  startOfWeek,
+  endOfWeek,
+  effectivePlanningStart,
+  weeklyLimit,
+  createdDateKeys,
+}: {
+  startOfWeek: Date;
+  endOfWeek: Date;
+  effectivePlanningStart: Date;
+  weeklyLimit: number | null;
+  createdDateKeys: Set<string>;
+}): string[] {
+  const limit = Math.max(Number(weeklyLimit || 0), 0);
+  if (!limit) return [];
+
+  const remainingCount = Math.max(limit - createdDateKeys.size, 0);
+  if (remainingCount <= 0) return [];
+
+  const friday = addDaysForPlanning(startOfWeek, 4);
+  friday.setHours(23, 59, 59, 999);
+
+  const todayCivil = parseCivilDateInput(getSaoPauloCivilDateInput());
+  const isCurrentWeek = Boolean(
+    todayCivil &&
+      todayCivil.getTime() >= startOfWeek.getTime() &&
+      todayCivil.getTime() < endOfWeek.getTime()
+  );
+
+  let earliestAllowed = new Date(effectivePlanningStart);
+  if (earliestAllowed.getTime() < startOfWeek.getTime()) {
+    earliestAllowed = new Date(startOfWeek);
+  }
+  if (isCurrentWeek && todayCivil && todayCivil.getTime() > earliestAllowed.getTime()) {
+    earliestAllowed = new Date(todayCivil);
+  }
+  earliestAllowed.setHours(12, 0, 0, 0);
+
+  if (earliestAllowed.getTime() > friday.getTime()) {
+    return [];
+  }
+
+  const canonicalDates = getCanonicalWeekdayOffsets(limit)
+    .map((offset) => addDaysForPlanning(startOfWeek, offset))
+    .map((date) => {
+      date.setHours(12, 0, 0, 0);
+      return date;
+    })
+    .filter((date) => date.getTime() >= earliestAllowed.getTime() && date.getTime() <= friday.getTime())
+    .map((date) => getDateKey(date))
+    .filter((dateKey) => Boolean(dateKey) && !createdDateKeys.has(dateKey));
+
+  const result: string[] = [];
+  for (const dateKey of canonicalDates) {
+    if (!result.includes(dateKey)) result.push(dateKey);
+    if (result.length >= remainingCount) return result;
+  }
+
+  const fallbackDates: string[] = [];
+  const cursor = new Date(earliestAllowed);
+  while (cursor.getTime() <= friday.getTime()) {
+    const weekday = cursor.getDay();
+    const dateKey = getDateKey(cursor);
+
+    if (
+      weekday >= 1 &&
+      weekday <= 5 &&
+      dateKey &&
+      !createdDateKeys.has(dateKey) &&
+      !result.includes(dateKey)
+    ) {
+      fallbackDates.push(dateKey);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const stillNeeded = remainingCount - result.length;
+
+  if (stillNeeded === 1 && fallbackDates.length > 0) {
+    result.push(
+      createdDateKeys.size > 0 || result.length > 0
+        ? fallbackDates[fallbackDates.length - 1]
+        : fallbackDates[0]
+    );
+    return result;
+  }
+
+  if (stillNeeded > 0 && fallbackDates.length > 0) {
+    if (stillNeeded >= fallbackDates.length) {
+      result.push(...fallbackDates);
+    } else if (stillNeeded === 1) {
+      result.push(fallbackDates[0]);
+    } else {
+      for (let index = 0; index < stillNeeded; index += 1) {
+        const position = Math.round(
+          (index * (fallbackDates.length - 1)) / (stillNeeded - 1)
+        );
+        const dateKey = fallbackDates[position];
+        if (!result.includes(dateKey)) result.push(dateKey);
+      }
+
+      for (const dateKey of fallbackDates) {
+        if (result.length >= remainingCount) break;
+        if (!result.includes(dateKey)) result.push(dateKey);
+      }
+    }
+  }
+
+  return result.slice(0, remainingCount).sort();
 }
 
 function formatDatePtBr(date: Date): string {
@@ -1210,7 +1369,11 @@ async function releaseWorkoutWeek({
     );
   }
 
-  const careReturnContext = await getPendingCareReturnPlanningContext(studentId);
+  const careReturnContext = await getCareReturnPlanningContextForWeek(
+    studentId,
+    week.startOfWeek,
+    week.endOfWeek
+  );
   const effectivePlanningStart = getEffectiveCareReturnWeekStart(
     week.startOfWeek,
     careReturnContext?.planningStart
@@ -1503,7 +1666,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const workoutDate = normalizeWorkoutDateInsideContract(requestedWorkoutDate, activeContract);
+    let workoutDate = normalizeWorkoutDateInsideContract(requestedWorkoutDate, activeContract);
 
     const existingWorkoutPlanCount = await prisma.workoutPlan.count({
       where: {
@@ -1532,21 +1695,15 @@ export async function POST(req: NextRequest) {
     }
 
     const { startOfWeek, endOfWeek } = getWeekRange(workoutDate);
-    const careReturnContext = await getPendingCareReturnPlanningContext(studentId);
+    const careReturnContext = await getCareReturnPlanningContextForWeek(
+      studentId,
+      startOfWeek,
+      endOfWeek
+    );
     const effectivePlanningStart = getEffectiveCareReturnWeekStart(
       startOfWeek,
       careReturnContext?.planningStart
     );
-
-    if (careReturnContext && workoutDate.getTime() < effectivePlanningStart.getTime()) {
-      return NextResponse.json(
-        {
-          error: `Na retomada, escolha uma data a partir de ${formatDatePtBr(effectivePlanningStart)}. Treinos anteriores à liberação não contam como nova programação.`,
-          code: "CARE_RETURN_DATE_BEFORE_RELEASE",
-        },
-        { status: 409 }
-      );
-    }
 
     if (isUnsafeCurrentWeekPlanningWindow(startOfWeek)) {
       return NextResponse.json(getSafeWindowBlockedPayload(), { status: 409 });
@@ -1578,6 +1735,122 @@ export async function POST(req: NextRequest) {
     });
 
     const workoutPlansThisWeek = countDistinctPlanDates(eligibleWorkoutPlansThisWeek);
+    const createdDateKeysThisWeek = new Set<string>(
+      eligibleWorkoutPlansThisWeek
+        .map((plan) => getDateKey(plan.date))
+        .filter((dateKey): dateKey is string => Boolean(dateKey))
+    );
+    const authoritativeRemainingDates = buildExpectedWorkoutDatesForWeek({
+      startOfWeek,
+      endOfWeek,
+      effectivePlanningStart,
+      weeklyLimit,
+      createdDateKeys: createdDateKeysThisWeek,
+    });
+
+    /*
+     * Retomada: normalização autoritativa no servidor.
+     *
+     * Uma URL/rascunho antigo pode chegar com uma data anterior à liberação
+     * (ex.: 03/08). O servidor NÃO rejeita imediatamente. Primeiro reconstrói
+     * as datas úteis ainda disponíveis da semana a partir da liberação e, na
+     * semana atual, nunca volta para uma data que já passou. Se existir uma
+     * única vaga restante, ela é aplicada automaticamente antes de salvar.
+     */
+    if (careReturnContext) {
+      const requestedWorkoutDateKey = getDateKey(workoutDate);
+      const todayKey = getSaoPauloCivilDateInput();
+      const todayDate = parseCivilDateInput(todayKey);
+      const currentWeek = todayDate ? getWeekRange(todayDate) : null;
+      const isCurrentWeek = Boolean(
+        currentWeek && currentWeek.startOfWeek.getTime() === startOfWeek.getTime()
+      );
+
+      let earliestCandidate = new Date(effectivePlanningStart);
+      if (isCurrentWeek && todayDate && todayDate.getTime() > earliestCandidate.getTime()) {
+        earliestCandidate = new Date(todayDate);
+      }
+      earliestCandidate.setHours(12, 0, 0, 0);
+
+      const friday = addDaysForPlanning(startOfWeek, 4);
+      friday.setHours(23, 59, 59, 999);
+
+      const availableCareReturnDates: string[] = [];
+      const cursor = new Date(earliestCandidate);
+      while (cursor.getTime() <= friday.getTime() && cursor.getTime() < endOfWeek.getTime()) {
+        const weekday = cursor.getDay();
+        const dateKey = getDateKey(cursor);
+        if (
+          weekday >= 1 &&
+          weekday <= 5 &&
+          dateKey &&
+          !createdDateKeysThisWeek.has(dateKey)
+        ) {
+          availableCareReturnDates.push(dateKey);
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      const remainingSlots = Math.max(weeklyLimit - workoutPlansThisWeek, 0);
+      const selectedDateIsBeforeRelease =
+        workoutDate.getTime() < effectivePlanningStart.getTime();
+      const selectedDateAlreadyPlanned =
+        createdDateKeysThisWeek.has(requestedWorkoutDateKey);
+      const selectedDateIsPastUnplannedInCurrentWeek = Boolean(
+        isCurrentWeek &&
+        todayDate &&
+        workoutDate.getTime() < todayDate.getTime() &&
+        !createdDateKeysThisWeek.has(requestedWorkoutDateKey)
+      );
+      const selectedDateIsNotAvailable =
+        availableCareReturnDates.length > 0 &&
+        !availableCareReturnDates.includes(requestedWorkoutDateKey) &&
+        !createdDateKeysThisWeek.has(requestedWorkoutDateKey);
+
+      if (
+        remainingSlots > 0 &&
+        (selectedDateIsBeforeRelease ||
+          selectedDateAlreadyPlanned ||
+          selectedDateIsPastUnplannedInCurrentWeek ||
+          selectedDateIsNotAvailable)
+      ) {
+        let replacementDateKey: string | null = null;
+
+        // Se falta exatamente um treino, fecha a semana na última data útil
+        // disponível. Ex.: 05/08 já criado e hoje 07/08 -> 07/08.
+        if (remainingSlots === 1 && availableCareReturnDates.length > 0) {
+          replacementDateKey =
+            availableCareReturnDates[availableCareReturnDates.length - 1];
+        } else {
+          replacementDateKey =
+            authoritativeRemainingDates.find((dateKey) =>
+              availableCareReturnDates.includes(dateKey)
+            ) ||
+            availableCareReturnDates[0] ||
+            null;
+        }
+
+        if (replacementDateKey) {
+          const normalizedDate = parseCivilDateInput(replacementDateKey);
+          if (normalizedDate) {
+            normalizedDate.setHours(12, 0, 0, 0);
+            workoutDate = normalizedDate;
+          }
+        }
+      }
+    }
+
+    if (careReturnContext && workoutDate.getTime() < effectivePlanningStart.getTime()) {
+      return NextResponse.json(
+        {
+          error: `Na retomada, escolha uma data a partir de ${formatDatePtBr(effectivePlanningStart)}. Treinos anteriores à liberação não contam como nova programação.`,
+          code: "CARE_RETURN_DATE_BEFORE_RELEASE",
+          expectedWorkoutDates: authoritativeRemainingDates,
+        },
+        { status: 409 }
+      );
+    }
+
     const selectedWorkoutDateKey = getDateKey(workoutDate);
     const selectedDateAlreadyPlanned = eligibleWorkoutPlansThisWeek.some(
       (plan) => getDateKey(plan.date) === selectedWorkoutDateKey
@@ -1758,7 +2031,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     const studentId = searchParams.get("studentId");
-    const includeSummary = searchParams.get("summary") === "1";
+    const includeSummary =
+      searchParams.get("summary") === "1" ||
+      searchParams.get("includeSummary") === "1" ||
+      searchParams.get("includeSummary") === "true";
     const referenceDateParam = searchParams.get("date");
     const referenceDate = referenceDateParam
       ? new Date(`${referenceDateParam}T12:00:00`)
@@ -1938,7 +2214,11 @@ export async function GET(req: NextRequest) {
         ? normalizeWorkoutDateInsideContract(referenceDate, activeContract)
         : referenceDate;
       const weeklyLimit = getWeeklyWorkoutLimitFromContract(activeContract);
-      const careReturnContext = await getPendingCareReturnPlanningContext(studentId);
+      const careReturnContext = await getCareReturnPlanningContextForWeek(
+        studentId,
+        startOfWeek,
+        endOfWeek
+      );
       const effectivePlanningStart = getEffectiveCareReturnWeekStart(
         startOfWeek,
         careReturnContext?.planningStart
@@ -1991,6 +2271,20 @@ export async function GET(req: NextRequest) {
         : [];
 
       const weeklyPlansCount = countDistinctPlanDates(eligibleWeeklyPlans);
+      const createdWorkoutDates: string[] = Array.from(
+        new Set<string>(
+          eligibleWeeklyPlans
+            .map((plan: any) => getDateKey(plan.date))
+            .filter((dateKey: string) => Boolean(dateKey))
+        )
+      ).sort();
+      const expectedWorkoutDates = buildExpectedWorkoutDatesForWeek({
+        startOfWeek,
+        endOfWeek,
+        effectivePlanningStart,
+        weeklyLimit,
+        createdDateKeys: new Set(createdWorkoutDates),
+      });
 
       const selectedDateBeforeContractStart = Boolean(
         activeContract && referenceDate < activeContract.startDate
@@ -2003,6 +2297,10 @@ export async function GET(req: NextRequest) {
         weeklyPlansCount,
         weeklyRemaining:
           weeklyLimit == null ? null : Math.max(weeklyLimit - weeklyPlansCount, 0),
+        createdWorkoutDates,
+        expectedWorkoutDates,
+        expectedWorkoutCount: expectedWorkoutDates.length,
+        planningSource: "DATABASE_WEEK_STATE",
         week: {
           startOfWeek: startOfWeek.toISOString(),
           endOfWeek: endOfWeek.toISOString(),
@@ -2010,6 +2308,14 @@ export async function GET(req: NextRequest) {
           futureWeek: isFutureWeek(startOfWeek),
         },
         effectiveWorkoutDate: effectiveWorkoutDate.toISOString().slice(0, 10),
+        effectivePlanningStart: getDateKey(effectivePlanningStart),
+        careReturn: careReturnContext
+          ? {
+              active: true,
+              planningStart: getDateKey(effectivePlanningStart),
+              resolvedAt: careReturnContext.resolvedAt.toISOString(),
+            }
+          : null,
         canCreateWorkout: Boolean(activeContract && weeklyLimit && weeklyPlansCount < weeklyLimit),
         message: activeContract
           ? selectedDateBeforeContractStart

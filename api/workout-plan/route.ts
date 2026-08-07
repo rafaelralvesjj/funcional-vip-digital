@@ -1749,68 +1749,93 @@ export async function POST(req: NextRequest) {
     });
 
     /*
-     * Fonte única no backend para retomada.
-     * A URL ou um rascunho antigo pode ainda carregar uma data anterior à
-     * liberação (ex.: 03/08). Antes de rejeitar, o servidor consulta o estado
-     * real da semana e substitui pela data restante válida. Assim a regra de
-     * segurança continua ativa, mas a interface antiga não consegue prender
-     * o professor numa data inválida.
+     * Retomada: normalização autoritativa no servidor.
+     *
+     * Uma URL/rascunho antigo pode chegar com uma data anterior à liberação
+     * (ex.: 03/08). O servidor NÃO rejeita imediatamente. Primeiro reconstrói
+     * as datas úteis ainda disponíveis da semana a partir da liberação e, na
+     * semana atual, nunca volta para uma data que já passou. Se existir uma
+     * única vaga restante, ela é aplicada automaticamente antes de salvar.
      */
-    const requestedWorkoutDateKey = getDateKey(workoutDate);
-    const effectivePlanningStartKey = getDateKey(effectivePlanningStart);
-    const selectedDateAlreadyPlannedBeforeNormalization =
-      createdDateKeysThisWeek.has(requestedWorkoutDateKey);
-    const selectedDateBeforeCareReturn =
-      Boolean(careReturnContext) &&
-      workoutDate.getTime() < effectivePlanningStart.getTime();
-    const selectedDateOutsideAuthoritativeRemaining =
-      authoritativeRemainingDates.length > 0 &&
-      !authoritativeRemainingDates.includes(requestedWorkoutDateKey) &&
-      !createdDateKeysThisWeek.has(requestedWorkoutDateKey);
+    if (careReturnContext) {
+      const requestedWorkoutDateKey = getDateKey(workoutDate);
+      const todayKey = getSaoPauloCivilDateInput();
+      const todayDate = parseCivilDateInput(todayKey);
+      const currentWeek = todayDate ? getWeekRange(todayDate) : null;
+      const isCurrentWeek = Boolean(
+        currentWeek && currentWeek.startOfWeek.getTime() === startOfWeek.getTime()
+      );
 
-    if (careReturnContext && (
-      selectedDateBeforeCareReturn ||
-      selectedDateAlreadyPlannedBeforeNormalization ||
-      selectedDateOutsideAuthoritativeRemaining
-    )) {
-      let replacementDateKey = authoritativeRemainingDates.find(
-        (dateKey) => !effectivePlanningStartKey || dateKey >= effectivePlanningStartKey
-      ) || null;
+      let earliestCandidate = new Date(effectivePlanningStart);
+      if (isCurrentWeek && todayDate && todayDate.getTime() > earliestCandidate.getTime()) {
+        earliestCandidate = new Date(todayDate);
+      }
+      earliestCandidate.setHours(12, 0, 0, 0);
 
-      // Fallback determinístico para a semana atual: se o cálculo anterior
-      // não devolveu uma data, usa hoje quando hoje é dia útil, está dentro
-      // da semana e já é posterior à liberação. No caso Rafael em 07/08, isso
-      // força 07/08 sem jamais liberar 03/08.
-      if (!replacementDateKey) {
-        const todayKey = getSaoPauloCivilDateInput();
-        const todayDate = parseCivilDateInput(todayKey);
-        const weekday = todayDate?.getDay() ?? 0;
-        const todayIsInsideWeek = Boolean(
-          todayDate &&
-          todayDate.getTime() >= startOfWeek.getTime() &&
-          todayDate.getTime() < endOfWeek.getTime()
-        );
-        const todayIsAfterRelease = Boolean(
-          todayDate &&
-          todayDate.getTime() >= effectivePlanningStart.getTime()
-        );
+      const friday = addDaysForPlanning(startOfWeek, 4);
+      friday.setHours(23, 59, 59, 999);
 
+      const availableCareReturnDates: string[] = [];
+      const cursor = new Date(earliestCandidate);
+      while (cursor.getTime() <= friday.getTime() && cursor.getTime() < endOfWeek.getTime()) {
+        const weekday = cursor.getDay();
+        const dateKey = getDateKey(cursor);
         if (
-          todayIsInsideWeek &&
-          todayIsAfterRelease &&
           weekday >= 1 &&
           weekday <= 5 &&
-          !createdDateKeysThisWeek.has(todayKey)
+          dateKey &&
+          !createdDateKeysThisWeek.has(dateKey)
         ) {
-          replacementDateKey = todayKey;
+          availableCareReturnDates.push(dateKey);
         }
+        cursor.setDate(cursor.getDate() + 1);
       }
 
-      if (replacementDateKey) {
-        const normalizedRemainingDate = parseCivilDateInput(replacementDateKey);
-        if (normalizedRemainingDate) {
-          normalizedRemainingDate.setHours(12, 0, 0, 0);
-          workoutDate = normalizedRemainingDate;
+      const remainingSlots = Math.max(weeklyLimit - workoutPlansThisWeek, 0);
+      const selectedDateIsBeforeRelease =
+        workoutDate.getTime() < effectivePlanningStart.getTime();
+      const selectedDateAlreadyPlanned =
+        createdDateKeysThisWeek.has(requestedWorkoutDateKey);
+      const selectedDateIsPastUnplannedInCurrentWeek = Boolean(
+        isCurrentWeek &&
+        todayDate &&
+        workoutDate.getTime() < todayDate.getTime() &&
+        !createdDateKeysThisWeek.has(requestedWorkoutDateKey)
+      );
+      const selectedDateIsNotAvailable =
+        availableCareReturnDates.length > 0 &&
+        !availableCareReturnDates.includes(requestedWorkoutDateKey) &&
+        !createdDateKeysThisWeek.has(requestedWorkoutDateKey);
+
+      if (
+        remainingSlots > 0 &&
+        (selectedDateIsBeforeRelease ||
+          selectedDateAlreadyPlanned ||
+          selectedDateIsPastUnplannedInCurrentWeek ||
+          selectedDateIsNotAvailable)
+      ) {
+        let replacementDateKey: string | null = null;
+
+        // Se falta exatamente um treino, fecha a semana na última data útil
+        // disponível. Ex.: 05/08 já criado e hoje 07/08 -> 07/08.
+        if (remainingSlots === 1 && availableCareReturnDates.length > 0) {
+          replacementDateKey =
+            availableCareReturnDates[availableCareReturnDates.length - 1];
+        } else {
+          replacementDateKey =
+            authoritativeRemainingDates.find((dateKey) =>
+              availableCareReturnDates.includes(dateKey)
+            ) ||
+            availableCareReturnDates[0] ||
+            null;
+        }
+
+        if (replacementDateKey) {
+          const normalizedDate = parseCivilDateInput(replacementDateKey);
+          if (normalizedDate) {
+            normalizedDate.setHours(12, 0, 0, 0);
+            workoutDate = normalizedDate;
+          }
         }
       }
     }
