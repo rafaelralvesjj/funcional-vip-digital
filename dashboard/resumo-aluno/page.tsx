@@ -1321,14 +1321,9 @@ export default function ResumoAlunoPage() {
       if (!res.ok) return null;
 
       const data = (await res.json()) as WorkoutPlanningSummaryResponse;
-      if (!data?.careReturn?.active) return null;
+      const weeklyLimit = Math.max(Number(data.weeklyLimit || 0), 0);
 
-      const planningStart = data.careReturn.planningStart || data.effectivePlanningStart || null;
-      const fullReturnSchedule = getCareReturnExpectedWorkoutDates({
-        weekStartIso: referenceDate,
-        planningStartIso: planningStart,
-        weeklyLimit: data.weeklyLimit,
-      });
+      if (!weeklyLimit) return null;
 
       const createdDates = new Set(
         (Array.isArray(data.plans) ? data.plans : [])
@@ -1336,10 +1331,82 @@ export default function ResumoAlunoPage() {
           .filter((value): value is string => Boolean(value))
       );
 
-      const remainingDates = fullReturnSchedule.filter((date) => !createdDates.has(date));
+      const remainingCount = Number.isFinite(Number(data.weeklyRemaining))
+        ? Math.max(Number(data.weeklyRemaining || 0), 0)
+        : Math.max(weeklyLimit - createdDates.size, 0);
 
-      // A API/DB é a fonte de verdade da retomada. URL antiga ou pacote anterior
-      // não pode reintroduzir datas anteriores à liberação.
+      if (remainingCount <= 0) {
+        setTargetExpectedWorkoutDates([]);
+        setAiJsonText("");
+
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("expectedWorkoutDates");
+          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+
+        return [];
+      }
+
+      const weekStartIso = resolveWeekStartIso(referenceDate);
+      const weekStartDate = parseDateInput(weekStartIso);
+      if (!weekStartDate) return null;
+
+      const fridayIso = formatIsoDate(addDays(weekStartDate, 4));
+      const todayIso = getSaoPauloCivilDateInput();
+      const currentWeekStartIso = resolveWeekStartIso(todayIso);
+      const isCurrentWeek = currentWeekStartIso === weekStartIso;
+      const planningStart =
+        getCivilDateInput(data.careReturn?.planningStart || data.effectivePlanningStart || weekStartIso) ||
+        weekStartIso;
+      const earliestAllowedDate = isCurrentWeek && todayIso > planningStart
+        ? todayIso
+        : planningStart;
+
+      if (earliestAllowedDate > fridayIso) {
+        setTargetExpectedWorkoutDates([]);
+        return [];
+      }
+
+      const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || weeklyLimit * 4;
+      const canonicalDates = getTrainingSchedule(contractedDays, weekStartIso)
+        .map((item) => item.date)
+        .filter(
+          (date) =>
+            date >= earliestAllowedDate &&
+            date <= fridayIso &&
+            !createdDates.has(date)
+        );
+
+      const weekdayFallbackDates: string[] = [];
+      const cursor = parseDateInput(earliestAllowedDate);
+
+      if (cursor) {
+        while (formatIsoDate(cursor) <= fridayIso) {
+          const weekday = cursor.getDay();
+          const date = formatIsoDate(cursor);
+
+          if (
+            weekday >= 1 &&
+            weekday <= 5 &&
+            !createdDates.has(date) &&
+            !canonicalDates.includes(date)
+          ) {
+            weekdayFallbackDates.push(date);
+          }
+
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      }
+
+      const remainingDates = [...canonicalDates, ...weekdayFallbackDates]
+        .slice(0, remainingCount)
+        .sort();
+
+      // Fonte única para qualquer semana corrente: o que já foi salvo no banco
+      // conta primeiro; datas antigas que ficaram para trás não voltam a ser
+      // oferecidas. Na retomada do meio da semana, isso transforma 05/08 criado
+      // + 1 restante em 07/08, em vez de reabrir 03/08.
       setTargetExpectedWorkoutDates(remainingDates);
       setAiJsonText("");
       setMessage(null);
