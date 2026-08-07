@@ -2139,7 +2139,9 @@ export default async function DashboardPage() {
                               pathname: '/dashboard/montar-treino',
                               query: {
                                 studentId: event.studentId,
-                                date: formatDateInput(currentWorkoutWeek.startOfWeek),
+                                date: event.resolvedAt
+                                  ? formatDateInput(event.resolvedAt)
+                                  : formatDateInput(currentWorkoutWeek.startOfWeek),
                                 returnMode: 'care',
                               },
                             }}

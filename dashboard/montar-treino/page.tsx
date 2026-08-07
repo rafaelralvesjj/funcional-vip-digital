@@ -69,6 +69,12 @@ interface WorkoutWeekSummary {
   weeklyRemaining?: number | null;
   canCreateWorkout?: boolean;
   message?: string | null;
+  effectivePlanningStart?: string | null;
+  careReturn?: {
+    active?: boolean;
+    planningStart?: string | null;
+    resolvedAt?: string | null;
+  } | null;
 }
 
 interface ReleaseReviewContext {
@@ -146,6 +152,7 @@ interface AiWorkoutDraftBatch {
   createdAt?: string;
   studentId: string;
   studentName?: string;
+  editingWorkoutId?: string | null;
   currentIndex?: number;
   scheduleDescription?: string;
   scheduleWarning?: string;
@@ -269,7 +276,8 @@ function getExpectedWorkoutDatesForWeek(
   startOfWeek: Date,
   weeklyLimit?: number | null,
   activeContract?: ActiveWorkoutContract | null,
-  existingPlans: WorkoutPlanSummary[] = []
+  existingPlans: WorkoutPlanSummary[] = [],
+  careReturnPlanningStartInput?: string | null
 ): string[] {
   const limit = Math.max(Number(weeklyLimit || 0), 0);
 
@@ -313,6 +321,57 @@ function getExpectedWorkoutDatesForWeek(
   const effectiveEndExclusiveInput = contractEndInput && contractEndInput < weekEndExclusiveInput
     ? contractEndInput
     : weekEndExclusiveInput;
+
+  const careReturnStartInput =
+    careReturnPlanningStartInput &&
+    careReturnPlanningStartInput >= weekStartInput &&
+    careReturnPlanningStartInput < weekEndExclusiveInput
+      ? careReturnPlanningStartInput
+      : null;
+
+  /*
+   * Retomada após pausa por cuidado é uma nova programação dentro da semana.
+   * Datas anteriores à liberação não podem ser reaproveitadas. Quando ainda há
+   * dias úteis suficientes, redistribuímos a meta entre a data da retomada e
+   * a sexta-feira. Ex.: retomada na quarta com 2 treinos => quarta e sexta.
+   */
+  if (careReturnStartInput) {
+    const returnStartInput =
+      careReturnStartInput > effectiveStartInput
+        ? careReturnStartInput
+        : effectiveStartInput;
+
+    const availableWeekdays: string[] = [];
+    const cursor = parseDateInput(returnStartInput);
+    const end = parseDateInput(effectiveEndExclusiveInput);
+
+    if (cursor && end) {
+      while (cursor.getTime() < end.getTime()) {
+        const weekday = cursor.getDay();
+        if (weekday >= 1 && weekday <= 5) {
+          availableWeekdays.push(formatDateInput(cursor));
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
+    if (availableWeekdays.length > 0) {
+      const targetCount = Math.min(limit, availableWeekdays.length);
+
+      if (targetCount === 1) {
+        return [availableWeekdays[0]];
+      }
+
+      const spreadDates = Array.from({ length: targetCount }, (_, index) => {
+        const position = Math.round(
+          (index * (availableWeekdays.length - 1)) / (targetCount - 1)
+        );
+        return availableWeekdays[position];
+      });
+
+      return Array.from(new Set(spreadDates)).slice(0, targetCount);
+    }
+  }
 
   const candidates = getPreferredWorkoutOffsets(limit).map((offset) => {
     const date = new Date(startOfWeek);
@@ -464,6 +523,7 @@ export default function MontarTreinoPage() {
   const [weeklyPlans, setWeeklyPlans] = useState<WorkoutPlanSummary[]>([]);
   const [weeklyInfoLoading, setWeeklyInfoLoading] = useState(false);
   const [activeWorkoutContract, setActiveWorkoutContract] = useState<ActiveWorkoutContract | null>(null);
+  const [careReturnPlanningStart, setCareReturnPlanningStart] = useState<string | null>(null);
   const [contractWarning, setContractWarning] = useState<string | null>(null);
   const [lockStudentSelection, setLockStudentSelection] = useState(false);
   const [openedFromPendingList, setOpenedFromPendingList] = useState(false);
@@ -475,6 +535,9 @@ export default function MontarTreinoPage() {
   const [releaseLoading, setReleaseLoading] = useState(false);
   const [releaseReviewContext, setReleaseReviewContext] = useState<ReleaseReviewContext | null>(null);
   const [releaseMessage, setReleaseMessage] = useState<{ type: "success" | "error" | "warning"; text: string } | null>(null);
+  const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+  const [editingWorkoutLoaded, setEditingWorkoutLoaded] = useState(false);
+  const [loadAiDraftWhenReady, setLoadAiDraftWhenReady] = useState(false);
 
   function normalizeAiExercise(exercise: Partial<ExerciseItem> & { exerciseId?: string; exerciseLibraryId?: string }, index: number): ExerciseItem {
     const libraryExerciseId = String(
@@ -632,11 +695,26 @@ export default function MontarTreinoPage() {
     const studentIdFromUrl = params.get("studentId");
     const dateFromUrl = params.get("date");
     const weekFromUrl = params.get("week");
+    const workoutIdFromUrl = params.get("workoutId");
+
+    if (workoutIdFromUrl) {
+      setEditingWorkoutId(workoutIdFromUrl);
+      setEditingWorkoutLoaded(false);
+    }
 
     if (studentIdFromUrl) {
       setSelectedStudent(studentIdFromUrl);
       setLockStudentSelection(true);
-      setOpenedFromPendingList(true);
+      setOpenedFromPendingList(!workoutIdFromUrl);
+    }
+
+    // Em modo de edição, a data correta vem do treino existente. Não deixe
+    // a lógica de pendência semanal empurrar o professor para outra data.
+    if (workoutIdFromUrl) {
+      if (dateFromUrl) setDate(dateFromUrl);
+      setPendingWeekLabelFromUrl("treino existente");
+      setSafeWindowNotice(null);
+      return;
     }
 
     if (weekFromUrl === "current") {
@@ -703,14 +781,87 @@ export default function MontarTreinoPage() {
         ? new URLSearchParams(window.location.search)
         : null;
     const openedFromAiJson = params?.get("source") === "ai-json";
-
-    if (openedFromAiJson) {
-      loadAiWorkoutDraftFromStorage();
-    }
+    setLoadAiDraftWhenReady(Boolean(openedFromAiJson));
 
     fetchStudents();
     fetchLibrary();
   }, []);
+
+  async function loadWorkoutForEditing(workoutId: string) {
+    try {
+      const res = await fetch(`/api/workout-plan?id=${encodeURIComponent(workoutId)}`, {
+        cache: "no-store",
+      });
+      const plan = await res.json().catch(() => null);
+
+      if (!res.ok || !plan?.id) {
+        alert(plan?.error || "Não foi possível carregar o treino para edição.");
+        setEditingWorkoutLoaded(true);
+        return;
+      }
+
+      setSelectedStudent(String(plan.studentId || ""));
+      setLockStudentSelection(true);
+      setPlanName(String(plan.name || ""));
+      setDate(getCivilDateInput(plan.date) || "");
+      setDescription(String(plan.description || ""));
+      setObjective(String(plan.objective || ""));
+      setFocusAreas(String(plan.focusAreas || ""));
+      setIntensity(String(plan.intensity || ""));
+      setEstimatedDurationMinutes(plan.estimatedDurationMinutes == null ? "" : String(plan.estimatedDurationMinutes));
+      setEstimatedCaloriesMin(plan.estimatedCaloriesMin == null ? "" : String(plan.estimatedCaloriesMin));
+      setEstimatedCaloriesMax(plan.estimatedCaloriesMax == null ? "" : String(plan.estimatedCaloriesMax));
+      setStudentSummary(String(plan.studentSummary || ""));
+      setSafetyNote(String(plan.safetyNote || ""));
+      setNotes(String(plan.notes || ""));
+      setExercises(
+        Array.isArray(plan.exercises)
+          ? plan.exercises.map((exercise: any, index: number) =>
+              normalizeAiExercise(
+                {
+                  libraryExerciseId: exercise.libraryExerciseId,
+                  name: exercise.name,
+                  description: exercise.description,
+                  series: exercise.series,
+                  reps: exercise.reps,
+                  weight: exercise.weight,
+                  restTime: exercise.restTime,
+                  notes: exercise.notes,
+                  order: exercise.order,
+                  imageUrl: exercise.imageUrl,
+                  videoUrl: exercise.videoUrl,
+                  muscleGroup: exercise.libraryExercise?.muscleGroup || null,
+                },
+                index
+              )
+            )
+          : []
+      );
+    } catch (error) {
+      console.error("Erro ao carregar treino para edição:", error);
+      alert("Não foi possível carregar o treino para edição.");
+    } finally {
+      setEditingWorkoutLoaded(true);
+    }
+  }
+
+  useEffect(() => {
+    if (!editingWorkoutId) {
+      setEditingWorkoutLoaded(true);
+      return;
+    }
+
+    void loadWorkoutForEditing(editingWorkoutId);
+  }, [editingWorkoutId]);
+
+  useEffect(() => {
+    if (!loadAiDraftWhenReady) return;
+    if (library.length === 0) return;
+    if (editingWorkoutId && !editingWorkoutLoaded) return;
+
+    loadAiWorkoutDraftFromStorage();
+    setLoadAiDraftWhenReady(false);
+  }, [loadAiDraftWhenReady, library.length, editingWorkoutId, editingWorkoutLoaded]);
 
   useEffect(() => {
     /*
@@ -718,10 +869,10 @@ export default function MontarTreinoPage() {
      * Isso garante que o combo fique selecionado mesmo quando a tela veio
      * do dashboard antes de os alunos terminarem de carregar.
      */
-    if (students.length > 0 && !openedFromAiDraft) {
+    if (students.length > 0 && !openedFromAiDraft && !editingWorkoutId) {
       applyDashboardParams();
     }
-  }, [students.length, openedFromAiDraft]);
+  }, [students.length, openedFromAiDraft, editingWorkoutId]);
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -756,7 +907,8 @@ export default function MontarTreinoPage() {
     startOfWeek,
     weeklyWorkoutLimit,
     activeWorkoutContract,
-    weeklyPlans
+    weeklyPlans,
+    careReturnPlanningStart
   );
   const firstMissingExpectedDate = getFirstMissingExpectedDate(
     expectedWorkoutDates,
@@ -794,8 +946,15 @@ export default function MontarTreinoPage() {
     startOfWeek.getTime() > currentWeekRange.startOfWeek.getTime();
   const isWeeklyLimitReached =
     weeklyWorkoutLimit != null && weeklyPlansCount >= weeklyWorkoutLimit;
+  const aiExpectedWorkoutDates = editingWorkoutId
+    ? [date].filter(Boolean)
+    : (remainingExpectedWorkoutDates.length > 0 ? remainingExpectedWorkoutDates : [date]).filter(Boolean);
+  const aiSummaryHref = selectedStudent
+    ? `/dashboard/resumo-aluno?studentId=${encodeURIComponent(selectedStudent)}&date=${encodeURIComponent(date || "")}&expectedWorkoutDates=${encodeURIComponent(aiExpectedWorkoutDates.join(","))}${editingWorkoutId ? `&workoutId=${encodeURIComponent(editingWorkoutId)}&mode=edit` : ""}`
+    : "/dashboard/resumo-aluno";
 
   useEffect(() => {
+    if (editingWorkoutId) return;
     if (!activeWorkoutContract || expectedWorkoutDates.length === 0) return;
 
     const selectedDateAlreadyCreated = Boolean(
@@ -816,6 +975,7 @@ export default function MontarTreinoPage() {
       setSafeWindowNotice(null);
     }
   }, [
+    editingWorkoutId,
     activeWorkoutContract?.id,
     date,
     expectedWorkoutDates.join("|"),
@@ -829,6 +989,7 @@ export default function MontarTreinoPage() {
         setWeeklyPlansCount(0);
         setWeeklyPlans([]);
         setActiveWorkoutContract(null);
+        setCareReturnPlanningStart(null);
         setContractWarning(null);
         return;
       }
@@ -854,6 +1015,7 @@ export default function MontarTreinoPage() {
           setWeeklyPlansCount(0);
           setWeeklyPlans([]);
           setActiveWorkoutContract(null);
+          setCareReturnPlanningStart(null);
           setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
           return;
         }
@@ -870,12 +1032,16 @@ export default function MontarTreinoPage() {
         setWeeklyPlansCount(uniqueValidPlanDates);
         setWeeklyPlans(validWeeklyPlans);
         setActiveWorkoutContract(data.activeContract || null);
+        setCareReturnPlanningStart(
+          data.careReturn?.planningStart || data.effectivePlanningStart || null
+        );
         setContractWarning(data.message || null);
       } catch (error) {
         console.error("Erro ao buscar treinos da semana:", error);
         setWeeklyPlansCount(0);
         setWeeklyPlans([]);
         setActiveWorkoutContract(null);
+        setCareReturnPlanningStart(null);
         setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
       } finally {
         setWeeklyInfoLoading(false);
@@ -891,6 +1057,7 @@ export default function MontarTreinoPage() {
   }, [selectedStudent, date]);
 
   useEffect(() => {
+    if (editingWorkoutId) return;
     if (!openedFromPendingList || openedFromAiDraft) return;
     if (!selectedStudent || !weeklyWorkoutLimit || weeklyInfoLoading) return;
     if (planName.trim() || exercises.length > 0) return;
@@ -900,6 +1067,7 @@ export default function MontarTreinoPage() {
       setDate(firstMissingExpectedDate);
     }
   }, [
+    editingWorkoutId,
     openedFromPendingList,
     openedFromAiDraft,
     selectedStudent,
@@ -1244,7 +1412,7 @@ export default function MontarTreinoPage() {
       return;
     }
 
-    if (isWeeklyLimitReached) {
+    if (isWeeklyLimitReached && !editingWorkoutId) {
       alert(
         `Este aluno já recebeu ${weeklyPlansCount} treino(s) nesta semana. O limite atual é de ${weeklyWorkoutLimit} treino(s) por semana.`
       );
@@ -1254,9 +1422,10 @@ export default function MontarTreinoPage() {
     setSuccess(null);
     try {
       const res = await fetch("/api/workout-plan", {
-        method: "POST",
+        method: editingWorkoutId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(editingWorkoutId ? { id: editingWorkoutId } : {}),
           studentId: selectedStudent,
           name: planName.trim(),
           description: description || null,
@@ -1293,6 +1462,17 @@ export default function MontarTreinoPage() {
       });
       if (res.ok) {
         const result = await res.json();
+        if (editingWorkoutId) {
+          if (openedFromAiDraft) {
+            clearAiWorkoutDraft();
+          }
+          setSuccess("Treino atualizado com sucesso. Voltando ao dashboard...");
+          window.setTimeout(() => {
+            window.location.replace("/dashboard");
+          }, 700);
+          return;
+        }
+
         const weeklyMessage =
           result?.weeklyNotification?.message ||
           "Treino salvo com sucesso.";
@@ -1401,9 +1581,13 @@ export default function MontarTreinoPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#00A19C]">📋 Montar Treino</h1>
+        <h1 className="text-2xl font-bold text-[#00A19C]">
+          {editingWorkoutId ? "✏️ Editar Treino" : "📋 Montar Treino"}
+        </h1>
         <p className="text-[#a1a1a1] mt-1">
-          Monte os treinos da semana. Treinos futuros ficam planejados para professor/gestão e só aparecem para o aluno na semana correta.
+          {editingWorkoutId
+            ? "Altere o treino existente sem criar um quarto treino. Ao salvar, você volta automaticamente ao dashboard."
+            : "Monte os treinos da semana. Treinos futuros ficam planejados para professor/gestão e só aparecem para o aluno na semana correta."}
         </p>
       </div>
 
@@ -1459,6 +1643,11 @@ export default function MontarTreinoPage() {
                   {weeklyWorkoutLimit ? `/${weeklyWorkoutLimit}` : ""}
                 </span>
               </p>
+              {editingWorkoutId && (
+                <p className="mt-2 rounded-md bg-blue-500/10 px-2 py-1 text-blue-300">
+                  Modo edição: este salvamento substitui o treino atual e não aumenta a contagem semanal.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -1619,12 +1808,15 @@ export default function MontarTreinoPage() {
                     <span
                       className={
                         "text-xs font-bold px-3 py-1 rounded-full " +
-                        (isWeeklyLimitReached
+                        (editingWorkoutId
+                          ? "bg-blue-500/10 text-blue-300"
+                          : isWeeklyLimitReached
                           ? "bg-red-500/10 text-red-400"
                           : "bg-emerald-500/10 text-emerald-400")
                       }
                     >
                       {weeklyPlansCount}/{weeklyWorkoutLimit} treino(s) criados nesta semana
+                      {editingWorkoutId ? " · editando um existente" : ""}
                     </span>
                   ) : (
                     <span className="text-xs font-bold px-3 py-1 rounded-full bg-red-500/10 text-red-400">
@@ -1690,6 +1882,13 @@ export default function MontarTreinoPage() {
                           {hasCarryOverWorkoutFromPreviousContract || weeklyPlansCount > 0
                             ? "O plano mudou no meio da semana. Os treinos anteriores continuam contando e a nova meta semanal já vale nesta semana."
                             : "O contrato começou no meio da semana. Por isso, o sistema considera somente datas úteis a partir do início do contrato."}
+                        </p>
+                      )}
+
+                      {careReturnPlanningStart && (
+                        <p className="text-[11px] text-emerald-400 mt-2">
+                          Retomada liberada em {formatDatePtBr(new Date(`${careReturnPlanningStart}T12:00:00`))}.
+                          Treinos anteriores a essa data não contam como nova programação; o sistema usa somente as datas úteis restantes da semana.
                         </p>
                       )}
 
@@ -1839,7 +2038,7 @@ export default function MontarTreinoPage() {
 
                               <div className="flex flex-col md:flex-row gap-2">
                                 <a
-                                  href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}&expectedWorkoutDates=${encodeURIComponent((remainingExpectedWorkoutDates.length > 0 ? remainingExpectedWorkoutDates : [date]).filter(Boolean).join(","))}`}
+                                  href={aiSummaryHref}
                                   onClick={(event) => {
                                     if (selectedStudentMissingBirthDate) {
                                       event.preventDefault();
@@ -1937,7 +2136,7 @@ export default function MontarTreinoPage() {
                   </div>
 
                   <a
-                    href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}&expectedWorkoutDates=${encodeURIComponent((remainingExpectedWorkoutDates.length > 0 ? remainingExpectedWorkoutDates : [date]).filter(Boolean).join(","))}`}
+                    href={aiSummaryHref}
                     onClick={(event) => {
                       if (selectedStudentMissingBirthDate) {
                         event.preventDefault();
@@ -2286,12 +2485,14 @@ export default function MontarTreinoPage() {
             library.length === 0 ||
             exercises.some((exercise) => !exercise.libraryExerciseId) ||
             !weeklyWorkoutLimit ||
-            isWeeklyLimitReached
+            (isWeeklyLimitReached && !editingWorkoutId)
           }
           className="w-full bg-[#00A19C] text-[#0a0a0a] font-bold rounded-xl py-4 text-base transition hover:bg-[#007D79] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving
             ? "💾 Salvando treino..."
+            : editingWorkoutId
+              ? "✅ Salvar alterações e voltar ao dashboard"
             : selectedStudentMissingBirthDate
               ? "⚠️ Data de nascimento pendente"
               : library.length === 0
