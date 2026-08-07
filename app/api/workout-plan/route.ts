@@ -1196,7 +1196,8 @@ async function releaseWorkoutWeek({
   const plans = await prisma.workoutPlan.findMany({
     where: {
       studentId,
-      contractId: activeContract.id,
+      // Em conversão no meio da semana, os treinos do contrato anterior
+      // continuam fazendo parte da mesma semana do aluno.
       active: true,
       workouts: {
         some: {
@@ -1480,7 +1481,6 @@ export async function POST(req: NextRequest) {
     const existingWorkoutPlanCount = await prisma.workoutPlan.count({
       where: {
         studentId,
-        contractId: activeContract.id,
         active: true,
         workouts: {
           some: {
@@ -1528,7 +1528,8 @@ export async function POST(req: NextRequest) {
     const eligibleWorkoutPlansThisWeek = await prisma.workoutPlan.findMany({
       where: {
         studentId,
-        contractId: activeContract.id,
+        // Conta também treinos da experiência anterior quando a conversão
+        // para o plano pago acontece no meio da mesma semana.
         active: true,
         workouts: {
           some: {
@@ -1920,7 +1921,8 @@ export async function GET(req: NextRequest) {
         ? await prisma.workoutPlan.findMany({
             where: {
               studentId,
-              contractId: activeContract.id,
+              // A visão semanal deve ser contínua mesmo quando o contrato muda
+              // no meio da semana (ex.: TRIAL -> PAID).
               active: true,
               workouts: {
                 some: {

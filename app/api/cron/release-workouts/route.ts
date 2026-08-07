@@ -346,7 +346,8 @@ export async function GET(request: NextRequest) {
         where: {
           studentId: student.id,
           active: true,
-          ...(activeContract ? { contractId: activeContract.id } : {}),
+          // A semana do aluno é contínua mesmo quando há conversão de
+          // experiência para plano pago durante a própria semana.
           date: {
             gte: startOfWeek,
             lt: endOfWeek,
@@ -459,7 +460,6 @@ export async function GET(request: NextRequest) {
       const previousPlanCount = await prisma.workoutPlan.count({
         where: {
           studentId: student.id,
-          ...(activeContract ? { contractId: activeContract.id } : {}),
           date: {
             lt: startOfWeek,
           },
