@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import WorkoutMuscleMap from "@/components/WorkoutMuscleMap";
+import { isUnsafeCurrentWeekPlanningDate as isUnsafePlanningWindow } from "@/lib/planning-window";
 
 interface Student {
   id: string;
@@ -224,21 +225,7 @@ function getWeekdayInSaoPaulo(referenceDate = new Date()): string {
 }
 
 function isUnsafeCurrentWeekPlanningDate(dateInput?: string | null): boolean {
-  const parsedDate = parseDateInput(dateInput);
-
-  if (!parsedDate) return false;
-
-  const currentWeek = getWeekRange(new Date());
-  const selectedWeek = getWeekRange(parsedDate);
-  const weekday = getWeekdayInSaoPaulo();
-
-  // Sexta-feira é válida. A trava começa somente no sábado e no domingo.
-  const isWeekend = weekday === "Sat" || weekday === "Sun";
-
-  return (
-    selectedWeek.startOfWeek.getTime() === currentWeek.startOfWeek.getTime() &&
-    isWeekend
-  );
+  return isUnsafePlanningWindow(dateInput);
 }
 
 function getNextSafePlanningDateInput(dateInput?: string | null): {
@@ -775,6 +762,9 @@ export default function MontarTreinoPage() {
     expectedWorkoutDates,
     weeklyPlans
   );
+  const remainingExpectedWorkoutDates = expectedWorkoutDates.filter(
+    (expectedDate) => !weeklyPlans.some((plan) => getPlanDateInput(plan) === expectedDate)
+  );
   const selectedDateIsExpected =
     !date || expectedWorkoutDates.length === 0 || expectedWorkoutDates.includes(date);
   const activeContractStartInput = getDateInputFromRaw(activeWorkoutContract?.startDate);
@@ -1307,20 +1297,20 @@ export default function MontarTreinoPage() {
           result?.weeklyNotification?.message ||
           "Treino salvo com sucesso.";
 
-        const hasNextAiWorkout =
+        const aiBatchHasNextWorkout =
           openedFromAiDraft &&
           aiDraftBatch &&
           aiDraftIndex + 1 < aiDraftBatch.workouts.length;
 
         /*
-         * Ao salvar o último treino necessário da semana, a montagem foi
-         * concluída. Nesse caso, voltamos ao dashboard automaticamente.
-         *
-         * Se ainda existir outro treino do lote da IA, a tela permanece aberta
-         * para o professor revisar e salvar o próximo.
+         * A meta semanal é soberana sobre o lote da IA. Se este salvamento
+         * completa a semana, encerramos a montagem e voltamos ao dashboard
+         * mesmo que exista um rascunho antigo com treinos extras. Isso evita
+         * prender o professor na tela por um pacote gerado antes da contagem
+         * atualizada da semana.
          */
-        const shouldReturnToDashboardAfterSave =
-          !hasNextAiWorkout && willCompleteWeekOnSave;
+        const shouldReturnToDashboardAfterSave = willCompleteWeekOnSave;
+        const hasNextAiWorkout = aiBatchHasNextWorkout && !shouldReturnToDashboardAfterSave;
 
         setSuccess(
           hasNextAiWorkout
@@ -1849,7 +1839,7 @@ export default function MontarTreinoPage() {
 
                               <div className="flex flex-col md:flex-row gap-2">
                                 <a
-                                  href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}&expectedWorkoutDates=${encodeURIComponent(expectedWorkoutDates.join(","))}`}
+                                  href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}&expectedWorkoutDates=${encodeURIComponent((remainingExpectedWorkoutDates.length > 0 ? remainingExpectedWorkoutDates : [date]).filter(Boolean).join(","))}`}
                                   onClick={(event) => {
                                     if (selectedStudentMissingBirthDate) {
                                       event.preventDefault();
@@ -1947,7 +1937,7 @@ export default function MontarTreinoPage() {
                   </div>
 
                   <a
-                    href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}&expectedWorkoutDates=${encodeURIComponent(expectedWorkoutDates.join(","))}`}
+                    href={`/dashboard/resumo-aluno?studentId=${selectedStudent}&date=${date}&expectedWorkoutDates=${encodeURIComponent((remainingExpectedWorkoutDates.length > 0 ? remainingExpectedWorkoutDates : [date]).filter(Boolean).join(","))}`}
                     onClick={(event) => {
                       if (selectedStudentMissingBirthDate) {
                         event.preventDefault();
