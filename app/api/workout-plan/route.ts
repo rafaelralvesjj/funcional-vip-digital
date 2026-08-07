@@ -398,7 +398,10 @@ function normalizeWorkoutDateInsideContract(workoutDate: Date, contract: { start
 }
 
 
-async function normalizeExercisesFromOfficialLibrary(exercises: any[]) {
+async function normalizeExercisesFromOfficialLibrary(
+  exercises: any[],
+  options?: { allowInactiveIds?: string[] }
+) {
   if (!Array.isArray(exercises) || exercises.length === 0) {
     throw new Error("O treino precisa ter pelo menos um exercício da biblioteca.");
   }
@@ -412,13 +415,23 @@ async function normalizeExercisesFromOfficialLibrary(exercises: any[]) {
   }
 
   const uniqueIds = Array.from(new Set(ids));
+  const allowInactiveIds = Array.from(
+    new Set((options?.allowInactiveIds || []).map((id) => String(id || "").trim()).filter(Boolean))
+  );
 
   const libraryExercises = await prisma.exerciseLibrary.findMany({
     where: {
       id: {
         in: uniqueIds,
       },
-      active: true,
+      ...(allowInactiveIds.length > 0
+        ? {
+            OR: [
+              { active: true },
+              { id: { in: allowInactiveIds } },
+            ],
+          }
+        : { active: true }),
     },
   });
 
@@ -2178,7 +2191,30 @@ export async function PUT(req: NextRequest) {
 
     if (Array.isArray(exercises)) {
       try {
-        normalizedExercises = await normalizeExercisesFromOfficialLibrary(exercises);
+        const historicalPlans = await prisma.workoutPlan.findMany({
+          where: { studentId: planExists.studentId },
+          select: {
+            exercises: {
+              select: { libraryExerciseId: true },
+            },
+          },
+        });
+        const historicalLibraryExerciseIds = Array.from(
+          new Set(
+            historicalPlans.flatMap((historicalPlan) =>
+              historicalPlan.exercises
+                .map((exercise) => exercise.libraryExerciseId)
+                .filter((id): id is string => Boolean(id))
+            )
+          )
+        );
+
+        normalizedExercises = await normalizeExercisesFromOfficialLibrary(exercises, {
+          // Na edição, permitimos reutilizar exercício oficial que ficou
+          // inativo depois, mas somente se ele já fizer parte do histórico
+          // real deste aluno. Treino novo continua exigindo biblioteca ativa.
+          allowInactiveIds: historicalLibraryExerciseIds,
+        });
       } catch (validationError: any) {
         return NextResponse.json(
           { error: validationError?.message || "Exercícios inválidos." },
