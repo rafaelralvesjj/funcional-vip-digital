@@ -1749,43 +1749,69 @@ export async function POST(req: NextRequest) {
     });
 
     /*
-     * Defesa final no backend:
-     * se a tela/rascunho da IA ainda trouxer uma data antiga (ex.: 03/08),
-     * mas o banco indicar que existe exatamente UMA data restante válida
-     * (ex.: 07/08), salvamos nessa data real em vez de rejeitar a montagem.
-     *
-     * Só fazemos a correção automática quando há uma única opção inequívoca.
-     * Com duas ou mais opções, mantemos a validação normal para não escolher
-     * uma data pelo professor.
+     * Fonte única no backend para retomada.
+     * A URL ou um rascunho antigo pode ainda carregar uma data anterior à
+     * liberação (ex.: 03/08). Antes de rejeitar, o servidor consulta o estado
+     * real da semana e substitui pela data restante válida. Assim a regra de
+     * segurança continua ativa, mas a interface antiga não consegue prender
+     * o professor numa data inválida.
      */
     const requestedWorkoutDateKey = getDateKey(workoutDate);
-    const uniqueRemainingDate =
-      authoritativeRemainingDates.length === 1
-        ? authoritativeRemainingDates[0]
-        : null;
+    const effectivePlanningStartKey = getDateKey(effectivePlanningStart);
     const selectedDateAlreadyPlannedBeforeNormalization =
       createdDateKeysThisWeek.has(requestedWorkoutDateKey);
     const selectedDateBeforeCareReturn =
       Boolean(careReturnContext) &&
       workoutDate.getTime() < effectivePlanningStart.getTime();
-    const selectedDateNotAuthoritative =
-      Boolean(uniqueRemainingDate) &&
-      requestedWorkoutDateKey !== uniqueRemainingDate &&
-      !createdDateKeysThisWeek.has(uniqueRemainingDate!);
+    const selectedDateOutsideAuthoritativeRemaining =
+      authoritativeRemainingDates.length > 0 &&
+      !authoritativeRemainingDates.includes(requestedWorkoutDateKey) &&
+      !createdDateKeysThisWeek.has(requestedWorkoutDateKey);
 
-    if (
-      uniqueRemainingDate &&
-      (
-        selectedDateBeforeCareReturn ||
-        selectedDateAlreadyPlannedBeforeNormalization ||
-        selectedDateNotAuthoritative
-      )
-    ) {
-      const normalizedRemainingDate = parseCivilDateInput(uniqueRemainingDate);
+    if (careReturnContext && (
+      selectedDateBeforeCareReturn ||
+      selectedDateAlreadyPlannedBeforeNormalization ||
+      selectedDateOutsideAuthoritativeRemaining
+    )) {
+      let replacementDateKey = authoritativeRemainingDates.find(
+        (dateKey) => !effectivePlanningStartKey || dateKey >= effectivePlanningStartKey
+      ) || null;
 
-      if (normalizedRemainingDate) {
-        normalizedRemainingDate.setHours(12, 0, 0, 0);
-        workoutDate = normalizedRemainingDate;
+      // Fallback determinístico para a semana atual: se o cálculo anterior
+      // não devolveu uma data, usa hoje quando hoje é dia útil, está dentro
+      // da semana e já é posterior à liberação. No caso Rafael em 07/08, isso
+      // força 07/08 sem jamais liberar 03/08.
+      if (!replacementDateKey) {
+        const todayKey = getSaoPauloCivilDateInput();
+        const todayDate = parseCivilDateInput(todayKey);
+        const weekday = todayDate?.getDay() ?? 0;
+        const todayIsInsideWeek = Boolean(
+          todayDate &&
+          todayDate.getTime() >= startOfWeek.getTime() &&
+          todayDate.getTime() < endOfWeek.getTime()
+        );
+        const todayIsAfterRelease = Boolean(
+          todayDate &&
+          todayDate.getTime() >= effectivePlanningStart.getTime()
+        );
+
+        if (
+          todayIsInsideWeek &&
+          todayIsAfterRelease &&
+          weekday >= 1 &&
+          weekday <= 5 &&
+          !createdDateKeysThisWeek.has(todayKey)
+        ) {
+          replacementDateKey = todayKey;
+        }
+      }
+
+      if (replacementDateKey) {
+        const normalizedRemainingDate = parseCivilDateInput(replacementDateKey);
+        if (normalizedRemainingDate) {
+          normalizedRemainingDate.setHours(12, 0, 0, 0);
+          workoutDate = normalizedRemainingDate;
+        }
       }
     }
 

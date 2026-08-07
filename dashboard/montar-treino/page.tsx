@@ -67,6 +67,7 @@ interface WorkoutWeekSummary {
   weeklyLimit?: number | null;
   weeklyPlansCount?: number;
   weeklyRemaining?: number | null;
+  expectedWorkoutDates?: string[];
   canCreateWorkout?: boolean;
   message?: string | null;
   effectivePlanningStart?: string | null;
@@ -586,6 +587,9 @@ export default function MontarTreinoPage() {
   const [weeklyInfoLoading, setWeeklyInfoLoading] = useState(false);
   const [activeWorkoutContract, setActiveWorkoutContract] = useState<ActiveWorkoutContract | null>(null);
   const [careReturnPlanningStart, setCareReturnPlanningStart] = useState<string | null>(null);
+  // Fonte única da programação: quando a API responde, as datas do banco
+  // prevalecem sobre qualquer cálculo antigo da tela/URL. null = ainda não consultou.
+  const [serverExpectedWorkoutDates, setServerExpectedWorkoutDates] = useState<string[] | null>(null);
   const [contractWarning, setContractWarning] = useState<string | null>(null);
   const [lockStudentSelection, setLockStudentSelection] = useState(false);
   const [openedFromPendingList, setOpenedFromPendingList] = useState(false);
@@ -965,13 +969,17 @@ export default function MontarTreinoPage() {
   const referenceWeekDate = date ? new Date(date + "T12:00:00") : new Date();
   const { startOfWeek, endOfWeek } = getWeekRange(referenceWeekDate);
   const weekScopeLabel = getWeekScopeLabel(startOfWeek);
-  const expectedWorkoutDates = getExpectedWorkoutDatesForWeek(
+  const clientExpectedWorkoutDates = getExpectedWorkoutDatesForWeek(
     startOfWeek,
     weeklyWorkoutLimit,
     activeWorkoutContract,
     weeklyPlans,
     careReturnPlanningStart
   );
+  const expectedWorkoutDates =
+    serverExpectedWorkoutDates !== null
+      ? serverExpectedWorkoutDates
+      : clientExpectedWorkoutDates;
   const firstMissingExpectedDate = getFirstMissingExpectedDate(
     expectedWorkoutDates,
     weeklyPlans
@@ -1052,6 +1060,7 @@ export default function MontarTreinoPage() {
         setWeeklyPlans([]);
         setActiveWorkoutContract(null);
         setCareReturnPlanningStart(null);
+        setServerExpectedWorkoutDates(null);
         setContractWarning(null);
         return;
       }
@@ -1078,6 +1087,7 @@ export default function MontarTreinoPage() {
           setWeeklyPlans([]);
           setActiveWorkoutContract(null);
           setCareReturnPlanningStart(null);
+          setServerExpectedWorkoutDates(null);
           setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
           return;
         }
@@ -1097,6 +1107,11 @@ export default function MontarTreinoPage() {
         setCareReturnPlanningStart(
           data.careReturn?.planningStart || data.effectivePlanningStart || null
         );
+        setServerExpectedWorkoutDates(
+          Array.isArray(data.expectedWorkoutDates)
+            ? data.expectedWorkoutDates.filter((value): value is string => Boolean(value))
+            : []
+        );
         setContractWarning(data.message || null);
       } catch (error) {
         console.error("Erro ao buscar treinos da semana:", error);
@@ -1104,6 +1119,7 @@ export default function MontarTreinoPage() {
         setWeeklyPlans([]);
         setActiveWorkoutContract(null);
         setCareReturnPlanningStart(null);
+        setServerExpectedWorkoutDates(null);
         setContractWarning("Não foi possível consultar o contrato ativo deste aluno.");
       } finally {
         setWeeklyInfoLoading(false);
