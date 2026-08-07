@@ -262,6 +262,9 @@ async function notifyProfessorDeadline({
       subject: title,
       text,
       html,
+      eventType: "WORKOUT_PLANNING_DEADLINE",
+      recipientType: "TEACHER",
+      contextId: group.professor.id,
     });
   }
 

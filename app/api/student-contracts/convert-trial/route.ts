@@ -249,6 +249,9 @@ async function notifyStudentAboutConversion({
         subject: title,
         text,
         html,
+        eventType: "TRIAL_CONVERTED_TO_PAID",
+        recipientType: "STUDENT",
+        contextId: student.id,
       })
     );
   }

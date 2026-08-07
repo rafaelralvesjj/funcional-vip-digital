@@ -465,6 +465,8 @@ async function sendStudentEmail({
     subject: `${senderName} — ${subject}`,
     text,
     html,
+    eventType: "WORKOUT_ENGAGEMENT_STUDENT",
+    recipientType: "STUDENT",
   });
 
   return true;
@@ -539,6 +541,8 @@ async function sendProfessorEmail({
     subject,
     text,
     html,
+    eventType: "WORKOUT_ENGAGEMENT_TEACHER",
+    recipientType: "TEACHER",
   });
 
   return true;

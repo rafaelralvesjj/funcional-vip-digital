@@ -410,6 +410,9 @@ async function notifyPaymentStatusChange({
     subject: title,
     text: `${content}\n\nAcessar meu painel: ${loginUrl}`,
     html,
+    eventType: "CONTRACT_PAYMENT_STATUS",
+    recipientType: "STUDENT",
+    contextId: student.id,
   });
 }
 

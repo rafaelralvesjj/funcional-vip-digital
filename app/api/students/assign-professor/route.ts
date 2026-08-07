@@ -178,6 +178,9 @@ async function notifyProfessorAssignment({
     to: recipientEmail,
     subject: title,
     text: `${content}\n\nAcessar o painel: ${loginUrl}`,
+    eventType: "STUDENT_ASSIGNED_TO_TEACHER",
+    recipientType: "TEACHER",
+    contextId: student.id,
     html: `
       <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
         <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">

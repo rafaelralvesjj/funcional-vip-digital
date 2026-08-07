@@ -209,7 +209,7 @@ async function sendStudentBioRequestEmail({
     </div>
   `;
 
-  await sendEmail({ to, subject: title, text, html });
+  await sendEmail({ to, subject: title, text, html, eventType: "EVOLUTION_ASSESSMENT_REQUEST", recipientType: "STUDENT", contextId: student.id });
   return true;
 }
 
@@ -253,7 +253,7 @@ async function sendProfessorReadyEmail({
     </div>
   `;
 
-  await sendEmail({ to: professorEmail, subject: title, text, html });
+  await sendEmail({ to: professorEmail, subject: title, text, html, eventType: "EVOLUTION_FEEDBACK_READY", recipientType: "TEACHER", contextId: student.id });
   return true;
 }
 

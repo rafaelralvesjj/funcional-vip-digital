@@ -4,6 +4,7 @@ import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-head
 import { useEffect, useMemo, useState } from "react";
 import JSZip from "jszip";
 import Link from "next/link";
+import { getSaoPauloCivilDateInput, getSaoPauloWeekday } from "@/lib/planning-window";
 
 type StudentOption = {
   id: string;
@@ -132,10 +133,12 @@ function getSafePlanningWeekStartIso(dateValue?: string | null): {
     ? getWeekRange(parsedDate).startOfWeek
     : getNextMonday();
 
-  const currentWeek = getWeekRange(new Date());
-  const todayDay = new Date().getDay();
+  const saoPauloToday = parseDateInput(getSaoPauloCivilDateInput()) || new Date();
+  const currentWeek = getWeekRange(saoPauloToday);
+  const todayDay = getSaoPauloWeekday();
   const selectedCurrentWeek = requestedWeekStart.getTime() === currentWeek.startOfWeek.getTime();
-  const unsafeCurrentWeekWindow = selectedCurrentWeek && [5, 6, 0].includes(todayDay);
+  // Sexta-feira continua válida. Só sábado e domingo redirecionam para a próxima semana.
+  const unsafeCurrentWeekWindow = selectedCurrentWeek && [6, 0].includes(todayDay);
 
   if (unsafeCurrentWeekWindow) {
     return {

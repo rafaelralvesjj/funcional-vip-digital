@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { ensureFuncionalUpEmailHtml } from "@/lib/email-brand";
+import { getManagementRecipientEmail } from "@/lib/email-recipient-policy";
 
 type SendEmailInput = {
   to: string;
@@ -25,6 +26,21 @@ export async function sendEmail({ to, subject, text, html, eventType = "UNSPECIF
   const normalizedTo = String(to || "").trim().toLowerCase();
   if (!normalizedTo || !normalizedTo.includes("@")) {
     throw new Error(`Destinatário de e-mail inválido para ${eventType}`);
+  }
+
+  const managementEmail = getManagementRecipientEmail();
+
+  // Trava de segurança: um e-mail classificado como STUDENT jamais pode
+  // cair na caixa operacional da gestão.
+  if (recipientType === "STUDENT" && normalizedTo === managementEmail) {
+    throw new Error(`Envio de aluno bloqueado: destinatário é o e-mail da gestão (${eventType})`);
+  }
+
+  // Todos os eventos explicitamente classificados como MANAGEMENT vão para
+  // uma única caixa operacional, evitando distribuição acidental entre
+  // usuários internos diferentes.
+  if (recipientType === "MANAGEMENT" && normalizedTo !== managementEmail) {
+    throw new Error(`Envio de gestão bloqueado para destinatário não autorizado (${eventType})`);
   }
 
   const host = process.env.EMAIL_HOST || "smtp.gmail.com";

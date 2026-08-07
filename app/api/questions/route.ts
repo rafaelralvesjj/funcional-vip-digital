@@ -256,6 +256,9 @@ async function sendNewConversationEmail({
           subject,
           text,
           html,
+          eventType: "NEW_CONVERSATION",
+          recipientType: recipient.panelKind === "STUDENT" ? "STUDENT" : recipient.panelKind === "TEACHER" ? "TEACHER" : "MANAGEMENT",
+          contextId: recipient.id,
         });
       })
   );

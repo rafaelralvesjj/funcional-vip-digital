@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { sendEmail } from "@/lib/sendEmail";
-import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
+import { resolveManagementRecipientEmails, resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 
 function getAppBaseUrl(): string {
   const appUrl =
@@ -84,21 +84,7 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
     studentName = student.name || userAuth?.name || "Aluno";
   }
 
-  const gestores = await prisma.user.findMany({
-    where: {
-      role: {
-        in: ["GESTOR", "ADMIN"],
-      },
-      email: {
-        not: null,
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
+  const gestores = await resolveManagementRecipientEmails();
 
   const loginUrl = getAppLoginUrl();
   const vincularAlunosUrl = getVincularAlunosUrl();
@@ -210,6 +196,9 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
         subject,
         text,
         html,
+        eventType: "INITIAL_ASSESSMENT_RECEIVED",
+        recipientType: "STUDENT",
+        contextId: student.id,
       })
     );
   }
@@ -255,6 +244,9 @@ async function notifyInitialEvaluationCompleted(alunoId: string) {
           subject,
           text,
           html,
+          eventType: "INITIAL_ASSESSMENT_READY_FOR_LINK",
+          recipientType: "MANAGEMENT",
+          contextId: student.id,
         })
       );
     });

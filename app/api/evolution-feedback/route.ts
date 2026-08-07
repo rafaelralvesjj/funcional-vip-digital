@@ -153,7 +153,7 @@ async function sendFeedbackEmail({
     </div>
   `;
 
-  await sendEmail({ to, subject: title, text, html });
+  await sendEmail({ to, subject: title, text, html, eventType: "EVOLUTION_FEEDBACK_SENT", recipientType: "STUDENT", contextId: student.id });
   return true;
 }
 

@@ -472,6 +472,9 @@ async function sendSurveyEmail(row: SurveyEmailRow, reminder = false) {
     subject: content.subject,
     text,
     html,
+    eventType: reminder ? "STUDENT_SURVEY_REMINDER" : "STUDENT_SURVEY_INVITE",
+    recipientType: "STUDENT",
+    contextId: row.student_id,
   });
 
   if (reminder) {

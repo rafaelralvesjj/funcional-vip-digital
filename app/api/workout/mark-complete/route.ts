@@ -472,6 +472,9 @@ async function createWorkoutCareEvent({
       await sendEmail({
         to: student.user.email,
         subject: `Ação de cuidado necessária: ${student.name}`,
+        eventType: "WORKOUT_CARE_ACTION_TEACHER",
+        recipientType: "TEACHER",
+        contextId: student.id,
         text: [
           `Oi, ${student.user?.name || "professor(a)"}.`,
           "",
@@ -717,7 +720,7 @@ async function sendStudentEmail({
     </div>
   `;
 
-  await sendEmail({ to, subject, text, html });
+  await sendEmail({ to, subject, text, html, eventType: "WORKOUT_COMPLETION_STUDENT", recipientType: "STUDENT" });
   return true;
 }
 
@@ -1184,6 +1187,9 @@ async function notifyEvolutionFeedbackMilestone({
       await sendEmail({
         to: student.user.email,
         subject: `Evolução de ${student.name}: devolutiva para revisar`,
+        eventType: "EVOLUTION_FEEDBACK_DUE_TEACHER",
+        recipientType: "TEACHER",
+        contextId: student.id,
         text: [
           `Oi, ${student.user?.name || "professor(a)"}.`,
           "",

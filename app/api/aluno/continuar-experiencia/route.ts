@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/sendEmail";
+import { getManagementRecipientEmail } from "@/lib/email-recipient-policy";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 
 export const dynamic = "force-dynamic";
@@ -191,13 +192,16 @@ export async function POST() {
       },
     });
 
-    const notifyEmail = process.env.TRIAL_CONTINUATION_NOTIFY_EMAIL;
+    const notifyEmail = getManagementRecipientEmail();
 
     if (notifyEmail) {
       try {
         await sendEmail({
           to: notifyEmail,
           subject: `${studentName} quer continuar com o acompanhamento`,
+          eventType: "TRIAL_CONTINUATION_REQUEST",
+          recipientType: "MANAGEMENT",
+          contextId: student.id,
           text: [
             "Olá, equipe de gestão.",
             "",

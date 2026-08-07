@@ -249,6 +249,9 @@ async function sendNoticeEmailToRecipients({
           subject,
           text,
           html,
+          eventType: "NOTICE_EMAIL",
+          recipientType: recipientKind === "STUDENT" ? "STUDENT" : "TEACHER",
+          contextId: recipient.id,
         });
       })
   );

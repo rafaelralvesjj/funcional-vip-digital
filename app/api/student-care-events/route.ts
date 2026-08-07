@@ -897,6 +897,9 @@ export async function POST(request: NextRequest) {
         await sendEmail({
           to: email,
           subject: `${studentDisplayName}, ${copy.title.toLowerCase()}`,
+          eventType: "STUDENT_CARE_EVENT",
+          recipientType: "STUDENT",
+          contextId: studentId,
           text: [
             `Oi, ${studentDisplayName}!`,
             "",
@@ -943,6 +946,9 @@ export async function POST(request: NextRequest) {
     if (copy.shouldEmailProfessor && resolvedProfessor?.email) {
       await sendEmail({
         to: resolvedProfessor.email,
+        eventType: "STUDENT_CARE_EVENT_TEACHER",
+        recipientType: "TEACHER",
+        contextId: studentId,
         subject:
           copy.severity === "CUIDADO"
             ? `Atenção prioritária: ${student.name}`
@@ -1544,6 +1550,9 @@ Motivo registrado: ${pauseDescription}`
           await sendEmail({
             to: studentEmail,
             subject: `${studentName}, seus treinos foram pausados por cuidado`,
+            eventType: "CARE_PAUSE_STUDENT",
+            recipientType: "STUDENT",
+            contextId: existing.studentId,
             text: [
               `Oi, ${studentName}!`,
               "",
@@ -1578,6 +1587,9 @@ Motivo registrado: ${pauseDescription}`
           await sendEmail({
             to: professorEmail,
             subject: `Pausa por cuidado ativada para ${studentName}`,
+            eventType: "CARE_PAUSE_TEACHER",
+            recipientType: "TEACHER",
+            contextId: existing.studentId,
             text: [
               `Olá, ${professorName}!`,
               "",
@@ -1822,6 +1834,9 @@ Motivo registrado: ${pauseDescription}`
           await sendEmail({
             to: professorEmail,
             subject: `${studentName} pediu revisão para retomar os treinos`,
+            eventType: "CARE_RETURN_REVIEW_TEACHER",
+            recipientType: "TEACHER",
+            contextId: existing.studentId,
             text: [
               professorContent,
               "",

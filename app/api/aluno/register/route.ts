@@ -4,6 +4,7 @@ import { formatBirthDatePtBr, validateBirthDateInput } from "@/lib/student-age";
 import { buildTrainingResourceSummary } from "@/lib/student-training-resources";
 import * as bcrypt from "bcryptjs";
 import { sendEmail } from "@/lib/sendEmail";
+import { getManagementRecipientEmail } from "@/lib/email-recipient-policy";
 
 type BodySource = FormData | Record<string, any>;
 
@@ -763,24 +764,20 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      const managementRecipients = await tx.user.findMany({
+      const managementEmail = getManagementRecipientEmail();
+      const managementUsers = await tx.user.findMany({
         where: {
-          role: {
-            in: ["GESTOR", "ADMIN"],
-          },
+          role: { in: ["GESTOR", "ADMIN"] },
           active: true,
         },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
+        select: { id: true, name: true, email: true },
+        orderBy: { createdAt: "asc" },
       });
 
-      const notificationAuthor = managementRecipients[0] || null;
+      const notificationAuthor =
+        managementUsers.find(
+          (item) => String(item.email || "").trim().toLowerCase() === managementEmail
+        ) || managementUsers[0] || null;
       const managementAuthorId = notificationAuthor?.id || authUser.id;
 
       const notice = await tx.notice.create({
@@ -892,11 +889,11 @@ export async function POST(req: NextRequest) {
         onboardingComplete: onboardingStatus.onboardingComplete,
         missingOnboardingLabels: onboardingStatus.missingLabels,
         shiftedToNextWeek: safeWindow.shiftedToNextWeek,
-        managementRecipients: managementRecipients.map((item) => ({
-          id: item.id,
-          name: item.name,
-          email: item.email,
-        })),
+        managementRecipients: [{
+          id: notificationAuthor?.id || "management-email",
+          name: notificationAuthor?.name || "Gestão",
+          email: managementEmail,
+        }],
       };
     });
 
@@ -939,6 +936,9 @@ export async function POST(req: NextRequest) {
         to: email,
         subject: title,
         text,
+        eventType: "TRIAL_WELCOME",
+        recipientType: "STUDENT",
+        contextId: result.studentId,
         html: `
           <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
             <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
@@ -1052,6 +1052,9 @@ export async function POST(req: NextRequest) {
             subject,
             text,
             html,
+            eventType: "NEW_STUDENT_LINK_REQUIRED",
+            recipientType: "MANAGEMENT",
+            contextId: result.studentId,
           });
         })
       );

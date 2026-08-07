@@ -125,6 +125,8 @@ async function sendStudentEvolutionEmail({
   await sendEmail({
     to,
     subject: title,
+    eventType: "EVOLUTION_FEEDBACK_SENT",
+    recipientType: "STUDENT",
     text: [
       `Oi, ${studentName}!`,
       "",

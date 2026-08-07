@@ -289,6 +289,9 @@ async function notifyStudent({
         subject: emailSubject,
         text: emailText,
         html: emailHtml,
+        eventType: "CONTRACT_LIFECYCLE_STUDENT",
+        recipientType: "STUDENT",
+        contextId: contract.student.id,
       });
 
       emailSentAt = new Date();

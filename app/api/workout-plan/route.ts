@@ -6,6 +6,7 @@ import { sendEmail } from "@/lib/sendEmail";
 import { calculateAgeYears } from "@/lib/student-age";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import { releaseCurrentWeekPreplannedWorkouts } from "@/lib/workout-status-lifecycle";
+import { getSaoPauloCivilDateInput, getSaoPauloWeekday, parseCivilDateInput } from "@/lib/planning-window";
 
 const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
 const WORKOUT_STATUS_PENDING = "PENDENTE";
@@ -173,13 +174,23 @@ function isFutureWeek(startOfWeek: Date): boolean {
   return startOfWeek.getTime() > currentWeek.startOfWeek.getTime();
 }
 
+function getWeekdayInSaoPaulo(referenceDate = new Date()): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short",
+  }).format(referenceDate);
+}
+
 function isUnsafeCurrentWeekPlanningWindow(startOfWeek: Date): boolean {
-  const currentWeek = getWeekRange(new Date());
-  const todayDay = new Date().getDay();
+  const saoPauloToday = parseCivilDateInput(getSaoPauloCivilDateInput()) || new Date();
+  const currentWeek = getWeekRange(saoPauloToday);
+  const todayDay = getSaoPauloWeekday();
+  const isWeekend = todayDay === 0 || todayDay === 6;
 
   return (
     startOfWeek.getTime() === currentWeek.startOfWeek.getTime() &&
-    [5, 6, 0].includes(todayDay)
+    // Sexta-feira continua válida; bloqueio somente no sábado/domingo.
+    isWeekend
   );
 }
 
@@ -710,6 +721,9 @@ async function notifyWorkoutAvailable({
         subject: title,
         text,
         html,
+        eventType: "WORKOUT_WEEK_RELEASED",
+        recipientType: "STUDENT",
+        contextId: student.id,
       })
     );
   }

@@ -8,6 +8,14 @@ function normalizeEmail(value: string | null | undefined): string | null {
   return email || null;
 }
 
+export function getManagementRecipientEmail(): string {
+  return normalizeEmail(process.env.MANAGEMENT_EMAIL) || "rafaelralvesjj@gmail.com";
+}
+
+export function isManagementRecipientEmail(value: string | null | undefined): boolean {
+  return normalizeEmail(value) === getManagementRecipientEmail();
+}
+
 export async function resolveStudentRecipientEmail(input: {
   studentId?: string | null;
   studentEmail?: string | null;
@@ -121,13 +129,23 @@ export async function resolveProfessorRecipientEmail(input: {
 }
 
 export async function resolveManagementRecipientEmails(): Promise<Array<{ id: string; name: string | null; email: string }>> {
-  const users = await prisma.user.findMany({
-    where: { active: true, role: { in: ["GESTOR", "ADMIN"] }, email: { not: null } },
+  const managementEmail = getManagementRecipientEmail();
+
+  const user = await prisma.user.findFirst({
+    where: {
+      active: true,
+      role: { in: ["GESTOR", "ADMIN"] },
+      email: { equals: managementEmail, mode: "insensitive" },
+    },
     select: { id: true, name: true, email: true },
   });
 
-  return users.flatMap((user) => {
-    const email = normalizeEmail(user.email);
-    return email ? [{ id: user.id, name: user.name, email }] : [];
-  });
+  // O e-mail da gestão é uma configuração operacional única. Mesmo que o
+  // cadastro de usuário esteja temporariamente inconsistente, o aviso não
+  // deve ser espalhado para outros gestores/professores.
+  return [{
+    id: user?.id || "management-email",
+    name: user?.name || "Gestão",
+    email: managementEmail,
+  }];
 }

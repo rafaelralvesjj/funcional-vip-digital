@@ -269,6 +269,7 @@ export default async function DashboardPage() {
         select: {
           id: true,
           professorId: true,
+          type: true,
           startDate: true,
           endDate: true,
           status: true,
@@ -341,12 +342,32 @@ export default async function DashboardPage() {
     return Array.from(linkedProfessorIds);
   }
 
-  function getDashboardWeeklyWorkoutLimit(student: { contractedTrainingDaysPerMonth?: number | null }) {
+  function getDashboardWeeklyWorkoutLimit(
+    student: { contractedTrainingDaysPerMonth?: number | null },
+    contract?: {
+      workoutsPerWeek?: number | null;
+      workoutsPerMonth?: number | null;
+    } | null
+  ) {
     /*
-     * O dashboard precisa funcionar também para aluno recém-criado/teste,
-     * quando o contrato/dias por mês ainda não foram preenchidos.
-     * Nesses casos, usamos 1 treino como mínimo operacional apenas para
-     * o contador/lista de "sem treino" não ficar zerado indevidamente.
+     * A régua semanal precisa vir primeiro do contrato que vale para a semana.
+     * Isso é essencial na conversão TRIAL -> PAID no meio da semana: os treinos
+     * já feitos continuam contando, mas a nova meta semanal passa a valer já.
+     */
+    const directWeekly = Number(contract?.workoutsPerWeek || 0);
+
+    if (Number.isFinite(directWeekly) && directWeekly > 0) {
+      return directWeekly;
+    }
+
+    const contractMonthly = Number(contract?.workoutsPerMonth || 0);
+
+    if (Number.isFinite(contractMonthly) && contractMonthly > 0) {
+      return getWeeklyWorkoutLimit(contractMonthly) || 1;
+    }
+
+    /*
+     * Fallback para cadastros antigos/teste sem contrato estruturado.
      */
     return getWeeklyWorkoutLimit(student.contractedTrainingDaysPerMonth) || 1;
   }
@@ -426,10 +447,23 @@ export default async function DashboardPage() {
   ) {
     const contracts = student.contracts || [];
 
-    return contracts.find((contract) => {
+    const matchingContracts = contracts.filter((contract) => {
       const status = String(contract.status || '').toUpperCase();
 
-      if (['CANCELADO', 'CANCELLED', 'INATIVO', 'ENCERRADO'].includes(status)) {
+      /*
+       * Contrato finalizado não pode continuar comandando a régua semanal.
+       * Esse era o ponto crítico após converter uma experiência para plano pago.
+       */
+      if (
+        [
+          'CANCELADO',
+          'CANCELLED',
+          'FINALIZADO',
+          'FINALIZED',
+          'INATIVO',
+          'ENCERRADO',
+        ].includes(status)
+      ) {
         return false;
       }
 
@@ -440,15 +474,38 @@ export default async function DashboardPage() {
         return false;
       }
 
-      /*
-       * O fim da semana é exclusivo.
-       * O fim do contrato é considerado inclusivo.
-       */
       return (
         contractStart.getTime() < week.endOfWeek.getTime() &&
         contractEnd.getTime() >= week.startOfWeek.getTime()
       );
-    }) || null;
+    });
+
+    if (matchingContracts.length === 0) {
+      return null;
+    }
+
+    return matchingContracts.sort((a, b) => {
+      const statusPriority = (status?: string | null) =>
+        String(status || '').toUpperCase() === 'ACTIVE' ? 0 : 1;
+      const typePriority = (type?: string | null) =>
+        String(type || '').toUpperCase() === 'PAID' ? 0 : 1;
+
+      const statusDiff = statusPriority(a.status) - statusPriority(b.status);
+      if (statusDiff !== 0) return statusDiff;
+
+      const typeDiff = typePriority(a.type) - typePriority(b.type);
+      if (typeDiff !== 0) return typeDiff;
+
+      const aWeekly = Number(a.workoutsPerWeek || 0);
+      const bWeekly = Number(b.workoutsPerWeek || 0);
+      if (aWeekly !== bWeekly) return bWeekly - aWeekly;
+
+      const aStart = toLocalDateOnly(a.startDate)?.getTime() || 0;
+      const bStart = toLocalDateOnly(b.startDate)?.getTime() || 0;
+      if (aStart !== bStart) return bStart - aStart;
+
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    })[0];
   }
 
   function getStudentsEligibleForWeek(
@@ -625,12 +682,14 @@ export default async function DashboardPage() {
   function buildStudentsMissingWeeklyWorkouts(
     eligibleStudents: typeof studentsEligibleForWeeklyWorkout,
     countByStudent: Map<string, number>,
+    week: { startOfWeek: Date; endOfWeek: Date },
     weekLabel: string,
     weekStartDateInput: string
   ) {
     return eligibleStudents
       .map((student) => {
-        const weeklyLimit = getDashboardWeeklyWorkoutLimit(student);
+        const contractForWeek = getStudentContractForWeek(student, week);
+        const weeklyLimit = getDashboardWeeklyWorkoutLimit(student, contractForWeek);
         const createdCount = countByStudent.get(student.id) || 0;
         const missingCount = Math.max(weeklyLimit - createdCount, 0);
 
@@ -652,16 +711,29 @@ export default async function DashboardPage() {
   const studentsMissingCurrentWeekWorkouts = buildStudentsMissingWeeklyWorkouts(
     studentsEligibleForCurrentWeek,
     currentWeekWorkoutPlansCountByStudent,
+    currentWorkoutWeek,
     currentWorkoutWeekLabel,
     formatDateInput(currentWorkoutWeek.startOfWeek)
   ).filter((item) => !careReturnPreparationStudentIds.has(item.student.id));
 
+  const studentsMissingCurrentWeekIds = new Set(
+    studentsMissingCurrentWeekWorkouts.map((item) => item.student.id)
+  );
+
   const studentsMissingNextWeekWorkouts = buildStudentsMissingWeeklyWorkouts(
     studentsEligibleForNextWeek,
     nextWeekWorkoutPlansCountByStudent,
+    nextWorkoutWeek,
     nextWorkoutWeekLabel,
     formatDateInput(nextWorkoutWeek.startOfWeek)
-  ).filter((item) => !careReturnPreparationStudentIds.has(item.student.id));
+  )
+    .filter((item) => !careReturnPreparationStudentIds.has(item.student.id))
+    /*
+     * Enquanto a semana atual ainda está incompleta, não mostramos o mesmo
+     * aluno simultaneamente no card da próxima semana. Isso evita o professor
+     * abrir o planejamento futuro por engano antes de completar a obrigação atual.
+     */
+    .filter((item) => !studentsMissingCurrentWeekIds.has(item.student.id));
 
   const isWorkoutPlanningDeadlineToday = getWeekdayInSaoPaulo(new Date()) === 'Sat';
   const workoutPlanningDeadlineStatusLabel = isWorkoutPlanningDeadlineToday
@@ -1979,6 +2051,7 @@ export default async function DashboardPage() {
                               query: {
                                 studentId: item.student.id,
                                 date: item.weekStartDateInput,
+                                week: "current",
                               },
                             }}
                             prefetch={false}
@@ -2210,6 +2283,7 @@ export default async function DashboardPage() {
                               query: {
                                 studentId: item.student.id,
                                 date: item.weekStartDateInput,
+                                week: "next",
                               },
                             }}
                             prefetch={false}

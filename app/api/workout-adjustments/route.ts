@@ -365,7 +365,7 @@ async function sendWorkoutAdjustmentEmail({
     </div>
   `;
 
-  await sendEmail({ to, subject, text, html });
+  await sendEmail({ to, subject, text, html, eventType: "WORKOUT_ADJUSTMENT_STUDENT", recipientType: "STUDENT" });
 
   return true;
 }

@@ -189,6 +189,8 @@ async function sendPreparationEmail({
     to,
     subject: NOTICE_TITLE,
     text: `${content}\n\nAcessar a plataforma: ${appUrl}`,
+    eventType: "SUNDAY_WEEK_PREPARATION",
+    recipientType: "STUDENT",
     html: `
       <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
         <div style="max-width:580px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:18px;padding:26px;">
