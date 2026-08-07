@@ -23,6 +23,10 @@ type WorkoutPlanningSummaryResponse = {
   weeklyLimit?: number | null;
   weeklyPlansCount?: number | null;
   weeklyRemaining?: number | null;
+  createdWorkoutDates?: string[];
+  expectedWorkoutDates?: string[];
+  expectedWorkoutCount?: number | null;
+  planningSource?: string | null;
   effectivePlanningStart?: string | null;
   careReturn?: {
     active?: boolean;
@@ -643,9 +647,15 @@ export default function ResumoAlunoPage() {
     );
 
     const safeWeek = getSafePlanningWeekStartIso(weekDateFromUrl);
+    const datesFromNavigation =
+      expectedDatesFromUrl.length > 0
+        ? expectedDatesFromUrl
+        : weekDateFromUrl
+          ? [weekDateFromUrl]
+          : [];
     const editTargetDates = workoutIdFromUrl && weekDateFromUrl
       ? [weekDateFromUrl]
-      : expectedDatesFromUrl;
+      : datesFromNavigation;
     const safeTargetDates = workoutIdFromUrl
       ? editTargetDates
       : normalizeCurrentWeekExpectedDatesFallback(
@@ -1380,6 +1390,34 @@ export default function ResumoAlunoPage() {
 
       if (!weeklyLimit) return null;
 
+      // A API é a fonte única da programação semanal. Ela já considera:
+      // contrato ativo, treinos realmente salvos, retomada no meio da semana
+      // e o fato de datas passadas não poderem voltar para uma nova montagem.
+      if (Array.isArray(data.expectedWorkoutDates)) {
+        const authoritativeDates = data.expectedWorkoutDates
+          .map((value) => String(value))
+          .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
+
+        setTargetExpectedWorkoutDates(authoritativeDates);
+        setAiJsonText("");
+        setMessage(null);
+
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+
+          if (authoritativeDates.length > 0) {
+            url.searchParams.set("date", authoritativeDates[0]);
+            url.searchParams.set("expectedWorkoutDates", authoritativeDates.join(","));
+          } else {
+            url.searchParams.delete("expectedWorkoutDates");
+          }
+
+          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+
+        return authoritativeDates;
+      }
+
       const createdDates = new Set(
         (Array.isArray(data.plans) ? data.plans : [])
           .map((plan) => getCivilDateInput(plan.date || plan.createdAt || null))
@@ -1479,6 +1517,16 @@ export default function ResumoAlunoPage() {
 
       return remainingDates;
     } catch {
+      const localFallback = normalizeCurrentWeekExpectedDatesFallback(
+        targetExpectedWorkoutDates,
+        targetWeekStart || resolveWeekStartIso(getSaoPauloCivilDateInput())
+      );
+
+      if (localFallback.length > 0) {
+        setTargetExpectedWorkoutDates(localFallback);
+        return localFallback;
+      }
+
       return null;
     }
   }

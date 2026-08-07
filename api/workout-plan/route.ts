@@ -193,6 +193,132 @@ function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date
   return { startOfWeek, endOfWeek };
 }
 
+
+function getCanonicalWeekdayOffsets(weeklyLimit: number): number[] {
+  if (weeklyLimit <= 1) return [0];
+  if (weeklyLimit === 2) return [0, 2];
+  if (weeklyLimit === 3) return [0, 2, 4];
+  if (weeklyLimit === 4) return [0, 1, 3, 4];
+  return [0, 1, 2, 3, 4];
+}
+
+function addDaysForPlanning(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function buildExpectedWorkoutDatesForWeek({
+  startOfWeek,
+  endOfWeek,
+  effectivePlanningStart,
+  weeklyLimit,
+  createdDateKeys,
+}: {
+  startOfWeek: Date;
+  endOfWeek: Date;
+  effectivePlanningStart: Date;
+  weeklyLimit: number | null;
+  createdDateKeys: Set<string>;
+}): string[] {
+  const limit = Math.max(Number(weeklyLimit || 0), 0);
+  if (!limit) return [];
+
+  const remainingCount = Math.max(limit - createdDateKeys.size, 0);
+  if (remainingCount <= 0) return [];
+
+  const friday = addDaysForPlanning(startOfWeek, 4);
+  friday.setHours(23, 59, 59, 999);
+
+  const todayCivil = parseCivilDateInput(getSaoPauloCivilDateInput());
+  const isCurrentWeek = Boolean(
+    todayCivil &&
+      todayCivil.getTime() >= startOfWeek.getTime() &&
+      todayCivil.getTime() < endOfWeek.getTime()
+  );
+
+  let earliestAllowed = new Date(effectivePlanningStart);
+  if (earliestAllowed.getTime() < startOfWeek.getTime()) {
+    earliestAllowed = new Date(startOfWeek);
+  }
+  if (isCurrentWeek && todayCivil && todayCivil.getTime() > earliestAllowed.getTime()) {
+    earliestAllowed = new Date(todayCivil);
+  }
+  earliestAllowed.setHours(12, 0, 0, 0);
+
+  if (earliestAllowed.getTime() > friday.getTime()) {
+    return [];
+  }
+
+  const canonicalDates = getCanonicalWeekdayOffsets(limit)
+    .map((offset) => addDaysForPlanning(startOfWeek, offset))
+    .map((date) => {
+      date.setHours(12, 0, 0, 0);
+      return date;
+    })
+    .filter((date) => date.getTime() >= earliestAllowed.getTime() && date.getTime() <= friday.getTime())
+    .map((date) => getDateKey(date))
+    .filter((dateKey) => Boolean(dateKey) && !createdDateKeys.has(dateKey));
+
+  const result: string[] = [];
+  for (const dateKey of canonicalDates) {
+    if (!result.includes(dateKey)) result.push(dateKey);
+    if (result.length >= remainingCount) return result;
+  }
+
+  const fallbackDates: string[] = [];
+  const cursor = new Date(earliestAllowed);
+  while (cursor.getTime() <= friday.getTime()) {
+    const weekday = cursor.getDay();
+    const dateKey = getDateKey(cursor);
+
+    if (
+      weekday >= 1 &&
+      weekday <= 5 &&
+      dateKey &&
+      !createdDateKeys.has(dateKey) &&
+      !result.includes(dateKey)
+    ) {
+      fallbackDates.push(dateKey);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const stillNeeded = remainingCount - result.length;
+
+  if (stillNeeded === 1 && fallbackDates.length > 0) {
+    result.push(
+      createdDateKeys.size > 0 || result.length > 0
+        ? fallbackDates[fallbackDates.length - 1]
+        : fallbackDates[0]
+    );
+    return result;
+  }
+
+  if (stillNeeded > 0 && fallbackDates.length > 0) {
+    if (stillNeeded >= fallbackDates.length) {
+      result.push(...fallbackDates);
+    } else if (stillNeeded === 1) {
+      result.push(fallbackDates[0]);
+    } else {
+      for (let index = 0; index < stillNeeded; index += 1) {
+        const position = Math.round(
+          (index * (fallbackDates.length - 1)) / (stillNeeded - 1)
+        );
+        const dateKey = fallbackDates[position];
+        if (!result.includes(dateKey)) result.push(dateKey);
+      }
+
+      for (const dateKey of fallbackDates) {
+        if (result.length >= remainingCount) break;
+        if (!result.includes(dateKey)) result.push(dateKey);
+      }
+    }
+  }
+
+  return result.slice(0, remainingCount).sort();
+}
+
 function formatDatePtBr(date: Date): string {
   return date.toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -2039,6 +2165,20 @@ export async function GET(req: NextRequest) {
         : [];
 
       const weeklyPlansCount = countDistinctPlanDates(eligibleWeeklyPlans);
+      const createdWorkoutDates: string[] = Array.from(
+        new Set<string>(
+          eligibleWeeklyPlans
+            .map((plan: any) => getDateKey(plan.date))
+            .filter((dateKey: string) => Boolean(dateKey))
+        )
+      ).sort();
+      const expectedWorkoutDates = buildExpectedWorkoutDatesForWeek({
+        startOfWeek,
+        endOfWeek,
+        effectivePlanningStart,
+        weeklyLimit,
+        createdDateKeys: new Set(createdWorkoutDates),
+      });
 
       const selectedDateBeforeContractStart = Boolean(
         activeContract && referenceDate < activeContract.startDate
@@ -2051,6 +2191,10 @@ export async function GET(req: NextRequest) {
         weeklyPlansCount,
         weeklyRemaining:
           weeklyLimit == null ? null : Math.max(weeklyLimit - weeklyPlansCount, 0),
+        createdWorkoutDates,
+        expectedWorkoutDates,
+        expectedWorkoutCount: expectedWorkoutDates.length,
+        planningSource: "DATABASE_WEEK_STATE",
         week: {
           startOfWeek: startOfWeek.toISOString(),
           endOfWeek: endOfWeek.toISOString(),
