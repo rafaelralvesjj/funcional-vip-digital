@@ -193,14 +193,34 @@ function parseDateInput(value?: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function getDateInputFromRaw(value?: string | Date | null): string | null {
+function getCivilDateInput(value?: string | Date | null): string | null {
   if (!value) return null;
 
-  const date = value instanceof Date ? value : new Date(value);
+  if (typeof value === "string") {
+    const isoDate = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (isoDate?.[1]) return isoDate[1];
+  }
 
+  const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
 
-  return formatDateInput(date);
+  // Datas de treino/contrato são datas civis. Usar UTC evita 03/08 virar 02/08
+  // no navegador em Brasília quando a API devolve meia-noite UTC.
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDateInputFromRaw(value?: string | Date | null): string | null {
+  return getCivilDateInput(value);
+}
+
+function getWeekdayInSaoPaulo(referenceDate = new Date()): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short",
+  }).format(referenceDate);
 }
 
 function isUnsafeCurrentWeekPlanningDate(dateInput?: string | null): boolean {
@@ -210,12 +230,14 @@ function isUnsafeCurrentWeekPlanningDate(dateInput?: string | null): boolean {
 
   const currentWeek = getWeekRange(new Date());
   const selectedWeek = getWeekRange(parsedDate);
-  const todayDay = new Date().getDay();
+  const weekday = getWeekdayInSaoPaulo();
+
+  // Sexta-feira é válida. A trava começa somente no sábado e no domingo.
+  const isWeekend = weekday === "Sat" || weekday === "Sun";
 
   return (
     selectedWeek.startOfWeek.getTime() === currentWeek.startOfWeek.getTime() &&
-    // Sexta-feira ainda é uma janela válida: o aluno pode receber/executar treino no próprio dia.
-    [6, 0].includes(todayDay)
+    isWeekend
   );
 }
 
@@ -243,15 +265,17 @@ function getPreferredWorkoutOffsets(weeklyLimit?: number | null): number[] {
 
   if (!limit) return [];
 
+  // Programação normal acontece de segunda a sexta. Sábado e domingo
+  // nunca são usados como "datas de compensação" para completar a meta semanal.
   const patterns: Record<number, number[]> = {
-    1: [0, 1, 2, 3, 4, 5, 6],
-    2: [0, 2, 4, 1, 3, 5, 6],
-    3: [0, 2, 4, 1, 3, 5, 6],
-    4: [0, 1, 3, 4, 2, 5, 6],
-    5: [0, 1, 2, 3, 4, 5, 6],
+    1: [0, 1, 2, 3, 4],
+    2: [0, 2, 4, 1, 3],
+    3: [0, 2, 4, 1, 3],
+    4: [0, 1, 3, 4, 2],
+    5: [0, 1, 2, 3, 4],
   };
 
-  return patterns[limit] || [0, 1, 2, 3, 4, 5, 6];
+  return patterns[limit] || [0, 1, 2, 3, 4];
 }
 
 function getExpectedWorkoutDatesForWeek(
@@ -276,6 +300,7 @@ function getExpectedWorkoutDatesForWeek(
 
   const hasCarryOverWorkoutFromPreviousContract = Boolean(
     contractStartInput &&
+      contractStartInput > weekStartInput &&
       existingPlans.some((plan) => {
         const planDate = getPlanDateInput(plan);
         return Boolean(
@@ -318,15 +343,7 @@ function getExpectedWorkoutDatesForWeek(
 }
 
 function getPlanDateInput(plan: WorkoutPlanSummary): string | null {
-  const rawDate = plan.date || plan.createdAt;
-
-  if (!rawDate) return null;
-
-  const date = new Date(rawDate);
-
-  if (Number.isNaN(date.getTime())) return null;
-
-  return formatDateInput(date);
+  return getCivilDateInput(plan.date || plan.createdAt || null);
 }
 
 function getFirstMissingExpectedDate(
@@ -767,7 +784,11 @@ export default function MontarTreinoPage() {
 
       if (safeDate.redirected && safeDate.message) {
         setSafeWindowNotice(safeDate.message);
+      } else {
+        setSafeWindowNotice(null);
       }
+    } else if (!isUnsafeCurrentWeekPlanningDate(date)) {
+      setSafeWindowNotice(null);
     }
   }, [activeWorkoutContract?.id, date, expectedWorkoutDates.join("|")]);
 
@@ -1635,9 +1656,9 @@ export default function MontarTreinoPage() {
 
                       {activeWorkoutContract?.startDate && getDateInputFromRaw(activeWorkoutContract.startDate) && getDateInputFromRaw(activeWorkoutContract.startDate)! > formatDateInput(startOfWeek) && (
                         <p className="text-[11px] text-[#a1a1a1] mt-2">
-                          {hasCarryOverWorkoutFromPreviousContract
+                          {hasCarryOverWorkoutFromPreviousContract || weeklyPlansCount > 0
                             ? "O plano mudou no meio da semana. Os treinos anteriores continuam contando e a nova meta semanal já vale nesta semana."
-                            : "O contrato começou no meio da semana. Por isso, o sistema considera somente datas a partir do início do contrato."}
+                            : "O contrato começou no meio da semana. Por isso, o sistema considera somente datas úteis a partir do início do contrato."}
                         </p>
                       )}
 
@@ -1648,11 +1669,15 @@ export default function MontarTreinoPage() {
                         </p>
                       )}
 
-                      {selectedDateHasUnsafeWindow && (
+                      {selectedDateHasUnsafeWindow ? (
                         <p className="text-[11px] text-red-400 mt-2">
                           Esta semana já não possui janela segura de execução. O sistema deve direcionar o planejamento para a próxima semana.
                         </p>
-                      )}
+                      ) : weekScopeLabel === "semana atual" && getWeekdayInSaoPaulo() === "Fri" ? (
+                        <p className="text-[11px] text-emerald-400 mt-2">
+                          Sexta-feira ainda é válida para execução. Se este for o treino restante da semana, ele pode ser salvo e liberado hoje.
+                        </p>
+                      ) : null}
                     </div>
                   )}
 

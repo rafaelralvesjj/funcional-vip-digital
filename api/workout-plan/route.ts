@@ -173,14 +173,22 @@ function isFutureWeek(startOfWeek: Date): boolean {
   return startOfWeek.getTime() > currentWeek.startOfWeek.getTime();
 }
 
+function getWeekdayInSaoPaulo(referenceDate = new Date()): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short",
+  }).format(referenceDate);
+}
+
 function isUnsafeCurrentWeekPlanningWindow(startOfWeek: Date): boolean {
   const currentWeek = getWeekRange(new Date());
-  const todayDay = new Date().getDay();
+  const weekday = getWeekdayInSaoPaulo();
+  const isWeekend = weekday === "Sat" || weekday === "Sun";
 
   return (
     startOfWeek.getTime() === currentWeek.startOfWeek.getTime() &&
-    // Sexta-feira ainda é uma janela válida: o aluno pode receber/executar treino no próprio dia.
-    [6, 0].includes(todayDay)
+    // Sexta-feira continua válida; bloqueio somente no sábado/domingo.
+    isWeekend
   );
 }
 
