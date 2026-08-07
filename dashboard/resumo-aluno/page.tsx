@@ -18,6 +18,19 @@ type StudentOption = {
   hasBirthDate?: boolean;
 };
 
+type WorkoutPlanningSummaryResponse = {
+  plans?: Array<{ id: string; date?: string | null; createdAt?: string | null }>;
+  weeklyLimit?: number | null;
+  weeklyPlansCount?: number | null;
+  weeklyRemaining?: number | null;
+  effectivePlanningStart?: string | null;
+  careReturn?: {
+    active?: boolean;
+    planningStart?: string | null;
+    resolvedAt?: string | null;
+  } | null;
+};
+
 type SummaryResponse = {
   ok: boolean;
   generatedAt: string;
@@ -246,6 +259,67 @@ function getTrainingSchedule(contractedTrainingDaysPerMonth?: number | null, wee
   }));
 }
 
+function getCivilDateInput(value?: string | Date | null): string | null {
+  if (!value) return null;
+
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match?.[1]) return match[1];
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString().slice(0, 10);
+}
+
+function getCareReturnExpectedWorkoutDates({
+  weekStartIso,
+  planningStartIso,
+  weeklyLimit,
+}: {
+  weekStartIso: string;
+  planningStartIso?: string | null;
+  weeklyLimit?: number | null;
+}): string[] {
+  const weekStart = parseDateInput(resolveWeekStartIso(weekStartIso));
+  const planningStart = parseDateInput(planningStartIso || "");
+  const limit = Math.max(Number(weeklyLimit || 0), 0);
+
+  if (!weekStart || !planningStart || !limit) return [];
+
+  const weekEndExclusive = addDays(weekStart, 7);
+  const effectiveStart = planningStart.getTime() > weekStart.getTime()
+    ? planningStart
+    : weekStart;
+
+  const availableWeekdays: string[] = [];
+  const cursor = new Date(effectiveStart);
+  cursor.setHours(12, 0, 0, 0);
+
+  while (cursor.getTime() < weekEndExclusive.getTime()) {
+    const weekday = cursor.getDay();
+    if (weekday >= 1 && weekday <= 5) {
+      availableWeekdays.push(formatIsoDate(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  if (availableWeekdays.length === 0) return [];
+
+  const targetCount = Math.min(limit, availableWeekdays.length);
+  if (targetCount === 1) return [availableWeekdays[0]];
+
+  const spreadDates = Array.from({ length: targetCount }, (_, index) => {
+    const position = Math.round(
+      (index * (availableWeekdays.length - 1)) / (targetCount - 1)
+    );
+    return availableWeekdays[position];
+  });
+
+  return Array.from(new Set(spreadDates)).slice(0, targetCount);
+}
+
 function getTrainingScheduleDescription(contractedTrainingDaysPerMonth?: number | null): string {
   const contracted = Number(contractedTrainingDaysPerMonth || 0);
 
@@ -456,6 +530,7 @@ export default function ResumoAlunoPage() {
   const [aiJsonText, setAiJsonText] = useState("");
   const [targetWeekStart, setTargetWeekStart] = useState("");
   const [targetExpectedWorkoutDates, setTargetExpectedWorkoutDates] = useState<string[]>([]);
+  const [targetWorkoutId, setTargetWorkoutId] = useState<string | null>(null);
   const [safeWindowNotice, setSafeWindowNotice] = useState<string | null>(null);
   const [exerciseLibrary, setExerciseLibrary] = useState<LibraryExercise[]>([]);
   const [loadingExerciseLibrary, setLoadingExerciseLibrary] = useState(true);
@@ -491,13 +566,18 @@ export default function ResumoAlunoPage() {
     setLoadingStudents(false);
   }
 
-  async function loadExerciseLibrary() {
+  async function loadExerciseLibrary(includeInactiveForEditing = false) {
     setLoadingExerciseLibrary(true);
 
     try {
-      const res = await fetch("/api/exercise-library?active=1", {
+      const res = await fetch(
+        includeInactiveForEditing
+          ? "/api/exercise-library?active=all"
+          : "/api/exercise-library?active=1",
+        {
         cache: "no-store",
-      });
+        }
+      );
 
       if (res.ok) {
         const data = await res.json();
@@ -516,14 +596,19 @@ export default function ResumoAlunoPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const weekDateFromUrl = params.get("date") || params.get("weekStart");
+    const workoutIdFromUrl = params.get("workoutId");
     const expectedDatesFromUrl = parseExpectedWorkoutDatesParam(
       params.get("expectedWorkoutDates") || params.get("expectedDates")
     );
 
     const safeWeek = getSafePlanningWeekStartIso(weekDateFromUrl);
+    const editTargetDates = workoutIdFromUrl && weekDateFromUrl
+      ? [weekDateFromUrl]
+      : expectedDatesFromUrl;
 
     setTargetWeekStart(safeWeek.weekStartIso);
-    setTargetExpectedWorkoutDates(safeWeek.redirectedToNextWeek ? [] : expectedDatesFromUrl);
+    setTargetExpectedWorkoutDates(safeWeek.redirectedToNextWeek ? [] : editTargetDates);
+    setTargetWorkoutId(workoutIdFromUrl || null);
     setSafeWindowNotice(safeWeek.reason || null);
 
     if (safeWeek.reason) {
@@ -531,7 +616,7 @@ export default function ResumoAlunoPage() {
     }
 
     loadStudents(params.get("studentId"));
-    loadExerciseLibrary();
+    loadExerciseLibrary(Boolean(workoutIdFromUrl));
   }, []);
 
   const selectedStudent = useMemo(() => {
@@ -540,6 +625,11 @@ export default function ResumoAlunoPage() {
   const selectedStudentMissingBirthDate =
     Boolean(selectedStudent) &&
     (selectedStudent?.ageYears === null || selectedStudent?.ageYears === undefined);
+
+  useEffect(() => {
+    if (!selectedStudentId || !targetWeekStart || targetWorkoutId) return;
+    void resolveCareReturnPlanningTarget(selectedStudentId);
+  }, [selectedStudentId, targetWeekStart, targetWorkoutId]);
 
   function compactText(value?: unknown): string {
     return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -821,7 +911,18 @@ export default function ResumoAlunoPage() {
       context.includes("academia") &&
       /(maquina|maquinas|leg press|cadeira extensora|cadeira flexora|polia|puxada|remada)/.test(context);
 
-    const scored = exerciseLibrary
+    const eligibleLibrary = exerciseLibrary.filter((exercise) => {
+      if (exercise.active !== false) return true;
+      if (!targetWorkoutId) return false;
+
+      // Em edição podemos reaproveitar exercício oficial legado/inativo
+      // somente quando o próprio histórico consolidado do aluno cita esse
+      // exercício. O backend repete a mesma proteção usando os IDs históricos.
+      const normalizedName = normalizePromptSearch(exercise.name);
+      return normalizedName.length >= 4 && context.includes(normalizedName);
+    });
+
+    const scored = eligibleLibrary
       .map((exercise, index) => {
         const searchable = normalizePromptSearch([
           exercise.name, exercise.muscleGroup, exercise.objectiveTags, exercise.locationTags,
@@ -907,7 +1008,9 @@ export default function ResumoAlunoPage() {
     const schedule = validationContext.expectedWorkoutDates.length > 0
       ? getTrainingScheduleFromExpectedDates(validationContext.expectedWorkoutDates)
       : getTrainingSchedule(contractedDays, validationContext.weekStart);
-    const scheduleDescription = getTrainingScheduleDescription(contractedDays);
+    const scheduleDescription = targetExpectedWorkoutDates.length > 0
+      ? `Planejamento complementar/retomada: usar somente as datas obrigatórias desta solicitação (${targetExpectedWorkoutDates.join(", ")}).`
+      : getTrainingScheduleDescription(contractedDays);
     const expectedWorkoutCount = validationContext.expectedWorkoutCount;
     const scheduleLines = schedule.length
       ? schedule.map((item, index) => `- Treino ${index + 1}: ${item.weekday}, ${item.date}`)
@@ -927,10 +1030,15 @@ export default function ResumoAlunoPage() {
       expectedWorkoutDates: validationContext.expectedWorkoutDates,
       validationKey: validationContext.validationKey,
     };
+    const editingInstruction = targetWorkoutId
+      ? `ALTERAÇÃO DE TREINO EXISTENTE: workoutId=${targetWorkoutId}. Gere exatamente 1 treino para a data obrigatória informada e substitua apenas o conteúdo desse treino. Não crie treino adicional e não altere os demais treinos da semana.`
+      : "MONTAGEM DE TREINO: gere somente os treinos ainda faltantes nas datas obrigatórias informadas.";
 
     return [
       ...MANUAL_AI_EXECUTION_HEADER_LINES,
-      "Monte os treinos da semana para apoiar o professor de educação física.",
+      targetWorkoutId
+        ? "Altere o treino existente para apoiar o professor de educação física."
+        : "Monte os treinos da semana para apoiar o professor de educação física.",
       "Responda somente com JSON válido, sem markdown, comentários ou explicações.",
       "Use somente exerciseId da biblioteca permitida. Não invente exercícios, cargas, equipamentos, lesões, restrições ou diagnósticos.",
       "Respeite objetivo, local, equipamentos, preferências, adesão, histórico e cuidados. Dor/desconforto impede progressão automática e exige revisão humana.",
@@ -940,6 +1048,7 @@ export default function ResumoAlunoPage() {
       "NÃO recuse gerar o treino por conflito entre cadastro antigo e memória técnica. Use a memória APPROVED mais recente e registre o conflito em reviewAlerts.",
       "Só deixe de gerar quando houver pausa por cuidado aberta, biblioteca vazia ou validação imutável inválida.",
       "Calorias são faixa estimada e conservadora, nunca promessa. O professor revisará antes de liberar.",
+      editingInstruction,
       "",
       `ALUNO: ${summaryData.student.name} | studentId=${summaryData.student.id}`,
       `SEMANA E VALIDAÇÃO IMUTÁVEL: ${JSON.stringify(validationPayload)}`,
@@ -955,7 +1064,7 @@ export default function ResumoAlunoPage() {
       "",
       "FORMATO OBRIGATÓRIO:",
       `{"studentId":"${summaryData.student.id}","studentName":"${summaryData.student.name.replaceAll('"', "'")}","aiValidation":${JSON.stringify(validationPayload)},"evolutionDecision":{"status":"PRE_PLANEJAMENTO_CONSERVADOR","reason":"motivo objetivo","requiresReviewBeforeRelease":true,"reviewAlerts":[]},"workouts":[{"name":"Treino A","date":"${schedule[0]?.date || "AAAA-MM-DD"}","description":"","objective":"","focusAreas":"","intensity":"leve|moderada|alta","estimatedDurationMinutes":40,"estimatedCaloriesMin":0,"estimatedCaloriesMax":0,"studentSummary":"","safetyNote":"","notes":"","exercises":[{"exerciseId":"ID_DA_BIBLIOTECA","series":3,"reps":"10-12","weight":"a definir pelo professor","restTime":"60s","notes":"","order":0}]}]}`,
-      `Gere exatamente ${expectedWorkoutCount} treino(s), nas datas obrigatórias e mantendo aiValidation sem qualquer alteração.`,
+      `Gere exatamente ${expectedWorkoutCount} treino(s), nas datas obrigatórias e mantendo aiValidation sem qualquer alteração.${targetWorkoutId ? " Esta resposta será usada para ATUALIZAR o treino existente, não para criar um novo." : ""}`,
     ].join("\n");
   }
 
@@ -1128,6 +1237,7 @@ export default function ResumoAlunoPage() {
       createdAt: new Date().toISOString(),
       studentId: payloadStudentId,
       studentName: payload?.studentName || selectedStudent?.name || "",
+      editingWorkoutId: targetWorkoutId || null,
       aiValidation: expectedContext,
       evolutionDecision,
       currentIndex: 0,
@@ -1151,15 +1261,58 @@ export default function ResumoAlunoPage() {
       const normalized = normalizeAiWorkoutPayload(parsed);
 
       localStorage.setItem("aiWorkoutDraftBatch", JSON.stringify(normalized));
-      setMessage({ type: "success", text: "JSON validado. Abrindo tela de montar treino com os dados preenchidos." });
+      setMessage({
+        type: "success",
+        text: targetWorkoutId
+          ? "JSON validado. Abrindo o treino existente para substituição dos dados."
+          : "JSON validado. Abrindo tela de montar treino com os dados preenchidos.",
+      });
 
       const firstWorkoutDate = normalized.aiValidation.expectedWorkoutDates?.[0] || normalized.aiValidation.weekStart;
-      window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(normalized.studentId)}&date=${encodeURIComponent(firstWorkoutDate)}&source=ai-json`;
+      window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(normalized.studentId)}&date=${encodeURIComponent(firstWorkoutDate)}&source=ai-json${targetWorkoutId ? `&workoutId=${encodeURIComponent(targetWorkoutId)}` : ""}`;
     } catch (error: any) {
       setMessage({
         type: "error",
         text: error?.message || "JSON inválido. Copie novamente a resposta da IA.",
       });
+    }
+  }
+
+  async function resolveCareReturnPlanningTarget(studentId: string): Promise<string[] | null> {
+    if (!studentId || targetWorkoutId) return null;
+
+    const referenceDate = targetWeekStart || resolveWeekStartIso(getSaoPauloCivilDateInput());
+
+    try {
+      const res = await fetch(
+        `/api/workout-plan?studentId=${encodeURIComponent(studentId)}&date=${encodeURIComponent(referenceDate)}&includeSummary=true`,
+        { cache: "no-store" }
+      );
+
+      if (!res.ok) return null;
+
+      const data = (await res.json()) as WorkoutPlanningSummaryResponse;
+      if (!data?.careReturn?.active) return null;
+
+      const planningStart = data.careReturn.planningStart || data.effectivePlanningStart || null;
+      const fullReturnSchedule = getCareReturnExpectedWorkoutDates({
+        weekStartIso: referenceDate,
+        planningStartIso: planningStart,
+        weeklyLimit: data.weeklyLimit,
+      });
+
+      const createdDates = new Set(
+        (Array.isArray(data.plans) ? data.plans : [])
+          .map((plan) => getCivilDateInput(plan.date || plan.createdAt || null))
+          .filter((value): value is string => Boolean(value))
+      );
+
+      const remainingDates = fullReturnSchedule.filter((date) => !createdDates.has(date));
+      setTargetExpectedWorkoutDates(remainingDates);
+
+      return remainingDates;
+    } catch {
+      return null;
     }
   }
 
@@ -1190,6 +1343,17 @@ export default function ResumoAlunoPage() {
     setSummary(null);
 
     try {
+      const careReturnRemainingDates = await resolveCareReturnPlanningTarget(selectedStudentId);
+
+      if (careReturnRemainingDates && careReturnRemainingDates.length === 0) {
+        setMessage({
+          type: "success",
+          text: "A programação de retomada desta semana já está completa. Não há novo treino pendente para gerar por IA.",
+        });
+        setLoadingSummary(false);
+        return;
+      }
+
       const res = await fetch(`/api/students/${selectedStudentId}/ai-summary`, {
         cache: "no-store",
       });
@@ -1245,6 +1409,7 @@ export default function ResumoAlunoPage() {
       const model = {
         studentId: summary.student.id,
         studentName: summary.student.name,
+        ...(targetWorkoutId ? { workoutId: targetWorkoutId, mode: "EDIT_EXISTING_WORKOUT" } : {}),
         aiValidation: {
           studentId: summary.student.id,
           weekStart: displayWeekStart,
@@ -1269,10 +1434,11 @@ export default function ResumoAlunoPage() {
       };
       const manifest = {
         packageVersion: "2.1",
-        purpose: "MONTAR_TREINOS_DA_SEMANA",
+        purpose: targetWorkoutId ? "ALTERAR_TREINO_EXISTENTE" : "MONTAR_TREINOS_DA_SEMANA",
         generatedAt: new Date().toISOString(),
         studentId: summary.student.id,
         studentName: summary.student.name,
+        ...(targetWorkoutId ? { workoutId: targetWorkoutId } : {}),
         weekStart: displayWeekStart,
         weekEnd: displayWeekEnd,
         expectedWorkoutDates: displaySchedule.map((item) => item.date),
@@ -1306,6 +1472,9 @@ export default function ResumoAlunoPage() {
           "Não trate um achado isolado como autorização automática para progressão.",
           "Retorne somente o JSON válido no formato de INSTRUCOES/MODELO_RESPOSTA.json.",
           "Não altere studentId, aiValidation, datas obrigatórias ou validationKey.",
+          targetWorkoutId
+            ? `Este pacote é de ALTERAÇÃO do treino existente workoutId=${targetWorkoutId}. Gere somente a data indicada e não crie outro treino.`
+            : "Este pacote é de montagem dos treinos faltantes da semana.",
           "Use somente exerciseId presentes na biblioteca permitida.",
           "Quando possível, salve o resultado em resposta.txt.",
         ].join("\n")
@@ -1360,7 +1529,9 @@ export default function ResumoAlunoPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `pacote-montar-treino-${safeStudentName}-${displayWeekStart}.zip`;
+      link.download = targetWorkoutId
+        ? `pacote-alterar-treino-${safeStudentName}-${displaySchedule[0]?.date || displayWeekStart}.zip`
+        : `pacote-montar-treino-${safeStudentName}-${displayWeekStart}.zip`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1429,7 +1600,7 @@ export default function ResumoAlunoPage() {
       );
   const backToWorkoutBuilderDate = displaySchedule[0]?.date || targetExpectedWorkoutDates[0] || displayWeekStart;
   const backToWorkoutBuilderHref = selectedStudentId
-    ? `/dashboard/montar-treino?studentId=${encodeURIComponent(selectedStudentId)}&date=${encodeURIComponent(backToWorkoutBuilderDate)}`
+    ? `/dashboard/montar-treino?studentId=${encodeURIComponent(selectedStudentId)}&date=${encodeURIComponent(backToWorkoutBuilderDate)}${targetWorkoutId ? `&workoutId=${encodeURIComponent(targetWorkoutId)}` : ""}`
     : "/dashboard/montar-treino";
 
   return (
@@ -1440,11 +1611,12 @@ export default function ResumoAlunoPage() {
             Apoio inteligente
           </p>
           <h1 className="text-2xl md:text-3xl font-bold text-[#f5f5f5]">
-            Resumo do aluno para IA
+            {targetWorkoutId ? "IA para alterar treino existente" : "Resumo do aluno para IA"}
           </h1>
           <p className="text-sm text-[#a1a1a1] mt-2 max-w-3xl">
-            Gere um resumo completo do aluno com avaliações, treinos, adesão, dúvidas, avisos e feedbacks.
-            Use o texto para pedir uma sugestão de treino para a IA. A IA apoia, mas o professor revisa e valida antes de cadastrar.
+            {targetWorkoutId
+              ? "O pacote será gerado somente para o treino selecionado. A resposta da IA substituirá esse treino, sem criar um quarto treino na semana."
+              : "Gere um resumo completo do aluno com avaliações, treinos, adesão, dúvidas, avisos e feedbacks. Use o texto para pedir uma sugestão de treino para a IA. A IA apoia, mas o professor revisa e valida antes de cadastrar."}
           </p>
         </div>
 
@@ -1452,7 +1624,7 @@ export default function ResumoAlunoPage() {
           href={backToWorkoutBuilderHref}
           className="inline-flex items-center justify-center rounded-xl bg-[#1a1a1a] border border-[#00A19C]/30 text-[#00A19C] px-4 py-3 text-sm font-semibold hover:border-[#00A19C] transition"
         >
-          ← Fechar IA e voltar para montagem manual
+          ← {targetWorkoutId ? "Fechar IA e voltar para edição" : "Fechar IA e voltar para montagem manual"}
         </Link>
       </div>
 
