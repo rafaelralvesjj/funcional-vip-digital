@@ -101,6 +101,13 @@ function compactText(value?: string | null): string {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeSearchValue(value?: string | null): string {
+  return compactText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 function normalizeMuscleGroupValue(value?: string | null): string {
   const current = compactText(value);
   if (!current) return "";
@@ -240,6 +247,8 @@ export default function ExerciseGrid({
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [downloadingImageId, setDownloadingImageId] = useState<string | null>(null);
   const [copiedPromptKey, setCopiedPromptKey] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [muscleGroupFilter, setMuscleGroupFilter] = useState("");
 
   const mainFileInputRef = useRef<HTMLInputElement>(null);
   const sequenceFileInputRef = useRef<HTMLInputElement>(null);
@@ -567,8 +576,50 @@ export default function ExerciseGrid({
     }
   }
 
+  const muscleGroupOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        exercises
+          .map((exercise) => compactText(exercise.muscleGroup))
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [exercises]);
+
+  const filteredExercises = useMemo(() => {
+    const query = normalizeSearchValue(searchTerm);
+
+    return exercises.filter((exercise) => {
+      if (
+        muscleGroupFilter &&
+        compactText(exercise.muscleGroup) !== muscleGroupFilter
+      ) {
+        return false;
+      }
+
+      if (!query) return true;
+
+      const searchableText = [
+        exercise.name,
+        exercise.muscleGroup,
+        exercise.description,
+        exercise.equipmentTags,
+        exercise.objectiveTags,
+        exercise.locationTags,
+        exercise.levelTags,
+        exercise.intensity,
+        exercise.instructions,
+        exercise.substitutions,
+      ]
+        .map((value) => normalizeSearchValue(value))
+        .join(" ");
+
+      return searchableText.includes(query);
+    });
+  }, [exercises, muscleGroupFilter, searchTerm]);
+
   const groups = useMemo(() => {
-    return exercises.reduce(
+    return filteredExercises.reduce(
       (acc, exercise) => {
         const group = exercise.muscleGroup || "Sem grupo muscular";
         if (!acc[group]) acc[group] = [];
@@ -577,25 +628,83 @@ export default function ExerciseGrid({
       },
       {} as Record<string, Exercise[]>
     );
-  }, [exercises]);
+  }, [filteredExercises]);
 
   return (
     <div>
-      <div className="mb-6">
-        <button
-          onClick={() => {
-            if (showForm) {
-              resetForm();
-            } else {
-              setForm(emptyForm);
-              setEditingId(null);
-              setShowForm(true);
-            }
-          }}
-          className="bg-[#00A19C] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#007D79]"
-        >
-          {showForm ? "Cancelar" : "+ Novo Exercício"}
-        </button>
+      <div className="mb-6 flex flex-col gap-4">
+        <div>
+          <button
+            onClick={() => {
+              if (showForm) {
+                resetForm();
+              } else {
+                setForm(emptyForm);
+                setEditingId(null);
+                setShowForm(true);
+              }
+            }}
+            className="bg-[#00A19C] text-[#0a0a0a] font-semibold rounded-lg px-5 py-3 text-sm transition hover:bg-[#007D79]"
+          >
+            {showForm ? "Cancelar" : "+ Novo Exercício"}
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-[#ffffff10] bg-[#111111] p-4">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_260px_auto]">
+            <div className="relative">
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#7a7a7a]"
+              >
+                🔎
+              </span>
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Buscar exercício, aparelho, grupo muscular..."
+                className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] py-3 pl-11 pr-4 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none transition focus:border-[#00A19C]"
+              />
+            </div>
+
+            <select
+              value={muscleGroupFilter}
+              onChange={(event) => setMuscleGroupFilter(event.target.value)}
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] outline-none transition focus:border-[#00A19C]"
+              aria-label="Filtrar por grupo muscular"
+            >
+              <option value="">Todos os grupos musculares</option>
+              {muscleGroupOptions.map((group) => (
+                <option key={group} value={group}>
+                  {group}
+                </option>
+              ))}
+            </select>
+
+            {(searchTerm || muscleGroupFilter) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setMuscleGroupFilter("");
+                }}
+                className="rounded-lg border border-[#ffffff15] bg-[#1a1a1a] px-4 py-3 text-sm font-medium text-[#d4d4d4] transition hover:border-[#00A19C] hover:text-[#00A19C]"
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[#8f8f8f]">
+            <span>
+              {filteredExercises.length} de {exercises.length} exercício(s) encontrado(s)
+            </span>
+            <span>
+              A busca encontra por nome, aparelho/equipamento, grupo, objetivo e descrição.
+            </span>
+          </div>
+        </div>
       </div>
 
       {showForm && (
@@ -1062,6 +1171,17 @@ export default function ExerciseGrid({
                 : "Salvar Exercício"}
           </button>
         </form>
+      )}
+
+      {filteredExercises.length === 0 && (
+        <div className="mb-8 rounded-xl border border-[#ffffff10] bg-[#111111] p-8 text-center">
+          <p className="text-base font-semibold text-[#f5f5f5]">
+            Nenhum exercício encontrado
+          </p>
+          <p className="mt-2 text-sm text-[#8f8f8f]">
+            Tente outro nome, aparelho, equipamento ou grupo muscular.
+          </p>
+        </div>
       )}
 
       {Object.entries(groups).map(([group, groupedExercises]) => (
