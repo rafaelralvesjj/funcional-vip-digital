@@ -42,6 +42,8 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
+const BUSINESS_TIME_ZONE = "America/Sao_Paulo";
+
 function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
   const date = new Date(referenceDate);
   date.setHours(0, 0, 0, 0);
@@ -60,30 +62,96 @@ function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date
   return { startOfWeek, endOfWeek };
 }
 
-function isDateInCurrentValidationWeek(date: Date): boolean {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
+type BusinessDateParts = {
+  year: number;
+  month: number;
+  day: number;
+};
 
-  const currentWeek = getWeekRange(new Date());
-  const validationDeadline = new Date(currentWeek.startOfWeek);
-  validationDeadline.setDate(validationDeadline.getDate() + 5);
-  validationDeadline.setHours(0, 0, 0, 0);
+function getBusinessDateParts(
+  date: Date = new Date(),
+  timeZone = BUSINESS_TIME_ZONE
+): BusinessDateParts {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 
-  const now = new Date();
+  const parts = formatter.formatToParts(date);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
 
-  return (
-    now < validationDeadline &&
-    normalized >= currentWeek.startOfWeek &&
-    normalized < validationDeadline
-  );
+  return {
+    year: Number(values.get("year")),
+    month: Number(values.get("month")),
+    day: Number(values.get("day")),
+  };
 }
 
-function getCurrentValidationDeadlineLabel(): string {
-  const currentWeek = getWeekRange(new Date());
-  const deadline = new Date(currentWeek.startOfWeek);
-  deadline.setDate(deadline.getDate() + 4);
+function toCivilDateKey(parts: BusinessDateParts): string {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
 
-  return formatDatePtBr(deadline);
+function shiftCivilDate(parts: BusinessDateParts, days: number): BusinessDateParts {
+  const cursor = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12, 0, 0, 0));
+  cursor.setUTCDate(cursor.getUTCDate() + days);
+
+  return {
+    year: cursor.getUTCFullYear(),
+    month: cursor.getUTCMonth() + 1,
+    day: cursor.getUTCDate(),
+  };
+}
+
+function getWorkoutCivilDateKey(date: Date): string {
+  /*
+   * As datas dos treinos são persistidas como data civil (normalmente meia-noite UTC).
+   * Não converta a data do treino para America/Sao_Paulo aqui, pois isso poderia
+   * deslocar 07/08 para 06/08. O fuso é usado somente para descobrir qual é o
+   * dia atual de negócio e quando a janela de sexta-feira termina.
+   */
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function getCurrentBusinessValidationWeek(referenceDate: Date = new Date()): {
+  monday: BusinessDateParts;
+  friday: BusinessDateParts;
+  isValidationOpen: boolean;
+} {
+  const today = getBusinessDateParts(referenceDate);
+  const cursor = new Date(Date.UTC(today.year, today.month - 1, today.day, 12, 0, 0, 0));
+  const weekday = cursor.getUTCDay();
+  const diffToMonday = weekday === 0 ? -6 : 1 - weekday;
+  const monday = shiftCivilDate(today, diffToMonday);
+  const friday = shiftCivilDate(monday, 4);
+
+  return {
+    monday,
+    friday,
+    // Segunda a sexta, inclusive. Em Brasília, sexta permanece válida até 23:59:59.
+    isValidationOpen: weekday >= 1 && weekday <= 5,
+  };
+}
+
+function isDateInCurrentValidationWeek(
+  date: Date,
+  referenceDate: Date = new Date()
+): boolean {
+  const week = getCurrentBusinessValidationWeek(referenceDate);
+
+  if (!week.isValidationOpen) return false;
+
+  const workoutKey = getWorkoutCivilDateKey(date);
+  const mondayKey = toCivilDateKey(week.monday);
+  const fridayKey = toCivilDateKey(week.friday);
+
+  return workoutKey >= mondayKey && workoutKey <= fridayKey;
+}
+
+function getCurrentValidationDeadlineLabel(referenceDate: Date = new Date()): string {
+  const { friday } = getCurrentBusinessValidationWeek(referenceDate);
+  return `${String(friday.day).padStart(2, "0")}/${String(friday.month).padStart(2, "0")}/${friday.year}`;
 }
 
 function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): number | null {
