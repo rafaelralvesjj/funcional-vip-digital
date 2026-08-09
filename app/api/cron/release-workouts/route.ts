@@ -4,6 +4,7 @@ import { sendEmail } from "@/lib/sendEmail";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import { buildWorkoutReleaseCommunication } from "@/lib/student-experience";
 import { getStudentDisplayName } from "@/lib/display-name";
+import { addDaysToCivilKey, civilKeyToUtcDate, getCivilWeekday, getSaoPauloCivilKey, getWeekStartCivilKey } from "@/lib/workout-validation-window";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -62,57 +63,41 @@ function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): 
   return Math.ceil(contracted / 4);
 }
 
-function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
-  const date = new Date(referenceDate);
-  date.setHours(0, 0, 0, 0);
-
-  const day = date.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-
-  const startOfWeek = new Date(date);
-  startOfWeek.setDate(date.getDate() + diffToMonday);
-  startOfWeek.setHours(0, 0, 0, 0);
-
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 7);
-  endOfWeek.setHours(0, 0, 0, 0);
-
-  return { startOfWeek, endOfWeek };
-}
-
-function getSaoPauloWeekdayAndHour(referenceDate: Date): { weekday: string; hour: number } {
+function getSaoPauloHour(referenceDate: Date): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Sao_Paulo",
-    weekday: "short",
     hour: "2-digit",
     hourCycle: "h23",
   }).formatToParts(referenceDate);
 
-  const weekday = parts.find((part) => part.type === "weekday")?.value || "";
-  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
-
-  return { weekday, hour };
+  return Number(parts.find((part) => part.type === "hour")?.value || 0);
 }
 
 function getWeekToRelease(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
-  const currentWeek = getWeekRange(referenceDate);
-  const saoPauloTime = getSaoPauloWeekdayAndHour(referenceDate);
+  // A semana é calculada pela data civil de Brasília, nunca pelo dia local do
+  // servidor da Vercel. Isso é essencial nas últimas horas do domingo, quando
+  // em UTC já pode ser segunda-feira.
+  const todayKey = getSaoPauloCivilKey(referenceDate);
+  const weekday = getCivilWeekday(todayKey);
+  const currentWeekStartKey = getWeekStartCivilKey(todayKey);
+  const shouldReleaseNextWeek = weekday === 0 && getSaoPauloHour(referenceDate) >= 15;
 
-  // No domingo, somente a partir das 15h de Brasília a próxima semana é liberada.
-  // Nas execuções de recuperação durante a semana, o cron atua na semana atual.
-  if (saoPauloTime.weekday === "Sun" && saoPauloTime.hour >= 15) {
-    const startOfWeek = new Date(currentWeek.endOfWeek);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 7);
+  const startKey = shouldReleaseNextWeek
+    ? addDaysToCivilKey(currentWeekStartKey, 7)
+    : currentWeekStartKey;
+  const endKey = addDaysToCivilKey(startKey, 7);
 
-    return { startOfWeek, endOfWeek };
-  }
-
-  return currentWeek;
+  return {
+    startOfWeek: civilKeyToUtcDate(startKey),
+    endOfWeek: civilKeyToUtcDate(endKey),
+  };
 }
 
 function formatDatePtBr(date: Date): string {
+  // As datas dos treinos são marcadores civis gravados em UTC 00:00.
+  // Fixar UTC evita que 10/08 apareça como 09/08 em ambientes com fuso local.
   return date.toLocaleDateString("pt-BR", {
+    timeZone: "UTC",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

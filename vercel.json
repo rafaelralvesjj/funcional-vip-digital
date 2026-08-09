@@ -6,6 +6,38 @@
       "schedule": "0 18 * * 0"
     },
     {
+      "path": "/api/cron/release-workouts-retry-16h",
+      "schedule": "0 19 * * 0"
+    },
+    {
+      "path": "/api/cron/release-workouts-retry-17h",
+      "schedule": "0 20 * * 0"
+    },
+    {
+      "path": "/api/cron/release-workouts-retry-18h",
+      "schedule": "0 21 * * 0"
+    },
+    {
+      "path": "/api/cron/release-workouts-retry-19h",
+      "schedule": "0 22 * * 0"
+    },
+    {
+      "path": "/api/cron/release-workouts-retry-20h",
+      "schedule": "0 23 * * 0"
+    },
+    {
+      "path": "/api/cron/release-workouts-retry-21h",
+      "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/cron/release-workouts-retry-22h",
+      "schedule": "0 1 * * 1"
+    },
+    {
+      "path": "/api/cron/release-workouts-retry-23h",
+      "schedule": "0 2 * * 1"
+    },
+    {
       "path": "/api/cron/release-workouts-catchup",
       "schedule": "15 10 * * 1-5"
     },
