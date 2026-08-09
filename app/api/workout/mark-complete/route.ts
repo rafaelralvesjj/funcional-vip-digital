@@ -14,6 +14,12 @@ import {
   expireOverduePendingWorkouts,
   releaseCurrentWeekPreplannedWorkouts,
 } from "@/lib/workout-status-lifecycle";
+import {
+  canValidateWorkoutCivilDate,
+  formatCivilKeyPtBr,
+  getCurrentValidationDeadlineCivilKey,
+  workoutDateToCivilKey,
+} from "@/lib/workout-validation-window";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -61,29 +67,11 @@ function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date
 }
 
 function isDateInCurrentValidationWeek(date: Date): boolean {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-
-  const currentWeek = getWeekRange(new Date());
-  const validationDeadline = new Date(currentWeek.startOfWeek);
-  validationDeadline.setDate(validationDeadline.getDate() + 5);
-  validationDeadline.setHours(0, 0, 0, 0);
-
-  const now = new Date();
-
-  return (
-    now < validationDeadline &&
-    normalized >= currentWeek.startOfWeek &&
-    normalized < validationDeadline
-  );
+  return canValidateWorkoutCivilDate(workoutDateToCivilKey(date));
 }
 
 function getCurrentValidationDeadlineLabel(): string {
-  const currentWeek = getWeekRange(new Date());
-  const deadline = new Date(currentWeek.startOfWeek);
-  deadline.setDate(deadline.getDate() + 4);
-
-  return formatDatePtBr(deadline);
+  return formatCivilKeyPtBr(getCurrentValidationDeadlineCivilKey());
 }
 
 function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): number | null {

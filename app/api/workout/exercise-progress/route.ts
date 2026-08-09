@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  canValidateWorkoutCivilDate,
+  formatCivilKeyPtBr,
+  getCurrentValidationDeadlineCivilKey,
+  workoutDateToCivilKey,
+} from "@/lib/workout-validation-window";
 
 function normalizeDay(value: string | Date): Date {
   const date = new Date(value);
@@ -245,12 +251,25 @@ export async function POST(request: NextRequest) {
     select: {
       id: true,
       name: true,
-      workoutPlan: { select: { id: true, name: true, contractId: true } },
+      workoutPlan: { select: { id: true, name: true, contractId: true, date: true } },
     },
   });
   if (!exercise) return NextResponse.json({ error: "Exercício não encontrado." }, { status: 404 });
 
-  const workoutDate = normalizeDay(dateValue);
+  const officialWorkoutDate = exercise.workoutPlan.date || normalizeDay(dateValue);
+  const officialWorkoutCivilKey = workoutDateToCivilKey(officialWorkoutDate);
+
+  if (!canValidateWorkoutCivilDate(officialWorkoutCivilKey)) {
+    return NextResponse.json(
+      {
+        error: `Este treino só pode receber registros na semana vigente, até sexta-feira, 23h59 (${formatCivilKeyPtBr(getCurrentValidationDeadlineCivilKey())}).`,
+        code: "VALIDATION_WINDOW_CLOSED",
+      },
+      { status: 403 }
+    );
+  }
+
+  const workoutDate = normalizeDay(officialWorkoutDate);
   const item = await prisma.workoutExerciseProgress.upsert({
     where: {
       studentId_exerciseId_workoutDate: {

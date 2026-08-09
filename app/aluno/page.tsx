@@ -7,6 +7,11 @@ import ProfilePhotoEditor from "@/components/ProfilePhotoEditor";
 import StudentSurveyPanel from "@/components/aluno/StudentSurveyPanel";
 import EmailNotificationReminder from "@/components/aluno/EmailNotificationReminder";
 import { StudentDidYouKnowCard } from "@/components/aluno/StudentDidYouKnowCard";
+import {
+  canValidateWorkoutCivilDate,
+  getCurrentValidationDeadlineCivilKey,
+  getWorkoutValidationState,
+} from "@/lib/workout-validation-window";
 type PersonAvatarProps = {
   image?: string | null;
   name?: string | null;
@@ -728,9 +733,13 @@ export default function AlunoPage() {
     }
 
     if (!canValidateWorkoutDay(selectedDay)) {
+      const futureWorkout = isFutureWorkoutDay(selectedDay);
+
       setMessage({
-        type: "error",
-        text: "O prazo para validar este treino já foi encerrado. Você pode visualizar o treino, mas não pode mais marcar como concluído.",
+        type: futureWorkout ? "success" : "error",
+        text: futureWorkout
+          ? "Este treino é da próxima semana. Ele já está disponível para consulta e poderá ser concluído a partir de segunda-feira."
+          : "O prazo para validar este treino já foi encerrado. Você pode visualizar o treino, mas não pode mais marcar como concluído.",
       });
       setShowWorkoutModal(false);
       setTimeout(() => setMessage(null), 5000);
@@ -1173,16 +1182,14 @@ export default function AlunoPage() {
     return limit;
   }
 
-  function isDateInCurrentValidationWeek(date: Date): boolean {
-    const normalized = new Date(date);
-    normalized.setHours(0, 0, 0, 0);
-
-    return normalized >= getStartOfCurrentWeek() && normalized < getStartOfNextWeek();
+  function getSelectedWorkoutCivilKey(day: number): string {
+    return `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
 
   function getValidationDeadlineLabel(): string {
-    const deadline = new Date(getStartOfCurrentWeek());
-    deadline.setDate(deadline.getDate() + 4);
+    const key = getCurrentValidationDeadlineCivilKey();
+    const [year, month, day] = key.split("-").map(Number);
+    const deadline = new Date(year, month - 1, day, 12, 0, 0, 0);
 
     return deadline.toLocaleDateString("pt-BR", {
       weekday: "long",
@@ -1191,31 +1198,19 @@ export default function AlunoPage() {
     });
   }
 
-  function getStartOfValidationClosure(): Date {
-    const closure = new Date(getStartOfCurrentWeek());
-    closure.setDate(closure.getDate() + 5);
-    closure.setHours(0, 0, 0, 0);
-
-    return closure;
-  }
-
   function canValidateWorkoutDay(day: number | null): boolean {
     if (day === null) return false;
+    return canValidateWorkoutCivilDate(getSelectedWorkoutCivilKey(day));
+  }
 
-    const selectedDate = new Date(currentYear, currentMonth, day);
-    selectedDate.setHours(0, 0, 0, 0);
-
-    const now = new Date();
-
-    return (
-      now < getStartOfValidationClosure() &&
-      selectedDate >= getStartOfCurrentWeek() &&
-      selectedDate < getStartOfValidationClosure()
-    );
+  function isFutureWorkoutDay(day: number | null): boolean {
+    if (day === null) return false;
+    return getWorkoutValidationState(getSelectedWorkoutCivilKey(day)) === "FUTURE";
   }
 
   function isExpiredWorkoutDay(day: number): boolean {
-    return hasPlan(day) && !isCompleted(day) && !canValidateWorkoutDay(day);
+    if (!hasPlan(day) || isCompleted(day)) return false;
+    return getWorkoutValidationState(getSelectedWorkoutCivilKey(day)) === "EXPIRED";
   }
 
   function isStudentVisibleWorkoutStatus(status?: string | null): boolean {
@@ -1648,6 +1643,9 @@ export default function AlunoPage() {
                         {plan && !done && canValidateWorkoutDay(day) && (
                           <div className="w-[3px] h-[3px] rounded-full bg-[#F97316]" />
                         )}
+                        {plan && !done && isFutureWorkoutDay(day) && (
+                          <div className="w-[3px] h-[3px] rounded-full bg-sky-400" />
+                        )}
                         {isExpiredWorkoutDay(day) && (
                           <div className="w-[3px] h-[3px] rounded-full bg-[#EF4444]" />
                         )}
@@ -1669,6 +1667,9 @@ export default function AlunoPage() {
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-[#F97316]" /> Disponível
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-sky-400" /> Próxima semana
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-[#EF4444]" /> Não concluído
@@ -2069,7 +2070,9 @@ export default function AlunoPage() {
                   <p className="text-[9px] mt-0.5 text-[#00A19C]">
                     {canValidateWorkoutDay(selectedDay)
                       ? `Validação liberada até ${getValidationDeadlineLabel()}`
-                      : "Prazo de validação encerrado. Treino disponível apenas para consulta."}
+                      : isFutureWorkoutDay(selectedDay)
+                        ? "Próxima semana: disponível para consulta. A conclusão será liberada na segunda-feira."
+                        : "Prazo de validação encerrado. Treino disponível apenas para consulta."}
                   </p>
                 )}
               </div>
@@ -2201,7 +2204,7 @@ export default function AlunoPage() {
                       {done && <p className="mt-1 text-[9px] text-green-400">Feito {progress?.effort ? `• ${progress.effort === "FACIL" ? "Fácil" : progress.effort === "DIFICIL" ? "Difícil" : "Na medida"}` : ""}</p>}
                       {skipped && <p className="mt-1 text-[9px] text-amber-300">Não realizado • {progress.skipReason}</p>}
                     </button>
-                    {!isCompleted(selectedDay!) && (
+                    {!isCompleted(selectedDay!) && canValidateWorkoutDay(selectedDay) && (
                       <div className="flex shrink-0 flex-col gap-1.5">
                         <button
                           type="button"
@@ -2239,7 +2242,18 @@ export default function AlunoPage() {
             )}
             {selectedDay !== null && (
               <div className="px-3 pb-3 space-y-2">
-                {!canValidateWorkoutDay(selectedDay) && !isCompleted(selectedDay) && (
+                {isFutureWorkoutDay(selectedDay) && !isCompleted(selectedDay) && (
+                  <div className="bg-sky-500/10 border border-sky-400/30 rounded-xl p-3">
+                    <p className="text-[11px] font-semibold text-sky-300">
+                      Treino da próxima semana
+                    </p>
+                    <p className="mt-1 text-[10px] text-sky-100/90 leading-relaxed">
+                      O treino já está liberado para você consultar. A partir de segunda-feira, ele ficará disponível normalmente para registrar os exercícios e finalizar.
+                    </p>
+                  </div>
+                )}
+
+                {isExpiredWorkoutDay(selectedDay) && (
                   <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
                     <p className="text-[11px] font-semibold text-red-300">
                       Prazo de conclusão encerrado
@@ -2591,7 +2605,7 @@ export default function AlunoPage() {
               )}
             </div>
             <div className="p-3 border-t border-[#ffffff10] space-y-2">
-              {!isCompleted(selectedDay || 0) && (
+              {!isCompleted(selectedDay || 0) && canValidateWorkoutDay(selectedDay) && (
                 <div className="space-y-2">
                   <button
                     type="button"
