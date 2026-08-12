@@ -138,6 +138,7 @@ export async function GET() {
         email: true,
         active: true,
         contractedTrainingDaysPerMonth: true,
+        preferredWorkoutDays: true,
         user: {
           select: {
             id: true,
@@ -197,6 +198,7 @@ export async function GET() {
           email: student.email,
           professorName: professor?.name || null,
           contractedTrainingDaysPerMonth: student.contractedTrainingDaysPerMonth,
+          preferredWorkoutDays: student.preferredWorkoutDays || [],
           birthDate: formatBirthDateInput(birthDate),
           ageYears,
           isMinor: ageYears !== null && ageYears < 18,

@@ -15,6 +15,10 @@ import {
   type TrainingEquipmentValue,
   type TrainingLocationValue,
 } from "@/lib/student-training-resources";
+import {
+  WORKOUT_DAY_OPTIONS,
+  type WorkoutDayCode,
+} from "@/lib/student-workout-days";
 
 const OTHER_OBJECTIVE = "Outro";
 
@@ -62,6 +66,7 @@ export default function AlunoRegisterPage() {
     equipmentOther: "",
     gymUnavailableEquipment: "",
     timeAvailableMinutes: "",
+    preferredWorkoutDays: [] as WorkoutDayCode[],
     preferredDays: "",
     currentPain: "",
     medicalRestriction: "",
@@ -160,6 +165,20 @@ export default function AlunoRegisterPage() {
     });
   }
 
+  function togglePreferredWorkoutDay(day: WorkoutDayCode) {
+    setForm((current) => {
+      const alreadySelected = current.preferredWorkoutDays.includes(day);
+      const preferredWorkoutDays = alreadySelected
+        ? current.preferredWorkoutDays.filter((item) => item !== day)
+        : [...current.preferredWorkoutDays, day];
+
+      return {
+        ...current,
+        preferredWorkoutDays,
+      };
+    });
+  }
+
   function getTrainingResources() {
     return buildTrainingResourceSummary({
       trainingLocations: form.trainingLocations,
@@ -230,6 +249,7 @@ export default function AlunoRegisterPage() {
     }
 
     if (!form.timeAvailableMinutes.trim()) missing.push("tempo disponível por treino");
+    if (form.preferredWorkoutDays.length === 0) missing.push("dias disponíveis para treinar");
     if (!form.currentPain.trim()) missing.push("dor/desconforto atual");
     if (!form.medicalRestriction.trim()) missing.push("restrição médica ou física");
 
@@ -321,6 +341,7 @@ export default function AlunoRegisterPage() {
           trainingEnvironment: trainingResources.trainingEnvironment,
           availableEquipment: trainingResources.availableEquipment,
           timeAvailableMinutes: form.timeAvailableMinutes,
+          preferredWorkoutDays: form.preferredWorkoutDays,
           preferredDays: form.preferredDays,
           currentPain: form.currentPain,
           medicalRestriction: form.medicalRestriction,
@@ -807,15 +828,46 @@ export default function AlunoRegisterPage() {
 
               <div>
                 <label className="block text-sm text-[#d6d6d6] mb-1">
-                  Dias ou horários preferidos <span className="text-[#6b6b6b]">(opcional)</span>
+                  Horário preferido <span className="text-[#6b6b6b]">(opcional)</span>
                 </label>
                 <input
                   name="preferredDays"
                   value={form.preferredDays}
                   onChange={handleChange}
                   className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#00A19C]"
-                  placeholder="Ex: segunda e quarta à noite"
+                  placeholder="Ex: à noite; antes das 8h; depois do trabalho"
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-[#d6d6d6] mb-2">
+                Em quais dias da semana você pode treinar? *
+              </label>
+              <p className="mb-3 text-[11px] leading-relaxed text-[#8a8a8a]">
+                Marque os dias que funcionam para sua rotina. Se quiser dias fixos, marque somente esses dias. Se marcar mais opções do que a quantidade de treinos do plano, o sistema distribuirá os treinos entre elas para evitar concentração. Sábado e domingo também podem ser escolhidos.
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {WORKOUT_DAY_OPTIONS.map((option) => {
+                  const selected = form.preferredWorkoutDays.includes(option.value);
+
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => togglePreferredWorkoutDay(option.value)}
+                      className={
+                        "rounded-xl border px-3 py-2.5 text-sm font-medium transition " +
+                        (selected
+                          ? "border-[#00A19C] bg-[#00A19C]/15 text-[#00A19C]"
+                          : "border-[#ffffff10] bg-[#1a1a1a] text-[#a1a1a1] hover:border-[#00A19C]/50 hover:text-[#f5f5f5]")
+                      }
+                      aria-pressed={selected}
+                    >
+                      {option.shortLabel}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

@@ -5,6 +5,13 @@ import { buildTrainingResourceSummary } from "@/lib/student-training-resources";
 import * as bcrypt from "bcryptjs";
 import { sendEmail } from "@/lib/sendEmail";
 import { getManagementRecipientEmail } from "@/lib/email-recipient-policy";
+import { getSaoPauloCivilDateInput, parseCivilDateInput } from "@/lib/planning-window";
+import {
+  formatPreferredWorkoutDays,
+  getPreferredWorkoutOffsets,
+  normalizePreferredWorkoutDays,
+  resolveRecurringWorkoutOffsets,
+} from "@/lib/student-workout-days";
 
 type BodySource = FormData | Record<string, any>;
 
@@ -64,17 +71,32 @@ function addMonthsMinusOneDay(startDate: Date, months: number): Date {
   return endDate;
 }
 
-function getFirstSafeTrialStartDate(referenceDate = new Date()): {
+function getFirstSafeTrialStartDate(
+  referenceDate = new Date(),
+  workoutsPerWeek?: number | null,
+  preferredWorkoutDays?: unknown
+): {
   startDate: Date;
   shiftedToNextWeek: boolean;
   reason: string | null;
 } {
-  const reference = startOfDay(referenceDate);
+  const reference =
+    parseCivilDateInput(getSaoPauloCivilDateInput(referenceDate)) || startOfDay(referenceDate);
   const day = reference.getDay();
+  const todayOffset = day === 0 ? 6 : day - 1;
+  const weeklyLimit = Math.min(Math.max(Number(workoutsPerWeek || 0), 0), 7);
+  const normalizedPreferredDays = normalizePreferredWorkoutDays(preferredWorkoutDays);
+  const scheduledOffsets =
+    normalizedPreferredDays.length > weeklyLimit
+      ? getPreferredWorkoutOffsets(normalizedPreferredDays)
+      : resolveRecurringWorkoutOffsets(weeklyLimit, normalizedPreferredDays);
+  const remainingScheduledDays = scheduledOffsets.filter(
+    (offset) => offset >= todayOffset
+  );
 
-  const isFridaySaturdayOrSunday = day === 5 || day === 6 || day === 0;
-
-  if (!isFridaySaturdayOrSunday) {
+  // Se a semana atual ainda comporta toda a meta da experiência nos dias
+  // escolhidos, o aluno pode começar agora — inclusive sexta, sábado ou domingo.
+  if (!weeklyLimit || remainingScheduledDays.length >= weeklyLimit) {
     return {
       startDate: withMidday(reference),
       shiftedToNextWeek: false,
@@ -90,7 +112,7 @@ function getFirstSafeTrialStartDate(referenceDate = new Date()): {
     startDate: withMidday(nextMonday),
     shiftedToNextWeek: true,
     reason:
-      "Cadastro realizado no fim da semana. Experiência direcionada para a próxima segunda-feira para garantir primeira janela segura de acompanhamento.",
+      "A semana atual não comporta todos os treinos previstos nos dias escolhidos. A experiência começará na próxima segunda-feira para preservar a programação completa.",
   };
 }
 
@@ -157,6 +179,7 @@ function buildOnboardingLines({
   trainingEnvironment,
   availableEquipment,
   timeAvailableMinutes,
+  preferredWorkoutDaysLabel,
   preferredDays,
   currentPain,
   medicalRestriction,
@@ -172,6 +195,7 @@ function buildOnboardingLines({
   trainingEnvironment: string;
   availableEquipment: string;
   timeAvailableMinutes: string;
+  preferredWorkoutDaysLabel: string;
   preferredDays: string;
   currentPain: string;
   medicalRestriction: string;
@@ -188,7 +212,8 @@ function buildOnboardingLines({
     trainingEnvironment ? `Ambiente de treino: ${trainingEnvironment}.` : null,
     availableEquipment ? `Equipamentos/materiais disponíveis: ${availableEquipment}.` : null,
     timeAvailableMinutes ? `Tempo disponível por treino: ${timeAvailableMinutes} minuto(s).` : null,
-    preferredDays ? `Dias/horários preferidos: ${preferredDays}.` : null,
+    preferredWorkoutDaysLabel ? `Dias disponíveis para treino: ${preferredWorkoutDaysLabel}.` : null,
+    preferredDays ? `Horário/observação preferida: ${preferredDays}.` : null,
     currentPain ? `Dor/desconforto atual informado: ${currentPain}.` : null,
     medicalRestriction ? `Restrição médica/física declarada: ${medicalRestriction}.` : null,
     trainingHistory ? `Histórico de treino: ${trainingHistory}.` : null,
@@ -561,7 +586,11 @@ export async function POST(req: NextRequest) {
     const trainingEnvironment = trainingResources.trainingEnvironment;
     const availableEquipment = trainingResources.availableEquipment;
     const timeAvailableMinutes = normalizeOptionalNumberText(getString(body, ["timeAvailableMinutes", "tempoDisponivelMinutos", "tempoTreino", "tempoDisponivel"]));
-    const preferredDays = getString(body, ["preferredDays", "diasPreferidos", "dias"]);
+    const preferredWorkoutDays = normalizePreferredWorkoutDays(
+      getValue(body, ["preferredWorkoutDays", "diasTreino", "diasDisponiveisTreino"])
+    );
+    const preferredWorkoutDaysLabel = formatPreferredWorkoutDays(preferredWorkoutDays);
+    const preferredDays = getString(body, ["preferredDays", "horarioPreferido", "diasPreferidos", "dias"]);
     const currentPain = getString(body, ["currentPain", "dorAtual", "desconfortoAtual", "pain"]);
     const medicalRestriction = getString(body, ["medicalRestriction", "restricaoMedica", "restricao", "restricoesMedicas"]);
     const trainingHistory = getString(body, ["trainingHistory", "historicoTreino", "historico", "experienciaTreino"]);
@@ -621,6 +650,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (preferredWorkoutDays.length === 0) {
+      return NextResponse.json(
+        {
+          error: "Escolha pelo menos um dia da semana em que você pode treinar.",
+          code: "PREFERRED_WORKOUT_DAYS_REQUIRED",
+        },
+        { status: 400 }
+      );
+    }
+
     const existing = await findExistingStudentOrUser({ email, phoneDigits });
 
     if (existing) {
@@ -638,8 +677,28 @@ export async function POST(req: NextRequest) {
     }
 
     const trialPlan = await getTrialPlan();
+    const trialWeeklyLimit = Math.min(
+      Math.max(Number(trialPlan.workoutsPerWeek || 0), 0),
+      7
+    );
+
+    if (trialWeeklyLimit > 0 && preferredWorkoutDays.length < trialWeeklyLimit) {
+      return NextResponse.json(
+        {
+          error: `Escolha pelo menos ${trialWeeklyLimit} dia(s) da semana para que os ${trialWeeklyLimit} treino(s) previstos possam respeitar sua rotina.`,
+          code: "PREFERRED_WORKOUT_DAYS_INSUFFICIENT",
+          minimumDays: trialWeeklyLimit,
+        },
+        { status: 400 }
+      );
+    }
+
     const durationMonths = Math.max(Number(trialPlan.durationMonths || 1), 1);
-    const safeWindow = getFirstSafeTrialStartDate(new Date());
+    const safeWindow = getFirstSafeTrialStartDate(
+      new Date(),
+      trialWeeklyLimit,
+      preferredWorkoutDays
+    );
     const startDate = safeWindow.startDate;
     const endDate = addMonthsMinusOneDay(startDate, durationMonths);
     const startDateText = formatDatePtBr(startDate);
@@ -670,6 +729,7 @@ export async function POST(req: NextRequest) {
       trainingEnvironment,
       availableEquipment,
       timeAvailableMinutes,
+      preferredWorkoutDaysLabel,
       preferredDays,
       currentPain,
       medicalRestriction,
@@ -696,7 +756,7 @@ export async function POST(req: NextRequest) {
       const notes = [
         "Cadastro criado pelo fluxo de experiência gratuita.",
         `Origem: ${source}.`,
-        safeWindow.shiftedToNextWeek ? "Entrada tardia/fim de semana: experiência iniciará na primeira janela segura de treino." : null,
+        safeWindow.shiftedToNextWeek ? "Programação inicial transferida para a próxima semana para preservar a quantidade de treinos prevista." : null,
         safeWindow.reason ? safeWindow.reason : null,
         `Início da experiência: ${startDateText}.`,
         `Fim da experiência: ${endDateText}.`,
@@ -725,6 +785,7 @@ export async function POST(req: NextRequest) {
           onboardingCompleto: onboardingStatus.onboardingComplete,
           commercialStatus: studentCommercialStatus,
           contractedTrainingDaysPerMonth: trialPlan.workoutsPerMonth,
+          preferredWorkoutDays,
           userAuthId: authUser.id,
           userId: authUser.id,
         },

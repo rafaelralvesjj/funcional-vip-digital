@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import {
   canValidateWorkoutCivilDate,
   formatCivilKeyPtBr,
-  getCurrentValidationDeadlineCivilKey,
+  getWorkoutValidationDeadlineCivilKey,
   workoutDateToCivilKey,
 } from "@/lib/workout-validation-window";
 
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
   if (!canValidateWorkoutCivilDate(officialWorkoutCivilKey)) {
     return NextResponse.json(
       {
-        error: `Este treino só pode receber registros na semana vigente, até sexta-feira, 23h59 (${formatCivilKeyPtBr(getCurrentValidationDeadlineCivilKey())}).`,
+        error: `Este treino só pode receber registros até 23h59 de ${formatCivilKeyPtBr(getWorkoutValidationDeadlineCivilKey(officialWorkoutCivilKey))}.`,
         code: "VALIDATION_WINDOW_CLOSED",
       },
       { status: 403 }

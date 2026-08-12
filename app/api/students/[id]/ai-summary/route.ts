@@ -6,6 +6,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { calculateAgeYears, formatBirthDateInput, formatBirthDatePtBr } from "@/lib/student-age";
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 import { isStudentAssignedToProfessor, resolveStudentProfessor } from "@/lib/student-professor";
+import { formatPreferredWorkoutDays } from "@/lib/student-workout-days";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -281,6 +282,8 @@ function getOnboardingProfile(notes?: string | null) {
     "Tempo disponivel por treino",
   ]);
   const preferredDays = extractFromNotes(notes, [
+    "Dias disponíveis para treino",
+    "Dias disponiveis para treino",
     "Dias/horários preferidos",
     "Dias/horarios preferidos",
     "Dias preferidos",
@@ -718,6 +721,7 @@ export async function GET(
         userAuthId: true,
         onboardingCompleto: true,
         contractedTrainingDaysPerMonth: true,
+        preferredWorkoutDays: true,
         createdAt: true,
         updatedAt: true,
         user: {
@@ -1242,6 +1246,7 @@ export async function GET(
       `Professor responsável: ${professor?.name || "não vinculado"} (${professor?.email || "sem e-mail"})`,
       `Treinos contratados/mês: ${student.contractedTrainingDaysPerMonth || "não informado"}`,
       `Meta semanal estimada: ${weeklyLimit ? `${weeklyLimit} treino(s)/semana` : "não configurada"}`,
+      `Dias de treino definidos no cadastro: ${formatPreferredWorkoutDays(student.preferredWorkoutDays) || "não definidos"}`,
       `Observações cadastrais: ${cadastroNotes}`,
       "",
       "Ficha inicial / mini-anamnese:",

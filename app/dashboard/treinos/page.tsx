@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { canValidateWorkoutCivilDate, workoutDateToCivilKey } from "@/lib/workout-validation-window";
 
 type Exercise = {
   id?: string;
@@ -149,18 +150,7 @@ function getStudentPlanVisibilityLimit(referenceDate = new Date()) {
 }
 
 function canValidateWorkoutDate(date: Date, referenceDate = new Date()) {
-  const selectedDate = new Date(date);
-  selectedDate.setHours(0, 0, 0, 0);
-
-  const closure = getStartOfCurrentWeek(referenceDate);
-  closure.setDate(closure.getDate() + 5);
-  closure.setHours(0, 0, 0, 0);
-
-  return (
-    referenceDate < closure &&
-    selectedDate >= getStartOfCurrentWeek(referenceDate) &&
-    selectedDate < closure
-  );
+  return canValidateWorkoutCivilDate(workoutDateToCivilKey(date), referenceDate);
 }
 
 function toDateKey(value?: string | null) {

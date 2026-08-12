@@ -84,10 +84,31 @@ export function getCurrentWorkoutWeekCivilRange(referenceDate = new Date()): {
 
   return {
     startKey,
-    // Limite exclusivo: sábado 00h00. Segunda a sexta podem concluir.
+    // Limite padrão exclusivo: sábado 00h00. Treinos de segunda a sexta
+    // preservam a regra histórica de conclusão até sexta, 23h59.
     validationEndKey: addDaysToCivilKey(startKey, 5),
     nextWeekStartKey: addDaysToCivilKey(startKey, 7),
   };
+}
+
+/**
+ * Prazo do treino dentro da própria semana.
+ * - treino de segunda a sexta: sexta-feira;
+ * - treino de sábado: sábado;
+ * - treino de domingo: domingo.
+ *
+ * Assim preservamos a regra anterior para os treinos de dias úteis e abrimos
+ * o fim de semana somente quando o próprio treino foi programado para ele.
+ */
+export function getWorkoutValidationDeadlineCivilKey(workoutCivilKey: string): string {
+  if (!parseCivilKey(workoutCivilKey)) return workoutCivilKey;
+
+  const startKey = getWeekStartCivilKey(workoutCivilKey);
+  const workoutWeekday = getCivilWeekday(workoutCivilKey);
+
+  if (workoutWeekday === 6) return addDaysToCivilKey(startKey, 5);
+  if (workoutWeekday === 0) return addDaysToCivilKey(startKey, 6);
+  return addDaysToCivilKey(startKey, 4);
 }
 
 export function canValidateWorkoutCivilDate(
@@ -97,14 +118,17 @@ export function canValidateWorkoutCivilDate(
   if (!parseCivilKey(workoutCivilKey)) return false;
 
   const todayKey = getSaoPauloCivilKey(referenceDate);
-  const todayWeekday = getCivilWeekday(todayKey);
-  const { startKey, validationEndKey } = getCurrentWorkoutWeekCivilRange(referenceDate);
+  const { startKey, nextWeekStartKey } = getCurrentWorkoutWeekCivilRange(referenceDate);
+  const workoutWeekStart = getWeekStartCivilKey(workoutCivilKey);
+
+  if (workoutWeekStart !== startKey) return false;
+
+  const deadlineKey = getWorkoutValidationDeadlineCivilKey(workoutCivilKey);
 
   return (
-    todayWeekday >= 1 &&
-    todayWeekday <= 5 &&
-    workoutCivilKey >= startKey &&
-    workoutCivilKey < validationEndKey
+    todayKey >= startKey &&
+    todayKey < nextWeekStartKey &&
+    todayKey <= deadlineKey
   );
 }
 
@@ -128,15 +152,21 @@ export function getWorkoutValidationState(
 
 /**
  * Primeiro dia que NÃO pode ser encerrado automaticamente como não realizado.
- * Segunda a sexta: início da semana atual.
- * Sábado e domingo: início da próxima semana.
+ *
+ * - segunda a sexta: semanas anteriores já expiraram, semana atual segue aberta;
+ * - sábado: treinos de segunda a sexta da semana atual expiram, mas sábado e
+ *   domingo continuam preservados;
+ * - domingo: sábado também expira e somente o treino de domingo segue aberto;
+ * - segunda seguinte: toda a semana anterior já expirou.
  */
 export function getWorkoutExpirationBoundaryCivilKey(referenceDate = new Date()): string {
   const todayKey = getSaoPauloCivilKey(referenceDate);
   const weekday = getCivilWeekday(todayKey);
-  const { startKey, nextWeekStartKey } = getCurrentWorkoutWeekCivilRange(referenceDate);
+  const { startKey } = getCurrentWorkoutWeekCivilRange(referenceDate);
 
-  return weekday === 0 || weekday === 6 ? nextWeekStartKey : startKey;
+  if (weekday === 6) return addDaysToCivilKey(startKey, 5);
+  if (weekday === 0) return addDaysToCivilKey(startKey, 6);
+  return startKey;
 }
 
 /**

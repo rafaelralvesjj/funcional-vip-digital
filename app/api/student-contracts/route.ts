@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { normalizePreferredWorkoutDays } from "@/lib/student-workout-days";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -653,6 +654,7 @@ export async function POST(request: NextRequest) {
           id: true,
           name: true,
           userId: true,
+          preferredWorkoutDays: true,
         },
       }),
       planId
@@ -687,6 +689,18 @@ export async function POST(request: NextRequest) {
 
     if (workoutsPerMonth <= 0 || workoutsPerWeek <= 0) {
       return NextResponse.json({ error: "Quantidade de treinos precisa ser maior que zero." }, { status: 400 });
+    }
+
+    const preferredWorkoutDays = normalizePreferredWorkoutDays(student.preferredWorkoutDays);
+    if (preferredWorkoutDays.length > 0 && preferredWorkoutDays.length < workoutsPerWeek) {
+      return NextResponse.json(
+        {
+          error: `A rotina cadastrada do aluno tem ${preferredWorkoutDays.length} dia(s) disponível(is), mas este contrato prevê ${workoutsPerWeek} treino(s) por semana. Atualize os dias de treino no cadastro do aluno antes de ativar este plano.`,
+          code: "PREFERRED_WORKOUT_DAYS_INSUFFICIENT",
+          minimumDays: workoutsPerWeek,
+        },
+        { status: 409 }
+      );
     }
 
     const contract = await prisma.$transaction(async (tx) => {

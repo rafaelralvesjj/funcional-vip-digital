@@ -3,6 +3,7 @@ import { sendEmail } from "@/lib/sendEmail";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import { NextRequest, NextResponse } from "next/server";
 import { getStudentDisplayName } from "@/lib/display-name";
+import { getSaoPauloCivilKey, workoutDateToCivilKey } from "@/lib/workout-validation-window";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -42,13 +43,28 @@ function weeklyLimit(days?: number | null) {
   return Math.ceil(value / 4);
 }
 
-function studentMessage(name: string, planned: number, completed: number) {
+function studentMessage(
+  name: string,
+  planned: number,
+  completed: number,
+  remainingWeekendWorkouts = 0
+) {
   const student = firstName(name);
+
+  if (remainingWeekendWorkouts > 0) {
+    return {
+      subject: `${student}, sua semana ainda está em andamento 💪`,
+      title: `Sua semana ainda está aberta, ${student}! 💪`,
+      body: `Você concluiu ${completed} de ${planned} treino(s) até agora e ainda tem ${remainingWeekendWorkouts} treino(s) programado(s) para o fim de semana. Sábado e domingo fazem parte da sua programação quando foram definidos como dias de treino.`,
+      next: "Siga somente os treinos previstos para você e registre no chat qualquer dificuldade, facilidade ou desconforto. O treino de fim de semana permanece aberto até 23h59 do próprio dia programado.",
+    };
+  }
+
   if (planned > 0 && completed >= planned) {
     return {
       subject: `${student}, você fechou a semana com tudo! 🎉`,
       title: `Semana concluída, ${student}! 🎉`,
-      body: `Você concluiu ${completed} de ${planned} treino(s) planejado(s). Isso é constância de verdade! Aproveite o sábado para recuperar o corpo, celebrar seu esforço e chegar renovado para a próxima semana.`,
+      body: `Você concluiu ${completed} de ${planned} treino(s) planejado(s). Isso é constância de verdade! Siga sua programação da semana e reserve momentos de recuperação entre os treinos. Se houver treino no fim de semana, ele continua valendo normalmente.`,
       next: "Hidrate-se, descanse e registre no chat qualquer facilidade, dificuldade ou desconforto. Seu professor acompanha esses sinais.",
     };
   }
@@ -101,12 +117,23 @@ export async function GET(request: NextRequest) {
   for (const student of students) {
     const plans = await prisma.workout.findMany({
       where: { studentId: student.id, date: { gte: start, lt: end } },
-      select: { id: true, status: true },
+      select: { id: true, status: true, date: true },
     });
     const planned = plans.length;
     const completed = plans.filter((item) => String(item.status).toUpperCase() === "CONCLUIDO").length;
+    const todayKey = getSaoPauloCivilKey();
+    const remainingWeekendWorkouts = plans.filter((item) => {
+      const status = String(item.status || "").toUpperCase();
+      const workoutKey = workoutDateToCivilKey(item.date);
+      return status !== "CONCLUIDO" && workoutKey >= todayKey;
+    }).length;
     const studentDisplayName = getStudentDisplayName(student);
-    const message = studentMessage(studentDisplayName, planned, completed);
+    const message = studentMessage(
+      studentDisplayName,
+      planned,
+      completed,
+      remainingWeekendWorkouts
+    );
     const title = `${message.title} — ${weekKey}`;
 
     const exists = await prisma.notice.findFirst({ where: { studentId: student.id, type: "SATURDAY_MOTIVATION", title }, select: { id: true } });

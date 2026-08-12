@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { hash } from "bcryptjs";
 import { calculateAgeYears, formatBirthDateInput, validateBirthDateInput } from "@/lib/student-age";
+import { formatPreferredWorkoutDays, normalizePreferredWorkoutDays } from "@/lib/student-workout-days";
 
 type AnyStudent = Record<string, any>;
 
@@ -173,6 +174,7 @@ export async function GET() {
         updatedAt: true,
         onboardingCompleto: true,
         contractedTrainingDaysPerMonth: true,
+        preferredWorkoutDays: true,
         commercialStatus: true,
         user: {
           select: {
@@ -222,6 +224,8 @@ export async function GET() {
           updatedAt: student.updatedAt,
           onboardingCompleto: student.onboardingCompleto,
           contractedTrainingDaysPerMonth: student.contractedTrainingDaysPerMonth,
+          preferredWorkoutDays: student.preferredWorkoutDays,
+          preferredWorkoutDaysLabel: formatPreferredWorkoutDays(student.preferredWorkoutDays),
           commercialStatus: student.commercialStatus,
 
           objective: profile.objective,
@@ -285,6 +289,7 @@ export async function POST(req: NextRequest) {
     const image = String(body?.image ?? body?.imageUrl ?? "").trim() || null;
     const active = body?.active !== false;
     const professorId = String(body?.professorId || "").trim() || null;
+    const preferredWorkoutDays = normalizePreferredWorkoutDays(body?.preferredWorkoutDays);
     const contractedTrainingDaysPerMonth =
       body?.contractedTrainingDaysPerMonth === null ||
       body?.contractedTrainingDaysPerMonth === undefined ||
@@ -387,6 +392,7 @@ export async function POST(req: NextRequest) {
           active,
           onboardingCompleto: false,
           contractedTrainingDaysPerMonth,
+          preferredWorkoutDays,
           commercialStatus: "SEM_CONTRATO_ATIVO",
         },
         select: {
@@ -402,6 +408,7 @@ export async function POST(req: NextRequest) {
           userAuthId: true,
           onboardingCompleto: true,
           contractedTrainingDaysPerMonth: true,
+          preferredWorkoutDays: true,
           commercialStatus: true,
           createdAt: true,
           updatedAt: true,
@@ -438,6 +445,7 @@ export async function POST(req: NextRequest) {
           ageYears,
           isMinor: ageYears !== null && ageYears < 18,
           hasBirthDate: Boolean(created.userAuth?.birthDate),
+          preferredWorkoutDaysLabel: formatPreferredWorkoutDays(created.preferredWorkoutDays),
           professorId: isProfessorUser(created.user) ? created.user?.id || null : null,
           professorName: isProfessorUser(created.user)
             ? created.user?.name || "Não vinculado"

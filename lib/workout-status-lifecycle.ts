@@ -142,9 +142,9 @@ export async function releaseCurrentWeekPreplannedWorkouts(
  * Retorna o limite exclusivo dos treinos que já perderam a janela de conclusão.
  *
  * Regra do produto:
- * - de segunda a sexta, somente semanas anteriores são encerradas;
- * - a partir de sábado, 00h00 em Brasília, a semana que terminou na sexta
- *   também passa a ser considerada encerrada.
+ * - treinos de segunda a sexta encerram na sexta, como já acontecia;
+ * - treino programado para sábado continua aberto no sábado;
+ * - treino programado para domingo continua aberto no domingo.
  */
 export function getWorkoutExpirationBoundary(referenceDate = new Date()): Date {
   return civilKeyToUtcDate(getWorkoutExpirationBoundaryCivilKey(referenceDate));

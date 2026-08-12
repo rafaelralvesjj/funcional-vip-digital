@@ -434,7 +434,7 @@ function getStudentProfile(student: Student | null) {
       "onboarding.preferredDays",
       "anamnesis.preferredDays",
     ],
-    ["Dias/horários preferidos", "Dias/horarios preferidos", "Dias preferidos"]
+    ["Dias disponíveis para treino", "Dias disponiveis para treino", "Dias/horários preferidos", "Dias/horarios preferidos", "Dias preferidos"]
   );
 
   const currentPain = firstRawTextWithNotes(

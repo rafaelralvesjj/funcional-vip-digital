@@ -9,7 +9,7 @@ import EmailNotificationReminder from "@/components/aluno/EmailNotificationRemin
 import { StudentDidYouKnowCard } from "@/components/aluno/StudentDidYouKnowCard";
 import {
   canValidateWorkoutCivilDate,
-  getCurrentValidationDeadlineCivilKey,
+  getWorkoutValidationDeadlineCivilKey,
   getWorkoutValidationState,
 } from "@/lib/workout-validation-window";
 type PersonAvatarProps = {
@@ -1186,10 +1186,12 @@ export default function AlunoPage() {
     return `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
 
-  function getValidationDeadlineLabel(): string {
-    const key = getCurrentValidationDeadlineCivilKey();
-    const [year, month, day] = key.split("-").map(Number);
-    const deadline = new Date(year, month - 1, day, 12, 0, 0, 0);
+  function getValidationDeadlineLabel(day: number | null): string {
+    if (day === null) return "sexta-feira";
+
+    const key = getWorkoutValidationDeadlineCivilKey(getSelectedWorkoutCivilKey(day));
+    const [year, month, deadlineDay] = key.split("-").map(Number);
+    const deadline = new Date(year, month - 1, deadlineDay, 12, 0, 0, 0);
 
     return deadline.toLocaleDateString("pt-BR", {
       weekday: "long",
@@ -1677,7 +1679,7 @@ export default function AlunoPage() {
               </div>
 
               <p className="text-[8px] text-[#6b6b6b] mt-1 leading-relaxed">
-                A conclusão fica disponível somente na semana vigente, até sexta-feira, 23h59. Depois disso, o treino permanece apenas para consulta.
+                Treinos de segunda a sexta podem ser concluídos até sexta, 23h59. Quando houver treino programado no sábado ou domingo, ele permanece disponível até o próprio dia.
               </p>
                 </>
               )}
@@ -2069,7 +2071,7 @@ export default function AlunoPage() {
                 {selectedDay !== null && (
                   <p className="text-[9px] mt-0.5 text-[#00A19C]">
                     {canValidateWorkoutDay(selectedDay)
-                      ? `Validação liberada até ${getValidationDeadlineLabel()}`
+                      ? `Validação liberada até ${getValidationDeadlineLabel(selectedDay)}`
                       : isFutureWorkoutDay(selectedDay)
                         ? "Próxima semana: disponível para consulta. A conclusão será liberada na segunda-feira."
                         : "Prazo de validação encerrado. Treino disponível apenas para consulta."}
@@ -2259,7 +2261,7 @@ export default function AlunoPage() {
                       Prazo de conclusão encerrado
                     </p>
                     <p className="mt-1 text-[10px] text-red-200/90 leading-relaxed">
-                      Este treino poderia ser concluído até sexta-feira, 23h59. Agora ele permanece disponível somente para consulta e será registrado como não concluído.
+                      Este treino poderia ser concluído até {getValidationDeadlineLabel(selectedDay)}, 23h59. Agora ele permanece disponível somente para consulta e será registrado como não concluído.
                     </p>
                   </div>
                 )}

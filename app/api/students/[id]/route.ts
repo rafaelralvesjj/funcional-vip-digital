@@ -4,6 +4,7 @@ import { hash } from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { calculateAgeYears, formatBirthDateInput, validateBirthDateInput } from "@/lib/student-age";
+import { formatPreferredWorkoutDays, normalizePreferredWorkoutDays } from "@/lib/student-workout-days";
 
 type AnyStudent = Record<string, any>;
 
@@ -115,6 +116,8 @@ function buildInitialProfile(student: AnyStudent) {
     ]),
     timeAvailableMinutes,
     preferredDays: extractFromNotes(notes, [
+      "Dias disponíveis para treino",
+      "Dias disponiveis para treino",
       "Dias/horários preferidos",
       "Dias/horarios preferidos",
       "Dias preferidos",
@@ -207,6 +210,8 @@ function buildStudentResponse(student: AnyStudent) {
     active: student.active,
     onboardingCompleto: student.onboardingCompleto,
     contractedTrainingDaysPerMonth: student.contractedTrainingDaysPerMonth,
+    preferredWorkoutDays: student.preferredWorkoutDays || [],
+    preferredWorkoutDaysLabel: formatPreferredWorkoutDays(student.preferredWorkoutDays),
     commercialStatus: student.commercialStatus,
     createdAt: student.createdAt,
     updatedAt: student.updatedAt,
@@ -271,6 +276,7 @@ export async function GET(
         active: true,
         onboardingCompleto: true,
         contractedTrainingDaysPerMonth: true,
+        preferredWorkoutDays: true,
         commercialStatus: true,
         createdAt: true,
         updatedAt: true,
@@ -450,6 +456,40 @@ export async function PUT(
     const contractedTrainingDaysPerMonth = parseOptionalInt(
       body.contractedTrainingDaysPerMonth ?? body.trainingDaysPerMonth ?? body.daysPerMonth
     );
+    const preferredWorkoutDays =
+      body.preferredWorkoutDays !== undefined
+        ? normalizePreferredWorkoutDays(body.preferredWorkoutDays)
+        : undefined;
+
+    if (preferredWorkoutDays && preferredWorkoutDays.length > 0) {
+      const activeContract = await prisma.studentContract.findFirst({
+        where: {
+          studentId: id,
+          status: "ACTIVE",
+        },
+        select: {
+          workoutsPerWeek: true,
+        },
+        orderBy: {
+          endDate: "desc",
+        },
+      });
+      const weeklyLimit = Math.min(
+        Math.max(Number(activeContract?.workoutsPerWeek || 0), 0),
+        7
+      );
+
+      if (weeklyLimit > 0 && preferredWorkoutDays.length < weeklyLimit) {
+        return NextResponse.json(
+          {
+            error: `Selecione pelo menos ${weeklyLimit} dia(s) para este aluno. O contrato ativo prevê ${weeklyLimit} treino(s) por semana.`,
+            code: "PREFERRED_WORKOUT_DAYS_INSUFFICIENT",
+            minimumDays: weeklyLimit,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     if (name !== undefined && !name) {
       return NextResponse.json({ error: "O nome é obrigatório." }, { status: 400 });
@@ -547,6 +587,7 @@ export async function PUT(
           ...(contractedTrainingDaysPerMonth !== undefined && {
             contractedTrainingDaysPerMonth,
           }),
+          ...(preferredWorkoutDays !== undefined && { preferredWorkoutDays }),
         },
         select: {
           id: true,
@@ -561,6 +602,7 @@ export async function PUT(
           active: true,
           onboardingCompleto: true,
           contractedTrainingDaysPerMonth: true,
+          preferredWorkoutDays: true,
           commercialStatus: true,
           createdAt: true,
           updatedAt: true,
@@ -626,6 +668,7 @@ export async function PUT(
         active: true,
         onboardingCompleto: true,
         contractedTrainingDaysPerMonth: true,
+        preferredWorkoutDays: true,
         commercialStatus: true,
         createdAt: true,
         updatedAt: true,

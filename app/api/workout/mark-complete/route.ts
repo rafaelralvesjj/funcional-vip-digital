@@ -17,7 +17,7 @@ import {
 import {
   canValidateWorkoutCivilDate,
   formatCivilKeyPtBr,
-  getCurrentValidationDeadlineCivilKey,
+  getWorkoutValidationDeadlineCivilKey,
   workoutDateToCivilKey,
 } from "@/lib/workout-validation-window";
 
@@ -70,8 +70,9 @@ function isDateInCurrentValidationWeek(date: Date): boolean {
   return canValidateWorkoutCivilDate(workoutDateToCivilKey(date));
 }
 
-function getCurrentValidationDeadlineLabel(): string {
-  return formatCivilKeyPtBr(getCurrentValidationDeadlineCivilKey());
+function getWorkoutValidationDeadlineLabel(date: Date | string): string {
+  const workoutCivilKey = workoutDateToCivilKey(date);
+  return formatCivilKeyPtBr(getWorkoutValidationDeadlineCivilKey(workoutCivilKey));
 }
 
 function getWeeklyWorkoutLimit(contractedTrainingDaysPerMonth?: number | null): number | null {
@@ -1435,7 +1436,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            `Prazo encerrado. Este treino só poderia ser concluído até sexta-feira, 23h59 (${getCurrentValidationDeadlineLabel()}). Ele continua disponível apenas para consulta e será considerado não realizado.`,
+            `Prazo encerrado. Este treino só poderia ser concluído até 23h59 de ${getWorkoutValidationDeadlineLabel(workoutDate)}. Ele continua disponível apenas para consulta e será considerado não realizado.`,
           code: "VALIDATION_WINDOW_CLOSED",
         },
         { status: 403 }

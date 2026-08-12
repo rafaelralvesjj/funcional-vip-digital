@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
+import { normalizePreferredWorkoutDays } from "@/lib/student-workout-days";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -369,6 +370,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Selecione um plano pago, não o plano de experiência grátis." },
         { status: 400 }
+      );
+    }
+
+    const preferredWorkoutDays = normalizePreferredWorkoutDays(trial.student.preferredWorkoutDays);
+    if (
+      preferredWorkoutDays.length > 0 &&
+      preferredWorkoutDays.length < paidPlan.workoutsPerWeek
+    ) {
+      return NextResponse.json(
+        {
+          error: `A rotina cadastrada do aluno tem ${preferredWorkoutDays.length} dia(s) disponível(is), mas o plano escolhido prevê ${paidPlan.workoutsPerWeek} treino(s) por semana. Atualize os dias de treino no cadastro do aluno antes da conversão.`,
+          code: "PREFERRED_WORKOUT_DAYS_INSUFFICIENT",
+          minimumDays: paidPlan.workoutsPerWeek,
+        },
+        { status: 409 }
       );
     }
 

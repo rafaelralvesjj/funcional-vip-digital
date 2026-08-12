@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import JSZip from "jszip";
 import Link from "next/link";
 import { getSaoPauloCivilDateInput, getSaoPauloWeekday } from "@/lib/planning-window";
+import { resolveRecurringWorkoutOffsets } from "@/lib/student-workout-days";
 
 type StudentOption = {
   id: string;
@@ -12,6 +13,7 @@ type StudentOption = {
   email?: string | null;
   professorName?: string | null;
   contractedTrainingDaysPerMonth?: number | null;
+  preferredWorkoutDays?: string[];
   birthDate?: string | null;
   ageYears?: number | null;
   isMinor?: boolean;
@@ -150,21 +152,8 @@ function getSafePlanningWeekStartIso(dateValue?: string | null): {
     ? getWeekRange(parsedDate).startOfWeek
     : getNextMonday();
 
-  const saoPauloToday = parseDateInput(getSaoPauloCivilDateInput()) || new Date();
-  const currentWeek = getWeekRange(saoPauloToday);
-  const todayDay = getSaoPauloWeekday();
-  const selectedCurrentWeek = requestedWeekStart.getTime() === currentWeek.startOfWeek.getTime();
-  // Sexta-feira continua válida. Só sábado e domingo redirecionam para a próxima semana.
-  const unsafeCurrentWeekWindow = selectedCurrentWeek && [6, 0].includes(todayDay);
-
-  if (unsafeCurrentWeekWindow) {
-    return {
-      weekStartIso: formatIsoDate(currentWeek.endOfWeek),
-      redirectedToNextWeek: true,
-      reason: "Esta semana já não possui janela segura de execução. O planejamento foi direcionado para a próxima semana.",
-    };
-  }
-
+  // A semana operacional vai de segunda a domingo. Fim de semana pode ser
+  // escolhido como dia de treino, então não redirecionamos mais sábado/domingo.
   return {
     weekStartIso: formatIsoDate(requestedWeekStart),
     redirectedToNextWeek: false,
@@ -202,7 +191,7 @@ function normalizeCurrentWeekExpectedDatesFallback(
 
   const todayWeekday = getSaoPauloWeekday();
 
-  if (todayWeekday < 1 || todayWeekday > 5) {
+  if (todayWeekday < 0) {
     return expectedDates;
   }
 
@@ -211,9 +200,9 @@ function normalizeCurrentWeekExpectedDatesFallback(
     return expectedDates;
   }
 
-  const fridayIso = formatIsoDate(addDays(weekStartDate, 4));
+  const sundayIso = formatIsoDate(addDays(weekStartDate, 6));
   const datesStillValid = expectedDates.filter(
-    (date) => date >= todayIso && date <= fridayIso
+    (date) => date >= todayIso && date <= sundayIso
   );
 
   if (datesStillValid.length > 0) {
@@ -268,17 +257,22 @@ function formatDatePtBr(date: Date): string {
   });
 }
 
-function getTrainingWeekdayOffsets(contractedTrainingDaysPerMonth?: number | null): number[] {
+function getTrainingWeekdayOffsets(
+  contractedTrainingDaysPerMonth?: number | null,
+  preferredWorkoutDays?: unknown
+): number[] {
   const contracted = Number(contractedTrainingDaysPerMonth || 0);
 
   if (!Number.isFinite(contracted) || contracted <= 0) return [];
 
-  if (contracted <= 4) return [0];
-  if (contracted <= 8) return [0, 2];
-  if (contracted <= 12) return [0, 2, 4];
-  if (contracted <= 16) return [0, 1, 3, 4];
+  const weeklyLimit =
+    contracted <= 4 ? 1 :
+    contracted <= 8 ? 2 :
+    contracted <= 12 ? 3 :
+    contracted <= 16 ? 4 :
+    5;
 
-  return [0, 1, 2, 3, 4];
+  return resolveRecurringWorkoutOffsets(weeklyLimit, preferredWorkoutDays);
 }
 
 function getWeekdayName(offset: number): string {
@@ -288,14 +282,20 @@ function getWeekdayName(offset: number): string {
     2: "quarta-feira",
     3: "quinta-feira",
     4: "sexta-feira",
+    5: "sábado",
+    6: "domingo",
   };
 
-  return names[offset] || "dia útil";
+  return names[offset] || "dia da semana";
 }
 
-function getTrainingSchedule(contractedTrainingDaysPerMonth?: number | null, weekStartIso?: string | null) {
+function getTrainingSchedule(
+  contractedTrainingDaysPerMonth?: number | null,
+  weekStartIso?: string | null,
+  preferredWorkoutDays?: unknown
+) {
   const weekStartDate = parseDateInput(weekStartIso) || getNextMonday();
-  const offsets = getTrainingWeekdayOffsets(contractedTrainingDaysPerMonth);
+  const offsets = getTrainingWeekdayOffsets(contractedTrainingDaysPerMonth, preferredWorkoutDays);
 
   return offsets.map((offset) => ({
     offset,
@@ -343,10 +343,7 @@ function getCareReturnExpectedWorkoutDates({
   cursor.setHours(12, 0, 0, 0);
 
   while (cursor.getTime() < weekEndExclusive.getTime()) {
-    const weekday = cursor.getDay();
-    if (weekday >= 1 && weekday <= 5) {
-      availableWeekdays.push(formatIsoDate(cursor));
-    }
+    availableWeekdays.push(formatIsoDate(cursor));
     cursor.setDate(cursor.getDate() + 1);
   }
 
@@ -373,22 +370,22 @@ function getTrainingScheduleDescription(contractedTrainingDaysPerMonth?: number 
   }
 
   if (contracted <= 4) {
-    return `Contrato de ${contracted} dia(s)/mês: gerar 1 treino por semana, preferencialmente na segunda-feira.`;
+    return `Contrato de ${contracted} dia(s)/mês: gerar 1 treino por semana, respeitando o dia definido para o aluno.`;
   }
 
   if (contracted <= 8) {
-    return `Contrato de ${contracted} dias/mês: gerar 2 treinos por semana, intercalados em segunda-feira e quarta-feira.`;
+    return `Contrato de ${contracted} dias/mês: gerar 2 treinos por semana, respeitando os dias definidos para o aluno.`;
   }
 
   if (contracted <= 12) {
-    return `Contrato de ${contracted} dias/mês: gerar 3 treinos por semana, em segunda-feira, quarta-feira e sexta-feira.`;
+    return `Contrato de ${contracted} dias/mês: gerar 3 treinos por semana, respeitando os dias definidos para o aluno e mantendo a distribuição escolhida.`;
   }
 
   if (contracted <= 16) {
-    return `Contrato de ${contracted} dias/mês: gerar 4 treinos por semana, em segunda-feira, terça-feira, quinta-feira e sexta-feira. Quarta-feira fica sem treino.`;
+    return `Contrato de ${contracted} dias/mês: gerar 4 treinos por semana, respeitando os dias definidos para o aluno.`;
   }
 
-  return `Contrato de ${contracted} dias/mês: gerar 5 treinos por semana, de segunda-feira a sexta-feira, sem folga em dia útil.`;
+  return `Contrato de ${contracted} dias/mês: gerar 5 treinos por semana, respeitando os dias definidos para o aluno, inclusive sábado ou domingo quando selecionados.`;
 }
 
 function getAiValidationContext({
@@ -1458,7 +1455,7 @@ export default function ResumoAlunoPage() {
       const weekStartDate = parseDateInput(weekStartIso);
       if (!weekStartDate) return null;
 
-      const fridayIso = formatIsoDate(addDays(weekStartDate, 4));
+      const sundayIso = formatIsoDate(addDays(weekStartDate, 6));
       const todayIso = getSaoPauloCivilDateInput();
       const currentWeekStartIso = resolveWeekStartIso(todayIso);
       const isCurrentWeek = currentWeekStartIso === weekStartIso;
@@ -1469,32 +1466,38 @@ export default function ResumoAlunoPage() {
         ? todayIso
         : planningStart;
 
-      if (earliestAllowedDate > fridayIso) {
+      if (earliestAllowedDate > sundayIso) {
         setTargetExpectedWorkoutDates([]);
         return [];
       }
 
       const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || weeklyLimit * 4;
-      const canonicalDates = getTrainingSchedule(contractedDays, weekStartIso)
+      const canonicalDates = getTrainingSchedule(
+        contractedDays,
+        weekStartIso,
+        selectedStudent?.preferredWorkoutDays
+      )
         .map((item) => item.date)
         .filter(
           (date) =>
             date >= earliestAllowedDate &&
-            date <= fridayIso &&
+            date <= sundayIso &&
             !createdDates.has(date)
         );
 
       const weekdayFallbackDates: string[] = [];
+      const hasStructuredPreferredWorkoutDays = Boolean(
+        selectedStudent?.preferredWorkoutDays?.length
+      );
       const cursor = parseDateInput(earliestAllowedDate);
 
-      if (cursor) {
-        while (formatIsoDate(cursor) <= fridayIso) {
-          const weekday = cursor.getDay();
+      // Alunos com rotina estruturada nunca recebem compensação em um dia não escolhido.
+      // O fallback diário fica somente para cadastros antigos sem preferência estruturada.
+      if (cursor && !hasStructuredPreferredWorkoutDays) {
+        while (formatIsoDate(cursor) <= sundayIso) {
           const date = formatIsoDate(cursor);
 
           if (
-            weekday >= 1 &&
-            weekday <= 5 &&
             !createdDates.has(date) &&
             !canonicalDates.includes(date)
           ) {

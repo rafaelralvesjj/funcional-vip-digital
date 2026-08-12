@@ -10,6 +10,7 @@ import DashboardSectionSwitcher from '@/components/DashboardSectionSwitcher';
 import TrialContinuationDashboardShortcut from '@/components/gestor/TrialContinuationDashboardShortcut';
 import ProfilePhotoEditor from '@/components/ProfilePhotoEditor';
 import { consolidateActiveCareEvents } from '@/lib/student-care-event-consolidation';
+import { canValidateWorkoutCivilDate, workoutDateToCivilKey } from '@/lib/workout-validation-window';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -740,52 +741,51 @@ export default async function DashboardPage() {
     ? 'Prazo vence hoje'
     : 'Prazo final: sábado';
 
-  // Um treino só permanece pendente enquanto a semana dele ainda está aberta
-  // para conclusão (segunda a sexta). Treinos de semanas anteriores continuam
-  // visíveis no histórico, mas não entram mais no contador/lista de pendências.
-  const currentWeekdayInSaoPaulo = getWeekdayInSaoPaulo(new Date());
-  const isWorkoutCompletionWindowOpen = !['Sat', 'Sun'].includes(currentWeekdayInSaoPaulo);
-
-  const pendingWorkouts = isWorkoutCompletionWindowOpen
-    ? await prisma.workout.findMany({
-        where: {
-          status: {
-            in: ['PENDENTE', 'PRE_PLANEJADO'],
-          },
-          date: {
-            gte: currentWorkoutWeek.startOfWeek,
-            lt: currentWorkoutWeek.endOfWeek,
-          },
-          ...(isTeacher ? { studentId: { in: myStudentIds } } : {}),
+  // A regra histórica continua valendo para treinos de segunda a sexta:
+  // no sábado eles já não entram como pendentes. Treinos realmente programados
+  // para sábado ou domingo continuam aparecendo enquanto o próprio prazo estiver aberto.
+  const pendingWorkoutsRaw = await prisma.workout.findMany({
+    where: {
+      status: {
+        in: ['PENDENTE', 'PRE_PLANEJADO'],
+      },
+      date: {
+        gte: currentWorkoutWeek.startOfWeek,
+        lt: currentWorkoutWeek.endOfWeek,
+      },
+      ...(isTeacher ? { studentId: { in: myStudentIds } } : {}),
+    },
+    select: {
+      id: true,
+      status: true,
+      date: true,
+      createdAt: true,
+      workoutPlan: {
+        select: {
+          name: true,
         },
+      },
+      student: {
         select: {
           id: true,
-          status: true,
-          date: true,
-          createdAt: true,
-          workoutPlan: {
-            select: {
-              name: true,
-            },
-          },
-          student: {
+          name: true,
+          user: {
             select: {
               id: true,
               name: true,
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
             },
           },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      })
-    : [];
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  const pendingWorkouts = pendingWorkoutsRaw.filter((workout) =>
+    canValidateWorkoutCivilDate(workoutDateToCivilKey(workout.date))
+  );
 
   await consolidateActiveCareEvents({
     studentIds: isTeacher ? myStudentIds : undefined,

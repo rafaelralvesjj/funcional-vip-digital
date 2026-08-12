@@ -47,20 +47,14 @@ export function getSaoPauloWeekday(referenceDate = new Date()): number {
 }
 
 /**
- * Regra operacional: sexta-feira ainda é válida para concluir/montar a semana.
- * A janela atual só é considerada encerrada no sábado ou domingo.
+ * A semana operacional vai de segunda a domingo.
+ * Sábado e domingo podem ser dias de treino quando fazem parte da rotina
+ * escolhida pelo aluno, portanto não bloqueamos mais a semana atual apenas
+ * por ser fim de semana.
  */
 export function isUnsafeCurrentWeekPlanningDate(
-  selectedDateInput?: string | null,
-  referenceDate = new Date()
+  _selectedDateInput?: string | null,
+  _referenceDate = new Date()
 ): boolean {
-  const selectedWeekStart = getCivilWeekStartInput(selectedDateInput);
-  if (!selectedWeekStart) return false;
-
-  const todayInput = getSaoPauloCivilDateInput(referenceDate);
-  const currentWeekStart = getCivilWeekStartInput(todayInput);
-  const todayWeekday = getSaoPauloWeekday(referenceDate);
-  const isWeekend = todayWeekday === 0 || todayWeekday === 6;
-
-  return selectedWeekStart === currentWeekStart && isWeekend;
+  return false;
 }

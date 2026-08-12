@@ -90,6 +90,7 @@ model Student {
   userAuthId                     String?  @unique @map("user_auth_id")
   onboardingCompleto             Boolean  @default(false) @map("onboarding_completo")
   contractedTrainingDaysPerMonth Int?     @map("contracted_training_days_per_month")
+  preferredWorkoutDays          String[] @default([]) @map("preferred_workout_days")
   commercialStatus               String   @default("SEM_CONTRATO_ATIVO") @map("commercial_status")
   createdAt                      DateTime @default(now()) @map("created_at")
   updatedAt                      DateTime @updatedAt @map("updated_at")

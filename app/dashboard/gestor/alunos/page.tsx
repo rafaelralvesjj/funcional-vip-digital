@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { calculateAgeYears, getTodayDateInput, validateBirthDateInput } from "@/lib/student-age";
+import { WORKOUT_DAY_OPTIONS, type WorkoutDayCode } from "@/lib/student-workout-days";
 
 interface Student {
   id: string;
@@ -18,6 +19,8 @@ interface Student {
   userId?: string | null;
   userAuthId?: string | null;
   contractedTrainingDaysPerMonth?: number | null;
+  preferredWorkoutDays?: WorkoutDayCode[];
+  preferredWorkoutDaysLabel?: string | null;
   user?: {
     id: string;
     name?: string | null;
@@ -45,6 +48,7 @@ interface StudentFormState {
   active: boolean;
   professorId: string;
   contractedTrainingDaysPerMonth: string;
+  preferredWorkoutDays: WorkoutDayCode[];
 }
 
 const emptyForm: StudentFormState = {
@@ -59,6 +63,7 @@ const emptyForm: StudentFormState = {
   active: true,
   professorId: "",
   contractedTrainingDaysPerMonth: "",
+  preferredWorkoutDays: [],
 };
 
 function normalizeStudents(data: any): Student[] {
@@ -144,11 +149,17 @@ export default function GerenciarAlunosPage() {
     return professor?.name || student.user?.name || "Professor";
   }
 
-  function updateNewForm(field: keyof StudentFormState, value: string | boolean) {
+  function updateNewForm(
+    field: keyof StudentFormState,
+    value: string | boolean | WorkoutDayCode[]
+  ) {
     setNewForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  function updateEditForm(field: keyof StudentFormState, value: string | boolean) {
+  function updateEditForm(
+    field: keyof StudentFormState,
+    value: string | boolean | WorkoutDayCode[]
+  ) {
     setEditForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -176,6 +187,7 @@ export default function GerenciarAlunosPage() {
         student.contractedTrainingDaysPerMonth !== undefined
           ? String(student.contractedTrainingDaysPerMonth)
           : "",
+      preferredWorkoutDays: student.preferredWorkoutDays || [],
     });
   }
 
@@ -196,6 +208,7 @@ export default function GerenciarAlunosPage() {
         form.contractedTrainingDaysPerMonth.trim() === ""
           ? null
           : Number(form.contractedTrainingDaysPerMonth),
+      preferredWorkoutDays: form.preferredWorkoutDays,
     };
   }
 
@@ -308,7 +321,10 @@ export default function GerenciarAlunosPage() {
     isEdit = false,
   }: {
     form: StudentFormState;
-    onChange: (field: keyof StudentFormState, value: string | boolean) => void;
+    onChange: (
+      field: keyof StudentFormState,
+      value: string | boolean | WorkoutDayCode[]
+    ) => void;
     isEdit?: boolean;
   }) {
     return (
@@ -400,6 +416,40 @@ export default function GerenciarAlunosPage() {
           min="0"
           className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
         />
+
+        <div className="rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-3">
+          <p className="text-xs font-semibold text-[#d6d6d6]">Dias preferidos para treino</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-[#6b6b6b]">
+            Marque os dias em que o aluno pode treinar. Sábado e domingo são permitidos. Para uma agenda fixa, deixe marcada exatamente a quantidade de dias correspondente aos treinos por semana; se houver mais opções, o sistema distribui os treinos entre elas.
+          </p>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {WORKOUT_DAY_OPTIONS.map((option) => {
+              const selected = form.preferredWorkoutDays.includes(option.value);
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() =>
+                    onChange(
+                      "preferredWorkoutDays",
+                      selected
+                        ? form.preferredWorkoutDays.filter((day) => day !== option.value)
+                        : [...form.preferredWorkoutDays, option.value]
+                    )
+                  }
+                  className={
+                    "rounded border px-2 py-2 text-xs font-semibold transition " +
+                    (selected
+                      ? "border-[#00A19C] bg-[#00A19C]/15 text-[#00A19C]"
+                      : "border-[#2a2a2a] bg-[#111] text-[#8a8a8a] hover:border-[#00A19C]/50")
+                  }
+                >
+                  {option.shortLabel}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <input
           value={form.image}
