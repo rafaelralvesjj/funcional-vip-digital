@@ -1,0 +1,24 @@
+REPARO DO FUNCIONAL UP DIGITAL
+
+1) Substitua no repositório os dois arquivos deste ZIP:
+- app/globals.css
+- package.json
+
+2) Exclua do repositório os arquivos abaixo, pois pertencem ao Meu Dia IA e foram enviados por engano:
+
+- ATUALIZACAO-V0.11.5.md
+- ATUALIZACAO-V0.11.6.md
+- app/api/tasks/[id]/capcut-kit/route.ts
+- app/api/tasks/[id]/route.ts
+- app/api/video-assets/register/route.ts
+- app/api/video-workflows/import/route.ts
+- components/AiHelpModal.tsx
+- components/ManualVideoProductionGuide.tsx
+- components/TaskCard.tsx
+- components/VideoWorkflowModal.tsx
+- lib/asset-metadata.ts
+- lib/capcut-kit.ts
+- lib/manual-video-guide.ts
+- lib/task-plan.ts
+
+Depois faça o commit. A Vercel deverá iniciar um novo build do Funcional.
