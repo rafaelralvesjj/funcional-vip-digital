@@ -6,7 +6,14 @@ import { sendEmail } from "@/lib/sendEmail";
 import { calculateAgeYears } from "@/lib/student-age";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import { releaseCurrentWeekPreplannedWorkouts } from "@/lib/workout-status-lifecycle";
-import { getSaoPauloCivilDateInput, getSaoPauloWeekday, parseCivilDateInput } from "@/lib/planning-window";
+import { getSaoPauloCivilDateInput, parseCivilDateInput } from "@/lib/planning-window";
+import {
+  formatPreferredWorkoutDays,
+  getPreferredWorkoutOffsets,
+  normalizePreferredWorkoutDays,
+  pickDistributedWorkoutOffsets,
+  resolveRecurringWorkoutOffsets,
+} from "@/lib/student-workout-days";
 
 const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
 const WORKOUT_STATUS_PENDING = "PENDENTE";
@@ -194,14 +201,6 @@ function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date
 }
 
 
-function getCanonicalWeekdayOffsets(weeklyLimit: number): number[] {
-  if (weeklyLimit <= 1) return [0];
-  if (weeklyLimit === 2) return [0, 2];
-  if (weeklyLimit === 3) return [0, 2, 4];
-  if (weeklyLimit === 4) return [0, 1, 3, 4];
-  return [0, 1, 2, 3, 4];
-}
-
 function addDaysForPlanning(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
@@ -214,21 +213,23 @@ function buildExpectedWorkoutDatesForWeek({
   effectivePlanningStart,
   weeklyLimit,
   createdDateKeys,
+  preferredWorkoutDays,
 }: {
   startOfWeek: Date;
   endOfWeek: Date;
   effectivePlanningStart: Date;
   weeklyLimit: number | null;
   createdDateKeys: Set<string>;
+  preferredWorkoutDays?: unknown;
 }): string[] {
-  const limit = Math.max(Number(weeklyLimit || 0), 0);
+  const limit = Math.min(Math.max(Number(weeklyLimit || 0), 0), 7);
   if (!limit) return [];
 
   const remainingCount = Math.max(limit - createdDateKeys.size, 0);
   if (remainingCount <= 0) return [];
 
-  const friday = addDaysForPlanning(startOfWeek, 4);
-  friday.setHours(23, 59, 59, 999);
+  const weekLastDay = addDaysForPlanning(startOfWeek, 6);
+  weekLastDay.setHours(23, 59, 59, 999);
 
   const todayCivil = parseCivilDateInput(getSaoPauloCivilDateInput());
   const isCurrentWeek = Boolean(
@@ -246,35 +247,111 @@ function buildExpectedWorkoutDatesForWeek({
   }
   earliestAllowed.setHours(12, 0, 0, 0);
 
-  if (earliestAllowed.getTime() > friday.getTime()) {
+  if (earliestAllowed.getTime() > weekLastDay.getTime()) {
     return [];
   }
 
-  const canonicalDates = getCanonicalWeekdayOffsets(limit)
+  const structuredPreferredDays = normalizePreferredWorkoutDays(preferredWorkoutDays);
+
+  // Quando existe uma rotina estruturada, nunca compensamos em um dia que o
+  // aluno não marcou. Se alguns dias já passaram, a semana pode terminar com
+  // menos treinos; na semana seguinte a rotina volta ao desenho cadastrado.
+  if (structuredPreferredDays.length > 0) {
+    const preferredOffsets = getPreferredWorkoutOffsets(structuredPreferredDays);
+
+    if (structuredPreferredDays.length > limit) {
+      // Quando os dias marcados representam disponibilidade (há mais opções do
+      // que treinos), a distribuição precisa permanecer estável depois que o
+      // primeiro treino é salvo. Por isso, treinos já criados continuam na
+      // base da distribuição, mesmo quando sua data já passou.
+      const createdPreferredOffsets = preferredOffsets.filter((offset) => {
+        const date = addDaysForPlanning(startOfWeek, offset);
+        date.setHours(12, 0, 0, 0);
+        return createdDateKeys.has(getDateKey(date));
+      });
+      const unpreferredCreatedCount = Math.max(
+        createdDateKeys.size - createdPreferredOffsets.length,
+        0
+      );
+      const targetPreferredCount = Math.max(limit - unpreferredCreatedCount, 0);
+      const eligiblePreferredOffsets = preferredOffsets.filter((offset) => {
+        const date = addDaysForPlanning(startOfWeek, offset);
+        date.setHours(12, 0, 0, 0);
+        const dateKey = getDateKey(date);
+
+        return (
+          createdDateKeys.has(dateKey) ||
+          (date.getTime() >= earliestAllowed.getTime() && date.getTime() < endOfWeek.getTime())
+        );
+      });
+      const plannedOffsets = pickDistributedWorkoutOffsets(
+        eligiblePreferredOffsets,
+        targetPreferredCount
+      );
+
+      return plannedOffsets
+        .map((offset) => {
+          const date = addDaysForPlanning(startOfWeek, offset);
+          date.setHours(12, 0, 0, 0);
+          return getDateKey(date);
+        })
+        .filter((dateKey) => Boolean(dateKey) && !createdDateKeys.has(dateKey))
+        .slice(0, remainingCount)
+        .sort();
+    }
+
+    const availablePreferredOffsets = preferredOffsets.filter((offset) => {
+      const date = addDaysForPlanning(startOfWeek, offset);
+      date.setHours(12, 0, 0, 0);
+      const dateKey = getDateKey(date);
+
+      return (
+        date.getTime() >= earliestAllowed.getTime() &&
+        date.getTime() < endOfWeek.getTime() &&
+        Boolean(dateKey) &&
+        !createdDateKeys.has(dateKey)
+      );
+    });
+
+    return availablePreferredOffsets
+      .slice(0, remainingCount)
+      .map((offset) => {
+        const date = addDaysForPlanning(startOfWeek, offset);
+        date.setHours(12, 0, 0, 0);
+        return getDateKey(date);
+      })
+      .filter(Boolean)
+      .sort();
+  }
+
+  const preferredDates = resolveRecurringWorkoutOffsets(limit, [])
     .map((offset) => addDaysForPlanning(startOfWeek, offset))
     .map((date) => {
       date.setHours(12, 0, 0, 0);
       return date;
     })
-    .filter((date) => date.getTime() >= earliestAllowed.getTime() && date.getTime() <= friday.getTime())
+    .filter(
+      (date) =>
+        date.getTime() >= earliestAllowed.getTime() &&
+        date.getTime() < endOfWeek.getTime()
+    )
     .map((date) => getDateKey(date))
     .filter((dateKey) => Boolean(dateKey) && !createdDateKeys.has(dateKey));
 
   const result: string[] = [];
-  for (const dateKey of canonicalDates) {
+  for (const dateKey of preferredDates) {
     if (!result.includes(dateKey)) result.push(dateKey);
-    if (result.length >= remainingCount) return result;
+    if (result.length >= remainingCount) return result.sort();
   }
 
+  // Alunos antigos, ainda sem rotina estruturada, mantêm o comportamento de
+  // fallback para completar a meta com os dias restantes da semana.
   const fallbackDates: string[] = [];
   const cursor = new Date(earliestAllowed);
-  while (cursor.getTime() <= friday.getTime()) {
-    const weekday = cursor.getDay();
+  while (cursor.getTime() < endOfWeek.getTime()) {
     const dateKey = getDateKey(cursor);
 
     if (
-      weekday >= 1 &&
-      weekday <= 5 &&
       dateKey &&
       !createdDateKeys.has(dateKey) &&
       !result.includes(dateKey)
@@ -292,21 +369,19 @@ function buildExpectedWorkoutDatesForWeek({
         ? fallbackDates[fallbackDates.length - 1]
         : fallbackDates[0]
     );
-    return result;
+    return Array.from(new Set(result)).slice(0, remainingCount).sort();
   }
 
   if (stillNeeded > 0 && fallbackDates.length > 0) {
     if (stillNeeded >= fallbackDates.length) {
       result.push(...fallbackDates);
-    } else if (stillNeeded === 1) {
-      result.push(fallbackDates[0]);
     } else {
       for (let index = 0; index < stillNeeded; index += 1) {
         const position = Math.round(
-          (index * (fallbackDates.length - 1)) / (stillNeeded - 1)
+          (index * (fallbackDates.length - 1)) / Math.max(stillNeeded - 1, 1)
         );
         const dateKey = fallbackDates[position];
-        if (!result.includes(dateKey)) result.push(dateKey);
+        if (dateKey && !result.includes(dateKey)) result.push(dateKey);
       }
 
       for (const dateKey of fallbackDates) {
@@ -316,7 +391,7 @@ function buildExpectedWorkoutDatesForWeek({
     }
   }
 
-  return result.slice(0, remainingCount).sort();
+  return Array.from(new Set(result)).slice(0, remainingCount).sort();
 }
 
 function formatDatePtBr(date: Date): string {
@@ -340,17 +415,10 @@ function getWeekdayInSaoPaulo(referenceDate = new Date()): string {
   }).format(referenceDate);
 }
 
-function isUnsafeCurrentWeekPlanningWindow(startOfWeek: Date): boolean {
-  const saoPauloToday = parseCivilDateInput(getSaoPauloCivilDateInput()) || new Date();
-  const currentWeek = getWeekRange(saoPauloToday);
-  const todayDay = getSaoPauloWeekday();
-  const isWeekend = todayDay === 0 || todayDay === 6;
-
-  return (
-    startOfWeek.getTime() === currentWeek.startOfWeek.getTime() &&
-    // Sexta-feira continua válida; bloqueio somente no sábado/domingo.
-    isWeekend
-  );
+function isUnsafeCurrentWeekPlanningWindow(_startOfWeek: Date): boolean {
+  // A semana operacional agora vai de segunda a domingo. Sábado e domingo
+  // podem ser dias de treino quando fazem parte da rotina escolhida pelo aluno.
+  return false;
 }
 
 function getSafeWindowBlockedPayload() {
@@ -1595,6 +1663,7 @@ export async function POST(req: NextRequest) {
         userId: true,
         userAuthId: true,
         contractedTrainingDaysPerMonth: true,
+        preferredWorkoutDays: true,
         userAuth: {
           select: {
             birthDate: true,
@@ -1735,6 +1804,8 @@ export async function POST(req: NextRequest) {
     });
 
     const workoutPlansThisWeek = countDistinctPlanDates(eligibleWorkoutPlansThisWeek);
+    const hasStructuredPreferredWorkoutDays =
+      normalizePreferredWorkoutDays(studentExists.preferredWorkoutDays).length > 0;
     const createdDateKeysThisWeek = new Set<string>(
       eligibleWorkoutPlansThisWeek
         .map((plan) => getDateKey(plan.date))
@@ -1746,6 +1817,7 @@ export async function POST(req: NextRequest) {
       effectivePlanningStart,
       weeklyLimit,
       createdDateKeys: createdDateKeysThisWeek,
+      preferredWorkoutDays: studentExists.preferredWorkoutDays,
     });
 
     /*
@@ -1753,9 +1825,9 @@ export async function POST(req: NextRequest) {
      *
      * Uma URL/rascunho antigo pode chegar com uma data anterior à liberação
      * (ex.: 03/08). O servidor NÃO rejeita imediatamente. Primeiro reconstrói
-     * as datas úteis ainda disponíveis da semana a partir da liberação e, na
-     * semana atual, nunca volta para uma data que já passou. Se existir uma
-     * única vaga restante, ela é aplicada automaticamente antes de salvar.
+     * as datas ainda disponíveis da semana a partir da liberação, respeitando
+     * a rotina cadastrada e, na semana atual, nunca volta para uma data que já
+     * passou. Se existir uma única vaga restante, ela é aplicada automaticamente.
      */
     if (careReturnContext) {
       const requestedWorkoutDateKey = getDateKey(workoutDate);
@@ -1772,20 +1844,11 @@ export async function POST(req: NextRequest) {
       }
       earliestCandidate.setHours(12, 0, 0, 0);
 
-      const friday = addDaysForPlanning(startOfWeek, 4);
-      friday.setHours(23, 59, 59, 999);
-
       const availableCareReturnDates: string[] = [];
       const cursor = new Date(earliestCandidate);
-      while (cursor.getTime() <= friday.getTime() && cursor.getTime() < endOfWeek.getTime()) {
-        const weekday = cursor.getDay();
+      while (cursor.getTime() < endOfWeek.getTime()) {
         const dateKey = getDateKey(cursor);
-        if (
-          weekday >= 1 &&
-          weekday <= 5 &&
-          dateKey &&
-          !createdDateKeysThisWeek.has(dateKey)
-        ) {
+        if (dateKey && !createdDateKeysThisWeek.has(dateKey)) {
           availableCareReturnDates.push(dateKey);
         }
         cursor.setDate(cursor.getDate() + 1);
@@ -1816,19 +1879,19 @@ export async function POST(req: NextRequest) {
       ) {
         let replacementDateKey: string | null = null;
 
-        // Se falta exatamente um treino, fecha a semana na última data útil
-        // disponível. Ex.: 05/08 já criado e hoje 07/08 -> 07/08.
-        if (remainingSlots === 1 && availableCareReturnDates.length > 0) {
-          replacementDateKey =
-            availableCareReturnDates[availableCareReturnDates.length - 1];
-        } else {
-          replacementDateKey =
-            authoritativeRemainingDates.find((dateKey) =>
-              availableCareReturnDates.includes(dateKey)
-            ) ||
-            availableCareReturnDates[0] ||
-            null;
-        }
+        // A rotina cadastrada é a primeira referência, inclusive na retomada.
+        // Só usamos uma data de fallback quando não restar nenhuma data
+        // autoritativa possível dentro da semana.
+        replacementDateKey =
+          authoritativeRemainingDates.find((dateKey) =>
+            availableCareReturnDates.includes(dateKey)
+          ) ||
+          (!hasStructuredPreferredWorkoutDays
+            ? (remainingSlots === 1 && availableCareReturnDates.length > 0
+                ? availableCareReturnDates[availableCareReturnDates.length - 1]
+                : availableCareReturnDates[0])
+            : null) ||
+          null;
 
         if (replacementDateKey) {
           const normalizedDate = parseCivilDateInput(replacementDateKey);
@@ -1855,6 +1918,37 @@ export async function POST(req: NextRequest) {
     const selectedDateAlreadyPlanned = eligibleWorkoutPlansThisWeek.some(
       (plan) => getDateKey(plan.date) === selectedWorkoutDateKey
     );
+
+    const mustRespectAuthoritativeSchedule =
+      authoritativeRemainingDates.length > 0 ||
+      (hasStructuredPreferredWorkoutDays && workoutPlansThisWeek < weeklyLimit);
+
+    if (
+      mustRespectAuthoritativeSchedule &&
+      !authoritativeRemainingDates.includes(selectedWorkoutDateKey)
+    ) {
+      const expectedLabel = authoritativeRemainingDates.length > 0
+        ? authoritativeRemainingDates
+            .map((dateKey) =>
+              formatDatePtBr(
+                parseCivilDateInput(dateKey) || new Date(`${dateKey}T12:00:00`)
+              )
+            )
+            .join(", ")
+        : "nenhum dia cadastrado restante nesta semana";
+
+      return NextResponse.json(
+        {
+          error: hasStructuredPreferredWorkoutDays
+            ? `A data escolhida não faz parte da rotina semanal deste aluno. Datas válidas agora: ${expectedLabel}. Se os dias cadastrados já passaram, planeje a próxima semana em vez de concentrar treinos em dias não escolhidos.`
+            : `A data escolhida não faz parte da programação semanal deste aluno. Datas válidas agora: ${expectedLabel}.`,
+          code: "WORKOUT_DATE_OUTSIDE_PREFERRED_SCHEDULE",
+          expectedWorkoutDates: authoritativeRemainingDates,
+          preferredWorkoutDays: studentExists.preferredWorkoutDays,
+        },
+        { status: 409 }
+      );
+    }
 
     if (selectedDateAlreadyPlanned) {
       return NextResponse.json(
@@ -1961,6 +2055,24 @@ export async function POST(req: NextRequest) {
 
     const workoutsThisWeekAfterCreate = workoutPlansThisWeek + 1;
     const isWeeklyPackageComplete = workoutsThisWeekAfterCreate >= weeklyLimit;
+
+    // Devolve imediatamente ao cliente a próxima programação autoritativa.
+    // Assim, ao salvar o treino 1 de um lote importado da IA, o treino 2 já
+    // recebe a data correta sem depender de uma nova consulta/race de estado.
+    const createdDateKeysAfterCreate = new Set(createdDateKeysThisWeek);
+    const savedWorkoutDateKey = getDateKey(workoutDate);
+    if (savedWorkoutDateKey) {
+      createdDateKeysAfterCreate.add(savedWorkoutDateKey);
+    }
+    const expectedWorkoutDatesAfterCreate = buildExpectedWorkoutDatesForWeek({
+      startOfWeek,
+      endOfWeek,
+      effectivePlanningStart,
+      weeklyLimit,
+      createdDateKeys: createdDateKeysAfterCreate,
+      preferredWorkoutDays: studentExists.preferredWorkoutDays,
+    });
+
     let emailSent = false;
 
     /*
@@ -1997,6 +2109,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         ...result,
+        expectedWorkoutDates: expectedWorkoutDatesAfterCreate,
         weeklyNotification: {
           weeklyLimit,
           workoutsThisWeek: workoutsThisWeekAfterCreate,
@@ -2270,6 +2383,11 @@ export async function GET(req: NextRequest) {
           })
         : [];
 
+      const schedulingStudent = await prisma.student.findUnique({
+        where: { id: studentId },
+        select: { preferredWorkoutDays: true },
+      });
+
       const weeklyPlansCount = countDistinctPlanDates(eligibleWeeklyPlans);
       const createdWorkoutDates: string[] = Array.from(
         new Set<string>(
@@ -2284,6 +2402,7 @@ export async function GET(req: NextRequest) {
         effectivePlanningStart,
         weeklyLimit,
         createdDateKeys: new Set(createdWorkoutDates),
+        preferredWorkoutDays: schedulingStudent?.preferredWorkoutDays || [],
       });
 
       const selectedDateBeforeContractStart = Boolean(
@@ -2298,6 +2417,8 @@ export async function GET(req: NextRequest) {
         weeklyRemaining:
           weeklyLimit == null ? null : Math.max(weeklyLimit - weeklyPlansCount, 0),
         createdWorkoutDates,
+        preferredWorkoutDays: schedulingStudent?.preferredWorkoutDays || [],
+        preferredWorkoutDaysLabel: formatPreferredWorkoutDays(schedulingStudent?.preferredWorkoutDays || []),
         expectedWorkoutDates,
         expectedWorkoutCount: expectedWorkoutDates.length,
         planningSource: "DATABASE_WEEK_STATE",
