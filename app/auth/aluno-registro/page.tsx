@@ -1,10 +1,9 @@
 "use client";
 
-import BrandLogo from "../../../components/BrandLogo";
+import BrandLogo from "@/components/BrandLogo";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { calculateAgeYears, getTodayDateInput, validateBirthDateInput } from "@/lib/student-age";
 import {
@@ -47,8 +46,6 @@ const OBJECTIVE_OPTIONS = [
 ];
 
 export default function AlunoRegisterPage() {
-  const router = useRouter();
-
   const [form, setForm] = useState({
     name: "",
     preferredName: "",
@@ -81,6 +78,9 @@ export default function AlunoRegisterPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState("");
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const submitFeedbackRef = useRef<HTMLDivElement | null>(null);
 
   const todayDateInput = getTodayDateInput();
   const calculatedAge = form.birthDate ? calculateAgeYears(form.birthDate) : null;
@@ -189,6 +189,14 @@ export default function AlunoRegisterPage() {
     });
   }
 
+  function showSubmitError(message: string) {
+    setError(message);
+
+    window.requestAnimationFrame(() => {
+      submitFeedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
   function getFinalObjective() {
     if (form.objective === OTHER_OBJECTIVE) {
       const otherObjective = form.objectiveOther.trim();
@@ -260,34 +268,36 @@ export default function AlunoRegisterPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    setSubmitAttempted(true);
     setError("");
+    setSubmitStatus("");
 
-    if (!form.name || !form.email || !form.phone || !form.birthDate || !form.password) {
-      setError("Preencha nome, e-mail, telefone, data de nascimento e senha.");
+    if (!form.name.trim() || !form.email.trim() || !form.phone.trim() || !form.birthDate || !form.password) {
+      showSubmitError("Preencha nome, e-mail, telefone, data de nascimento e senha.");
       return;
     }
 
     const birthDateValidation = validateBirthDateInput(form.birthDate);
 
     if (birthDateValidation.error) {
-      setError(birthDateValidation.error);
+      showSubmitError(birthDateValidation.error);
       return;
     }
 
     if (form.password.length < 6) {
-      setError("A senha deve ter no mínimo 6 caracteres.");
+      showSubmitError("A senha deve ter no mínimo 6 caracteres.");
       return;
     }
 
     if (form.password !== form.confirmPassword) {
-      setError("As senhas não conferem.");
+      showSubmitError("As senhas não conferem.");
       return;
     }
 
     const profileError = validateInitialProfile();
 
     if (profileError) {
-      setError(profileError);
+      showSubmitError(profileError);
       return;
     }
 
@@ -295,21 +305,23 @@ export default function AlunoRegisterPage() {
     const trainingResources = getTrainingResources();
 
     if (trainingResources.errors.length > 0) {
-      setError(trainingResources.errors[0]);
+      showSubmitError(trainingResources.errors[0]);
       return;
     }
 
     if (!finalObjective) {
-      setError("Informe seu objetivo principal para continuar.");
+      showSubmitError("Informe seu objetivo principal para continuar.");
       return;
     }
 
     if (!form.acceptedTerms) {
-      setError("Para iniciar a experiência gratuita, aceite o termo de experiência.");
+      showSubmitError("Para iniciar a experiência gratuita, aceite o termo de experiência.");
       return;
     }
 
+    const normalizedEmail = form.email.trim().toLowerCase();
     setLoading(true);
+    setSubmitStatus("Criando sua experiência...");
 
     try {
       const res = await fetch("/api/aluno/register", {
@@ -318,10 +330,10 @@ export default function AlunoRegisterPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: form.name,
-          preferredName: form.preferredName,
-          email: form.email,
-          phone: form.phone,
+          name: form.name.trim(),
+          preferredName: form.preferredName.trim(),
+          email: normalizedEmail,
+          phone: form.phone.trim(),
           birthDate: form.birthDate,
           password: form.password,
           confirmPassword: form.confirmPassword,
@@ -352,30 +364,58 @@ export default function AlunoRegisterPage() {
         }),
       });
 
-      const data = await res.json().catch(() => null);
+      const responseText = await res.text();
+      let data: any = null;
+
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = null;
+        }
+      }
 
       if (!res.ok) {
-        setError(data?.error || "Erro ao criar conta.");
+        const message =
+          data?.error ||
+          (res.status === 409
+            ? "Já existe um cadastro com este e-mail ou WhatsApp. Faça login ou fale com a equipe."
+            : `Não foi possível concluir o cadastro (erro ${res.status}). Tente novamente.`);
         setLoading(false);
+        setSubmitStatus("");
+        showSubmitError(message);
         return;
       }
 
-      const result = await signIn("credentials", {
-        email: form.email,
-        password: form.password,
-        redirect: false,
-      });
+      const loginEmail = String(data?.email || normalizedEmail).trim().toLowerCase();
+      setSubmitStatus("Cadastro concluído. Entrando na sua área...");
 
-      if (result?.ok) {
-        router.push("/aluno");
-      } else {
-        setError("Conta criada, mas houve erro ao fazer login. Faça login manualmente.");
-        router.push("/auth/signin");
+      try {
+        const result = await signIn("credentials", {
+          email: loginEmail,
+          password: form.password,
+          redirect: false,
+        });
+
+        if (result?.ok) {
+          window.location.replace("/aluno");
+          return;
+        }
+      } catch (loginError) {
+        console.error("Cadastro criado, mas o login automático falhou:", loginError);
       }
-    } catch {
-      setError("Erro interno do servidor. Tente novamente.");
-    } finally {
+
+      setSubmitStatus("Cadastro concluído. Abrindo a tela de acesso...");
+      window.location.replace(
+        `/auth/signin?cadastro=sucesso&email=${encodeURIComponent(loginEmail)}`
+      );
+    } catch (error) {
+      console.error("Erro no cadastro do aluno:", error);
       setLoading(false);
+      setSubmitStatus("");
+      showSubmitError(
+        "Não foi possível concluir o cadastro agora. Verifique sua conexão e tente novamente. Se o problema continuar, fale com a equipe."
+      );
     }
   }
 
@@ -471,7 +511,9 @@ export default function AlunoRegisterPage() {
                 autoComplete="nickname"
                 maxLength={40}
               />
-              <p className="mt-1 text-xs text-[#8a8a8a]">Usaremos esse nome nos e-mails, avisos e mensagens. Se não preencher, usaremos seu primeiro nome.</p>
+              <p className="mt-1 text-xs text-[#8a8a8a]">
+                Usaremos esse nome nos e-mails, avisos e mensagens. Se não preencher, usaremos seu primeiro nome.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -959,7 +1001,11 @@ export default function AlunoRegisterPage() {
             </div>
           </section>
 
-          <label className="flex gap-3 rounded-xl bg-[#1a1a1a] border border-[#ffffff10] px-4 py-3 cursor-pointer">
+          <label className={`flex gap-3 rounded-xl border px-4 py-3 cursor-pointer ${
+            submitAttempted && !form.acceptedTerms
+              ? "border-red-500/40 bg-red-500/10"
+              : "border-[#ffffff10] bg-[#1a1a1a]"
+          }`}>
             <input
               name="acceptedTerms"
               type="checkbox"
@@ -976,12 +1022,35 @@ export default function AlunoRegisterPage() {
             </span>
           </label>
 
+          {submitAttempted && !form.acceptedTerms && (
+            <p className="text-xs text-red-300">
+              Marque o aceite do termo acima para concluir o cadastro.
+            </p>
+          )}
+
+          {error && (
+            <div
+              ref={submitFeedbackRef}
+              role="alert"
+              aria-live="assertive"
+              className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300"
+            >
+              <p className="font-semibold">Não foi possível concluir ainda.</p>
+              <p className="mt-1">{error}</p>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={loading || !form.acceptedTerms}
+            disabled={loading || uploading}
+            aria-busy={loading}
             className="w-full rounded-xl bg-[#00A19C] px-4 py-3 font-semibold text-[#0a0a0a] hover:bg-[#008B87] transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Criando experiência..." : "Começar experiência gratuita"}
+            {uploading
+              ? "Aguarde o envio da foto..."
+              : loading
+                ? submitStatus || "Criando experiência..."
+                : "Começar experiência gratuita"}
           </button>
 
           <p className="text-center text-sm text-[#a1a1a1]">
