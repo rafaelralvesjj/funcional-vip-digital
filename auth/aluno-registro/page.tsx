@@ -1,6 +1,6 @@
 "use client";
 
-import BrandLogo from "../../../components/BrandLogo";
+import BrandLogo from "@/components/BrandLogo";
 
 import { useRef, useState } from "react";
 import { signIn } from "next-auth/react";
