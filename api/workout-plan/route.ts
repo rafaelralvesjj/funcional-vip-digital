@@ -1914,7 +1914,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const selectedWorkoutDateKey = getDateKey(workoutDate);
+    /*
+     * Normalização autoritativa geral da data.
+     *
+     * A tela pode chegar com uma data antiga do rascunho da IA ou com um
+     * estado visual desatualizado depois que o treino anterior do lote foi
+     * salvo. Se o servidor já sabe quais datas ainda são válidas nesta semana,
+     * ele NÃO deve devolver erro apenas por essa divergência: aplica a próxima
+     * data válida automaticamente.
+     *
+     * Exemplo real: treino 1 salvo em 17/08; resta somente 19/08. Se o cliente
+     * ainda enviar 23/08, o servidor salva em 19/08 em vez de bloquear o lote.
+     */
+    let selectedWorkoutDateKey = getDateKey(workoutDate);
+    let normalizedWorkoutDateFrom: string | null = null;
+
+    if (
+      workoutPlansThisWeek < weeklyLimit &&
+      authoritativeRemainingDates.length > 0 &&
+      !authoritativeRemainingDates.includes(selectedWorkoutDateKey)
+    ) {
+      const nextAuthoritativeDateKey = authoritativeRemainingDates[0];
+      const normalizedDate = parseCivilDateInput(nextAuthoritativeDateKey);
+
+      if (normalizedDate) {
+        normalizedWorkoutDateFrom = selectedWorkoutDateKey || null;
+        normalizedDate.setHours(12, 0, 0, 0);
+        workoutDate = normalizedDate;
+        selectedWorkoutDateKey = nextAuthoritativeDateKey;
+      }
+    }
+
     const selectedDateAlreadyPlanned = eligibleWorkoutPlansThisWeek.some(
       (plan) => getDateKey(plan.date) === selectedWorkoutDateKey
     );
@@ -2109,6 +2139,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         ...result,
+        savedWorkoutDate: savedWorkoutDateKey || null,
+        normalizedWorkoutDateFrom,
         expectedWorkoutDates: expectedWorkoutDatesAfterCreate,
         weeklyNotification: {
           weeklyLimit,

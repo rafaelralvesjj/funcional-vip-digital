@@ -1689,6 +1689,10 @@ export default function MontarTreinoPage() {
         const nextAuthoritativeDates = Array.isArray(result?.expectedWorkoutDates)
           ? result.expectedWorkoutDates.filter((value: unknown): value is string => Boolean(value))
           : [];
+        const savedAuthoritativeDate =
+          typeof result?.savedWorkoutDate === "string" && result.savedWorkoutDate
+            ? result.savedWorkoutDate
+            : getCivilDateInput(result?.date) || dateToSave;
 
         if (!editingWorkoutId && Array.isArray(result?.expectedWorkoutDates)) {
           setServerExpectedWorkoutDates(nextAuthoritativeDates);
@@ -1724,12 +1728,16 @@ export default function MontarTreinoPage() {
         const shouldReturnToDashboardAfterSave = willCompleteWeekOnSave;
         const hasNextAiWorkout = aiBatchHasNextWorkout && !shouldReturnToDashboardAfterSave;
 
+        const normalizedDateMessage = result?.normalizedWorkoutDateFrom && savedAuthoritativeDate
+          ? ` Data ajustada automaticamente para ${formatDatePtBr(new Date(`${savedAuthoritativeDate}T12:00:00`))} conforme a programação do aluno.`
+          : "";
+
         setSuccess(
           hasNextAiWorkout
-            ? `${weeklyMessage} Próximo treino sugerido pela IA carregado para revisão.`
+            ? `${weeklyMessage}${normalizedDateMessage} Próximo treino sugerido pela IA carregado para revisão.`
             : shouldReturnToDashboardAfterSave
-              ? `${weeklyMessage} Montagem concluída. Voltando ao dashboard...`
-              : weeklyMessage
+              ? `${weeklyMessage}${normalizedDateMessage} Montagem concluída. Voltando ao dashboard...`
+              : `${weeklyMessage}${normalizedDateMessage}`
         );
 
         if (hasNextAiWorkout && aiDraftBatch) {
@@ -1772,7 +1780,7 @@ export default function MontarTreinoPage() {
           ...current,
           {
             id: savedPlanId,
-            date: dateToSave || null,
+            date: savedAuthoritativeDate || null,
           },
         ]);
         setWeeklyPlansCount((current) => current + 1);
@@ -1783,7 +1791,7 @@ export default function MontarTreinoPage() {
             ...weeklyPlans,
             {
               id: savedPlanId,
-              date: dateToSave || null,
+              date: savedAuthoritativeDate || null,
             },
           ]
         );
