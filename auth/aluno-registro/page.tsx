@@ -409,12 +409,6 @@ export default function AlunoRegisterPage() {
           onSubmit={handleSubmit}
           className="bg-[#111] border border-[#ffffff10] rounded-2xl p-6 space-y-5"
         >
-          {error && (
-            <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">
-              {error}
-            </div>
-          )}
-
           <div className="rounded-xl bg-[#00A19C]/10 border border-[#00A19C]/20 px-4 py-3">
             <p className="text-sm text-[#00A19C] font-semibold">
               Experiência gratuita de 1 mês
@@ -991,24 +985,6 @@ export default function AlunoRegisterPage() {
             </span>
           </label>
 
-          {submitAttempted && !form.acceptedTerms && (
-            <p className="text-xs text-red-300">
-              Marque o aceite do termo acima para concluir o cadastro.
-            </p>
-          )}
-
-          {error && (
-            <div
-              ref={submitFeedbackRef}
-              role="alert"
-              aria-live="assertive"
-              className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300"
-            >
-              <p className="font-semibold">Não foi possível concluir ainda.</p>
-              <p className="mt-1">{error}</p>
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading || uploading}
@@ -1021,6 +997,18 @@ export default function AlunoRegisterPage() {
                 ? "Criando experiência..."
                 : "Começar experiência gratuita"}
           </button>
+
+          {error && (
+            <div
+              ref={submitFeedbackRef}
+              role="alert"
+              aria-live="assertive"
+              className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300"
+            >
+              <p className="font-semibold">Não foi possível concluir o cadastro.</p>
+              <p className="mt-1">{error}</p>
+            </div>
+          )}
 
           <p className="text-center text-sm text-[#a1a1a1]">
             Já tem conta?{" "}
