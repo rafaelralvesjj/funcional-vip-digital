@@ -3,15 +3,32 @@
 import BrandLogo from "../../../components/BrandLogo";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cadastro = params.get("cadastro");
+    const emailFromQuery = params.get("email");
+
+    if (emailFromQuery) {
+      setEmail(emailFromQuery.trim().toLowerCase());
+    }
+
+    if (cadastro === "sucesso") {
+      setSuccessMessage(
+        "Cadastro concluído com sucesso. Entre com a senha que você acabou de criar."
+      );
+    }
+  }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -19,25 +36,26 @@ export default function SignInPage() {
     setLoading(true);
 
     const result = await signIn("credentials", {
-      email,
+      email: email.trim().toLowerCase(),
       password,
       redirect: false,
     });
 
-    if (result?.error) {
+    if (result?.error || !result?.ok) {
       setError("E-mail ou senha inválidos");
       setLoading(false);
       return;
     }
 
-    const sessionRes = await fetch("/api/auth/session");
+    const sessionRes = await fetch("/api/auth/session", { cache: "no-store" });
     const session = await sessionRes.json();
 
     if (session?.user?.role === "ALUNO") {
-      router.push("/aluno");
-    } else {
-      router.push("/dashboard");
+      window.location.replace("/aluno");
+      return;
     }
+
+    router.replace("/dashboard");
   }
 
   return (
@@ -46,18 +64,30 @@ export default function SignInPage() {
         <div className="mb-4 flex justify-center">
           <BrandLogo variant="full" size="lg" priority />
         </div>
+
         <h1 className="text-center text-2xl sm:text-3xl font-bold text-[#00A19C] mb-2">
           Funcional UP Digital
         </h1>
+
         <p className="text-center text-[#a1a1a1] text-sm sm:text-base mb-6">
           Acesse sua conta
         </p>
 
+        {successMessage && (
+          <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+            {successMessage}
+          </div>
+        )}
+
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label htmlFor="email" className="text-sm font-medium text-[#e5e5e5]">
+            <label
+              htmlFor="email"
+              className="text-sm font-medium text-[#e5e5e5]"
+            >
               E-mail
             </label>
+
             <input
               id="email"
               type="email"
@@ -65,14 +95,19 @@ export default function SignInPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
               className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none transition focus:border-[#00A19C] focus:ring-1 focus:ring-[#00A19C]"
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label htmlFor="password" className="text-sm font-medium text-[#e5e5e5]">
+            <label
+              htmlFor="password"
+              className="text-sm font-medium text-[#e5e5e5]"
+            >
               Senha
             </label>
+
             <input
               id="password"
               type="password"
@@ -80,6 +115,7 @@ export default function SignInPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
               className="w-full rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-4 py-3 text-sm text-[#f5f5f5] placeholder-[#6b6b6b] outline-none transition focus:border-[#00A19C] focus:ring-1 focus:ring-[#00A19C]"
             />
           </div>
@@ -104,6 +140,7 @@ export default function SignInPage() {
           >
             Não tenho conta! Novo aluno
           </Link>
+
           <Link
             href="/"
             className="text-[#a1a1a1] transition hover:text-[#e5e5e5]"
