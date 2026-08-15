@@ -9,27 +9,37 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60,
   },
+
   providers: [
     CredentialsProvider({
       name: "credentials",
+
       credentials: {
-        email: { label: "E-mail", type: "email" },
-        password: { label: "Senha", type: "password" },
+        email: {
+          label: "E-mail",
+          type: "email",
+        },
+
+        password: {
+          label: "Senha",
+          type: "password",
+        },
       },
+
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
 
+        const normalizedEmail = credentials.email.trim().toLowerCase();
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: {
+            email: normalizedEmail,
+          },
         });
 
-        if (!user) {
-          return null;
-        }
-
-        if (!user.password) {
+        if (!user || !user.password || !user.active) {
           return null;
         }
 
@@ -51,24 +61,30 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-      token.id = user.id;
-      token.role = user.role ?? "";
+        token.id = user.id;
+        token.role = user.role ?? "";
       }
+
       return token;
     },
+
     async session({ session, token }) {
       if (token?.id) {
         session.user.id = token.id as string;
       }
+
       if (token?.role) {
         session.user.role = token.role as string;
       }
+
       return session;
     },
   },
+
   pages: {
     signIn: "/auth/signin",
   },
