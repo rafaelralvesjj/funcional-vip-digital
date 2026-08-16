@@ -655,13 +655,44 @@ export default function ResumoAlunoPage() {
     if (!studentId) return [];
 
     try {
-      const res = await fetch(`/api/students/${encodeURIComponent(studentId)}/open-questions-context`, {
+      // Usa a API de conversas que já existe no sistema. Assim o pacote de IA
+      // não depende de uma rota nova e não corre o risco de a implantação ficar
+      // incompleta. A API já aplica as permissões de professor/gestão e devolve
+      // a conversa raiz com todas as respostas (children).
+      const res = await fetch(`/api/questions?studentId=${encodeURIComponent(studentId)}`, {
         cache: "no-store",
       });
       if (!res.ok) return [];
 
       const data = await res.json().catch(() => null);
-      return Array.isArray(data?.openQuestions) ? data.openQuestions : [];
+      const conversations = Array.isArray(data) ? data : [];
+
+      return conversations
+        .filter((question: any) => !question?.resolvedAt && !question?.parentId)
+        .map((question: any) => {
+          const rawMessages = [question, ...(Array.isArray(question?.children) ? question.children : [])];
+          const messages = rawMessages
+            .filter((message: any) => String(message?.content || "").trim())
+            .map((message: any) => ({
+              id: String(message?.id || ""),
+              senderRole: String(message?.senderRole || ""),
+              content: String(message?.content || "").trim(),
+              createdAt: String(message?.createdAt || ""),
+            }));
+          const conversationText = messages
+            .map((message) => `${message.senderRole || "USUARIO"}: ${message.content}`)
+            .join("\n");
+          const lastMessage = messages.length > 0 ? messages[messages.length - 1].content : "";
+
+          return {
+            id: String(question?.id || ""),
+            createdAt: String(question?.createdAt || ""),
+            teacherName: question?.teacher?.name || null,
+            lastMessage,
+            conversationText,
+            messages,
+          } satisfies OpenQuestionContext;
+        });
     } catch {
       return [];
     }
@@ -1765,9 +1796,26 @@ export default function ResumoAlunoPage() {
         ? getTrainingScheduleFromExpectedDates(authoritativeExpectedDates)
         : displaySchedule;
 
-      const consolidatedContext = buildConsolidatedTrainingContext(summary);
-      const consolidatedSummaryText = buildConsolidatedSummaryText(summary, consolidatedContext);
-      const packageSummary: SummaryResponse = { ...summary, summaryText: consolidatedSummaryText };
+      // Reconsulta as conversas abertas exatamente no momento de baixar o ZIP.
+      // Isso garante que uma mensagem enviada depois de gerar o resumo também
+      // entre no pacote e que DUVIDAS_ABERTAS.json nunca dependa de estado antigo.
+      const freshOpenQuestions = selectedStudentId
+        ? await loadOpenQuestionsContext(selectedStudentId)
+        : [];
+      const packageOpenQuestions = freshOpenQuestions.length > 0
+        ? freshOpenQuestions
+        : (summary.openQuestions || []);
+      const summaryForPackage: SummaryResponse = {
+        ...summary,
+        openQuestions: packageOpenQuestions,
+      };
+
+      const consolidatedContext = buildConsolidatedTrainingContext(summaryForPackage);
+      const consolidatedSummaryText = buildConsolidatedSummaryText(summaryForPackage, consolidatedContext);
+      const packageSummary: SummaryResponse = {
+        ...summaryForPackage,
+        summaryText: consolidatedSummaryText,
+      };
       const prompt = getJsonPrompt(packageSummary, authoritativeExpectedDates);
       const zip = new JSZip();
       const safeStudentName = summary.student.name
@@ -1882,7 +1930,7 @@ export default function ResumoAlunoPage() {
       );
       zip.file(
         "CONTEXTO/DUVIDAS_ABERTAS.json",
-        JSON.stringify(summary.openQuestions || [], null, 2)
+        JSON.stringify(packageOpenQuestions, null, 2)
       );
       zip.file(
         "CONTEXTO/ULTIMO_TREINO.json",
@@ -1900,6 +1948,12 @@ export default function ResumoAlunoPage() {
         })), null, 2)
       );
       zip.file("manifesto.json", JSON.stringify(manifest, null, 2));
+
+      // Trava de integridade do pacote: se este arquivo não tiver sido criado,
+      // interrompe o download em vez de entregar um ZIP incompleto.
+      if (!zip.file("CONTEXTO/DUVIDAS_ABERTAS.json")) {
+        throw new Error("Falha interna: DUVIDAS_ABERTAS.json não foi incluído no pacote.");
+      }
 
       const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
       const url = URL.createObjectURL(blob);
