@@ -1,23 +1,7 @@
-CORREÇÃO DEFINITIVA — DATA DO TREINO / CAMINHO CORRETO
+SUBSTITUIR EXATAMENTE:
+app/dashboard/resumo-aluno/page.tsx
 
-O erro persistiu porque os arquivos corrigidos foram colocados na RAIZ do repositório:
-- /api/workout-plan/route.ts
-- /dashboard/montar-treino/page.tsx
-
-Esses caminhos NÃO são usados pelo Next.js deste projeto.
-Os arquivos que realmente rodam ficam dentro da pasta /app.
-
-SUBSTITUIR exatamente:
-1) app/api/workout-plan/route.ts
-2) app/dashboard/montar-treino/page.tsx
-
-Depois, APAGAR apenas os duplicados incorretos da raiz:
-1) api/workout-plan/route.ts
-2) dashboard/montar-treino/page.tsx
-
-NÃO apagar as pastas app/api nem app/dashboard.
-
-Resultado esperado para Ana Beatriz na semana 17/08/2026 a 23/08/2026:
-- 17/08/2026 = criado
-- 19/08/2026 = selecionado/restante
-- 23/08/2026 não deve substituir a data oficial devolvida pela API.
+Verificação após deploy:
+- Gere um novo pacote de treino.
+- manifesto.json deve mostrar packageVersion = 2.2-open-questions
+- O ZIP deve conter CONTEXTO/DUVIDAS_ABERTAS.json

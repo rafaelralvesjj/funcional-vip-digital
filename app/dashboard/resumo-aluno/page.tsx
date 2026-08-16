@@ -37,6 +37,20 @@ type WorkoutPlanningSummaryResponse = {
   } | null;
 };
 
+type OpenQuestionContext = {
+  id: string;
+  createdAt: string;
+  teacherName?: string | null;
+  lastMessage?: string | null;
+  conversationText?: string | null;
+  messages?: Array<{
+    id: string;
+    senderRole?: string | null;
+    content: string;
+    createdAt: string;
+  }>;
+};
+
 type SummaryResponse = {
   ok: boolean;
   generatedAt: string;
@@ -73,6 +87,7 @@ type SummaryResponse = {
     }>;
     openCareEvents?: Array<{ severity: string; title: string; description?: string | null }>;
   } | null;
+  openQuestions?: OpenQuestionContext[];
   latestWorkout?: {
     id: string;
     date: string;
@@ -567,7 +582,7 @@ export default function ResumoAlunoPage() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "warning" | "error"; text: string } | null>(null);
   const [viewMode, setViewMode] = useState<"prompt" | "summary" | "jsonPrompt">("jsonPrompt");
   const [aiJsonText, setAiJsonText] = useState("");
   const [aiImportMessage, setAiImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -634,6 +649,53 @@ export default function ResumoAlunoPage() {
     }
 
     setLoadingExerciseLibrary(false);
+  }
+
+  async function loadOpenQuestionsContext(studentId: string): Promise<OpenQuestionContext[]> {
+    if (!studentId) return [];
+
+    try {
+      // Usa a API de conversas que já existe no sistema. Assim o pacote de IA
+      // não depende de uma rota nova e não corre o risco de a implantação ficar
+      // incompleta. A API já aplica as permissões de professor/gestão e devolve
+      // a conversa raiz com todas as respostas (children).
+      const res = await fetch(`/api/questions?studentId=${encodeURIComponent(studentId)}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return [];
+
+      const data = await res.json().catch(() => null);
+      const conversations = Array.isArray(data) ? data : [];
+
+      return conversations
+        .filter((question: any) => !question?.resolvedAt && !question?.parentId)
+        .map((question: any) => {
+          const rawMessages = [question, ...(Array.isArray(question?.children) ? question.children : [])];
+          const messages = rawMessages
+            .filter((message: any) => String(message?.content || "").trim())
+            .map((message: any) => ({
+              id: String(message?.id || ""),
+              senderRole: String(message?.senderRole || ""),
+              content: String(message?.content || "").trim(),
+              createdAt: String(message?.createdAt || ""),
+            }));
+          const conversationText = messages
+            .map((message) => `${message.senderRole || "USUARIO"}: ${message.content}`)
+            .join("\n");
+          const lastMessage = messages.length > 0 ? messages[messages.length - 1].content : "";
+
+          return {
+            id: String(question?.id || ""),
+            createdAt: String(question?.createdAt || ""),
+            teacherName: question?.teacher?.name || null,
+            lastMessage,
+            conversationText,
+            messages,
+          } satisfies OpenQuestionContext;
+        });
+    } catch {
+      return [];
+    }
   }
 
   useEffect(() => {
@@ -1123,6 +1185,8 @@ export default function ResumoAlunoPage() {
         alerts: evolution.reviewAlerts || [],
       })}`,
       `CONTEXTO CONSOLIDADO E PRECEDÊNCIA: ${JSON.stringify(consolidatedContext)}`,
+      `DÚVIDAS/FEEDBACKS ABERTOS DO ALUNO — CONTEXTO OBRIGATÓRIO: ${JSON.stringify(summaryData.openQuestions || [])}`,
+      "REGRA PARA DÚVIDAS/FEEDBACKS ABERTOS: considere o conteúdo ao ajustar o próximo treino. Preserve o que o aluno disse que funcionou, incorpore pedidos de ajuste quando forem seguros e coerentes, e leve alertas operacionais para reviewAlerts. Uma mensagem ainda sem resposta NÃO bloqueia a geração do treino por si só; bloqueie apenas quando houver pausa por cuidado aberta ou outra condição de segurança já sinalizada pelo sistema. O professor responderá/revisará antes da liberação final.",
       `CONTEXTO ESSENCIAL DO ALUNO: ${compactContext}`,
       ...getExerciseLibraryPromptLines(summaryData),
       "",
@@ -1657,13 +1721,28 @@ export default function ResumoAlunoPage() {
       const data = await res.json().catch(() => null);
 
       if (res.ok && data?.ok) {
-        setSummary(data);
+        const openQuestions = await loadOpenQuestionsContext(selectedStudentId);
+        const enrichedData: SummaryResponse = {
+          ...data,
+          openQuestions,
+        };
+        const openQuestionsCount = Math.max(
+          openQuestions.length,
+          Number(data?.metrics?.openQuestions || 0)
+        );
+
+        setSummary(enrichedData);
         setViewMode("jsonPrompt");
 
-        if (hasOpenCarePause(data)) {
+        if (hasOpenCarePause(enrichedData)) {
           setMessage({
             type: "error",
             text: "Resumo gerado, mas o aluno está em pausa por cuidado. Não gere JSON de treino normal enquanto o evento estiver aberto.",
+          });
+        } else if (openQuestionsCount > 0) {
+          setMessage({
+            type: "warning",
+            text: `Resumo gerado. Há ${openQuestionsCount} mensagem(ns) do aluno aguardando resposta. O conteúdo foi incluído no contexto da IA e deve orientar os ajustes do treino. Você pode gerar o pacote normalmente, mas revise o resultado e responda ao aluno antes da liberação final.`,
           });
         } else {
           setMessage({ type: "success", text: "Resumo gerado com sucesso." });
@@ -1717,9 +1796,26 @@ export default function ResumoAlunoPage() {
         ? getTrainingScheduleFromExpectedDates(authoritativeExpectedDates)
         : displaySchedule;
 
-      const consolidatedContext = buildConsolidatedTrainingContext(summary);
-      const consolidatedSummaryText = buildConsolidatedSummaryText(summary, consolidatedContext);
-      const packageSummary: SummaryResponse = { ...summary, summaryText: consolidatedSummaryText };
+      // Reconsulta as conversas abertas exatamente no momento de baixar o ZIP.
+      // Isso garante que uma mensagem enviada depois de gerar o resumo também
+      // entre no pacote e que DUVIDAS_ABERTAS.json nunca dependa de estado antigo.
+      const freshOpenQuestions = selectedStudentId
+        ? await loadOpenQuestionsContext(selectedStudentId)
+        : [];
+      const packageOpenQuestions = freshOpenQuestions.length > 0
+        ? freshOpenQuestions
+        : (summary.openQuestions || []);
+      const summaryForPackage: SummaryResponse = {
+        ...summary,
+        openQuestions: packageOpenQuestions,
+      };
+
+      const consolidatedContext = buildConsolidatedTrainingContext(summaryForPackage);
+      const consolidatedSummaryText = buildConsolidatedSummaryText(summaryForPackage, consolidatedContext);
+      const packageSummary: SummaryResponse = {
+        ...summaryForPackage,
+        summaryText: consolidatedSummaryText,
+      };
       const prompt = getJsonPrompt(packageSummary, authoritativeExpectedDates);
       const zip = new JSZip();
       const safeStudentName = summary.student.name
@@ -1755,7 +1851,7 @@ export default function ResumoAlunoPage() {
         workouts: [],
       };
       const manifest = {
-        packageVersion: "2.1",
+        packageVersion: "2.2-open-questions",
         purpose: targetWorkoutId ? "ALTERAR_TREINO_EXISTENTE" : "MONTAR_TREINOS_DA_SEMANA",
         generatedAt: new Date().toISOString(),
         studentId: summary.student.id,
@@ -1776,6 +1872,7 @@ export default function ResumoAlunoPage() {
           "CONTEXTO/HISTORICO_RECENTE.json",
           "CONTEXTO/PREFERENCIAS_ATIVAS.json",
           "CONTEXTO/EVENTOS_DE_CUIDADO.json",
+          "CONTEXTO/DUVIDAS_ABERTAS.json",
           "CONTEXTO/ULTIMO_TREINO.json",
           "CONTEXTO/BIBLIOTECA_EXERCICIOS.json",
           "manifesto.json",
@@ -1791,6 +1888,7 @@ export default function ResumoAlunoPage() {
           "A memória técnica APPROVED mais recente prevalece sobre cadastro/onboarding antigo quando houver conflito.",
           "Não recuse gerar treino apenas por conflito de dados: aplique a precedência, gere de forma conservadora e inclua o alerta para revisão humana.",
           "A memória técnica aprovada, os eventos de cuidado e os feedbacks recentes têm prioridade sobre suposições.",
+          "Leia CONTEXTO/DUVIDAS_ABERTAS.json. Mensagens abertas do aluno são contexto obrigatório para ajustar o treino, mesmo antes de o professor responder. Elas não bloqueiam a geração por si só; o professor deve revisar e responder antes da liberação final.",
           "Não trate um achado isolado como autorização automática para progressão.",
           "Retorne somente o JSON válido no formato de INSTRUCOES/MODELO_RESPOSTA.json.",
           "Não altere studentId, aiValidation, datas obrigatórias ou validationKey.",
@@ -1831,6 +1929,10 @@ export default function ResumoAlunoPage() {
         JSON.stringify(technicalContext.openCareEvents || [], null, 2)
       );
       zip.file(
+        "CONTEXTO/DUVIDAS_ABERTAS.json",
+        JSON.stringify(packageOpenQuestions, null, 2)
+      );
+      zip.file(
         "CONTEXTO/ULTIMO_TREINO.json",
         JSON.stringify(summary.latestWorkout || null, null, 2)
       );
@@ -1846,6 +1948,12 @@ export default function ResumoAlunoPage() {
         })), null, 2)
       );
       zip.file("manifesto.json", JSON.stringify(manifest, null, 2));
+
+      // Trava de integridade do pacote: se este arquivo não tiver sido criado,
+      // interrompe o download em vez de entregar um ZIP incompleto.
+      if (!zip.file("CONTEXTO/DUVIDAS_ABERTAS.json")) {
+        throw new Error("Falha interna: DUVIDAS_ABERTAS.json não foi incluído no pacote.");
+      }
 
       const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
       const url = URL.createObjectURL(blob);
@@ -1991,7 +2099,9 @@ export default function ResumoAlunoPage() {
             "rounded-xl px-4 py-3 text-sm " +
             (message.type === "success"
               ? "bg-green-500/10 text-green-400 border border-green-500/20"
-              : "bg-red-500/10 text-red-400 border border-red-500/20")
+              : message.type === "warning"
+                ? "bg-amber-500/10 text-amber-300 border border-amber-500/30"
+                : "bg-red-500/10 text-red-400 border border-red-500/20")
           }
         >
           {message.text}
@@ -2090,6 +2200,40 @@ export default function ResumoAlunoPage() {
           </p>
         </div>
       </div>
+
+      {summary && Math.max(summary.openQuestions?.length || 0, Number(summary.metrics?.openQuestions || 0)) > 0 && !hasOpenCarePause(summary) && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 space-y-3">
+          <div>
+            <p className="text-sm font-bold text-amber-300">⚠️ Mensagem do aluno aguardando resposta</p>
+            <p className="text-sm text-amber-100/80 mt-1">
+              A IA já receberá esse conteúdo como contexto obrigatório para ajustar o próximo treino. Isso não bloqueia a montagem. Revise o rascunho e responda ao aluno antes de liberar a semana.
+            </p>
+          </div>
+
+          {(summary.openQuestions || []).slice(0, 3).map((question) => (
+            <div key={question.id} className="rounded-xl border border-amber-500/20 bg-black/20 px-4 py-3">
+              <p className="text-xs text-amber-200/70">
+                {new Date(question.createdAt).toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </p>
+              <p className="mt-1 text-sm text-[#f5f5f5] whitespace-pre-wrap">
+                {question.conversationText || question.lastMessage || "Mensagem aberta registrada no chat."}
+              </p>
+            </div>
+          ))}
+
+          {(summary.openQuestions?.length || 0) === 0 && (
+            <p className="text-xs text-amber-200/70">
+              O resumo identificou mensagem(ns) aberta(s). O conteúdo permanece no RESUMO_ALUNO e deve ser revisado antes da liberação.
+            </p>
+          )}
+        </div>
+      )}
 
       {summary && (
         <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
