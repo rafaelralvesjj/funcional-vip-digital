@@ -1135,6 +1135,27 @@ export default function MontarTreinoPage() {
     weeklyPlans.map((plan) => getPlanDateInput(plan) || "").join("|"),
   ]);
 
+  // Proteção adicional para lotes importados da IA: se um rascunho for
+  // carregado depois da resposta da API e tentar recolocar uma data antiga,
+  // a primeira data restante oficial do servidor volta a prevalecer.
+  useEffect(() => {
+    if (editingWorkoutId || serverExpectedWorkoutDates === null) return;
+
+    const nextServerDate = serverExpectedWorkoutDates.find(
+      (candidate) =>
+        !weeklyPlans.some((plan) => getPlanDateInput(plan) === candidate)
+    );
+
+    if (nextServerDate && date !== nextServerDate) {
+      setDate(nextServerDate);
+    }
+  }, [
+    editingWorkoutId,
+    serverExpectedWorkoutDates?.join("|") || "",
+    weeklyPlans.map((plan) => getPlanDateInput(plan) || "").join("|"),
+    date,
+  ]);
+
   useEffect(() => {
     async function fetchWeeklyWorkoutInfo() {
       if (!selectedStudent) {
@@ -1562,15 +1583,26 @@ export default function MontarTreinoPage() {
     const selectedDateAlreadyCreatedForSave = Boolean(
       date && weeklyPlans.some((plan) => getPlanDateInput(plan) === date)
     );
+
+    // Se o servidor já devolveu as datas restantes oficiais da semana, ele é
+    // a fonte soberana também no instante do salvamento. Isso impede que um
+    // rascunho/estado visual antigo (ex.: 23/08) seja enviado quando a API já
+    // informou que a vaga correta é 19/08.
+    const serverFirstMissingExpectedDate = serverExpectedWorkoutDates?.find(
+      (candidate) =>
+        !weeklyPlans.some((plan) => getPlanDateInput(plan) === candidate)
+    ) || null;
+
     let dateToSave = editingWorkoutId
       ? date
-      : (
+      : serverFirstMissingExpectedDate ||
+        ((
           date &&
           expectedWorkoutDates.includes(date) &&
           !selectedDateAlreadyCreatedForSave
         )
-        ? date
-        : firstMissingExpectedDate || date;
+          ? date
+          : firstMissingExpectedDate || date);
 
     // Proteção final da retomada no cliente. Mesmo que uma URL/rascunho antigo
     // ainda traga 03/08, nunca enviamos uma data anterior à liberação. Se hoje
