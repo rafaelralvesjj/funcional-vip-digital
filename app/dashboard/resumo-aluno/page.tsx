@@ -570,6 +570,7 @@ export default function ResumoAlunoPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [viewMode, setViewMode] = useState<"prompt" | "summary" | "jsonPrompt">("jsonPrompt");
   const [aiJsonText, setAiJsonText] = useState("");
+  const [aiImportMessage, setAiImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [targetWeekStart, setTargetWeekStart] = useState("");
   const [targetExpectedWorkoutDates, setTargetExpectedWorkoutDates] = useState<string[]>([]);
   const [targetWorkoutId, setTargetWorkoutId] = useState<string | null>(null);
@@ -1144,21 +1145,27 @@ export default function ResumoAlunoPage() {
     return JSON.parse(candidate);
   }
 
-  function normalizeAiWorkoutPayload(payload: any, expectedWorkoutDatesOverride?: string[]): any {
+  function normalizeAiWorkoutPayload(
+    payload: any,
+    expectedWorkoutDatesOverride?: string[],
+    studentIdOverride?: string
+  ): any {
     const workouts = Array.isArray(payload?.workouts)
       ? payload.workouts
       : Array.isArray(payload?.treinos)
         ? payload.treinos
         : [];
 
-    const payloadStudentId = String(payload?.studentId || "");
+    const payloadStudentId = String(payload?.studentId || "").trim();
+    const effectiveStudentId = String(studentIdOverride || selectedStudentId || "").trim();
+    const effectiveStudent = students.find((student) => student.id === effectiveStudentId) || null;
 
     if (!payloadStudentId) {
       throw new Error("O JSON precisa ter studentId.");
     }
 
-    if (payloadStudentId !== selectedStudentId) {
-      throw new Error("Este JSON não pertence ao aluno selecionado. Gere o resumo novamente pela tela correta.");
+    if (!effectiveStudentId || payloadStudentId !== effectiveStudentId) {
+      throw new Error("Este JSON não pertence ao aluno selecionado. Importe novamente o arquivo correto.");
     }
 
     if (workouts.length === 0) {
@@ -1169,11 +1176,13 @@ export default function ResumoAlunoPage() {
       throw new Error("A biblioteca de exercícios está vazia. Cadastre exercícios antes de importar treino da IA.");
     }
 
-    const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || null;
+    const contractedDays = effectiveStudent?.contractedTrainingDaysPerMonth || null;
+    const aiValidationFromPayload = payload?.aiValidation || payload?.security || null;
+    const payloadWeekStart = String(aiValidationFromPayload?.weekStart || targetWeekStart || "");
     const expectedContext = getAiValidationContext({
-      studentId: selectedStudentId,
+      studentId: effectiveStudentId,
       contractedTrainingDaysPerMonth: contractedDays,
-      weekStartIso: targetWeekStart,
+      weekStartIso: payloadWeekStart || targetWeekStart,
       expectedWorkoutDatesOverride:
         expectedWorkoutDatesOverride !== undefined
           ? expectedWorkoutDatesOverride
@@ -1192,7 +1201,7 @@ export default function ResumoAlunoPage() {
       fallbackWorkoutCount: expectedContext.expectedWorkoutCount,
       expectedWorkoutDatesOverride: effectiveExpectedWorkoutDates,
     });
-    const aiValidation = payload?.aiValidation || payload?.security || null;
+    const aiValidation = aiValidationFromPayload;
 
     if (!aiValidation) {
       throw new Error("O JSON não possui aiValidation. Copie novamente o Prompt JSON atualizado e gere outro arquivo pela IA.");
@@ -1315,7 +1324,7 @@ export default function ResumoAlunoPage() {
       source: "ai-summary",
       createdAt: new Date().toISOString(),
       studentId: payloadStudentId,
-      studentName: payload?.studentName || selectedStudent?.name || "",
+      studentName: payload?.studentName || effectiveStudent?.name || "",
       editingWorkoutId: targetWorkoutId || null,
       aiValidation: effectiveExpectedContext,
       evolutionDecision,
@@ -1327,65 +1336,110 @@ export default function ResumoAlunoPage() {
   }
 
   async function openJsonInWorkoutBuilder() {
-    if (hasOpenCarePause(summary)) {
-      setMessage({
-        type: "error",
-        text: "Aluno em pausa por cuidado. Não é permitido importar JSON de treino normal enquanto o evento estiver aberto.",
-      });
+    const importedText = aiJsonText;
+
+    if (!importedText.trim()) {
+      setAiImportMessage({ type: "error", text: "Importe ou cole primeiro a resposta TXT/JSON da IA." });
       return;
     }
 
     try {
-      // Reconsulta a programação real imediatamente antes de validar o JSON.
-      // Assim, uma URL antiga (ex.: 03/08) nunca prevalece sobre uma retomada
-      // já liberada em 05/08 com treino restante em 07/08.
-      const careReturnRemainingDates = selectedStudentId
-        ? await resolveCareReturnPlanningTarget(selectedStudentId)
-        : null;
+      // Primeiro lemos o arquivo importado e identificamos o aluno/semana do próprio
+      // pacote. Isso evita que uma URL antiga ou uma seleção visual desatualizada
+      // faça o JSON desaparecer sem abrir a montagem.
+      const parsed = extractJsonFromText(importedText);
+      const importedStudentId = String(parsed?.studentId || "").trim();
+      const importedValidation = parsed?.aiValidation || parsed?.security || null;
+      const importedWeekStart = String(importedValidation?.weekStart || targetWeekStart || "").trim();
+
+      if (!importedStudentId) {
+        throw new Error("O arquivo importado não possui studentId.");
+      }
+
+      const importedStudent = students.find((student) => student.id === importedStudentId) || null;
+      if (!importedStudent) {
+        throw new Error("O aluno deste arquivo não foi encontrado entre os alunos disponíveis para o professor.");
+      }
+
+      if (targetWorkoutId && importedStudentId !== selectedStudentId) {
+        throw new Error("Este arquivo pertence a outro aluno e não pode substituir o treino que está sendo editado.");
+      }
+
+      // Se o professor importou um arquivo válido de outro aluno enquanto a URL
+      // ainda apontava para um aluno anterior, sincronizamos a seleção automaticamente.
+      if (!targetWorkoutId && importedStudentId !== selectedStudentId) {
+        setSelectedStudentId(importedStudentId);
+        setSummary(null);
+
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.set("studentId", importedStudentId);
+          if (importedWeekStart) url.searchParams.set("date", importedWeekStart);
+          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+      }
+
+      // Reconsulta a programação oficial sem apagar o JSON que acabou de ser importado.
+      const careReturnRemainingDates = await resolveCareReturnPlanningTarget(
+        importedStudentId,
+        importedWeekStart || undefined,
+        true
+      );
       const authoritativeExpectedDatesRaw =
         careReturnRemainingDates !== null
           ? careReturnRemainingDates
           : targetExpectedWorkoutDates;
+      const effectiveWeekStart = importedWeekStart || targetWeekStart || resolveWeekStartIso(getSaoPauloCivilDateInput());
       const authoritativeExpectedDates = targetWorkoutId
         ? authoritativeExpectedDatesRaw
         : normalizeCurrentWeekExpectedDatesFallback(
             authoritativeExpectedDatesRaw,
-            targetWeekStart || resolveWeekStartIso(getSaoPauloCivilDateInput())
+            effectiveWeekStart
           );
 
       if (careReturnRemainingDates && careReturnRemainingDates.length === 0) {
-        setMessage({
+        setAiImportMessage({
           type: "success",
-          text: "A programação de retomada desta semana já está completa. Não há treino restante para importar.",
+          text: "A programação desta semana já está completa. Não há treino restante para importar.",
         });
         return;
       }
 
-      const parsed = extractJsonFromText(aiJsonText);
-      const normalized = normalizeAiWorkoutPayload(parsed, authoritativeExpectedDates);
+      const normalized = normalizeAiWorkoutPayload(
+        parsed,
+        authoritativeExpectedDates,
+        importedStudentId
+      );
 
       localStorage.setItem("aiWorkoutDraftBatch", JSON.stringify(normalized));
-      setMessage({
+      setAiImportMessage({
         type: "success",
         text: targetWorkoutId
           ? "JSON validado. Abrindo o treino existente para substituição dos dados."
-          : "JSON validado. Abrindo tela de montar treino com os dados preenchidos.",
+          : `JSON validado para ${importedStudent.name}. Abrindo a montagem do treino.`,
       });
 
       const firstWorkoutDate = normalized.aiValidation.expectedWorkoutDates?.[0] || normalized.aiValidation.weekStart;
       window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(normalized.studentId)}&date=${encodeURIComponent(firstWorkoutDate)}&source=ai-json${targetWorkoutId ? `&workoutId=${encodeURIComponent(targetWorkoutId)}` : ""}`;
     } catch (error: any) {
-      setMessage({
+      // Nunca apaga o arquivo importado quando há erro: o professor consegue ver
+      // o motivo, corrigir e tentar novamente sem reimportar tudo.
+      setAiJsonText(importedText);
+      setAiImportMessage({
         type: "error",
-        text: error?.message || "JSON inválido. Copie novamente a resposta da IA.",
+        text: error?.message || "JSON inválido. Importe novamente a resposta da IA.",
       });
     }
   }
 
-  async function resolveCareReturnPlanningTarget(studentId: string): Promise<string[] | null> {
+  async function resolveCareReturnPlanningTarget(
+    studentId: string,
+    referenceDateOverride?: string,
+    preserveAiJson = false
+  ): Promise<string[] | null> {
     if (!studentId || targetWorkoutId) return null;
 
-    const referenceDate = targetWeekStart || resolveWeekStartIso(getSaoPauloCivilDateInput());
+    const referenceDate = referenceDateOverride || targetWeekStart || resolveWeekStartIso(getSaoPauloCivilDateInput());
 
     try {
       const res = await fetch(
@@ -1409,11 +1463,15 @@ export default function ResumoAlunoPage() {
           .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
 
         setTargetExpectedWorkoutDates(authoritativeDates);
-        setAiJsonText("");
+        if (!preserveAiJson) {
+          setAiJsonText("");
+          setAiImportMessage(null);
+        }
         setMessage(null);
 
         if (typeof window !== "undefined") {
           const url = new URL(window.location.href);
+          url.searchParams.set("studentId", studentId);
 
           if (authoritativeDates.length > 0) {
             url.searchParams.set("date", authoritativeDates[0]);
@@ -1440,7 +1498,10 @@ export default function ResumoAlunoPage() {
 
       if (remainingCount <= 0) {
         setTargetExpectedWorkoutDates([]);
-        setAiJsonText("");
+        if (!preserveAiJson) {
+          setAiJsonText("");
+          setAiImportMessage(null);
+        }
 
         if (typeof window !== "undefined") {
           const url = new URL(window.location.href);
@@ -1471,11 +1532,12 @@ export default function ResumoAlunoPage() {
         return [];
       }
 
-      const contractedDays = selectedStudent?.contractedTrainingDaysPerMonth || weeklyLimit * 4;
+      const planningStudent = students.find((student) => student.id === studentId) || selectedStudent;
+      const contractedDays = planningStudent?.contractedTrainingDaysPerMonth || weeklyLimit * 4;
       const canonicalDates = getTrainingSchedule(
         contractedDays,
         weekStartIso,
-        selectedStudent?.preferredWorkoutDays
+        planningStudent?.preferredWorkoutDays
       )
         .map((item) => item.date)
         .filter(
@@ -1487,7 +1549,7 @@ export default function ResumoAlunoPage() {
 
       const weekdayFallbackDates: string[] = [];
       const hasStructuredPreferredWorkoutDays = Boolean(
-        selectedStudent?.preferredWorkoutDays?.length
+        planningStudent?.preferredWorkoutDays?.length
       );
       const cursor = parseDateInput(earliestAllowedDate);
 
@@ -1517,7 +1579,10 @@ export default function ResumoAlunoPage() {
       // oferecidas. Na retomada do meio da semana, isso transforma 05/08 criado
       // + 1 restante em 07/08, em vez de reabrir 03/08.
       setTargetExpectedWorkoutDates(remainingDates);
-      setAiJsonText("");
+      if (!preserveAiJson) {
+        setAiJsonText("");
+        setAiImportMessage(null);
+      }
       setMessage(null);
 
       if (typeof window !== "undefined") {
@@ -1806,9 +1871,38 @@ export default function ResumoAlunoPage() {
     try {
       const text = await file.text();
       setAiJsonText(text);
-      setMessage({ type: "success", text: "Resposta da IA importada. Agora valide e abra em Montar Treino." });
+
+      let importedStudentName = "";
+      try {
+        const parsed = extractJsonFromText(text);
+        const importedStudentId = String(parsed?.studentId || "").trim();
+        const importedStudent = students.find((student) => student.id === importedStudentId) || null;
+        importedStudentName = importedStudent?.name || String(parsed?.studentName || "").trim();
+
+        if (importedStudent && !targetWorkoutId && importedStudentId !== selectedStudentId) {
+          setSelectedStudentId(importedStudentId);
+          setSummary(null);
+          if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            url.searchParams.set("studentId", importedStudentId);
+            const importedWeekStart = String(parsed?.aiValidation?.weekStart || "").trim();
+            if (importedWeekStart) url.searchParams.set("date", importedWeekStart);
+            window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+          }
+        }
+      } catch {
+        // A validação completa acontece ao clicar em Abrir em Montar Treino.
+      }
+
+      const successText = importedStudentName
+        ? `Resposta da IA importada para ${importedStudentName}. Clique em Abrir em Montar Treino.`
+        : "Resposta da IA importada. Clique em Abrir em Montar Treino.";
+      setAiImportMessage({ type: "success", text: successText });
+      setMessage({ type: "success", text: successText });
     } catch {
-      setMessage({ type: "error", text: "Não foi possível ler o arquivo selecionado." });
+      const errorText = "Não foi possível ler o arquivo selecionado.";
+      setAiImportMessage({ type: "error", text: errorText });
+      setMessage({ type: "error", text: errorText });
     }
   }
 
@@ -1914,8 +2008,18 @@ export default function ResumoAlunoPage() {
             <select
               value={selectedStudentId}
               onChange={(event) => {
-                setSelectedStudentId(event.target.value);
+                const nextStudentId = event.target.value;
+                setSelectedStudentId(nextStudentId);
                 setSummary(null);
+                setAiJsonText("");
+                setAiImportMessage(null);
+
+                if (typeof window !== "undefined") {
+                  const url = new URL(window.location.href);
+                  if (nextStudentId) url.searchParams.set("studentId", nextStudentId);
+                  else url.searchParams.delete("studentId");
+                  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+                }
               }}
               disabled={loadingStudents}
               className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C] disabled:opacity-60"
@@ -2152,7 +2256,10 @@ export default function ResumoAlunoPage() {
 
             <textarea
               value={aiJsonText}
-              onChange={(event) => setAiJsonText(event.target.value)}
+              onChange={(event) => {
+                setAiJsonText(event.target.value);
+                setAiImportMessage(null);
+              }}
               disabled={hasCarePauseBlock}
               placeholder={
                 hasCarePauseBlock
@@ -2161,6 +2268,19 @@ export default function ResumoAlunoPage() {
               }
               className="w-full min-h-[220px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-xs md:text-sm text-[#e5e5e5] font-mono leading-relaxed outline-none focus:border-[#00A19C] disabled:opacity-50"
             />
+
+            {aiImportMessage && (
+              <div
+                className={
+                  "rounded-xl px-4 py-3 text-sm " +
+                  (aiImportMessage.type === "success"
+                    ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                    : "bg-red-500/10 text-red-400 border border-red-500/20")
+                }
+              >
+                {aiImportMessage.text}
+              </div>
+            )}
 
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <p className="text-xs text-[#6b6b6b]">
