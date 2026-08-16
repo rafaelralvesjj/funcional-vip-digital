@@ -1,16 +1,23 @@
-CORREÇÃO — IMPORTAÇÃO DA ADAPTAÇÃO E CONTAGEM DE TREINOS
+CORREÇÃO DEFINITIVA — DATA DO TREINO / CAMINHO CORRETO
 
-Arquivos alterados:
-- app/api/workout-adjustments/route.ts
-- components/DashboardConversationList.tsx
+O erro persistiu porque os arquivos corrigidos foram colocados na RAIZ do repositório:
+- /api/workout-plan/route.ts
+- /dashboard/montar-treino/page.tsx
 
-O que muda:
-- A área para importar o TXT/JSON agora aparece dentro do próprio cartão de preferência.
-- Também é possível colar o JSON e validar sem sair da conversa.
-- Após validar, aparece o botão para aplicar em todos os treinos elegíveis.
-- A busca passa a considerar TODOS os treinos pendentes da semana atual,
-  inclusive os que ficaram pendentes em dias anteriores da mesma semana,
-  além de todos os treinos futuros ainda não iniciados.
-- Treinos concluídos ou já iniciados continuam preservados.
+Esses caminhos NÃO são usados pelo Next.js deste projeto.
+Os arquivos que realmente rodam ficam dentro da pasta /app.
 
-Não houve alteração no Prisma nem no banco.
+SUBSTITUIR exatamente:
+1) app/api/workout-plan/route.ts
+2) app/dashboard/montar-treino/page.tsx
+
+Depois, APAGAR apenas os duplicados incorretos da raiz:
+1) api/workout-plan/route.ts
+2) dashboard/montar-treino/page.tsx
+
+NÃO apagar as pastas app/api nem app/dashboard.
+
+Resultado esperado para Ana Beatriz na semana 17/08/2026 a 23/08/2026:
+- 17/08/2026 = criado
+- 19/08/2026 = selecionado/restante
+- 23/08/2026 não deve substituir a data oficial devolvida pela API.

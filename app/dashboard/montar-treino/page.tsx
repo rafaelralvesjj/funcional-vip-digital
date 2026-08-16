@@ -1024,100 +1024,45 @@ export default function MontarTreinoPage() {
     careReturnPlanningStart,
     selectedStudentInfo?.preferredWorkoutDays
   );
-  const rawExpectedWorkoutDates =
-    serverExpectedWorkoutDates !== null
-      ? serverExpectedWorkoutDates
-      : clientExpectedWorkoutDates;
+  const createdWorkoutDatesThisWeek = Array.from(
+    new Set(
+      weeklyPlans
+        .map((plan) => getPlanDateInput(plan))
+        .filter((value): value is string => Boolean(value))
+        .filter((value) =>
+          value >= formatDateInput(startOfWeek) &&
+          value < formatDateInput(new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() + 7, 12, 0, 0, 0))
+        )
+    )
+  ).sort();
 
-  // Retomada: a tela nunca pode reapresentar uma data anterior à liberação
-  // ou uma data passada ainda não criada. Os treinos já salvos continuam
-  // visíveis/contando; as vagas restantes são reconstruídas somente entre
-  // hoje (quando a semana é a atual) e domingo.
-  const expectedWorkoutDates = (() => {
-    if (!careReturnPlanningStart || !weeklyWorkoutLimit) {
-      return rawExpectedWorkoutDates;
-    }
-
-    const weekStartInput = formatDateInput(startOfWeek);
-    const weekEndExclusive = new Date(startOfWeek);
-    weekEndExclusive.setDate(startOfWeek.getDate() + 7);
-    const weekEndExclusiveInput = formatDateInput(weekEndExclusive);
-    const sunday = new Date(startOfWeek);
-    sunday.setDate(startOfWeek.getDate() + 6);
-    sunday.setHours(12, 0, 0, 0);
-    const sundayInput = formatDateInput(sunday);
-
-    const createdDates = Array.from(
-      new Set(
-        weeklyPlans
-          .map((plan) => getPlanDateInput(plan))
-          .filter((value): value is string => Boolean(value))
-          .filter((value) => value >= weekStartInput && value < weekEndExclusiveInput)
-      )
-    ).sort();
-
-    const remainingCount = Math.max(weeklyWorkoutLimit - createdDates.length, 0);
-    if (remainingCount <= 0) return createdDates.slice(0, weeklyWorkoutLimit);
-
-    const todayInput = getSaoPauloCivilDateInput();
-    const todayDate = parseDateInput(todayInput);
-    const todayWeek = todayDate ? getWeekRange(todayDate) : null;
-    const isCurrentWeek = Boolean(
-      todayWeek && formatDateInput(todayWeek.startOfWeek) === weekStartInput
-    );
-
-    let earliestInput = careReturnPlanningStart > weekStartInput
-      ? careReturnPlanningStart
-      : weekStartInput;
-
-    if (isCurrentWeek && todayInput > earliestInput) {
-      earliestInput = todayInput;
-    }
-
-    const availableDates: string[] = [];
-    const cursor = parseDateInput(earliestInput);
-    if (cursor) {
-      while (formatDateInput(cursor) <= sundayInput) {
-        const candidate = formatDateInput(cursor);
-        if (
-          candidate >= careReturnPlanningStart &&
-          !createdDates.includes(candidate)
-        ) {
-          availableDates.push(candidate);
-        }
-        cursor.setDate(cursor.getDate() + 1);
-      }
-    }
-
-    const selectedRemaining: string[] = [];
-    if (remainingCount === 1 && availableDates.length > 0) {
-      // Se já existe um treino na retomada, fecha a semana na última data útil
-      // disponível (ex.: 05/08 criado -> 07/08 restante).
-      selectedRemaining.push(
-        createdDates.length > 0
-          ? availableDates[availableDates.length - 1]
-          : availableDates[0]
-      );
-    } else if (remainingCount > 1 && availableDates.length > 0) {
-      if (remainingCount >= availableDates.length) {
-        selectedRemaining.push(...availableDates);
-      } else {
-        for (let index = 0; index < remainingCount; index += 1) {
-          const position = Math.round(
-            (index * (availableDates.length - 1)) / (remainingCount - 1)
-          );
-          const candidate = availableDates[position];
-          if (candidate && !selectedRemaining.includes(candidate)) {
-            selectedRemaining.push(candidate);
-          }
-        }
-      }
-    }
-
-    return Array.from(new Set([...createdDates, ...selectedRemaining]))
-      .sort()
-      .slice(0, weeklyWorkoutLimit);
-  })();
+  /*
+   * A API é a fonte autoritativa da programação semanal.
+   *
+   * Antes, quando existia uma retomada por cuidado, o cliente reconstruía a
+   * agenda novamente e podia trocar uma data válida devolvida pela API por
+   * outra data da semana (ex.: servidor = 19/08, tela = 23/08). Depois do
+   * primeiro treino salvo isso deixava a interface e o backend em desacordo e
+   * o segundo treino era rejeitado.
+   *
+   * Agora, quando a API já respondeu, usamos exatamente as datas restantes
+   * que ela calculou e apenas somamos os treinos que já foram criados para
+   * exibir a programação completa na tela. O cálculo local fica somente como
+   * fallback enquanto a resposta do servidor ainda não chegou.
+   */
+  const authoritativeExpectedWorkoutDates = serverExpectedWorkoutDates !== null
+    ? Array.from(
+        new Set([
+          ...createdWorkoutDatesThisWeek,
+          ...serverExpectedWorkoutDates,
+        ])
+      ).sort()
+    : null;
+  const expectedWorkoutDates = authoritativeExpectedWorkoutDates !== null
+    ? weeklyWorkoutLimit
+      ? authoritativeExpectedWorkoutDates.slice(0, weeklyWorkoutLimit)
+      : authoritativeExpectedWorkoutDates
+    : clientExpectedWorkoutDates;
   const firstMissingExpectedDate = getFirstMissingExpectedDate(
     expectedWorkoutDates,
     weeklyPlans
@@ -1188,6 +1133,27 @@ export default function MontarTreinoPage() {
     expectedWorkoutDates.join("|"),
     firstMissingExpectedDate,
     weeklyPlans.map((plan) => getPlanDateInput(plan) || "").join("|"),
+  ]);
+
+  // Proteção adicional para lotes importados da IA: se um rascunho for
+  // carregado depois da resposta da API e tentar recolocar uma data antiga,
+  // a primeira data restante oficial do servidor volta a prevalecer.
+  useEffect(() => {
+    if (editingWorkoutId || serverExpectedWorkoutDates === null) return;
+
+    const nextServerDate = serverExpectedWorkoutDates.find(
+      (candidate) =>
+        !weeklyPlans.some((plan) => getPlanDateInput(plan) === candidate)
+    );
+
+    if (nextServerDate && date !== nextServerDate) {
+      setDate(nextServerDate);
+    }
+  }, [
+    editingWorkoutId,
+    serverExpectedWorkoutDates?.join("|") || "",
+    weeklyPlans.map((plan) => getPlanDateInput(plan) || "").join("|"),
+    date,
   ]);
 
   useEffect(() => {
@@ -1617,15 +1583,26 @@ export default function MontarTreinoPage() {
     const selectedDateAlreadyCreatedForSave = Boolean(
       date && weeklyPlans.some((plan) => getPlanDateInput(plan) === date)
     );
+
+    // Se o servidor já devolveu as datas restantes oficiais da semana, ele é
+    // a fonte soberana também no instante do salvamento. Isso impede que um
+    // rascunho/estado visual antigo (ex.: 23/08) seja enviado quando a API já
+    // informou que a vaga correta é 19/08.
+    const serverFirstMissingExpectedDate = serverExpectedWorkoutDates?.find(
+      (candidate) =>
+        !weeklyPlans.some((plan) => getPlanDateInput(plan) === candidate)
+    ) || null;
+
     let dateToSave = editingWorkoutId
       ? date
-      : (
+      : serverFirstMissingExpectedDate ||
+        ((
           date &&
           expectedWorkoutDates.includes(date) &&
           !selectedDateAlreadyCreatedForSave
         )
-        ? date
-        : firstMissingExpectedDate || date;
+          ? date
+          : firstMissingExpectedDate || date);
 
     // Proteção final da retomada no cliente. Mesmo que uma URL/rascunho antigo
     // ainda traga 03/08, nunca enviamos uma data anterior à liberação. Se hoje
@@ -1741,6 +1718,18 @@ export default function MontarTreinoPage() {
       });
       if (res.ok) {
         const result = await res.json();
+        const nextAuthoritativeDates = Array.isArray(result?.expectedWorkoutDates)
+          ? result.expectedWorkoutDates.filter((value: unknown): value is string => Boolean(value))
+          : [];
+        const savedAuthoritativeDate =
+          typeof result?.savedWorkoutDate === "string" && result.savedWorkoutDate
+            ? result.savedWorkoutDate
+            : getCivilDateInput(result?.date) || dateToSave;
+
+        if (!editingWorkoutId && Array.isArray(result?.expectedWorkoutDates)) {
+          setServerExpectedWorkoutDates(nextAuthoritativeDates);
+        }
+
         if (editingWorkoutId) {
           if (openedFromAiDraft) {
             clearAiWorkoutDraft();
@@ -1771,16 +1760,26 @@ export default function MontarTreinoPage() {
         const shouldReturnToDashboardAfterSave = willCompleteWeekOnSave;
         const hasNextAiWorkout = aiBatchHasNextWorkout && !shouldReturnToDashboardAfterSave;
 
+        const normalizedDateMessage = result?.normalizedWorkoutDateFrom && savedAuthoritativeDate
+          ? ` Data ajustada automaticamente para ${formatDatePtBr(new Date(`${savedAuthoritativeDate}T12:00:00`))} conforme a programação do aluno.`
+          : "";
+
         setSuccess(
           hasNextAiWorkout
-            ? `${weeklyMessage} Próximo treino sugerido pela IA carregado para revisão.`
+            ? `${weeklyMessage}${normalizedDateMessage} Próximo treino sugerido pela IA carregado para revisão.`
             : shouldReturnToDashboardAfterSave
-              ? `${weeklyMessage} Montagem concluída. Voltando ao dashboard...`
-              : weeklyMessage
+              ? `${weeklyMessage}${normalizedDateMessage} Montagem concluída. Voltando ao dashboard...`
+              : `${weeklyMessage}${normalizedDateMessage}`
         );
 
         if (hasNextAiWorkout && aiDraftBatch) {
           loadAiDraftByIndex(aiDraftIndex + 1);
+
+          // O servidor acabou de recalcular a programação após o treino salvo.
+          // Essa data prevalece sobre qualquer estado antigo da tela/rascunho.
+          if (nextAuthoritativeDates.length > 0) {
+            setDate(nextAuthoritativeDates[0]);
+          }
         } else {
           setPlanName("");
           if (!openedFromPendingList && !openedFromAiDraft) {
@@ -1813,18 +1812,18 @@ export default function MontarTreinoPage() {
           ...current,
           {
             id: savedPlanId,
-            date: dateToSave || null,
+            date: savedAuthoritativeDate || null,
           },
         ]);
         setWeeklyPlansCount((current) => current + 1);
 
-        const nextMissingDateAfterSave = getFirstMissingExpectedDate(
+        const nextMissingDateAfterSave = nextAuthoritativeDates[0] || getFirstMissingExpectedDate(
           expectedWorkoutDates,
           [
             ...weeklyPlans,
             {
               id: savedPlanId,
-              date: dateToSave || null,
+              date: savedAuthoritativeDate || null,
             },
           ]
         );
@@ -1848,6 +1847,15 @@ export default function MontarTreinoPage() {
         setTimeout(() => setSuccess(null), 7000);
       } else {
         const err = await res.json();
+        const authoritativeDatesFromError = Array.isArray(err?.expectedWorkoutDates)
+          ? err.expectedWorkoutDates.filter((value: unknown): value is string => Boolean(value))
+          : [];
+
+        if (authoritativeDatesFromError.length > 0) {
+          setServerExpectedWorkoutDates(authoritativeDatesFromError);
+          setDate(authoritativeDatesFromError[0]);
+        }
+
         alert(`Erro ao salvar: ${err.error}`);
       }
     } catch {
