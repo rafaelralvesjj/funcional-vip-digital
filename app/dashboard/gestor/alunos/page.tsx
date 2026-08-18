@@ -81,6 +81,180 @@ function normalizeRole(role?: string | null) {
   return String(role || "").toUpperCase();
 }
 
+type StudentFormChangeHandler = (
+  field: keyof StudentFormState,
+  value: string | boolean | WorkoutDayCode[]
+) => void;
+
+interface StudentFormProps {
+  form: StudentFormState;
+  onChange: StudentFormChangeHandler;
+  teacherOptions: Teacher[];
+  todayDateInput: string;
+  isEdit?: boolean;
+}
+
+function StudentForm({
+  form,
+  onChange,
+  teacherOptions,
+  todayDateInput,
+  isEdit = false,
+}: StudentFormProps) {
+  return (
+    <div className="space-y-3">
+      <input
+        value={form.name}
+        onChange={(e) => onChange("name", e.target.value)}
+        placeholder="Nome completo"
+        className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
+      />
+
+      <div>
+        <label className="mb-1 block text-xs text-[#a1a1a1]">
+          Como gosta de ser chamado
+        </label>
+        <input
+          value={form.preferredName}
+          onChange={(e) => onChange("preferredName", e.target.value)}
+          placeholder="Ex.: Rafa, Dê, João..."
+          maxLength={40}
+          autoComplete="nickname"
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
+        />
+        <p className="mt-1 text-[11px] leading-relaxed text-[#6b6b6b]">
+          Esse nome será usado nas saudações e comunicações com o aluno. O nome completo continua preservado no cadastro.
+        </p>
+      </div>
+
+      <input
+        value={form.email}
+        onChange={(e) => onChange("email", e.target.value)}
+        placeholder="E-mail"
+        type="email"
+        className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
+      />
+
+      <input
+        value={form.phone}
+        onChange={(e) => onChange("phone", e.target.value)}
+        placeholder="Telefone"
+        className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
+      />
+
+      <div>
+        <label className="mb-1 block text-xs text-[#a1a1a1]">
+          Data de nascimento *
+        </label>
+        <input
+          value={form.birthDate}
+          onChange={(e) => onChange("birthDate", e.target.value)}
+          type="date"
+          max={todayDateInput}
+          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
+        />
+        {form.birthDate && calculateAgeYears(form.birthDate) !== null && (
+          <p className="mt-1 text-[11px] text-[#00A19C]">
+            Idade calculada: {calculateAgeYears(form.birthDate)} ano(s)
+            {Number(calculateAgeYears(form.birthDate)) < 18 ? " · menor de idade" : ""}
+          </p>
+        )}
+      </div>
+
+      <input
+        value={form.password}
+        onChange={(e) => onChange("password", e.target.value)}
+        placeholder={isEdit ? "Nova senha, se quiser alterar" : "Senha inicial"}
+        type="password"
+        minLength={6}
+        autoComplete="new-password"
+        className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
+      />
+
+      <select
+        value={form.professorId}
+        onChange={(e) => onChange("professorId", e.target.value)}
+        className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
+      >
+        <option value="">Sem professor definido</option>
+        {teacherOptions.map((teacher) => (
+          <option key={teacher.id} value={teacher.id}>
+            {teacher.name}
+          </option>
+        ))}
+      </select>
+
+      <input
+        value={form.contractedTrainingDaysPerMonth}
+        onChange={(e) => onChange("contractedTrainingDaysPerMonth", e.target.value)}
+        placeholder="Dias contratados por mês. Ex.: 8, 12, 16, 20"
+        type="number"
+        min="0"
+        className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
+      />
+
+      <div className="rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-3">
+        <p className="text-xs font-semibold text-[#d6d6d6]">Dias preferidos para treino</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-[#6b6b6b]">
+          Marque os dias em que o aluno pode treinar. Sábado e domingo são permitidos. Para uma agenda fixa, deixe marcada exatamente a quantidade de dias correspondente aos treinos por semana; se houver mais opções, o sistema distribui os treinos entre elas.
+        </p>
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {WORKOUT_DAY_OPTIONS.map((option) => {
+            const selected = form.preferredWorkoutDays.includes(option.value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() =>
+                  onChange(
+                    "preferredWorkoutDays",
+                    selected
+                      ? form.preferredWorkoutDays.filter((day) => day !== option.value)
+                      : [...form.preferredWorkoutDays, option.value]
+                  )
+                }
+                className={
+                  "rounded border px-2 py-2 text-xs font-semibold transition " +
+                  (selected
+                    ? "border-[#00A19C] bg-[#00A19C]/15 text-[#00A19C]"
+                    : "border-[#2a2a2a] bg-[#111] text-[#8a8a8a] hover:border-[#00A19C]/50")
+                }
+              >
+                {option.shortLabel}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <input
+        value={form.image}
+        onChange={(e) => onChange("image", e.target.value)}
+        placeholder="URL da foto/imagem, se houver"
+        className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
+      />
+
+      <textarea
+        value={form.notes}
+        onChange={(e) => onChange("notes", e.target.value)}
+        placeholder="Observações"
+        rows={3}
+        className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C] resize-none"
+      />
+
+      <label className="flex items-center gap-2 text-sm text-[#a1a1a1]">
+        <input
+          type="checkbox"
+          checked={form.active}
+          onChange={(e) => onChange("active", e.target.checked)}
+          className="accent-[#00A19C]"
+        />
+        Aluno ativo
+      </label>
+    </div>
+  );
+}
+
 export default function GerenciarAlunosPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -315,169 +489,7 @@ export default function GerenciarAlunosPage() {
     }
   }
 
-  function StudentForm({
-    form,
-    onChange,
-    isEdit = false,
-  }: {
-    form: StudentFormState;
-    onChange: (
-      field: keyof StudentFormState,
-      value: string | boolean | WorkoutDayCode[]
-    ) => void;
-    isEdit?: boolean;
-  }) {
-    return (
-      <div className="space-y-3">
-        <input
-          value={form.name}
-          onChange={(e) => onChange("name", e.target.value)}
-          placeholder="Nome completo"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
-        />
 
-        <div>
-          <label className="mb-1 block text-xs text-[#a1a1a1]">
-            Como gosta de ser chamado
-          </label>
-          <input
-            value={form.preferredName}
-            onChange={(e) => onChange("preferredName", e.target.value)}
-            placeholder="Ex.: Rafa, Dê, João..."
-            maxLength={40}
-            autoComplete="nickname"
-            className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
-          />
-          <p className="mt-1 text-[11px] leading-relaxed text-[#6b6b6b]">
-            Esse nome será usado nas saudações e comunicações com o aluno. O nome completo continua preservado no cadastro.
-          </p>
-        </div>
-
-        <input
-          value={form.email}
-          onChange={(e) => onChange("email", e.target.value)}
-          placeholder="E-mail"
-          type="email"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
-        />
-
-        <input
-          value={form.phone}
-          onChange={(e) => onChange("phone", e.target.value)}
-          placeholder="Telefone"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
-        />
-
-        <div>
-          <label className="mb-1 block text-xs text-[#a1a1a1]">
-            Data de nascimento *
-          </label>
-          <input
-            value={form.birthDate}
-            onChange={(e) => onChange("birthDate", e.target.value)}
-            type="date"
-            max={todayDateInput}
-            className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
-          />
-          {form.birthDate && calculateAgeYears(form.birthDate) !== null && (
-            <p className="mt-1 text-[11px] text-[#00A19C]">
-              Idade calculada: {calculateAgeYears(form.birthDate)} ano(s)
-              {Number(calculateAgeYears(form.birthDate)) < 18 ? " · menor de idade" : ""}
-            </p>
-          )}
-        </div>
-
-        <input
-          value={form.password}
-          onChange={(e) => onChange("password", e.target.value)}
-          placeholder={isEdit ? "Nova senha, se quiser alterar" : "Senha inicial"}
-          type="password"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
-        />
-
-        <select
-          value={form.professorId}
-          onChange={(e) => onChange("professorId", e.target.value)}
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
-        >
-          <option value="">Sem professor definido</option>
-          {teacherOptions.map((teacher) => (
-            <option key={teacher.id} value={teacher.id}>
-              {teacher.name}
-            </option>
-          ))}
-        </select>
-
-        <input
-          value={form.contractedTrainingDaysPerMonth}
-          onChange={(e) => onChange("contractedTrainingDaysPerMonth", e.target.value)}
-          placeholder="Dias contratados por mês. Ex.: 8, 12, 16, 20"
-          type="number"
-          min="0"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
-        />
-
-        <div className="rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-3">
-          <p className="text-xs font-semibold text-[#d6d6d6]">Dias preferidos para treino</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-[#6b6b6b]">
-            Marque os dias em que o aluno pode treinar. Sábado e domingo são permitidos. Para uma agenda fixa, deixe marcada exatamente a quantidade de dias correspondente aos treinos por semana; se houver mais opções, o sistema distribui os treinos entre elas.
-          </p>
-          <div className="mt-3 grid grid-cols-4 gap-2">
-            {WORKOUT_DAY_OPTIONS.map((option) => {
-              const selected = form.preferredWorkoutDays.includes(option.value);
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() =>
-                    onChange(
-                      "preferredWorkoutDays",
-                      selected
-                        ? form.preferredWorkoutDays.filter((day) => day !== option.value)
-                        : [...form.preferredWorkoutDays, option.value]
-                    )
-                  }
-                  className={
-                    "rounded border px-2 py-2 text-xs font-semibold transition " +
-                    (selected
-                      ? "border-[#00A19C] bg-[#00A19C]/15 text-[#00A19C]"
-                      : "border-[#2a2a2a] bg-[#111] text-[#8a8a8a] hover:border-[#00A19C]/50")
-                  }
-                >
-                  {option.shortLabel}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <input
-          value={form.image}
-          onChange={(e) => onChange("image", e.target.value)}
-          placeholder="URL da foto/imagem, se houver"
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C]"
-        />
-
-        <textarea
-          value={form.notes}
-          onChange={(e) => onChange("notes", e.target.value)}
-          placeholder="Observações"
-          rows={3}
-          className="w-full bg-[#0a0a0a] text-white border border-[#2a2a2a] rounded px-3 py-2 text-sm outline-none focus:border-[#00A19C] resize-none"
-        />
-
-        <label className="flex items-center gap-2 text-sm text-[#a1a1a1]">
-          <input
-            type="checkbox"
-            checked={form.active}
-            onChange={(e) => onChange("active", e.target.checked)}
-            className="accent-[#00A19C]"
-          />
-          Aluno ativo
-        </label>
-      </div>
-    );
-  }
 
   return (
     <div className="p-4 md:p-6 w-full max-w-none mx-auto">
@@ -645,7 +657,13 @@ export default function GerenciarAlunosPage() {
           <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-white font-medium mb-4">Editar Aluno</h2>
 
-            <StudentForm form={editForm} onChange={updateEditForm} isEdit />
+            <StudentForm
+              form={editForm}
+              onChange={updateEditForm}
+              teacherOptions={teacherOptions}
+              todayDateInput={todayDateInput}
+              isEdit
+            />
 
             <div className="flex gap-2 justify-end mt-5">
               <button
@@ -671,7 +689,12 @@ export default function GerenciarAlunosPage() {
           <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-white font-medium mb-4">Cadastrar Aluno</h2>
 
-            <StudentForm form={newForm} onChange={updateNewForm} />
+            <StudentForm
+              form={newForm}
+              onChange={updateNewForm}
+              teacherOptions={teacherOptions}
+              todayDateInput={todayDateInput}
+            />
 
             <p className="text-[11px] text-[#6b6b6b] mt-3">
               A bioimpedância/anamnese continua separada. Este cadastro cria o login e o registro cadastral do aluno.
