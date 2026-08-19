@@ -777,7 +777,7 @@ export default function DashboardConversationList({
     const draft = batchAdjustmentByConversationId[conversation.id];
     if (!draft?.proposal) return;
     const count = draft.proposal.workouts.length;
-    if (!window.confirm(`Esta adaptação será aplicada a ${count} treino(s) pendente(s) da semana atual e futuros ainda não iniciados. Treinos concluídos, vencidos ou iniciados não serão alterados. Confirmar?`)) return;
+    if (!window.confirm(`Esta adaptação será aplicada a ${count} treino(s) pendente(s) da semana atual e futuros ainda não iniciados. Treinos concluídos, vencidos ou iniciados não serão alterados. Nenhuma mensagem será enviada ao aluno nesta etapa. Confirmar?`)) return;
     setErrorById((current) => ({ ...current, [conversation.id]: "" }));
     setSuccessById((current) => ({ ...current, [conversation.id]: "" }));
     setAdjustmentLoadingKey(`${conversation.id}:batch-apply`);
@@ -785,10 +785,25 @@ export default function DashboardConversationList({
       const response = await fetch("/api/workout-adjustments", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ action:"APPLY_CONVERSATION_BATCH", conversationId:conversation.id, proposal:draft.proposal }) });
       const data = await response.json().catch(()=>null);
       if (!response.ok) { setErrorById((current)=>({ ...current,[conversation.id]:getErrorMessage(data,"Não foi possível aplicar a adaptação.") })); return; }
+
+      const suggestedReply = String(data?.studentReplySuggestion || draft.proposal.studentMessage || "").trim();
+      if (suggestedReply) {
+        setReplyContentById((current) => ({ ...current, [conversation.id]: suggestedReply }));
+      }
+
       setErrorById((current)=>({ ...current,[conversation.id]:"" }));
-      setSuccessById((current)=>({ ...current,[conversation.id]:data.message||"Treinos ajustados." }));
+      setSuccessById((current)=>({
+        ...current,
+        [conversation.id]: data?.message || "Treinos ajustados. Revise a resposta abaixo e clique em Responder somente quando estiver pronta.",
+      }));
       setBatchAdjustmentByConversationId((current)=>({ ...current,[conversation.id]:null }));
       router.refresh();
+
+      window.setTimeout(() => {
+        const replyField = document.getElementById(`reply-${conversation.id}`) as HTMLTextAreaElement | null;
+        replyField?.scrollIntoView({ behavior: "smooth", block: "center" });
+        replyField?.focus();
+      }, 150);
     } catch(error){ console.error(error); setErrorById((current)=>({ ...current,[conversation.id]:"Erro ao aplicar a adaptação." })); } finally { setAdjustmentLoadingKey(null); }
   }
 
@@ -986,7 +1001,7 @@ export default function DashboardConversationList({
     if (!request || !draft?.proposal) return;
 
     const confirmed = window.confirm(
-      "Confirmar a substituição do treino pendente por esta versão? O treino já concluído não será alterado."
+      "Confirmar a substituição do treino pendente por esta versão? O treino já concluído não será alterado. Nenhuma mensagem será enviada ao aluno nesta etapa."
     );
 
     if (!confirmed) return;
@@ -1020,15 +1035,26 @@ export default function DashboardConversationList({
         return;
       }
 
+      const suggestedReply = String(data?.studentReplySuggestion || draft.proposal.studentMessage || "").trim();
+      if (suggestedReply) {
+        setReplyContentById((current) => ({ ...current, [conversation.id]: suggestedReply }));
+      }
+
       setSuccessById((current) => ({
         ...current,
-        [conversation.id]: data?.message || "Treino pendente ajustado.",
+        [conversation.id]: data?.message || "Treino pendente ajustado. Revise a resposta abaixo antes de enviar ao aluno.",
       }));
       setAdjustmentDraftByConversationId((current) => ({
         ...current,
         [conversation.id]: null,
       }));
       router.refresh();
+
+      window.setTimeout(() => {
+        const replyField = document.getElementById(`reply-${conversation.id}`) as HTMLTextAreaElement | null;
+        replyField?.scrollIntoView({ behavior: "smooth", block: "center" });
+        replyField?.focus();
+      }, 150);
     } catch (error) {
       console.error("Apply workout adjustment error:", error);
       setErrorById((current) => ({
@@ -1046,7 +1072,7 @@ export default function DashboardConversationList({
     if (!request) return;
 
     const confirmed = window.confirm(
-      "Manter o treino atual e aplicar esta preferência somente nos próximos treinos?"
+      "Manter o treino atual e aplicar esta preferência somente nos próximos treinos? Nenhuma mensagem será enviada ao aluno nesta etapa."
     );
 
     if (!confirmed) return;
@@ -1079,12 +1105,23 @@ export default function DashboardConversationList({
         return;
       }
 
+      const suggestedReply = String(data?.studentReplySuggestion || "").trim();
+      if (suggestedReply) {
+        setReplyContentById((current) => ({ ...current, [conversation.id]: suggestedReply }));
+      }
+
       setSuccessById((current) => ({
         ...current,
         [conversation.id]:
-          data?.message || "Preferência aplicada aos próximos treinos.",
+          data?.message || "Preferência aplicada aos próximos treinos. Revise a resposta abaixo antes de enviar ao aluno.",
       }));
       router.refresh();
+
+      window.setTimeout(() => {
+        const replyField = document.getElementById(`reply-${conversation.id}`) as HTMLTextAreaElement | null;
+        replyField?.scrollIntoView({ behavior: "smooth", block: "center" });
+        replyField?.focus();
+      }, 150);
     } catch (error) {
       console.error("Future-only workout adjustment error:", error);
       setErrorById((current) => ({
@@ -1251,7 +1288,8 @@ export default function DashboardConversationList({
                             <p className="text-xs font-semibold text-emerald-300">{batchAdjustmentDraft.proposal.workouts.length} treino(s) prontos para alteração</p>
                             {batchAdjustmentDraft.openCareEventCount ? <p className="text-[11px] text-amber-300">Há evento de cuidado aberto. A publicação ficará bloqueada até a resolução.</p> : null}
                             <p className="text-[11px] text-[#d4d4d4]">{batchAdjustmentDraft.proposal.rationale}</p>
-                            <button type="button" onClick={() => handleApplyBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey)} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Aplicar em todos os treinos elegíveis</button>
+                            <p className="text-[11px] font-medium text-cyan-200">Aplicar altera somente os treinos. A resposta ao aluno será revisada e enviada separadamente pelo botão Responder.</p>
+                            <button type="button" onClick={() => handleApplyBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey)} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Aplicar alterações nos treinos</button>
                           </div>
                         )}
                       </>
@@ -1386,13 +1424,14 @@ export default function DashboardConversationList({
                               <p className="text-[11px] text-amber-300">Há evento de cuidado aberto. A publicação ficará bloqueada até a resolução.</p>
                             ) : null}
                             <p className="text-[11px] text-[#d4d4d4]">{batchAdjustmentDraft.proposal.rationale}</p>
+                            <p className="text-[11px] font-medium text-cyan-200">Aplicar altera somente os treinos. A resposta ao aluno será revisada e enviada separadamente pelo botão Responder.</p>
                             <button
                               type="button"
                               onClick={() => handleApplyBatchAdjustment(conversation)}
                               disabled={Boolean(adjustmentLoadingKey)}
                               className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50"
                             >
-                              Aplicar em todos os treinos elegíveis
+                              Aplicar alterações nos treinos
                             </button>
                           </div>
                         )}
@@ -1439,7 +1478,7 @@ export default function DashboardConversationList({
                         </div>
 
                         <p className="text-[10px] text-emerald-200/80">
-                          O treino só será substituído depois da sua confirmação. Treinos concluídos permanecem intactos.
+                          O treino só será substituído depois da sua confirmação. Treinos concluídos permanecem intactos. Esta ação não envia mensagem ao aluno.
                         </p>
 
                         <button
@@ -1450,7 +1489,7 @@ export default function DashboardConversationList({
                         >
                           {adjustmentLoadingKey === `${conversation.id}:${adjustmentDraft.workoutId}:apply`
                             ? "Aplicando adaptação..."
-                            : "Confirmar e substituir treino pendente"}
+                            : "Aplicar alteração no treino"}
                         </button>
                       </div>
                     )}

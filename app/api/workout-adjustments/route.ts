@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/sendEmail";
 import { getStudentTechnicalContext } from "@/lib/student-technical-memory";
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 import JSZip from "jszip";
@@ -202,172 +201,6 @@ function cleanPositiveInteger(value: unknown, fallback: number): number {
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
 
   return Math.round(parsed);
-}
-
-function getAppAlunoUrl(): string {
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
-    "https://funcional-up-digital.vercel.app";
-
-  return `${appUrl.replace(/\/$/, "")}/aluno`;
-}
-
-function escapeHtml(value: string): string {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function formatDatePtBr(date: Date): string {
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function getInitials(name: string): string {
-  const parts = String(name || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (parts.length === 0) return "FV";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-
-  return `${parts[0][0] || ""}${parts[parts.length - 1][0] || ""}`.toUpperCase();
-}
-
-function buildSenderAvatarHtml(name: string, image?: string | null): string {
-  const safeName = escapeHtml(name);
-  const safeImage =
-    image && /^https?:\/\//i.test(image) ? escapeHtml(image) : "";
-
-  if (safeImage) {
-    return `<img src="${safeImage}" alt="${safeName}" width="52" height="52" style="display:block; width:52px; height:52px; border-radius:999px; object-fit:cover; border:2px solid #00A19C;" />`;
-  }
-
-  return `<div style="width:52px; height:52px; border-radius:999px; background:#2a2119; border:2px solid #00A19C; color:#00A19C; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:17px;">${escapeHtml(
-    getInitials(name)
-  )}</div>`;
-}
-
-async function sendWorkoutAdjustmentEmail({
-  to,
-  studentName,
-  professorName,
-  professorImage,
-  workoutName,
-  workoutDate,
-  objective,
-  studentMessage,
-}: {
-  to: string | null;
-  studentName: string;
-  professorName: string;
-  professorImage?: string | null;
-  workoutName: string;
-  workoutDate: Date;
-  objective: string;
-  studentMessage: string;
-}): Promise<boolean> {
-  if (!to) return false;
-
-  const alunoUrl = getAppAlunoUrl();
-  const safeStudentName = escapeHtml(studentName);
-  const safeProfessorName = escapeHtml(professorName);
-  const safeWorkoutName = escapeHtml(workoutName);
-  const safeWorkoutDate = escapeHtml(formatDatePtBr(workoutDate));
-  const safeObjective = escapeHtml(objective);
-  const safeStudentMessage = escapeHtml(studentMessage).replaceAll("\n", "<br />");
-  const avatarHtml = buildSenderAvatarHtml(professorName, professorImage);
-  const subject = `${professorName}: seu treino foi ajustado`;
-
-  const text = [
-    `Oi, ${studentName}!`,
-    "",
-    studentMessage,
-    "",
-    `Treino atualizado: ${workoutName}`,
-    `Data: ${formatDatePtBr(workoutDate)}`,
-    objective ? `Objetivo: ${objective}` : "",
-    "",
-    "Acesse sua área do aluno para conferir os exercícios, séries, repetições e orientações atualizadas.",
-    `Acessar treino: ${alunoUrl}`,
-    "",
-    "Caso queira comentar como foi a adaptação ou tenha alguma dúvida, use o chat da plataforma.",
-    "",
-    professorName,
-    "Professor · Funcional UP Digital",
-    "Mensagem automática enviada após a revisão e confirmação do professor.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const html = `
-    <div style="font-family:Arial,sans-serif; background:#0a0a0a; padding:24px;">
-      <div style="max-width:580px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:18px; overflow:hidden;">
-        <div style="padding:22px 24px; border-bottom:1px solid #2a2a2a; display:flex; align-items:center; gap:14px;">
-          ${avatarHtml}
-          <div>
-            <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.3;">${safeProfessorName}</div>
-            <div style="color:#00A19C; font-size:12px; margin-top:3px;">Professor · Funcional UP Digital</div>
-          </div>
-        </div>
-
-        <div style="padding:24px;">
-          <h2 style="color:#00A19C; margin:0 0 16px; font-size:22px;">Seu treino foi ajustado</h2>
-
-          <p style="color:#f5f5f5; font-size:15px; line-height:1.6;">
-            Oi, <strong>${safeStudentName}</strong>!
-          </p>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.7;">
-            ${safeStudentMessage}
-          </p>
-
-          <div style="background:#071413; border:1px solid #005D5A; border-radius:12px; padding:16px; margin:18px 0;">
-            <div style="color:#00A19C; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px;">Treino atualizado</div>
-            <div style="color:#f5f5f5; font-size:16px; font-weight:bold; line-height:1.4;">${safeWorkoutName}</div>
-            <div style="color:#b8b8b8; font-size:13px; margin-top:6px;">Data: ${safeWorkoutDate}</div>
-            ${
-              safeObjective
-                ? `<div style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:8px;">Objetivo: ${safeObjective}</div>`
-                : ""
-            }
-          </div>
-
-          <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-            Acesse sua área para conferir os exercícios, séries, repetições e orientações atualizadas antes de iniciar.
-          </p>
-
-          <a href="${alunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px; margin-top:4px;">
-            Ver treino atualizado
-          </a>
-
-          <p style="color:#d4d4d4; font-size:13px; line-height:1.6; margin-top:22px;">
-            Caso queira comentar como foi a adaptação ou tenha alguma dúvida, use o chat da plataforma.
-          </p>
-
-          <p style="color:#d4d4d4; font-size:13px; line-height:1.5; margin-top:20px;">
-            ${safeProfessorName}<br />Professor · Funcional UP Digital
-          </p>
-
-          <p style="color:#6b6b6b; font-size:11px; line-height:1.5; margin-top:4px;">
-            Mensagem automática enviada após a revisão e confirmação do professor.
-          </p>
-        </div>
-      </div>
-    </div>
-  `;
-
-  await sendEmail({ to, subject, text, html, eventType: "WORKOUT_ADJUSTMENT_STUDENT", recipientType: "STUDENT" });
-
-  return true;
 }
 
 function getCurrentWeekRange() {
@@ -1047,54 +880,14 @@ export async function POST(req: NextRequest) {
             });
           }
         }
-        await tx.question.create({ data:{ content:cleanText(normalizedBatch.studentMessage), answer:cleanText(normalizedBatch.studentMessage), answeredAt:now, answeredById:userId, parentId:conversationId, studentId:batchContext.student.id, teacherId:batchContext.conversation.teacherId||batchContext.student.userId, senderRole:role==="TEACHER"?"TEACHER":"GESTOR" } });
       });
-      const studentEmail = cleanText(batchContext.student.email)||cleanText(batchContext.student.userAuth?.email)||null;
-      if (studentEmail) {
-        const alunoUrl = getAppAlunoUrl();
-        const studentMessage = cleanText(normalizedBatch.studentMessage);
-        const safeStudentName = escapeHtml(cleanText(batchContext.student.name) || "aluno");
-        const safeStudentMessage = escapeHtml(studentMessage).replaceAll("\n", "<br />");
-
-        try {
-          await sendEmail({
-            to: studentEmail,
-            subject: "Seus próximos treinos foram ajustados 💪",
-            text: [
-              `Oi, ${cleanText(batchContext.student.name) || "aluno"}!`,
-              "",
-              studentMessage,
-              "",
-              `${normalizedWorkouts.length} treino(s) foram atualizados.`,
-              `Confira os detalhes na plataforma: ${alunoUrl}`,
-              "",
-              "Funcional UP Digital",
-            ].join("\n"),
-            html: `
-              <div style="font-family:Arial,sans-serif;background:#0a0a0a;padding:24px;">
-                <div style="max-width:580px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:18px;padding:26px;">
-                  <p style="margin:0 0 8px;color:#f5f5f5;font-size:15px;">Oi, <strong>${safeStudentName}</strong>!</p>
-                  <h2 style="margin:0 0 16px;color:#00A19C;font-size:24px;line-height:1.25;">Seus próximos treinos foram ajustados 💪</h2>
-                  <p style="margin:0;color:#d4d4d4;font-size:15px;line-height:1.65;">${safeStudentMessage}</p>
-                  <div style="margin-top:18px;padding:14px;border-radius:12px;background:#071413;border:1px solid #005D5A;color:#d4d4d4;font-size:14px;line-height:1.6;">
-                    <strong style="color:#00A19C;">Atualização concluída:</strong><br />
-                    ${normalizedWorkouts.length} treino(s) revisado(s) e atualizados na plataforma.
-                  </div>
-                  <a href="${alunoUrl}" style="display:inline-block;margin-top:20px;background:#00A19C;color:#081312;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:10px;">Ver meus treinos</a>
-                  <p style="margin:22px 0 0;color:#f5f5f5;font-size:14px;">Conte com a gente nessa caminhada.<br /><span style="color:#00A19C;">Funcional UP Digital</span></p>
-                  <p style="margin:18px 0 0;color:#6b6b6b;font-size:11px;">Mensagem automática enviada após a confirmação da adaptação dos treinos.</p>
-                </div>
-              </div>
-            `,
-            eventType: "WORKOUT_BATCH_ADJUSTED",
-            recipientType: "STUDENT",
-            contextId: conversationId,
-          });
-        } catch(e) {
-          console.error("Falha ao enviar e-mail da adaptação em lote:",e);
-        }
-      }
-      return NextResponse.json({ ok:true, action:"BATCH_ADAPTED", adjustedWorkoutCount:normalizedWorkouts.length, message:`${normalizedWorkouts.length} treino(s) pendente(s) e futuro(s) foram ajustados. O aluno recebeu a resposta no chat.` });
+      return NextResponse.json({
+        ok: true,
+        action: "BATCH_ADAPTED",
+        adjustedWorkoutCount: normalizedWorkouts.length,
+        studentReplySuggestion: cleanText(normalizedBatch.studentMessage),
+        message: `${normalizedWorkouts.length} treino(s) pendente(s) e futuro(s) foram ajustados. Nenhuma mensagem foi enviada ao aluno; revise a resposta abaixo e envie somente quando estiver pronta.`,
+      });
     }
 
     if (
@@ -1125,43 +918,28 @@ export async function POST(req: NextRequest) {
 
     if (action === "FUTURE_ONLY") {
       const now = new Date();
-      const replyContent = [
+      const studentReplySuggestion = [
         `${context.preference.student.name}, registrei sua preferência: ${context.preference.summary}`,
         context.workout
           ? "Ela será considerada nos próximos treinos. O treino que já está disponível nesta semana será mantido como está."
           : "Ela será considerada na montagem dos próximos treinos.",
-        "Mensagem automática enviada após a decisão do professor.",
       ].join("\n\n");
 
-      await prisma.$transaction([
-        prisma.studentTrainingPreference.update({
-          where: { id: preferenceId },
-          data: {
-            currentWeekAction: "FUTURE_ONLY",
-            handledAt: now,
-            handledById: userId,
-          },
-        }),
-        prisma.question.create({
-          data: {
-            content: replyContent,
-            answer: replyContent,
-            answeredAt: now,
-            answeredById: userId,
-            parentId: context.preference.sourceConversationId,
-            studentId: context.preference.studentId,
-            teacherId:
-              context.preference.professorId || context.preference.student.userId,
-            senderRole: role === "TEACHER" ? "TEACHER" : "GESTOR",
-          },
-        }),
-      ]);
+      await prisma.studentTrainingPreference.update({
+        where: { id: preferenceId },
+        data: {
+          currentWeekAction: "FUTURE_ONLY",
+          handledAt: now,
+          handledById: userId,
+        },
+      });
 
       return NextResponse.json({
         ok: true,
         action: "FUTURE_ONLY",
+        studentReplySuggestion,
         message:
-          "Preferência registrada para os próximos treinos. O treino atual foi mantido.",
+          "Preferência registrada para os próximos treinos. Nenhuma mensagem foi enviada ao aluno; revise a resposta sugerida e envie somente quando estiver pronta.",
       });
     }
 
@@ -1394,28 +1172,7 @@ export async function POST(req: NextRequest) {
       [
         `${context.preference.student.name}, sua preferência foi considerada na revisão do treino desta semana.`,
         "O treino pendente foi ajustado e já está disponível para você.",
-        "Mensagem automática enviada após a revisão do professor.",
       ].join("\n\n");
-
-    const professorId =
-      context.preference.professorId || (role === "TEACHER" ? userId : null);
-    const professor = professorId
-      ? await prisma.user.findUnique({
-          where: { id: professorId },
-          select: {
-            name: true,
-            image: true,
-          },
-        })
-      : null;
-    const professorName =
-      cleanText(professor?.name) ||
-      (role === "TEACHER" ? cleanText(sessionUser.name) : "Equipe Funcional UP Digital");
-    const professorImage = professor?.image || null;
-    const studentEmail =
-      cleanText(context.preference.student.email) ||
-      cleanText(context.preference.student.userAuth?.email) ||
-      null;
 
     await prisma.$transaction(async (tx) => {
       const adaptedPlan = await tx.workoutPlan.create({
@@ -1499,61 +1256,14 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      await tx.question.create({
-        data: {
-          content: studentMessage,
-          answer: studentMessage,
-          answeredAt: now,
-          answeredById: userId,
-          parentId: context.preference.sourceConversationId,
-          studentId: context.preference.studentId,
-          teacherId:
-            context.preference.professorId || context.preference.student.userId,
-          senderRole: role === "TEACHER" ? "TEACHER" : "GESTOR",
-        },
-      });
     });
-
-    let emailSent = false;
-    let emailStatus: "SENT" | "NO_EMAIL" | "FAILED" = studentEmail
-      ? "FAILED"
-      : "NO_EMAIL";
-
-    if (studentEmail) {
-      try {
-        emailSent = await sendWorkoutAdjustmentEmail({
-          to: studentEmail,
-          studentName: context.preference.student.name,
-          professorName,
-          professorImage,
-          workoutName: cleanText(proposal.name) || plan.name,
-          workoutDate: context.workout.date,
-          objective: cleanText(proposal.objective) || cleanText(plan.objective),
-          studentMessage,
-        });
-        emailStatus = emailSent ? "SENT" : "FAILED";
-      } catch (emailError) {
-        console.error(
-          "Falha ao enviar e-mail de treino ajustado ao aluno:",
-          emailError
-        );
-        emailStatus = "FAILED";
-      }
-    }
-
-    const responseMessage =
-      emailStatus === "SENT"
-        ? "Treino pendente ajustado. O treino concluído permaneceu intacto e o aluno foi avisado no chat e por e-mail."
-        : emailStatus === "NO_EMAIL"
-          ? "Treino pendente ajustado e aviso registrado no chat. O aluno não possui e-mail cadastrado para receber a notificação."
-          : "Treino pendente ajustado e aviso registrado no chat, mas não foi possível enviar o e-mail neste momento.";
 
     return NextResponse.json({
       ok: true,
       action: "ADAPTED",
-      emailSent,
-      emailStatus,
-      message: responseMessage,
+      studentReplySuggestion: studentMessage,
+      message:
+        "Treino pendente ajustado. Nenhuma mensagem foi enviada ao aluno; revise a resposta sugerida e envie somente quando estiver pronta.",
     });
   } catch (error) {
     console.error("POST /api/workout-adjustments error:", error);
