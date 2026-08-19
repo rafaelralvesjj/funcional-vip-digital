@@ -1,7 +1,16 @@
-SUBSTITUIR EXATAMENTE:
-app/dashboard/resumo-aluno/page.tsx
+CORREÇÃO — REVISÃO PROFUNDA DE ADAPTAÇÃO DE TREINOS
 
-Verificação após deploy:
-- Gere um novo pacote de treino.
-- manifesto.json deve mostrar packageVersion = 2.2-open-questions
-- O ZIP deve conter CONTEXTO/DUVIDAS_ABERTAS.json
+Arquivos alterados:
+- components/DashboardConversationList.tsx
+- app/api/workout-adjustments/route.ts
+
+O que muda:
+1. Quando há orientação médica ativa, o pacote de alteração entra automaticamente em modo DEEP.
+2. A IA precisa auditar cada exercício original: KEEP, MODIFY, REPLACE ou REMOVE, com justificativa.
+3. Todas as orientações médicas ativas precisam aparecer em guidanceCoverage.
+4. A validação confere a auditoria antes de permitir a aplicação.
+5. A tela mostra o impacto real antes -> depois por treino.
+6. Existe botão explícito "Gerar revisão profunda do treino" para uso mesmo sem orientação médica.
+7. Aplicar alterações continua sem responder automaticamente ao aluno.
+
+Não há mudança de banco de dados.

@@ -28,6 +28,22 @@ type ProposedExercise = {
   order: number;
 };
 
+type ExerciseAuditDecision = "KEEP" | "MODIFY" | "REPLACE" | "REMOVE";
+
+type ExerciseAuditItem = {
+  sourceExerciseId: string;
+  sourceExerciseName?: string;
+  decision: ExerciseAuditDecision;
+  reason: string;
+  replacementExerciseId?: string | null;
+};
+
+type GuidanceCoverageItem = {
+  guidanceKey: string;
+  application: string;
+  workoutIds: string[];
+};
+
 type LibraryExerciseRecord = {
   id: string;
   name: string;
@@ -51,6 +67,7 @@ type AdjustmentProposal = {
   rationale: string;
   studentMessage: string;
   exercises: ProposedExercise[];
+  exerciseAudit?: ExerciseAuditItem[];
 };
 
 
@@ -59,6 +76,26 @@ type BatchAdjustmentProposal = {
   rationale: string;
   studentMessage: string;
   workouts: Array<AdjustmentProposal & { workoutId: string }>;
+  guidanceCoverage?: GuidanceCoverageItem[];
+};
+
+type ActiveMedicalGuidance = {
+  guidanceKey: string;
+  title: string;
+  summary: string;
+};
+
+type WorkoutImpactSummary = {
+  workoutId: string;
+  workoutName: string;
+  originalExerciseCount: number;
+  newExerciseCount: number;
+  keptUnchangedCount: number;
+  modifiedCount: number;
+  removedCount: number;
+  addedCount: number;
+  auditDecisionCounts: Record<ExerciseAuditDecision, number>;
+  impactLevel: "LOW" | "MEDIUM" | "HIGH";
 };
 
 async function getConversationBatchContext({
@@ -201,6 +238,131 @@ function cleanPositiveInteger(value: unknown, fallback: number): number {
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
 
   return Math.round(parsed);
+}
+
+function extractMemorySummary(rawValue: unknown): string {
+  const raw = cleanText(rawValue);
+
+  if (!raw) return "";
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && typeof parsed.summary === "string") {
+      return parsed.summary.trim();
+    }
+  } catch {
+    // Memórias antigas podem guardar resumo como texto simples.
+  }
+
+  return raw;
+}
+
+function getActiveMedicalGuidance(technicalContext: any): ActiveMedicalGuidance[] {
+  const memories = Array.isArray(technicalContext?.approvedMemories)
+    ? technicalContext.approvedMemories
+    : [];
+
+  return memories
+    .filter((memory: any) => String(memory?.category || "").toUpperCase() === "MEDICAL_GUIDANCE")
+    .map((memory: any, index: number) => ({
+      guidanceKey: `MEDICAL_${index + 1}`,
+      title: cleanText(memory?.title) || `Orientação médica ${index + 1}`,
+      summary: extractMemorySummary(memory?.summary),
+    }));
+}
+
+function normalizeComparableText(value: unknown): string {
+  return cleanText(value).replace(/\s+/g, " ").toLowerCase();
+}
+
+function buildWorkoutImpactSummary({
+  workout,
+  proposal,
+}: {
+  workout: any;
+  proposal: any;
+}): WorkoutImpactSummary {
+  const originalExercises = Array.isArray(workout?.workoutPlan?.exercises)
+    ? workout.workoutPlan.exercises
+    : [];
+  const newExercises = Array.isArray(proposal?._normalizedExercises)
+    ? proposal._normalizedExercises
+    : [];
+
+  const originalById = new Map<string, any>(
+    originalExercises
+      .filter((exercise: any) => exercise?.libraryExerciseId)
+      .map((exercise: any) => [String(exercise.libraryExerciseId), exercise])
+  );
+  const newById = new Map<string, any>(
+    newExercises
+      .filter((exercise: any) => exercise?.libraryExerciseId)
+      .map((exercise: any) => [String(exercise.libraryExerciseId), exercise])
+  );
+
+  let keptUnchangedCount = 0;
+  let modifiedCount = 0;
+  let removedCount = 0;
+
+  for (const [exerciseId, original] of originalById.entries()) {
+    const next = newById.get(exerciseId);
+
+    if (!next) {
+      removedCount += 1;
+      continue;
+    }
+
+    const changed =
+      Number(original.series || 0) !== Number(next.series || 0) ||
+      normalizeComparableText(original.reps) !== normalizeComparableText(next.reps) ||
+      normalizeComparableText(original.weight) !== normalizeComparableText(next.weight) ||
+      normalizeComparableText(original.restTime) !== normalizeComparableText(next.restTime) ||
+      normalizeComparableText(original.notes) !== normalizeComparableText(next.notes);
+
+    if (changed) modifiedCount += 1;
+    else keptUnchangedCount += 1;
+  }
+
+  let addedCount = 0;
+  for (const exerciseId of newById.keys()) {
+    if (!originalById.has(exerciseId)) addedCount += 1;
+  }
+
+  const auditDecisionCounts: Record<ExerciseAuditDecision, number> = {
+    KEEP: 0,
+    MODIFY: 0,
+    REPLACE: 0,
+    REMOVE: 0,
+  };
+
+  for (const auditItem of Array.isArray(proposal?.exerciseAudit) ? proposal.exerciseAudit : []) {
+    const decision = String(auditItem?.decision || "").toUpperCase() as ExerciseAuditDecision;
+    if (decision in auditDecisionCounts) auditDecisionCounts[decision] += 1;
+  }
+
+  const touchedOriginalCount = modifiedCount + removedCount;
+  const originalCount = originalExercises.length;
+  const touchedRatio = originalCount > 0 ? touchedOriginalCount / originalCount : 0;
+  const structuralCount = removedCount + addedCount;
+  const impactLevel: WorkoutImpactSummary["impactLevel"] =
+    touchedRatio >= 0.6 || structuralCount >= 4
+      ? "HIGH"
+      : touchedRatio >= 0.3 || structuralCount >= 2
+        ? "MEDIUM"
+        : "LOW";
+
+  return {
+    workoutId: String(workout?.id || proposal?.workoutId || ""),
+    workoutName: cleanText(workout?.workoutPlan?.name) || cleanText(proposal?.name) || "Treino",
+    originalExerciseCount: originalExercises.length,
+    newExerciseCount: newExercises.length,
+    keptUnchangedCount,
+    modifiedCount,
+    removedCount,
+    addedCount,
+    auditDecisionCounts,
+    impactLevel,
+  };
 }
 
 function getCurrentWeekRange() {
@@ -749,11 +911,17 @@ export async function POST(req: NextRequest) {
     const preferenceId = cleanId(body?.preferenceId);
     const workoutId = cleanId(body?.workoutId);
     const conversationId = cleanId(body?.conversationId);
+    const requestedReviewDepth = String(body?.reviewDepth || "").toUpperCase();
 
     if (["PREPARE_CONVERSATION_PACKAGE", "VALIDATE_CONVERSATION_BATCH", "APPLY_CONVERSATION_BATCH"].includes(action)) {
       if (!conversationId) return NextResponse.json({ error: "Conversa inválida." }, { status: 400 });
       const batchContext = await getConversationBatchContext({ conversationId, userId, role });
       if ("error" in batchContext) return NextResponse.json({ error: batchContext.error }, { status: batchContext.status });
+      const activeMedicalGuidance = getActiveMedicalGuidance(batchContext.technicalContext);
+      const reviewDepth =
+        requestedReviewDepth === "DEEP" || activeMedicalGuidance.length > 0
+          ? "DEEP"
+          : "STANDARD";
 
       if (action === "PREPARE_CONVERSATION_PACKAGE") {
         if (batchContext.workouts.length === 0) return NextResponse.json({ error: "Não há treinos pendentes ou futuros elegíveis para adaptação." }, { status: 409 });
@@ -771,7 +939,39 @@ export async function POST(req: NextRequest) {
             exercises: workout.workoutPlan?.exercises.map((exercise: any) => ({ exerciseId: exercise.libraryExerciseId, name: exercise.name, series: exercise.series, reps: exercise.reps, weight: exercise.weight, restTime: exercise.restTime, notes: exercise.notes, order: exercise.order })),
           },
         }));
-        const model = { rationale: "", studentMessage: "", workouts: workoutPayload.map((w: any) => ({ workoutId: w.workoutId, name: w.plan.name || "", description: w.plan.description || "", objective: w.plan.objective || "", focusAreas: w.plan.focusAreas || "", intensity: w.plan.intensity || "", estimatedDurationMinutes: w.plan.estimatedDurationMinutes || 0, estimatedCaloriesMin: 0, estimatedCaloriesMax: 0, studentSummary: "", safetyNote: "", notes: "", rationale: "", studentMessage: "", exercises: [] })) };
+        const model = {
+          rationale: "",
+          studentMessage: "",
+          guidanceCoverage: activeMedicalGuidance.map((guidance) => ({
+            guidanceKey: guidance.guidanceKey,
+            application: "",
+            workoutIds: [],
+          })),
+          workouts: workoutPayload.map((w: any) => ({
+            workoutId: w.workoutId,
+            name: w.plan.name || "",
+            description: w.plan.description || "",
+            objective: w.plan.objective || "",
+            focusAreas: w.plan.focusAreas || "",
+            intensity: w.plan.intensity || "",
+            estimatedDurationMinutes: w.plan.estimatedDurationMinutes || 0,
+            estimatedCaloriesMin: 0,
+            estimatedCaloriesMax: 0,
+            studentSummary: "",
+            safetyNote: "",
+            notes: "",
+            rationale: "",
+            studentMessage: "",
+            exerciseAudit: (w.plan.exercises || []).map((exercise: any) => ({
+              sourceExerciseId: exercise.exerciseId,
+              sourceExerciseName: exercise.name,
+              decision: "KEEP",
+              reason: "",
+              replacementExerciseId: null,
+            })),
+            exercises: [],
+          })),
+        };
         const prompt = [
           ...MANUAL_AI_EXECUTION_HEADER_LINES,
           "Adapte TODOS os treinos elegíveis listados neste pacote com base no relato do aluno e em todo o contexto.",
@@ -786,16 +986,30 @@ export async function POST(req: NextRequest) {
           "Se houver evento de cuidado aberto, gere apenas o rascunho; a publicação ficará bloqueada até a resolução pelo professor.",
           "studentMessage deve explicar de forma humana que os próximos treinos foram revisados com base no relato do aluno.",
           "Cada item de workouts deve conter todos os campos do treino e exercises completos.",
+          ...(reviewDepth === "DEEP"
+            ? [
+                "MODO OBRIGATÓRIO: REVISÃO PROFUNDA DA PRESCRIÇÃO.",
+                "Não trate este pedido como ajuste mínimo e não preserve exercícios por padrão.",
+                "Revise CADA exercício original conscientemente, considerando todo o contexto técnico e todas as orientações médicas ativas.",
+                "Para cada treino, exerciseAudit é OBRIGATÓRIO e deve conter exatamente um item para cada exercício original, usando sourceExerciseId exatamente como veio no pacote.",
+                "decision deve ser KEEP, MODIFY, REPLACE ou REMOVE. KEEP só pode ser usado quando o exercício e seus parâmetros já forem plenamente compatíveis com as orientações atuais; explique o motivo em reason.",
+                "MODIFY significa manter o mesmo exerciseId com mudança material de séries, repetições, carga, descanso e/ou orientação técnica. REPLACE exige replacementExerciseId presente na nova lista exercises. REMOVE exige que o exercício original não apareça na nova lista.",
+                "A nova sessão deve refletir de forma perceptível as prioridades técnicas atuais; reorganize volume, ordem e composição quando necessário, sem trocar exercícios apenas para parecer diferente.",
+                "guidanceCoverage é OBRIGATÓRIO quando houver ORIENTACOES_MEDICAS_ATIVAS.json: cada guidanceKey deve aparecer exatamente uma vez, explicando como foi contemplado e em quais workoutIds.",
+                "Se uma orientação médica não exigir ação direta em determinado treino, explique isso em application; não omita a orientação.",
+              ]
+            : []),
         ].join("\n");
         const zip = new JSZip();
         zip.file("LEIA_PRIMEIRO.txt", prompt);
         zip.file("MODELO_RESPOSTA.json", JSON.stringify(model, null, 2));
         zip.file("CONTEXTO/CONVERSA.json", JSON.stringify(history, null, 2));
         zip.file("CONTEXTO/MEMORIA_TECNICA.json", JSON.stringify(batchContext.technicalContext || {}, null, 2));
+        zip.file("CONTEXTO/ORIENTACOES_MEDICAS_ATIVAS.json", JSON.stringify(activeMedicalGuidance, null, 2));
         zip.file("CONTEXTO/EVENTOS_DE_CUIDADO.json", JSON.stringify(batchContext.openCareEvents, null, 2));
         zip.file("CONTEXTO/TREINOS_ELEGIVEIS.json", JSON.stringify(workoutPayload, null, 2));
         zip.file("CONTEXTO/BIBLIOTECA_EXERCICIOS.json", JSON.stringify(library.map((e:any)=>({ exerciseId:e.id,name:e.name,group:e.muscleGroup,location:e.locationTags,equipment:e.equipmentTags,intensity:e.intensity })), null, 2));
-        zip.file("manifesto.json", JSON.stringify({ packageType: "WORKOUT_ADJUSTMENT_FROM_CONVERSATION", conversationId, studentId: batchContext.student.id, studentName: batchContext.student.name, eligibleWorkoutIds: workoutPayload.map((w:any)=>w.workoutId), eligibleWorkoutDates: workoutPayload.map((w:any)=>w.date), openCareEventCount: batchContext.openCareEvents.length, generatedAt: new Date().toISOString() }, null, 2));
+        zip.file("manifesto.json", JSON.stringify({ packageType: "WORKOUT_ADJUSTMENT_FROM_CONVERSATION", conversationId, studentId: batchContext.student.id, studentName: batchContext.student.name, eligibleWorkoutIds: workoutPayload.map((w:any)=>w.workoutId), eligibleWorkoutDates: workoutPayload.map((w:any)=>w.date), openCareEventCount: batchContext.openCareEvents.length, reviewDepth, medicalGuidanceCount: activeMedicalGuidance.length, generatedAt: new Date().toISOString() }, null, 2));
         const output = await zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
         const eligibleWorkoutDetails = workoutPayload.map((workout:any) => ({
           workoutId: workout.workoutId,
@@ -811,6 +1025,8 @@ export async function POST(req: NextRequest) {
             "Cache-Control":"no-store",
             "X-Eligible-Workout-Count": String(workoutPayload.length),
             "X-Eligible-Workout-Details": encodeURIComponent(JSON.stringify(eligibleWorkoutDetails)),
+            "X-Review-Mode": reviewDepth,
+            "X-Medical-Guidance-Count": String(activeMedicalGuidance.length),
           },
         });
       }
@@ -827,11 +1043,154 @@ export async function POST(req: NextRequest) {
         if (validation.error || !validation.normalizedExercises) return NextResponse.json({ error: `Treino ${item.workoutId}: ${validation.error || "proposta inválida"}` }, { status: 422 });
         normalizedWorkouts.push({ ...item, exercises: item.exercises.map((ex:any,index:number)=>({ ...ex, exerciseName: validation.normalizedExercises?.[index]?.name || "Exercício da biblioteca" })), _normalizedExercises: validation.normalizedExercises });
       }
+
+      if (reviewDepth === "DEEP") {
+        const byWorkoutIdForAudit = new Map(batchContext.workouts.map((workout: any) => [workout.id, workout]));
+
+        for (const item of normalizedWorkouts) {
+          const workout: any = byWorkoutIdForAudit.get(item.workoutId);
+          const originalExercises = Array.isArray(workout?.workoutPlan?.exercises)
+            ? workout.workoutPlan.exercises
+            : [];
+          const originalIds = originalExercises
+            .map((exercise: any) => cleanId(exercise.libraryExerciseId))
+            .filter(Boolean) as string[];
+          const audit = Array.isArray(item.exerciseAudit) ? item.exerciseAudit : [];
+
+          if (audit.length !== originalIds.length) {
+            return NextResponse.json(
+              {
+                error: `Treino ${item.workoutId}: a revisão profunda precisa auditar os ${originalIds.length} exercício(s) originais, mas recebeu ${audit.length}.`,
+              },
+              { status: 422 }
+            );
+          }
+
+          const auditedIds = audit.map((entry: any) => cleanId(entry?.sourceExerciseId));
+          if (
+            auditedIds.some((id: any) => !id || !originalIds.includes(id)) ||
+            new Set(auditedIds).size !== originalIds.length
+          ) {
+            return NextResponse.json(
+              {
+                error: `Treino ${item.workoutId}: exerciseAudit precisa cobrir cada sourceExerciseId original exatamente uma vez.`,
+              },
+              { status: 422 }
+            );
+          }
+
+          const newIds = new Set(
+            item._normalizedExercises.map((exercise: any) => String(exercise.libraryExerciseId))
+          );
+
+          for (const entry of audit) {
+            const sourceExerciseId = cleanId(entry?.sourceExerciseId)!;
+            const decision = String(entry?.decision || "").toUpperCase() as ExerciseAuditDecision;
+            const reason = cleanText(entry?.reason);
+
+            if (!(["KEEP", "MODIFY", "REPLACE", "REMOVE"] as string[]).includes(decision)) {
+              return NextResponse.json(
+                { error: `Treino ${item.workoutId}: decisão inválida em exerciseAudit para ${sourceExerciseId}.` },
+                { status: 422 }
+              );
+            }
+
+            if (!reason) {
+              return NextResponse.json(
+                { error: `Treino ${item.workoutId}: explique em reason a decisão tomada para cada exercício original.` },
+                { status: 422 }
+              );
+            }
+
+            if ((decision === "KEEP" || decision === "MODIFY") && !newIds.has(sourceExerciseId)) {
+              return NextResponse.json(
+                { error: `Treino ${item.workoutId}: ${decision} exige que o exercício original ${sourceExerciseId} permaneça na nova sessão.` },
+                { status: 422 }
+              );
+            }
+
+            if (decision === "REMOVE" && newIds.has(sourceExerciseId)) {
+              return NextResponse.json(
+                { error: `Treino ${item.workoutId}: REMOVE exige que o exercício original ${sourceExerciseId} saia da nova sessão.` },
+                { status: 422 }
+              );
+            }
+
+            if (decision === "REPLACE") {
+              const replacementExerciseId = cleanId(entry?.replacementExerciseId);
+              if (!replacementExerciseId || replacementExerciseId === sourceExerciseId || !newIds.has(replacementExerciseId)) {
+                return NextResponse.json(
+                  { error: `Treino ${item.workoutId}: REPLACE exige replacementExerciseId diferente do original e presente na nova lista exercises.` },
+                  { status: 422 }
+                );
+              }
+            }
+          }
+        }
+
+        if (activeMedicalGuidance.length > 0) {
+          const coverage = Array.isArray(parsedBatch.proposal.guidanceCoverage)
+            ? parsedBatch.proposal.guidanceCoverage
+            : [];
+          const expectedKeys = activeMedicalGuidance.map((guidance) => guidance.guidanceKey);
+          const returnedKeys = coverage.map((item: any) => cleanText(item?.guidanceKey));
+
+          if (
+            coverage.length !== expectedKeys.length ||
+            returnedKeys.some((key: string) => !expectedKeys.includes(key)) ||
+            new Set(returnedKeys).size !== expectedKeys.length
+          ) {
+            return NextResponse.json(
+              {
+                error: `A revisão profunda precisa explicar como cada uma das ${expectedKeys.length} orientação(ões) médica(s) ativa(s) foi contemplada em guidanceCoverage.`,
+              },
+              { status: 422 }
+            );
+          }
+
+          for (const item of coverage) {
+            const application = cleanText(item?.application);
+            const workoutIds = Array.isArray(item?.workoutIds)
+              ? item.workoutIds.map((id: any) => cleanId(id)).filter(Boolean)
+              : [];
+
+            if (!application) {
+              return NextResponse.json(
+                { error: `guidanceCoverage ${item?.guidanceKey || ""}: descreva como a orientação foi considerada.` },
+                { status: 422 }
+              );
+            }
+
+            if (workoutIds.some((id: any) => !eligibleIds.has(id))) {
+              return NextResponse.json(
+                { error: `guidanceCoverage ${item?.guidanceKey || ""}: contém workoutId fora dos treinos elegíveis.` },
+                { status: 422 }
+              );
+            }
+          }
+        }
+      }
+
       const normalizedBatch = { ...parsedBatch.proposal, workouts: normalizedWorkouts };
+      const byWorkoutIdForImpact = new Map(batchContext.workouts.map((workout: any) => [workout.id, workout]));
+      const impactSummaries = normalizedWorkouts.map((item: any) =>
+        buildWorkoutImpactSummary({
+          workout: byWorkoutIdForImpact.get(item.workoutId),
+          proposal: item,
+        })
+      );
+      const impactWarning =
+        reviewDepth === "DEEP" && impactSummaries.some((summary) => summary.impactLevel === "LOW")
+          ? "A revisão profunda ainda produziu impacto baixo em pelo menos um treino. Revise o antes → depois e, se necessário, gere um novo pacote antes de aplicar."
+          : null;
       if (action === "VALIDATE_CONVERSATION_BATCH") {
         return NextResponse.json({
           ok:true,
           proposal: normalizedBatch,
+          reviewDepth,
+          medicalGuidanceCount: activeMedicalGuidance.length,
+          impactSummaries,
+          impactWarning,
           eligibleWorkoutCount: batchContext.workouts.length,
           eligibleWorkouts: batchContext.workouts.map((workout:any) => ({
             workoutId: workout.id,
@@ -840,7 +1199,7 @@ export async function POST(req: NextRequest) {
             status: workout.status,
           })),
           openCareEvents: batchContext.openCareEvents,
-          message: `Resposta validada para ${batchContext.workouts.length} treino(s). Revise antes de aplicar.`,
+          message: `Resposta validada para ${batchContext.workouts.length} treino(s). Revise o impacto antes de aplicar.`,
         });
       }
 

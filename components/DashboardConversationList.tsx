@@ -100,12 +100,34 @@ type BatchEligibleWorkout = {
   status: string;
 };
 
+type WorkoutImpactSummary = {
+  workoutId: string;
+  workoutName: string;
+  originalExerciseCount: number;
+  newExerciseCount: number;
+  keptUnchangedCount: number;
+  modifiedCount: number;
+  removedCount: number;
+  addedCount: number;
+  auditDecisionCounts: {
+    KEEP: number;
+    MODIFY: number;
+    REPLACE: number;
+    REMOVE: number;
+  };
+  impactLevel: "LOW" | "MEDIUM" | "HIGH";
+};
+
 type BatchAdjustmentDraftState = {
   manualResponse: string;
   proposal?: BatchAdjustmentProposal;
   eligibleWorkoutCount?: number;
   eligibleWorkouts?: BatchEligibleWorkout[];
   openCareEventCount?: number;
+  reviewDepth?: "STANDARD" | "DEEP";
+  medicalGuidanceCount?: number;
+  impactSummaries?: WorkoutImpactSummary[];
+  impactWarning?: string | null;
 };
 
 type ConversationItem = {
@@ -691,14 +713,17 @@ export default function DashboardConversationList({
   }
 
 
-  async function handlePrepareConversationAdjustment(conversation: ConversationItem) {
+  async function handlePrepareConversationAdjustment(
+    conversation: ConversationItem,
+    reviewDepth: "STANDARD" | "DEEP" = "STANDARD"
+  ) {
     setAdjustmentLoadingKey(`${conversation.id}:batch-prepare`);
     setErrorById((current) => ({ ...current, [conversation.id]: "" }));
     setSuccessById((current) => ({ ...current, [conversation.id]: "" }));
     try {
       const response = await fetch("/api/workout-adjustments", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "PREPARE_CONVERSATION_PACKAGE", conversationId: conversation.id }),
+        body: JSON.stringify({ action: "PREPARE_CONVERSATION_PACKAGE", conversationId: conversation.id, reviewDepth }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => null);
@@ -713,6 +738,10 @@ export default function DashboardConversationList({
       link.href = url; link.download = match?.[1] || `pacote-alterar-treinos-${conversation.id}.zip`;
       document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
       const count = Number(response.headers.get("X-Eligible-Workout-Count") || 0);
+      const effectiveReviewDepth = String(response.headers.get("X-Review-Mode") || reviewDepth).toUpperCase() === "DEEP"
+        ? "DEEP"
+        : "STANDARD";
+      const medicalGuidanceCount = Number(response.headers.get("X-Medical-Guidance-Count") || 0);
       let eligibleWorkouts: BatchEligibleWorkout[] = [];
       const encodedDetails = response.headers.get("X-Eligible-Workout-Details") || "";
       if (encodedDetails) {
@@ -729,11 +758,15 @@ export default function DashboardConversationList({
           manualResponse: "",
           eligibleWorkoutCount: count,
           eligibleWorkouts,
+          reviewDepth: effectiveReviewDepth,
+          medicalGuidanceCount,
         },
       }));
       setSuccessById((current) => ({
         ...current,
-        [conversation.id]: `Um único pacote foi gerado para ${count} treino(s). A IA deve devolver exatamente esses mesmos workoutId, sem usar códigos genéricos.`,
+        [conversation.id]: effectiveReviewDepth === "DEEP"
+          ? `Pacote de REVISÃO PROFUNDA gerado para ${count} treino(s). A IA deverá auditar cada exercício${medicalGuidanceCount > 0 ? ` e cobrir ${medicalGuidanceCount} orientação(ões) médica(s) ativa(s)` : ""}.`
+          : `Um único pacote foi gerado para ${count} treino(s). A IA deve devolver exatamente esses mesmos workoutId, sem usar códigos genéricos.`,
       }));
     } catch (error) {
       console.error("Prepare conversation adjustment error:", error);
@@ -767,6 +800,10 @@ export default function DashboardConversationList({
           eligibleWorkoutCount:data.eligibleWorkoutCount,
           eligibleWorkouts:Array.isArray(data.eligibleWorkouts) ? data.eligibleWorkouts : draft.eligibleWorkouts,
           openCareEventCount:Array.isArray(data.openCareEvents)?data.openCareEvents.length:0,
+          reviewDepth:String(data.reviewDepth || draft.reviewDepth || "STANDARD").toUpperCase() === "DEEP" ? "DEEP" : "STANDARD",
+          medicalGuidanceCount:Number(data.medicalGuidanceCount || draft.medicalGuidanceCount || 0),
+          impactSummaries:Array.isArray(data.impactSummaries) ? data.impactSummaries : [],
+          impactWarning:typeof data.impactWarning === "string" ? data.impactWarning : null,
         },
       }));
       setSuccessById((current)=>({ ...current,[conversation.id]:data.message||"Adaptação validada." }));
@@ -1257,11 +1294,25 @@ export default function DashboardConversationList({
                     <button type="button" onClick={() => handlePrepareConversationAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey)} className="w-full rounded-lg bg-cyan-400 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">
                       {adjustmentLoadingKey === `${conversation.id}:batch-prepare` ? "Gerando pacote..." : "Alterar treino com IA"}
                     </button>
+                    <button type="button" onClick={() => handlePrepareConversationAdjustment(conversation, "DEEP")} disabled={Boolean(adjustmentLoadingKey)} className="w-full rounded-lg border border-cyan-300/40 bg-cyan-300/10 px-3 py-2 text-[11px] font-semibold text-cyan-100 disabled:opacity-50">
+                      Gerar revisão profunda do treino
+                    </button>
                     {batchAdjustmentDraft && (
                       <>
                         <p className="text-[11px] text-cyan-100">
                           Um único pacote preparado para {batchAdjustmentDraft.eligibleWorkoutCount || 0} treino(s).
                         </p>
+                        {batchAdjustmentDraft.reviewDepth === "DEEP" ? (
+                          <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-3 text-[11px] text-amber-100">
+                            <p className="font-semibold">Revisão profunda ativa</p>
+                            <p className="mt-1 text-amber-100/80">
+                              A IA deverá revisar cada exercício original e justificar manter, modificar, substituir ou retirar.
+                              {batchAdjustmentDraft.medicalGuidanceCount
+                                ? ` Há ${batchAdjustmentDraft.medicalGuidanceCount} orientação(ões) médica(s) que também precisam ser cobertas explicitamente.`
+                                : ""}
+                            </p>
+                          </div>
+                        ) : null}
                         {batchAdjustmentDraft.eligibleWorkouts?.length ? (
                           <div className="space-y-2 rounded-lg border border-cyan-400/15 bg-black/20 p-3">
                             <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">
@@ -1288,6 +1339,37 @@ export default function DashboardConversationList({
                             <p className="text-xs font-semibold text-emerald-300">{batchAdjustmentDraft.proposal.workouts.length} treino(s) prontos para alteração</p>
                             {batchAdjustmentDraft.openCareEventCount ? <p className="text-[11px] text-amber-300">Há evento de cuidado aberto. A publicação ficará bloqueada até a resolução.</p> : null}
                             <p className="text-[11px] text-[#d4d4d4]">{batchAdjustmentDraft.proposal.rationale}</p>
+                            {batchAdjustmentDraft.impactWarning ? (
+                              <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-[11px] font-medium text-amber-200">
+                                {batchAdjustmentDraft.impactWarning}
+                              </p>
+                            ) : null}
+                            {batchAdjustmentDraft.impactSummaries?.length ? (
+                              <div className="space-y-2 rounded-lg border border-white/10 bg-black/20 p-3">
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">Impacto real — antes → depois</p>
+                                {batchAdjustmentDraft.impactSummaries.map((impact) => (
+                                  <div key={impact.workoutId} className="rounded-lg border border-white/10 bg-black/20 p-2 text-[10px] text-[#d4d4d4]">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <p className="font-semibold text-[#f5f5f5]">{impact.workoutName}</p>
+                                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${impact.impactLevel === "HIGH" ? "bg-emerald-500/20 text-emerald-300" : impact.impactLevel === "MEDIUM" ? "bg-amber-500/20 text-amber-200" : "bg-red-500/20 text-red-200"}`}>
+                                        Impacto {impact.impactLevel === "HIGH" ? "alto" : impact.impactLevel === "MEDIUM" ? "médio" : "baixo"}
+                                      </span>
+                                    </div>
+                                    <p className="mt-1">
+                                      Antes: {impact.originalExerciseCount} exercício(s) · Depois: {impact.newExerciseCount}
+                                    </p>
+                                    <p className="mt-1">
+                                      Mantidos sem mudança: {impact.keptUnchangedCount} · Modificados: {impact.modifiedCount} · Retirados/substituídos: {impact.removedCount} · Novos: {impact.addedCount}
+                                    </p>
+                                    {batchAdjustmentDraft.reviewDepth === "DEEP" ? (
+                                      <p className="mt-1 text-cyan-100/80">
+                                        Auditoria: manter {impact.auditDecisionCounts.KEEP} · modificar {impact.auditDecisionCounts.MODIFY} · substituir {impact.auditDecisionCounts.REPLACE} · retirar {impact.auditDecisionCounts.REMOVE}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                             <p className="text-[11px] font-medium text-cyan-200">Aplicar altera somente os treinos. A resposta ao aluno será revisada e enviada separadamente pelo botão Responder.</p>
                             <button type="button" onClick={() => handleApplyBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey)} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Aplicar alterações nos treinos</button>
                           </div>
