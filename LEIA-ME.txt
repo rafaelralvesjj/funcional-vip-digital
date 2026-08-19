@@ -1,16 +1,14 @@
-CORREÇÃO — REVISÃO PROFUNDA DE ADAPTAÇÃO DE TREINOS
+CORREÇÃO LIMPA — REVISÃO PROFUNDA DE TREINO
 
-Arquivos alterados:
-- components/DashboardConversationList.tsx
-- app/api/workout-adjustments/route.ts
+Substitua EXATAMENTE estes arquivos no repositório:
 
-O que muda:
-1. Quando há orientação médica ativa, o pacote de alteração entra automaticamente em modo DEEP.
-2. A IA precisa auditar cada exercício original: KEEP, MODIFY, REPLACE ou REMOVE, com justificativa.
-3. Todas as orientações médicas ativas precisam aparecer em guidanceCoverage.
-4. A validação confere a auditoria antes de permitir a aplicação.
-5. A tela mostra o impacto real antes -> depois por treino.
-6. Existe botão explícito "Gerar revisão profunda do treino" para uso mesmo sem orientação médica.
-7. Aplicar alterações continua sem responder automaticamente ao aluno.
+1) components/DashboardConversationList.tsx
+2) app/api/workout-adjustments/route.ts
 
-Não há mudança de banco de dados.
+Após o deploy, em uma conversa expandida do professor, dentro do bloco
+"ALTERAÇÃO DE TREINO PELO PROFESSOR", devem aparecer dois botões:
+
+- Alterar treino com IA
+- Gerar revisão profunda do treino
+
+O segundo botão fica imediatamente abaixo do primeiro.
