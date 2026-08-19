@@ -304,7 +304,7 @@ function buildWorkoutImpactSummary({
   let modifiedCount = 0;
   let removedCount = 0;
 
-  for (const [exerciseId, original] of originalById.entries()) {
+  for (const [exerciseId, original] of Array.from(originalById.entries())) {
     const next = newById.get(exerciseId);
 
     if (!next) {
@@ -324,7 +324,7 @@ function buildWorkoutImpactSummary({
   }
 
   let addedCount = 0;
-  for (const exerciseId of newById.keys()) {
+  for (const exerciseId of Array.from(newById.keys())) {
     if (!originalById.has(exerciseId)) addedCount += 1;
   }
 

@@ -1,14 +1,10 @@
-CORREÇÃO LIMPA — REVISÃO PROFUNDA DE TREINO
+CORREÇÃO BUILD VERCEL — workout-adjustments
 
-Substitua EXATAMENTE estes arquivos no repositório:
+Substitua no Git apenas:
+app/api/workout-adjustments/route.ts
 
-1) components/DashboardConversationList.tsx
-2) app/api/workout-adjustments/route.ts
+Correção aplicada:
+- Map.entries() convertido com Array.from(...)
+- Map.keys() convertido com Array.from(...)
 
-Após o deploy, em uma conversa expandida do professor, dentro do bloco
-"ALTERAÇÃO DE TREINO PELO PROFESSOR", devem aparecer dois botões:
-
-- Alterar treino com IA
-- Gerar revisão profunda do treino
-
-O segundo botão fica imediatamente abaixo do primeiro.
+O componente DashboardConversationList.tsx não precisa ser reenviado neste ajuste.
