@@ -1,0 +1,74 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Coach de Inglês Diário</title>
+<meta name="theme-color" content="#146c5c">
+<meta name="description" content="Aula diária de inglês de 20 minutos para o seu trajeto até o trabalho.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/styles.css">
+
+<div id="app" class="app">
+
+  <!-- TELA INICIAL -->
+  <section id="screen-home" class="screen">
+    <header class="topbar">
+      <span class="brand">Coach de Inglês</span>
+      <span class="streak" id="streak-badge">🔥 0</span>
+    </header>
+
+    <div class="home-content">
+      <p class="teacher-line" id="home-greeting">Oi! Pronta para a aula de hoje?</p>
+      <h1 class="day-title" id="home-day-title">Dia 1 · Abrindo uma reunião com confiança</h1>
+      <p class="day-sub" id="home-day-sub">~20 minutos · fone no ouvido, sem precisar olhar pra tela</p>
+
+      <button id="btn-start" class="btn-primary">Começar aula de hoje</button>
+
+      <button id="btn-review" class="btn-secondary">Rever dias concluídos</button>
+    </div>
+
+    <p class="hint" id="stt-hint"></p>
+  </section>
+
+  <!-- TELA DA AULA -->
+  <section id="screen-lesson" class="screen hidden">
+    <header class="topbar">
+      <button id="btn-exit" class="btn-icon" aria-label="Sair">✕</button>
+      <span class="phase-label" id="phase-label">Aquecimento</span>
+      <button id="btn-pause" class="btn-icon" aria-label="Pausar">⏸</button>
+    </header>
+
+    <div class="progress-dots" id="progress-dots"></div>
+
+    <div class="lesson-content">
+      <p class="caption-pt" id="caption-pt"></p>
+      <p class="caption-en" id="caption-en"></p>
+      <div class="mic-indicator hidden" id="mic-indicator">🎙️ Sua vez de falar...</div>
+      <p class="feedback" id="feedback"></p>
+    </div>
+
+    <div class="lesson-controls">
+      <button id="btn-repeat" class="btn-secondary">Repetir</button>
+      <button id="btn-skip" class="btn-secondary">Pular</button>
+    </div>
+  </section>
+
+  <!-- TELA DE CONCLUSÃO -->
+  <section id="screen-done" class="screen hidden">
+    <div class="done-content">
+      <p class="done-emoji">🎉</p>
+      <h1 id="done-title">Aula concluída!</h1>
+      <p class="streak-big" id="done-streak">Sequência: 1 dia</p>
+      <p class="done-recap" id="done-recap"></p>
+      <button id="btn-back-home" class="btn-primary">Voltar</button>
+    </div>
+  </section>
+
+</div>
+
+<script type="module" src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+  }
+</script>
