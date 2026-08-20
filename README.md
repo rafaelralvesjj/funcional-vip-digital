@@ -1,6 +1,6 @@
 # Funcional UP Digital
 
-Starter web com Next.js 14 (App Router), TypeScript, Prisma, NextAuth e PostgreSQL.
+Sistema web de gestão de treinos funcionais, construído com Next.js 14 (App Router), TypeScript, Prisma, NextAuth e PostgreSQL. Permite que professores montem e acompanhem treinos, alunos registrem sua evolução e execução dos treinos, e gestores administrem alunos, professores e a operação do serviço.
 
 ## Primeiros passos
 
