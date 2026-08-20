@@ -782,6 +782,14 @@ export default function DashboardConversationList({
     } catch { setErrorById((current) => ({ ...current, [conversationId]: "Não foi possível ler o arquivo selecionado." })); }
   }
 
+  async function handleImportDocumentResponse(conversationId: string, file?: File | null) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setDocumentResponseById((current) => ({ ...current, [conversationId]: text }));
+    } catch { setErrorById((current) => ({ ...current, [conversationId]: "Não foi possível ler o arquivo selecionado." })); }
+  }
+
   async function handleValidateBatchAdjustment(conversation: ConversationItem) {
     const draft = batchAdjustmentByConversationId[conversation.id];
     if (!draft?.manualResponse.trim()) { setErrorById((current) => ({ ...current, [conversation.id]: "Cole ou importe a resposta da IA antes de validar." })); return; }
@@ -1385,7 +1393,13 @@ export default function DashboardConversationList({
                     </>
                   )}
 
-                  <textarea rows={9} value={documentResponseById[conversation.id] || ""} onChange={(event) => setDocumentResponseById((current) => ({ ...current, [conversation.id]: event.target.value }))} placeholder="Cole aqui o JSON ou o conteúdo do TXT devolvido pela IA" className="w-full rounded-lg border border-amber-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none" />
+                  <input
+                    type="file"
+                    accept=".txt,.json,text/plain,application/json"
+                    onChange={(event) => handleImportDocumentResponse(conversation.id, event.target.files?.[0])}
+                    className="block w-full text-[11px] text-[#d4d4d4]"
+                  />
+                  <textarea rows={9} value={documentResponseById[conversation.id] || ""} onChange={(event) => setDocumentResponseById((current) => ({ ...current, [conversation.id]: event.target.value }))} placeholder="Cole aqui o JSON ou importe o TXT/arquivo devolvido pela IA" className="w-full rounded-lg border border-amber-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none" />
                   <button type="button" onClick={() => handleSaveDocumentAnalysis(conversation)} disabled={documentLoadingId === conversation.id || !(documentResponseById[conversation.id] || "").trim()} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Salvar análise e preparar resposta ao aluno</button>
                 </div>
               )}
