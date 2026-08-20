@@ -34,8 +34,6 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "api",
-    "dashboard"
+    "node_modules"
   ]
 }
