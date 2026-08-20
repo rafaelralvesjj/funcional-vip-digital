@@ -124,6 +124,15 @@ export default function SignInPage() {
             <p className="text-center text-sm text-red-500">{error}</p>
           )}
 
+          <div className="flex justify-end">
+            <Link
+              href="/auth/esqueci-senha"
+              className="text-sm text-[#00A19C] transition hover:underline"
+            >
+              Esqueci minha senha
+            </Link>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
