@@ -674,6 +674,17 @@ model WorkoutEngagementNotification {
   @@map("workout_engagement_notifications")
 }
 
+model StudentReengagementEmail {
+  id        String   @id @default(uuid())
+  studentId String   @map("student_id")
+  category  String
+  sentAt    DateTime @default(now()) @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([studentId, category])
+  @@map("student_reengagement_emails")
+}
+
 model EvolutionFeedback {
   id                     String    @id @default(uuid())
   studentId              String    @map("student_id")
