@@ -1984,7 +1984,7 @@ export default async function DashboardPage() {
 
               {isTeacher && studentsMissingCurrentWeekWorkouts.length > 1 && (
                 <Link
-                  href="/dashboard/resumo-aluno?batch=1"
+                  href="/dashboard/resumo-aluno?batch=1&week=current"
                   prefetch={false}
                   className="inline-flex items-center justify-center shrink-0 bg-[#00A19C]/10 text-[#00A19C] border border-[#00A19C]/30 hover:bg-[#00A19C]/20 text-sm font-semibold px-4 py-2.5 rounded-xl transition"
                 >
@@ -2214,7 +2214,7 @@ export default async function DashboardPage() {
 
               {isTeacher && studentsMissingNextWeekWorkouts.length > 1 && (
                 <Link
-                  href="/dashboard/resumo-aluno?batch=1"
+                  href="/dashboard/resumo-aluno?batch=1&week=next"
                   prefetch={false}
                   className="inline-flex items-center justify-center shrink-0 bg-[#00A19C]/10 text-[#00A19C] border border-[#00A19C]/30 hover:bg-[#00A19C]/20 text-sm font-semibold px-4 py-2.5 rounded-xl transition"
                 >

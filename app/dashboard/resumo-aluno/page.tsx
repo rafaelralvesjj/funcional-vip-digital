@@ -689,6 +689,7 @@ export default function ResumoAlunoPage() {
   // Modo lote: gera/importa o pacote da IA para vários alunos de uma vez,
   // em vez de repetir o fluxo de um aluno por vez.
   const [batchMode, setBatchMode] = useState(false);
+  const [batchWeekChoice, setBatchWeekChoice] = useState<"current" | "next">("current");
   const [batchSize, setBatchSize] = useState(5);
   const [batchEligibleIds, setBatchEligibleIds] = useState<string[]>([]);
   const [batchLoadingEligible, setBatchLoadingEligible] = useState(false);
@@ -846,6 +847,7 @@ export default function ResumoAlunoPage() {
 
     if (params.get("batch") === "1" && !workoutIdFromUrl) {
       setBatchMode(true);
+      setBatchWeekChoice(params.get("week") === "next" ? "next" : "current");
     }
   }, []);
 
@@ -1795,7 +1797,32 @@ export default function ResumoAlunoPage() {
   }
 
   function getBatchWeekStart(): string {
-    return targetWeekStart || resolveWeekStartIso(getSaoPauloCivilDateInput());
+    if (batchWeekChoice === "next") {
+      return formatIsoDate(getWeekRange(new Date()).endOfWeek);
+    }
+
+    return resolveWeekStartIso(getSaoPauloCivilDateInput());
+  }
+
+  function getBatchWeekRangeLabel(week: "current" | "next"): string {
+    const weekStart = week === "next"
+      ? getWeekRange(new Date()).endOfWeek
+      : parseDateInput(resolveWeekStartIso(getSaoPauloCivilDateInput())) || new Date();
+    const weekEnd = addDays(weekStart, 6);
+
+    return `${formatDatePtBr(weekStart)} a ${formatDatePtBr(weekEnd)}`;
+  }
+
+  function selectBatchWeek(week: "current" | "next") {
+    if (week === batchWeekChoice) return;
+
+    setBatchWeekChoice(week);
+    setBatchEligibleIds([]);
+    setBatchSelectedIds([]);
+    setBatchResults([]);
+    setBatchPrompt("");
+    setBatchJsonText("");
+    setBatchMessage(null);
   }
 
   async function loadBatchEligibleStudents() {
@@ -2637,11 +2664,42 @@ export default function ResumoAlunoPage() {
           <div>
             <h2 className="text-lg font-bold text-[#00A19C]">Montar treinos em lote</h2>
             <p className="text-xs text-[#a1a1a1] mt-1 leading-relaxed">
-              Selecione até o tamanho do pacote de alunos que precisam de treino nesta semana, baixe um único pacote
-              para todos, envie para a IA e importe a resposta combinada de volta. Cada aluno continua passando pela
-              mesma validação de segurança (aluno, semana, quantidade e chave) e pela mesma revisão manual antes de
-              salvar — só a geração/importação do pacote é feita de uma vez.
+              Escolha a semana, selecione até o tamanho do pacote de alunos que precisam de treino nessa semana,
+              baixe um único pacote para todos, envie para a IA e importe a resposta combinada de volta. Cada aluno
+              continua passando pela mesma validação de segurança (aluno, semana, quantidade e chave) e pela mesma
+              revisão manual antes de salvar — só a geração/importação do pacote é feita de uma vez.
             </p>
+          </div>
+
+          <div>
+            <label className="block text-xs text-[#a1a1a1] mb-2">Qual semana você está montando?</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => selectBatchWeek("current")}
+                className={
+                  "px-4 py-2.5 rounded-xl text-sm font-semibold transition border " +
+                  (batchWeekChoice === "current"
+                    ? "bg-[#00A19C] border-[#00A19C] text-[#0a0a0a]"
+                    : "bg-[#1a1a1a] border-[#ffffff10] text-[#a1a1a1] hover:text-white")
+                }
+              >
+                Semana atual · {getBatchWeekRangeLabel("current")}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => selectBatchWeek("next")}
+                className={
+                  "px-4 py-2.5 rounded-xl text-sm font-semibold transition border " +
+                  (batchWeekChoice === "next"
+                    ? "bg-[#00A19C] border-[#00A19C] text-[#0a0a0a]"
+                    : "bg-[#1a1a1a] border-[#ffffff10] text-[#a1a1a1] hover:text-white")
+                }
+              >
+                Próxima semana · {getBatchWeekRangeLabel("next")}
+              </button>
+            </div>
           </div>
 
           {batchMessage && (
