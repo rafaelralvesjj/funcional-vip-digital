@@ -1971,6 +1971,16 @@ export default async function DashboardPage() {
                   Semana de referência: {currentWorkoutWeekLabel}. Pendência urgente: aluno ativo, com professor vinculado e elegível para treinar nesta semana, mas ainda sem a quantidade prevista de treinos.
                 </p>
               </div>
+
+              {isTeacher && studentsMissingCurrentWeekWorkouts.length > 1 && (
+                <Link
+                  href="/dashboard/resumo-aluno?batch=1"
+                  prefetch={false}
+                  className="inline-flex items-center justify-center shrink-0 bg-[#00A19C]/10 text-[#00A19C] border border-[#00A19C]/30 hover:bg-[#00A19C]/20 text-sm font-semibold px-4 py-2.5 rounded-xl transition"
+                >
+                  Montar treinos em lote
+                </Link>
+              )}
             </div>
 
             {studentsMissingCurrentWeekWorkouts.length === 0 ? (
@@ -2191,6 +2201,16 @@ export default async function DashboardPage() {
                   </p>
                 )}
               </div>
+
+              {isTeacher && studentsMissingNextWeekWorkouts.length > 1 && (
+                <Link
+                  href="/dashboard/resumo-aluno?batch=1"
+                  prefetch={false}
+                  className="inline-flex items-center justify-center shrink-0 bg-[#00A19C]/10 text-[#00A19C] border border-[#00A19C]/30 hover:bg-[#00A19C]/20 text-sm font-semibold px-4 py-2.5 rounded-xl transition"
+                >
+                  Montar treinos em lote
+                </Link>
+              )}
             </div>
 
             {studentsMissingNextWeekWorkouts.length === 0 ? (

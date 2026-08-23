@@ -843,6 +843,10 @@ export default function ResumoAlunoPage() {
 
     loadStudents(params.get("studentId"));
     loadExerciseLibrary(Boolean(workoutIdFromUrl));
+
+    if (params.get("batch") === "1" && !workoutIdFromUrl) {
+      setBatchMode(true);
+    }
   }, []);
 
   const selectedStudent = useMemo(() => {
