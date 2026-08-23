@@ -2888,6 +2888,8 @@ export default function ResumoAlunoPage() {
         </div>
       )}
 
+      {!batchMode && (
+      <>
       <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 md:items-end">
           <div>
@@ -3222,6 +3224,8 @@ export default function ResumoAlunoPage() {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
