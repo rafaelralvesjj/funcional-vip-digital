@@ -1970,6 +1970,18 @@ export default function ResumoAlunoPage() {
     window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(result.studentId)}&date=${encodeURIComponent(firstWorkoutDate)}&source=ai-json`;
   }
 
+  async function importBatchResponseFile(file?: File | null) {
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      setBatchJsonText(text);
+      setBatchMessage(null);
+    } catch {
+      setBatchMessage({ type: "error", text: "Não foi possível ler o arquivo selecionado." });
+    }
+  }
+
   async function importBatchResponse() {
     if (!batchJsonText.trim()) {
       setBatchMessage({ type: "error", text: "Cole a resposta da IA para o lote." });
@@ -2790,9 +2802,22 @@ export default function ResumoAlunoPage() {
             <div>
               <h3 className="text-sm font-semibold text-[#00A19C]">Importar resposta combinada da IA</h3>
               <p className="text-xs text-[#a1a1a1] mt-1">
-                Cole aqui o JSON com o formato {"{"}"results":[...]{"}"} devolvido pela IA para este pacote.
+                Importe o arquivo TXT/JSON devolvido pela IA para este pacote, ou cole o conteúdo abaixo.
               </p>
             </div>
+
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-[#00A19C]/30 bg-[#00A19C]/10 px-4 py-3 text-sm font-semibold text-[#00A19C] hover:bg-[#00A19C]/20 transition">
+              Importar resposta TXT/JSON
+              <input
+                type="file"
+                accept=".txt,.json,text/plain,application/json"
+                className="hidden"
+                onChange={(event) => {
+                  void importBatchResponseFile(event.target.files?.[0]);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
 
             <textarea
               value={batchJsonText}
