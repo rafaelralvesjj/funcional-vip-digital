@@ -1804,7 +1804,7 @@ export default function ResumoAlunoPage() {
       const eligible: string[] = [];
       const pool = [...students];
 
-      async function worker() {
+      const worker = async () => {
         while (pool.length > 0) {
           const student = pool.shift();
           if (!student) return;
@@ -1812,7 +1812,7 @@ export default function ResumoAlunoPage() {
           const dates = await fetchAuthoritativeExpectedWorkoutDates(student.id, weekStart, student);
           if (dates && dates.length > 0) eligible.push(student.id);
         }
-      }
+      };
 
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, students.length || 1) }, worker));
 
