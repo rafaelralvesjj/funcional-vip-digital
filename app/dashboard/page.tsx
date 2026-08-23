@@ -1737,6 +1737,16 @@ export default async function DashboardPage() {
                 </p>
               </div>
             </div>
+
+            {isTeacher && (
+              <Link
+                href="/dashboard/resumo-aluno?batch=1"
+                prefetch={false}
+                className="inline-flex items-center justify-center shrink-0 bg-[#00A19C] text-[#0a0a0a] hover:bg-[#008B87] text-sm font-semibold px-4 py-3 rounded-xl transition"
+              >
+                Montar treinos em lote
+              </Link>
+            )}
           </div>
         </div>
 
