@@ -1813,6 +1813,52 @@ export default function ResumoAlunoPage() {
     return `${formatDatePtBr(weekStart)} a ${formatDatePtBr(weekEnd)}`;
   }
 
+  const BATCH_QUEUE_STORAGE_KEY = "aiWorkoutBatchQueue";
+
+  function persistBatchQueue(week: "current" | "next", results: BatchStudentResult[]) {
+    try {
+      localStorage.setItem(BATCH_QUEUE_STORAGE_KEY, JSON.stringify({ week, results }));
+    } catch {
+      // localStorage indisponível: a fila simplesmente não fica retomável.
+    }
+  }
+
+  function loadPersistedBatchQueue(week: "current" | "next"): BatchStudentResult[] | null {
+    try {
+      const raw = localStorage.getItem(BATCH_QUEUE_STORAGE_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      if (parsed?.week !== week || !Array.isArray(parsed?.results)) return null;
+
+      return parsed.results;
+    } catch {
+      return null;
+    }
+  }
+
+  function clearPersistedBatchQueue() {
+    try {
+      localStorage.removeItem(BATCH_QUEUE_STORAGE_KEY);
+    } catch {
+      // ignora
+    }
+  }
+
+  useEffect(() => {
+    if (!batchMode || batchResults.length > 0) return;
+
+    const persisted = loadPersistedBatchQueue(batchWeekChoice);
+
+    if (persisted && persisted.length > 0) {
+      setBatchResults(persisted);
+      setBatchMessage({
+        type: "success",
+        text: `Retomando lote em andamento: ${persisted.length} aluno(s) restante(s) para revisar.`,
+      });
+    }
+  }, [batchMode, batchWeekChoice]);
+
   function selectBatchWeek(week: "current" | "next") {
     if (week === batchWeekChoice) return;
 
@@ -1962,6 +2008,14 @@ export default function ResumoAlunoPage() {
   function openBatchDraftInWorkoutBuilder(result: BatchStudentResult) {
     if (!result.draft) return;
 
+    // A tela de montar treino pode salvar e redirecionar sozinha (ex.: quando
+    // o treino completa a semana do aluno), então persistimos o restante da
+    // fila ANTES de navegar — assim, ao voltar pra cá, os demais alunos do
+    // lote continuam disponíveis em vez de precisar refazer o pacote do zero.
+    const remaining = batchResults.filter((item) => item.studentId !== result.studentId);
+    setBatchResults(remaining);
+    persistBatchQueue(batchWeekChoice, remaining);
+
     localStorage.setItem("aiWorkoutDraftBatch", JSON.stringify(result.draft));
 
     const aiValidation = result.draft.aiValidation as { expectedWorkoutDates?: string[]; weekStart?: string } | undefined;
@@ -2041,6 +2095,7 @@ export default function ResumoAlunoPage() {
       }
 
       setBatchResults(results);
+      persistBatchQueue(batchWeekChoice, results.filter((result) => result.status === "pronto"));
 
       const readyCount = results.filter((result) => result.status === "pronto").length;
       setBatchMessage({
@@ -2838,7 +2893,21 @@ export default function ResumoAlunoPage() {
 
           {batchResults.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-[#f5f5f5]">Resultado da validação</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-[#f5f5f5]">Resultado da validação</p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBatchResults([]);
+                    clearPersistedBatchQueue();
+                    setBatchMessage(null);
+                  }}
+                  className="text-xs text-[#a1a1a1] hover:text-white transition"
+                >
+                  Limpar fila
+                </button>
+              </div>
 
               {batchResults.map((result) => (
                 <div
