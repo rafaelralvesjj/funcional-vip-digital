@@ -197,6 +197,30 @@ function formatDatePtBr(date: Date): string {
   });
 }
 
+/**
+ * Se o professor veio de um lote de montagem em vários alunos (tela de
+ * resumo-aluno em modo lote) e ainda restam alunos na fila, volta direto
+ * para o painel de lote em vez de mandar para o Dashboard — assim ele não
+ * precisa clicar em "Montar treinos em lote" de novo a cada aluno salvo.
+ */
+function getNextBatchDestination(): string | null {
+  try {
+    const raw = window.localStorage.getItem("aiWorkoutBatchQueue");
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    const week = parsed?.week === "next" ? "next" : parsed?.week === "current" ? "current" : null;
+
+    if (!week || !Array.isArray(parsed?.results) || parsed.results.length === 0) {
+      return null;
+    }
+
+    return `/dashboard/resumo-aluno?batch=1&week=${week}`;
+  } catch {
+    return null;
+  }
+}
+
 function formatDateInput(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1768,7 +1792,7 @@ export default function MontarTreinoPage() {
           hasNextAiWorkout
             ? `${weeklyMessage}${normalizedDateMessage} Próximo treino sugerido pela IA carregado para revisão.`
             : shouldReturnToDashboardAfterSave
-              ? `${weeklyMessage}${normalizedDateMessage} Montagem concluída. Voltando ao dashboard...`
+              ? `${weeklyMessage}${normalizedDateMessage} Montagem concluída. ${getNextBatchDestination() ? "Voltando para o lote..." : "Voltando ao dashboard..."}`
               : `${weeklyMessage}${normalizedDateMessage}`
         );
 
@@ -1838,8 +1862,9 @@ export default function MontarTreinoPage() {
         }
 
         if (shouldReturnToDashboardAfterSave) {
+          const nextBatchDestination = getNextBatchDestination();
           window.setTimeout(() => {
-            window.location.replace("/dashboard");
+            window.location.replace(nextBatchDestination || "/dashboard");
           }, 900);
           return;
         }

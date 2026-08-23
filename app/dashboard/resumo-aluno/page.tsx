@@ -576,6 +576,99 @@ function applyContractScheduleToWorkouts(
   };
 }
 
+/**
+ * Versão sem efeitos colaterais de resolveCareReturnPlanningTarget, segura
+ * para consultar a programação de QUALQUER aluno (não apenas o selecionado
+ * na tela) sem alterar o estado ou a URL da tela de um aluno único. Usada
+ * pelo modo lote para calcular, para cada aluno do pacote, as mesmas datas
+ * esperadas oficiais que o fluxo de um aluno já calcula hoje.
+ */
+async function fetchAuthoritativeExpectedWorkoutDates(
+  studentId: string,
+  weekStartIso: string,
+  planningStudent?: { contractedTrainingDaysPerMonth?: number | null; preferredWorkoutDays?: string[] } | null
+): Promise<string[] | null> {
+  try {
+    const res = await fetch(
+      `/api/workout-plan?studentId=${encodeURIComponent(studentId)}&date=${encodeURIComponent(weekStartIso)}&summary=1`,
+      { cache: "no-store" }
+    );
+
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as WorkoutPlanningSummaryResponse;
+    const weeklyLimit = Math.max(Number(data.weeklyLimit || 0), 0);
+
+    if (!weeklyLimit) return null;
+
+    if (Array.isArray(data.expectedWorkoutDates)) {
+      return data.expectedWorkoutDates
+        .map((value) => String(value))
+        .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
+    }
+
+    const createdDates = new Set(
+      (Array.isArray(data.plans) ? data.plans : [])
+        .map((plan) => getCivilDateInput(plan.date || plan.createdAt || null))
+        .filter((value): value is string => Boolean(value))
+    );
+
+    const remainingCount = Number.isFinite(Number(data.weeklyRemaining))
+      ? Math.max(Number(data.weeklyRemaining || 0), 0)
+      : Math.max(weeklyLimit - createdDates.size, 0);
+
+    if (remainingCount <= 0) return [];
+
+    const weekStartIsoResolved = resolveWeekStartIso(weekStartIso);
+    const weekStartDate = parseDateInput(weekStartIsoResolved);
+    if (!weekStartDate) return null;
+
+    const sundayIso = formatIsoDate(addDays(weekStartDate, 6));
+    const todayIso = getSaoPauloCivilDateInput();
+    const currentWeekStartIso = resolveWeekStartIso(todayIso);
+    const isCurrentWeek = currentWeekStartIso === weekStartIsoResolved;
+    const planningStart =
+      getCivilDateInput(data.careReturn?.planningStart || data.effectivePlanningStart || weekStartIsoResolved) ||
+      weekStartIsoResolved;
+    const earliestAllowedDate = isCurrentWeek && todayIso > planningStart ? todayIso : planningStart;
+
+    if (earliestAllowedDate > sundayIso) return [];
+
+    const contractedDays = planningStudent?.contractedTrainingDaysPerMonth || weeklyLimit * 4;
+    const canonicalDates = getTrainingSchedule(contractedDays, weekStartIsoResolved, planningStudent?.preferredWorkoutDays)
+      .map((item) => item.date)
+      .filter((date) => date >= earliestAllowedDate && date <= sundayIso && !createdDates.has(date));
+
+    const weekdayFallbackDates: string[] = [];
+    const hasStructuredPreferredWorkoutDays = Boolean(planningStudent?.preferredWorkoutDays?.length);
+    const cursor = parseDateInput(earliestAllowedDate);
+
+    if (cursor && !hasStructuredPreferredWorkoutDays) {
+      while (formatIsoDate(cursor) <= sundayIso) {
+        const date = formatIsoDate(cursor);
+
+        if (!createdDates.has(date) && !canonicalDates.includes(date)) {
+          weekdayFallbackDates.push(date);
+        }
+
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
+    return [...canonicalDates, ...weekdayFallbackDates].slice(0, remainingCount).sort();
+  } catch {
+    return null;
+  }
+}
+
+type BatchStudentResult = {
+  studentId: string;
+  studentName: string;
+  status: "pronto" | "erro";
+  error?: string;
+  draft?: Record<string, unknown>;
+};
+
 export default function ResumoAlunoPage() {
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState("");
@@ -592,6 +685,21 @@ export default function ResumoAlunoPage() {
   const [safeWindowNotice, setSafeWindowNotice] = useState<string | null>(null);
   const [exerciseLibrary, setExerciseLibrary] = useState<LibraryExercise[]>([]);
   const [loadingExerciseLibrary, setLoadingExerciseLibrary] = useState(true);
+
+  // Modo lote: gera/importa o pacote da IA para vários alunos de uma vez,
+  // em vez de repetir o fluxo de um aluno por vez.
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchWeekChoice, setBatchWeekChoice] = useState<"current" | "next">("current");
+  const [batchSize, setBatchSize] = useState(5);
+  const [batchEligibleIds, setBatchEligibleIds] = useState<string[]>([]);
+  const [batchLoadingEligible, setBatchLoadingEligible] = useState(false);
+  const [batchSelectedIds, setBatchSelectedIds] = useState<string[]>([]);
+  const [batchPrompt, setBatchPrompt] = useState("");
+  const [batchGenerating, setBatchGenerating] = useState(false);
+  const [batchJsonText, setBatchJsonText] = useState("");
+  const [batchImporting, setBatchImporting] = useState(false);
+  const [batchResults, setBatchResults] = useState<BatchStudentResult[]>([]);
+  const [batchMessage, setBatchMessage] = useState<{ type: "success" | "warning" | "error"; text: string } | null>(null);
 
   async function loadStudents(preselectId?: string | null) {
     setLoadingStudents(true);
@@ -736,6 +844,11 @@ export default function ResumoAlunoPage() {
 
     loadStudents(params.get("studentId"));
     loadExerciseLibrary(Boolean(workoutIdFromUrl));
+
+    if (params.get("batch") === "1" && !workoutIdFromUrl) {
+      setBatchMode(true);
+      setBatchWeekChoice(params.get("week") === "next" ? "next" : "current");
+    }
   }, []);
 
   const selectedStudent = useMemo(() => {
@@ -1496,6 +1609,506 @@ export default function ResumoAlunoPage() {
     }
   }
 
+  function selectPromptLibraryFor(summaryData: SummaryResponse, studentNameForSearch: string): LibraryExercise[] {
+    const consolidatedContext = buildConsolidatedTrainingContext(summaryData);
+    const context = normalizePromptSearch(
+      [
+        summaryData.summaryText,
+        JSON.stringify(consolidatedContext),
+        studentNameForSearch,
+        summaryData.evolutionContext?.reason,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+
+    const stopWords = new Set([
+      "aluno", "treino", "treinos", "para", "com", "sem", "mais", "uma", "como",
+      "objetivo", "objetivos", "professor", "semana", "atual", "dados", "informacao",
+      "informacoes", "deve", "fazer", "realizar", "geral", "atividade", "fisica",
+    ]);
+    const terms = Array.from(new Set(
+      context.split(/[^a-z0-9]+/).filter((term) => term.length >= 4 && !stopWords.has(term))
+    )).slice(0, 50);
+
+    const boosts: string[] = [];
+    if (context.includes("corrida")) boosts.push("corrida", "pernas", "gluteos", "panturrilha", "core", "quadril", "tornozelo");
+    if (context.includes("academia")) boosts.push("academia", "maquina", "halteres", "polia");
+    if (context.includes("casa")) boosts.push("casa", "peso corporal", "nenhum equipamento", "elastico");
+    if (context.includes("emagrec")) boosts.push("condicionamento", "corpo inteiro", "cardio");
+    if (context.includes("hipertrof") || context.includes("massa muscular")) boosts.push("hipertrofia", "fortalecimento", "halteres", "maquinas");
+    if (context.includes("mobilidade")) boosts.push("mobilidade", "alongamento");
+
+    const wantsGymMachines =
+      context.includes("academia") &&
+      /(maquina|maquinas|leg press|cadeira extensora|cadeira flexora|polia|puxada|remada)/.test(context);
+
+    // Modo lote sempre monta treino novo (nunca substitui um treino específico
+    // em edição), então exercícios inativos ficam de fora, igual ao fluxo padrão.
+    const eligibleLibrary = exerciseLibrary.filter((exercise) => exercise.active !== false);
+
+    const scored = eligibleLibrary
+      .map((exercise, index) => {
+        const searchable = normalizePromptSearch([
+          exercise.name, exercise.muscleGroup, exercise.objectiveTags, exercise.locationTags,
+          exercise.equipmentTags, exercise.levelTags, exercise.intensity,
+        ].join(" "));
+        let score = 0;
+        for (const term of terms) if (searchable.includes(term)) score += term.length >= 7 ? 5 : 3;
+        for (const boost of boosts) if (searchable.includes(boost)) score += 10;
+
+        const isMachineBased = /(maquina|maquinas|leg press|cadeira (extensora|flexora|abdutora|adutora)|polia|puxada|remada baixa|chest press|smith|barra guiada)/.test(searchable);
+        if (wantsGymMachines && isMachineBased) score += 60;
+
+        return { exercise, score, index, isMachineBased };
+      })
+      .sort((a, b) => b.score - a.score || a.index - b.index);
+
+    if (!wantsGymMachines) {
+      return scored.slice(0, 32).map((item) => item.exercise);
+    }
+
+    const machineFirst = scored.filter((item) => item.isMachineBased).slice(0, 18);
+    const selectedIds = new Set(machineFirst.map((item) => item.exercise.id));
+    const complementary = scored
+      .filter((item) => !selectedIds.has(item.exercise.id))
+      .slice(0, Math.max(32 - machineFirst.length, 0));
+
+    return [...machineFirst, ...complementary].slice(0, 32).map((item) => item.exercise);
+  }
+
+  function getExerciseLibraryPromptLinesFor(summaryData: SummaryResponse, studentNameForSearch: string): string[] {
+    if (exerciseLibrary.length === 0) {
+      return [
+        "BIBLIOTECA PERMITIDA: []",
+        "Não gere treino enquanto a biblioteca estiver vazia.",
+      ];
+    }
+
+    const selected = selectPromptLibraryFor(summaryData, studentNameForSearch);
+    const compactLibrary = selected.map((exercise) => ({
+      exerciseId: exercise.id,
+      name: exercise.name,
+      group: exercise.muscleGroup || undefined,
+      location: compactText(exercise.locationTags) || undefined,
+      equipment: compactText(exercise.equipmentTags) || undefined,
+      intensity: compactText(exercise.intensity) || undefined,
+    }));
+
+    return [
+      `BIBLIOTECA PERMITIDA (${compactLibrary.length} opções já filtradas pelo sistema): ${JSON.stringify(compactLibrary)}`,
+      "Use somente esses exerciseId. O sistema completará descrição, execução e segurança a partir do cadastro oficial.",
+    ];
+  }
+
+  function getBatchStudentPromptBlock(
+    index: number,
+    summaryData: SummaryResponse,
+    student: { id: string; name: string; contractedTrainingDaysPerMonth?: number | null },
+    weekStart: string,
+    expectedWorkoutDates: string[]
+  ): string {
+    const validationContext = getAiValidationContext({
+      studentId: student.id,
+      contractedTrainingDaysPerMonth: student.contractedTrainingDaysPerMonth,
+      weekStartIso: weekStart,
+      expectedWorkoutDatesOverride: expectedWorkoutDates,
+    });
+    const schedule = validationContext.expectedWorkoutDates.length > 0
+      ? getTrainingScheduleFromExpectedDates(validationContext.expectedWorkoutDates)
+      : getTrainingSchedule(student.contractedTrainingDaysPerMonth, validationContext.weekStart);
+    const scheduleDescription = getTrainingScheduleDescription(student.contractedTrainingDaysPerMonth);
+    const expectedWorkoutCount = validationContext.expectedWorkoutCount;
+    const evolution = summaryData.evolutionContext || {};
+    const validationPayload = {
+      studentId: validationContext.studentId,
+      weekStart: validationContext.weekStart,
+      weekEnd: validationContext.weekEnd,
+      expectedWorkoutCount: validationContext.expectedWorkoutCount,
+      expectedWorkoutDates: validationContext.expectedWorkoutDates,
+      validationKey: validationContext.validationKey,
+    };
+    const compactContext = getCompactStudentContext(summaryData);
+    const consolidatedContext = buildConsolidatedTrainingContext(summaryData);
+
+    return [
+      `=== ALUNO ${index + 1}: ${student.name} | studentId=${student.id} ===`,
+      `SEMANA E VALIDAÇÃO IMUTÁVEL: ${JSON.stringify(validationPayload)}`,
+      `CALENDÁRIO DO CONTRATO: ${scheduleDescription} Nesta solicitação, gere somente ${expectedWorkoutCount} treino(s) restante(s), nas datas obrigatórias: ${validationContext.expectedWorkoutDates.join(", ") || "não configuradas"}.`,
+      `DECISÃO PRÉVIA DO SISTEMA: ${JSON.stringify({
+        status: evolution.status || "PRE_PLANEJAMENTO_CONSERVADOR",
+        reason: evolution.reason || "Revisar contexto antes da liberação.",
+        alerts: evolution.reviewAlerts || [],
+      })}`,
+      `CONTEXTO CONSOLIDADO E PRECEDÊNCIA: ${JSON.stringify(consolidatedContext)}`,
+      `DÚVIDAS/FEEDBACKS ABERTOS DO ALUNO — CONTEXTO OBRIGATÓRIO: ${JSON.stringify(summaryData.openQuestions || [])}`,
+      `CONTEXTO ESSENCIAL DO ALUNO: ${compactContext}`,
+      ...getExerciseLibraryPromptLinesFor(summaryData, student.name),
+      `FORMATO PARA ESTE ALUNO DENTRO DE "results": {"studentId":"${student.id}","studentName":"${student.name.replaceAll('"', "'")}","aiValidation":${JSON.stringify(validationPayload)},"evolutionDecision":{"status":"PRE_PLANEJAMENTO_CONSERVADOR","reason":"motivo objetivo","requiresReviewBeforeRelease":true,"reviewAlerts":[]},"workouts":[{"name":"Treino A","date":"${schedule[0]?.date || "AAAA-MM-DD"}","description":"","objective":"","focusAreas":"","intensity":"leve|moderada|alta","estimatedDurationMinutes":40,"estimatedCaloriesMin":0,"estimatedCaloriesMax":0,"studentSummary":"","safetyNote":"","notes":"","exercises":[{"exerciseId":"ID_DA_BIBLIOTECA","series":3,"reps":"10-12","weight":"a definir pelo professor","restTime":"60s","notes":"","order":0}]}]} — gerar exatamente ${expectedWorkoutCount} treino(s) para este aluno.`,
+      "",
+    ].join("\n");
+  }
+
+  function getBatchJsonPrompt(
+    entries: Array<{
+      summaryData: SummaryResponse;
+      student: { id: string; name: string; contractedTrainingDaysPerMonth?: number | null };
+      weekStart: string;
+      expectedWorkoutDates: string[];
+    }>
+  ): string {
+    const blockedEntries = entries.filter((entry) => hasOpenCarePause(entry.summaryData));
+
+    const header = [
+      ...MANUAL_AI_EXECUTION_HEADER_LINES,
+      `Monte os treinos da semana para ${entries.length} aluno(s) diferentes, um bloco por aluno, apoiando o professor de educação física.`,
+      "Responda somente com JSON válido, sem markdown, comentários ou explicações.",
+      "Use somente exerciseId da biblioteca permitida de CADA aluno (a biblioteca é filtrada por aluno). Não invente exercícios, cargas, equipamentos, lesões, restrições ou diagnósticos.",
+      "Respeite objetivo, local, equipamentos, preferências, adesão, histórico e cuidados de cada aluno individualmente. Dor/desconforto impede progressão automática e exige revisão humana.",
+      "Cada bloco de aluno abaixo é independente: não misture contexto, biblioteca ou exercícios de um aluno com outro.",
+      "Se os dados de um aluno forem insuficientes ou a adesão estiver baixa, faça planejamento conservador para aquele aluno e sinalize isso em evolutionDecision.",
+      "NÃO recuse gerar o treino de um aluno por conflito entre cadastro antigo e memória técnica. Use a memória APPROVED mais recente e registre o conflito em reviewAlerts.",
+      "Só deixe de gerar o treino de um aluno quando houver pausa por cuidado aberta, biblioteca vazia ou validação imutável inválida para aquele aluno — nesse caso, simplesmente não inclua esse aluno em results.",
+      "Calorias são faixa estimada e conservadora, nunca promessa. O professor revisará antes de liberar.",
+      "",
+    ];
+
+    const blockedNote = blockedEntries.length > 0
+      ? [
+          `ALUNOS COM PAUSA POR CUIDADO ABERTA — NÃO GERAR TREINO PARA ESTES: ${blockedEntries.map((entry) => entry.student.name).join(", ")}.`,
+          "",
+        ]
+      : [];
+
+    const studentBlocks = entries
+      .filter((entry) => !hasOpenCarePause(entry.summaryData))
+      .map((entry, index) =>
+        getBatchStudentPromptBlock(index, entry.summaryData, entry.student, entry.weekStart, entry.expectedWorkoutDates)
+      );
+
+    const footer = [
+      "",
+      "FORMATO OBRIGATÓRIO DA RESPOSTA COMPLETA:",
+      `{"results":[ /* um objeto por aluno, no formato indicado em cada bloco "ALUNO N" acima, na mesma ordem */ ]}`,
+      "Não inclua nenhum aluno bloqueado por pausa de cuidado em results. Mantenha aiValidation de cada aluno exatamente como foi informado, sem qualquer alteração.",
+    ];
+
+    return [...header, ...blockedNote, ...studentBlocks, ...footer].join("\n");
+  }
+
+  function getBatchWeekStart(): string {
+    if (batchWeekChoice === "next") {
+      return formatIsoDate(getWeekRange(new Date()).endOfWeek);
+    }
+
+    return resolveWeekStartIso(getSaoPauloCivilDateInput());
+  }
+
+  function getBatchWeekRangeLabel(week: "current" | "next"): string {
+    const weekStart = week === "next"
+      ? getWeekRange(new Date()).endOfWeek
+      : parseDateInput(resolveWeekStartIso(getSaoPauloCivilDateInput())) || new Date();
+    const weekEnd = addDays(weekStart, 6);
+
+    return `${formatDatePtBr(weekStart)} a ${formatDatePtBr(weekEnd)}`;
+  }
+
+  const BATCH_QUEUE_STORAGE_KEY = "aiWorkoutBatchQueue";
+
+  function persistBatchQueue(week: "current" | "next", results: BatchStudentResult[]) {
+    try {
+      localStorage.setItem(BATCH_QUEUE_STORAGE_KEY, JSON.stringify({ week, results }));
+    } catch {
+      // localStorage indisponível: a fila simplesmente não fica retomável.
+    }
+  }
+
+  function loadPersistedBatchQueue(week: "current" | "next"): BatchStudentResult[] | null {
+    try {
+      const raw = localStorage.getItem(BATCH_QUEUE_STORAGE_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      if (parsed?.week !== week || !Array.isArray(parsed?.results)) return null;
+
+      return parsed.results;
+    } catch {
+      return null;
+    }
+  }
+
+  function clearPersistedBatchQueue() {
+    try {
+      localStorage.removeItem(BATCH_QUEUE_STORAGE_KEY);
+    } catch {
+      // ignora
+    }
+  }
+
+  useEffect(() => {
+    if (!batchMode || batchResults.length > 0) return;
+
+    const persisted = loadPersistedBatchQueue(batchWeekChoice);
+
+    if (persisted && persisted.length > 0) {
+      setBatchResults(persisted);
+      setBatchMessage({
+        type: "success",
+        text: `Retomando lote em andamento: ${persisted.length} aluno(s) restante(s) para revisar.`,
+      });
+    }
+  }, [batchMode, batchWeekChoice]);
+
+  function selectBatchWeek(week: "current" | "next") {
+    if (week === batchWeekChoice) return;
+
+    setBatchWeekChoice(week);
+    setBatchEligibleIds([]);
+    setBatchSelectedIds([]);
+    setBatchResults([]);
+    setBatchPrompt("");
+    setBatchJsonText("");
+    setBatchMessage(null);
+  }
+
+  async function loadBatchEligibleStudents() {
+    setBatchLoadingEligible(true);
+    setBatchMessage(null);
+
+    try {
+      const weekStart = getBatchWeekStart();
+      const CONCURRENCY = 8;
+      const eligible: string[] = [];
+      const pool = [...students];
+
+      const worker = async () => {
+        while (pool.length > 0) {
+          const student = pool.shift();
+          if (!student) return;
+
+          const dates = await fetchAuthoritativeExpectedWorkoutDates(student.id, weekStart, student);
+          if (dates && dates.length > 0) eligible.push(student.id);
+        }
+      };
+
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, students.length || 1) }, worker));
+
+      setBatchEligibleIds(eligible);
+      setBatchSelectedIds((current) => current.filter((id) => eligible.includes(id)));
+
+      if (eligible.length === 0) {
+        setBatchMessage({ type: "warning", text: "Nenhum aluno com treino pendente nesta semana no momento." });
+      }
+    } catch {
+      setBatchMessage({ type: "error", text: "Erro ao verificar quais alunos precisam de treino." });
+    }
+
+    setBatchLoadingEligible(false);
+  }
+
+  function toggleBatchStudent(studentId: string) {
+    setBatchSelectedIds((current) => {
+      if (current.includes(studentId)) {
+        return current.filter((id) => id !== studentId);
+      }
+
+      if (current.length >= Math.max(Number(batchSize) || 1, 1)) {
+        return current;
+      }
+
+      return [...current, studentId];
+    });
+  }
+
+  async function generateBatchPackage() {
+    if (batchSelectedIds.length === 0) {
+      setBatchMessage({ type: "warning", text: "Selecione ao menos um aluno para o pacote." });
+      return;
+    }
+
+    if (exerciseLibrary.length === 0) {
+      setBatchMessage({ type: "error", text: "A biblioteca de exercícios está vazia." });
+      return;
+    }
+
+    setBatchGenerating(true);
+    setBatchMessage(null);
+    setBatchResults([]);
+
+    try {
+      const weekStart = getBatchWeekStart();
+      const entries: Array<{
+        summaryData: SummaryResponse;
+        student: { id: string; name: string; contractedTrainingDaysPerMonth?: number | null };
+        weekStart: string;
+        expectedWorkoutDates: string[];
+      }> = [];
+
+      for (const studentId of batchSelectedIds) {
+        const student = students.find((item) => item.id === studentId);
+        if (!student) continue;
+
+        const [summaryRes, expectedWorkoutDates] = await Promise.all([
+          fetch(`/api/students/${studentId}/ai-summary`, { cache: "no-store" }),
+          fetchAuthoritativeExpectedWorkoutDates(studentId, weekStart, student),
+        ]);
+
+        if (!summaryRes.ok) {
+          throw new Error(`Não foi possível gerar o resumo de ${student.name}.`);
+        }
+
+        const summaryData = (await summaryRes.json()) as SummaryResponse;
+
+        entries.push({
+          summaryData,
+          student,
+          weekStart,
+          expectedWorkoutDates: expectedWorkoutDates || [],
+        });
+      }
+
+      if (entries.length === 0) {
+        setBatchMessage({ type: "error", text: "Nenhum aluno válido para gerar o pacote." });
+        return;
+      }
+
+      const prompt = getBatchJsonPrompt(entries);
+      setBatchPrompt(prompt);
+
+      const zip = new JSZip();
+      zip.file(
+        "INSTRUCOES/LEIA_PRIMEIRO.txt",
+        [
+          "EXECUÇÃO DIRETA — LEIA E EXECUTE O prompt.txt.",
+          `Este pacote cobre ${entries.length} aluno(s): ${entries.map((entry) => entry.student.name).join(", ")}.`,
+          "A resposta deve ser um único JSON no formato {\"results\":[...]}, com um item por aluno, na mesma ordem dos blocos do prompt.",
+          "Salve o resultado em resposta.txt e importe de volta no sistema.",
+        ].join("\n")
+      );
+      zip.file("prompt.txt", prompt);
+
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pacote-lote-treinos-${weekStart}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      setBatchMessage({ type: "success", text: `Pacote gerado para ${entries.length} aluno(s). Envie para a IA e importe a resposta abaixo.` });
+    } catch (error: any) {
+      setBatchMessage({ type: "error", text: error?.message || "Erro ao gerar o pacote do lote." });
+    }
+
+    setBatchGenerating(false);
+  }
+
+  function openBatchDraftInWorkoutBuilder(result: BatchStudentResult) {
+    if (!result.draft) return;
+
+    // A tela de montar treino pode salvar e redirecionar sozinha (ex.: quando
+    // o treino completa a semana do aluno), então persistimos o restante da
+    // fila ANTES de navegar — assim, ao voltar pra cá, os demais alunos do
+    // lote continuam disponíveis em vez de precisar refazer o pacote do zero.
+    const remaining = batchResults.filter((item) => item.studentId !== result.studentId);
+    setBatchResults(remaining);
+    persistBatchQueue(batchWeekChoice, remaining);
+
+    localStorage.setItem("aiWorkoutDraftBatch", JSON.stringify(result.draft));
+
+    const aiValidation = result.draft.aiValidation as { expectedWorkoutDates?: string[]; weekStart?: string } | undefined;
+    const firstWorkoutDate = aiValidation?.expectedWorkoutDates?.[0] || aiValidation?.weekStart || "";
+
+    window.location.href = `/dashboard/montar-treino?studentId=${encodeURIComponent(result.studentId)}&date=${encodeURIComponent(firstWorkoutDate)}&source=ai-json`;
+  }
+
+  async function importBatchResponseFile(file?: File | null) {
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      setBatchJsonText(text);
+      setBatchMessage(null);
+    } catch {
+      setBatchMessage({ type: "error", text: "Não foi possível ler o arquivo selecionado." });
+    }
+  }
+
+  async function importBatchResponse() {
+    if (!batchJsonText.trim()) {
+      setBatchMessage({ type: "error", text: "Cole a resposta da IA para o lote." });
+      return;
+    }
+
+    setBatchImporting(true);
+    setBatchMessage(null);
+
+    try {
+      const parsed = extractJsonFromText(batchJsonText);
+      const items = Array.isArray(parsed?.results)
+        ? parsed.results
+        : Array.isArray(parsed)
+          ? parsed
+          : null;
+
+      if (!items) {
+        throw new Error('A resposta precisa ser um JSON no formato {"results":[...]}.');
+      }
+
+      const weekStart = getBatchWeekStart();
+      const results: BatchStudentResult[] = [];
+
+      for (const item of items) {
+        const studentId = String(item?.studentId || "").trim();
+        const student = students.find((candidate) => candidate.id === studentId);
+        const studentName = item?.studentName || student?.name || studentId || "Aluno não identificado";
+
+        try {
+          if (!student) {
+            throw new Error("Aluno não encontrado entre os alunos disponíveis para o professor.");
+          }
+
+          const expectedWorkoutDates = await fetchAuthoritativeExpectedWorkoutDates(studentId, weekStart, student);
+
+          if (expectedWorkoutDates && expectedWorkoutDates.length === 0) {
+            throw new Error("A programação desta semana já está completa para este aluno. Nada a importar.");
+          }
+
+          const normalized = normalizeAiWorkoutPayload(item, expectedWorkoutDates || undefined, studentId);
+
+          results.push({
+            studentId,
+            studentName: student.name,
+            status: "pronto",
+            draft: normalized,
+          });
+        } catch (error: any) {
+          results.push({
+            studentId: studentId || `sem-id-${results.length}`,
+            studentName,
+            status: "erro",
+            error: error?.message || "Erro ao validar este aluno.",
+          });
+        }
+      }
+
+      setBatchResults(results);
+      persistBatchQueue(batchWeekChoice, results.filter((result) => result.status === "pronto"));
+
+      const readyCount = results.filter((result) => result.status === "pronto").length;
+      setBatchMessage({
+        type: readyCount > 0 ? "success" : "error",
+        text: `${readyCount} de ${results.length} aluno(s) validado(s) e prontos para revisão.`,
+      });
+    } catch (error: any) {
+      setBatchMessage({ type: "error", text: error?.message || "JSON inválido. Importe novamente a resposta da IA." });
+    }
+
+    setBatchImporting(false);
+  }
+
   async function resolveCareReturnPlanningTarget(
     studentId: string,
     referenceDateOverride?: string,
@@ -2085,13 +2698,249 @@ export default function ResumoAlunoPage() {
           </p>
         </div>
 
-        <Link
-          href={backToWorkoutBuilderHref}
-          className="inline-flex items-center justify-center rounded-xl bg-[#1a1a1a] border border-[#00A19C]/30 text-[#00A19C] px-4 py-3 text-sm font-semibold hover:border-[#00A19C] transition"
-        >
-          ← {targetWorkoutId ? "Fechar IA e voltar para edição" : "Fechar IA e voltar para montagem manual"}
-        </Link>
+        <div className="flex flex-col gap-2 md:items-end">
+          {!targetWorkoutId && (
+            <button
+              type="button"
+              onClick={() => {
+                setBatchMode((current) => !current);
+                setBatchMessage(null);
+              }}
+              className={
+                "inline-flex items-center justify-center rounded-xl border px-4 py-3 text-sm font-semibold transition " +
+                (batchMode
+                  ? "bg-[#00A19C] border-[#00A19C] text-[#0a0a0a]"
+                  : "bg-[#1a1a1a] border-[#00A19C]/30 text-[#00A19C] hover:border-[#00A19C]")
+              }
+            >
+              {batchMode ? "Fechar montagem em lote" : "Montar treinos em lote"}
+            </button>
+          )}
+
+          <Link
+            href={backToWorkoutBuilderHref}
+            className="inline-flex items-center justify-center rounded-xl bg-[#1a1a1a] border border-[#00A19C]/30 text-[#00A19C] px-4 py-3 text-sm font-semibold hover:border-[#00A19C] transition"
+          >
+            ← {targetWorkoutId ? "Fechar IA e voltar para edição" : "Fechar IA e voltar para montagem manual"}
+          </Link>
+        </div>
       </div>
+
+      {batchMode && (
+        <div className="bg-[#111] border border-[#00A19C]/30 rounded-2xl p-5 space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-[#00A19C]">Montar treinos em lote</h2>
+            <p className="text-xs text-[#a1a1a1] mt-1 leading-relaxed">
+              Escolha a semana, selecione até o tamanho do pacote de alunos que precisam de treino nessa semana,
+              baixe um único pacote para todos, envie para a IA e importe a resposta combinada de volta. Cada aluno
+              continua passando pela mesma validação de segurança (aluno, semana, quantidade e chave) e pela mesma
+              revisão manual antes de salvar — só a geração/importação do pacote é feita de uma vez.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs text-[#a1a1a1] mb-2">Qual semana você está montando?</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => selectBatchWeek("current")}
+                className={
+                  "px-4 py-2.5 rounded-xl text-sm font-semibold transition border " +
+                  (batchWeekChoice === "current"
+                    ? "bg-[#00A19C] border-[#00A19C] text-[#0a0a0a]"
+                    : "bg-[#1a1a1a] border-[#ffffff10] text-[#a1a1a1] hover:text-white")
+                }
+              >
+                Semana atual · {getBatchWeekRangeLabel("current")}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => selectBatchWeek("next")}
+                className={
+                  "px-4 py-2.5 rounded-xl text-sm font-semibold transition border " +
+                  (batchWeekChoice === "next"
+                    ? "bg-[#00A19C] border-[#00A19C] text-[#0a0a0a]"
+                    : "bg-[#1a1a1a] border-[#ffffff10] text-[#a1a1a1] hover:text-white")
+                }
+              >
+                Próxima semana · {getBatchWeekRangeLabel("next")}
+              </button>
+            </div>
+          </div>
+
+          {batchMessage && (
+            <div
+              className={
+                "rounded-xl px-4 py-3 text-sm " +
+                (batchMessage.type === "success"
+                  ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                  : batchMessage.type === "warning"
+                    ? "bg-amber-500/10 text-amber-300 border border-amber-500/30"
+                    : "bg-red-500/10 text-red-400 border border-red-500/20")
+              }
+            >
+              {batchMessage.text}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs text-[#a1a1a1] mb-2">Tamanho do pacote (alunos por vez)</label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={batchSize}
+                onChange={(event) => {
+                  const next = Math.min(Math.max(Number(event.target.value) || 1, 1), 20);
+                  setBatchSize(next);
+                  setBatchSelectedIds((current) => current.slice(0, next));
+                }}
+                className="w-28 bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={loadBatchEligibleStudents}
+              disabled={batchLoadingEligible || loadingStudents}
+              className="px-4 py-3 rounded-xl text-sm bg-[#1a1a1a] border border-[#00A19C]/30 text-[#00A19C] hover:border-[#00A19C] transition disabled:opacity-50"
+            >
+              {batchLoadingEligible ? "Verificando alunos..." : "Listar alunos com treino pendente"}
+            </button>
+          </div>
+
+          {batchEligibleIds.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-[#a1a1a1]">
+                {batchSelectedIds.length}/{batchSize} selecionado(s) de {batchEligibleIds.length} aluno(s) pendente(s).
+              </p>
+
+              <div className="max-h-64 overflow-y-auto rounded-xl border border-[#ffffff10] divide-y divide-[#ffffff10]">
+                {batchEligibleIds.map((studentId) => {
+                  const student = students.find((item) => item.id === studentId);
+                  if (!student) return null;
+
+                  const checked = batchSelectedIds.includes(studentId);
+
+                  return (
+                    <label
+                      key={studentId}
+                      className="flex items-center gap-3 px-4 py-2 text-sm text-[#f5f5f5] cursor-pointer hover:bg-[#1a1a1a]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleBatchStudent(studentId)}
+                        disabled={!checked && batchSelectedIds.length >= batchSize}
+                        className="accent-[#00A19C]"
+                      />
+                      {student.name}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={generateBatchPackage}
+            disabled={batchGenerating || batchSelectedIds.length === 0}
+            className="w-full md:w-auto px-5 py-3 rounded-xl text-sm font-semibold bg-[#00A19C] text-[#0a0a0a] hover:bg-[#008B87] transition disabled:opacity-50"
+          >
+            {batchGenerating ? "Gerando pacote..." : `Baixar pacote ZIP para ${batchSelectedIds.length || ""} aluno(s)`}
+          </button>
+
+          <div className="border-t border-[#ffffff10] pt-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[#00A19C]">Importar resposta combinada da IA</h3>
+              <p className="text-xs text-[#a1a1a1] mt-1">
+                Importe o arquivo TXT/JSON devolvido pela IA para este pacote, ou cole o conteúdo abaixo.
+              </p>
+            </div>
+
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-[#00A19C]/30 bg-[#00A19C]/10 px-4 py-3 text-sm font-semibold text-[#00A19C] hover:bg-[#00A19C]/20 transition">
+              Importar resposta TXT/JSON
+              <input
+                type="file"
+                accept=".txt,.json,text/plain,application/json"
+                className="hidden"
+                onChange={(event) => {
+                  void importBatchResponseFile(event.target.files?.[0]);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+
+            <textarea
+              value={batchJsonText}
+              onChange={(event) => setBatchJsonText(event.target.value)}
+              placeholder='Cole aqui o JSON, começando com {"results": [...]}'
+              className="w-full min-h-[160px] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-4 py-3 text-xs md:text-sm text-[#e5e5e5] font-mono leading-relaxed outline-none focus:border-[#00A19C]"
+            />
+
+            <button
+              type="button"
+              onClick={importBatchResponse}
+              disabled={batchImporting || !batchJsonText.trim()}
+              className="px-4 py-3 rounded-xl text-sm font-semibold bg-[#00A19C] text-[#0a0a0a] hover:bg-[#008B87] transition disabled:opacity-50"
+            >
+              {batchImporting ? "Validando..." : "Validar resposta do lote"}
+            </button>
+          </div>
+
+          {batchResults.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-[#f5f5f5]">Resultado da validação</p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBatchResults([]);
+                    clearPersistedBatchQueue();
+                    setBatchMessage(null);
+                  }}
+                  className="text-xs text-[#a1a1a1] hover:text-white transition"
+                >
+                  Limpar fila
+                </button>
+              </div>
+
+              {batchResults.map((result) => (
+                <div
+                  key={result.studentId}
+                  className={
+                    "flex items-center justify-between gap-3 rounded-xl border px-4 py-3 " +
+                    (result.status === "pronto"
+                      ? "border-green-500/20 bg-green-500/10"
+                      : "border-red-500/20 bg-red-500/10")
+                  }
+                >
+                  <div>
+                    <p className="text-sm text-[#f5f5f5] font-semibold">{result.studentName}</p>
+                    <p className={"text-xs " + (result.status === "pronto" ? "text-green-400" : "text-red-400")}>
+                      {result.status === "pronto" ? "Pronto para revisar" : result.error}
+                    </p>
+                  </div>
+
+                  {result.status === "pronto" && (
+                    <button
+                      type="button"
+                      onClick={() => openBatchDraftInWorkoutBuilder(result)}
+                      className="shrink-0 px-3 py-2 rounded-lg text-xs font-semibold bg-[#00A19C] text-[#0a0a0a] hover:bg-[#008B87] transition"
+                    >
+                      Revisar e salvar
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {message && (
         <div
@@ -2108,6 +2957,8 @@ export default function ResumoAlunoPage() {
         </div>
       )}
 
+      {!batchMode && (
+      <>
       <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 md:items-end">
           <div>
@@ -2442,6 +3293,8 @@ export default function ResumoAlunoPage() {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
