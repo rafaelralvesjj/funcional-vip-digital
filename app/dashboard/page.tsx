@@ -10,7 +10,13 @@ import DashboardSectionSwitcher from '@/components/DashboardSectionSwitcher';
 import TrialContinuationDashboardShortcut from '@/components/gestor/TrialContinuationDashboardShortcut';
 import ProfilePhotoEditor from '@/components/ProfilePhotoEditor';
 import { consolidateActiveCareEvents } from '@/lib/student-care-event-consolidation';
-import { canValidateWorkoutCivilDate, workoutDateToCivilKey } from '@/lib/workout-validation-window';
+import {
+  addDaysToCivilKey,
+  canValidateWorkoutCivilDate,
+  civilKeyToUtcDate,
+  getCurrentWorkoutWeekCivilRange,
+  workoutDateToCivilKey,
+} from '@/lib/workout-validation-window';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -182,35 +188,29 @@ export default async function DashboardPage() {
   }
 
   function getWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
-    const date = new Date(referenceDate);
-    date.setHours(0, 0, 0, 0);
+    // Dashboard roda no servidor da Vercel (UTC). A semana operacional, porém,
+    // é sempre a semana civil de Brasília. Sem isso, domingo às 21h BRT já é
+    // segunda-feira em UTC e o painel avança a semana três horas antes.
+    const { startKey, nextWeekStartKey } = getCurrentWorkoutWeekCivilRange(referenceDate);
 
-    const day = date.getDay();
-    const diffToMonday = day === 0 ? -6 : 1 - day;
-
-    const startOfWeek = new Date(date);
-    startOfWeek.setDate(date.getDate() + diffToMonday);
-    startOfWeek.setHours(0, 0, 0, 0);
-
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 7);
-    endOfWeek.setHours(0, 0, 0, 0);
-
-    return { startOfWeek, endOfWeek };
+    return {
+      startOfWeek: civilKeyToUtcDate(startKey),
+      endOfWeek: civilKeyToUtcDate(nextWeekStartKey),
+    };
   }
 
   function getNextWeekRange(referenceDate: Date): { startOfWeek: Date; endOfWeek: Date } {
-    const currentWeek = getWeekRange(referenceDate);
-    const startOfWeek = new Date(currentWeek.endOfWeek);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 7);
-    endOfWeek.setHours(0, 0, 0, 0);
+    const { nextWeekStartKey } = getCurrentWorkoutWeekCivilRange(referenceDate);
 
-    return { startOfWeek, endOfWeek };
+    return {
+      startOfWeek: civilKeyToUtcDate(nextWeekStartKey),
+      endOfWeek: civilKeyToUtcDate(addDaysToCivilKey(nextWeekStartKey, 7)),
+    };
   }
 
   function formatDateOnly(date: Date): string {
     return new Date(date).toLocaleDateString('pt-BR', {
+      timeZone: 'UTC',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -225,9 +225,10 @@ export default async function DashboardPage() {
   }
 
   function formatDateInput(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    // As fronteiras de semana acima são marcadores civis em UTC.
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
 
     return `${year}-${month}-${day}`;
   }

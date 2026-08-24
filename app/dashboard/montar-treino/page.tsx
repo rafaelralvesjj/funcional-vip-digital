@@ -885,9 +885,10 @@ export default function MontarTreinoPage() {
     }
 
     const dashboardDate =
-      weekFromUrl === "next"
+      dateFromUrl ||
+      (weekFromUrl === "next"
         ? formatDateInput(currentWeek.endOfWeek)
-        : dateFromUrl;
+        : null);
 
     if (dashboardDate) {
       const safeDate = getNextSafePlanningDateInput(dashboardDate);

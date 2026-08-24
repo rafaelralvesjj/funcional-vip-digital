@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { canValidateWorkoutCivilDate, workoutDateToCivilKey } from "@/lib/workout-validation-window";
+import { canValidateWorkoutCivilDate, getWorkoutValidationState, workoutDateToCivilKey } from "@/lib/workout-validation-window";
 
 type Exercise = {
   id?: string;
@@ -371,8 +371,19 @@ export default function TreinosPage() {
     const completed = status === "CONCLUIDO";
     const partiallyCompleted = status === "CONCLUIDO_PARCIALMENTE";
     const hidden = date >= getStudentPlanVisibilityLimit();
-    const available = Boolean(plan && !completed && !partiallyCompleted && canValidateWorkoutDate(date));
-    const expired = Boolean(plan && !completed && !partiallyCompleted && !canValidateWorkoutDate(date));
+    const dateKey = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}-${String(
+      day,
+    ).padStart(2, "0")}`;
+    const validationState = plan ? getWorkoutValidationState(dateKey) : null;
+    const available = Boolean(
+      plan && !completed && !partiallyCompleted && validationState === "AVAILABLE",
+    );
+    const future = Boolean(
+      plan && !completed && !partiallyCompleted && !hidden && validationState === "FUTURE",
+    );
+    const expired = Boolean(
+      plan && !completed && !partiallyCompleted && validationState === "EXPIRED",
+    );
 
     return {
       plan,
@@ -381,6 +392,7 @@ export default function TreinosPage() {
       partiallyCompleted,
       hidden,
       available,
+      future,
       expired,
     };
   }
@@ -605,6 +617,9 @@ export default function TreinosPage() {
                             {state.available && (
                               <span className="h-2 w-2 rounded-full bg-[#F97316]" />
                             )}
+                            {state.future && (
+                              <span className="h-2 w-2 rounded-full bg-sky-400" />
+                            )}
                             {state.expired && (
                               <span className="h-2 w-2 rounded-full bg-[#EF4444]" />
                             )}
@@ -624,6 +639,9 @@ export default function TreinosPage() {
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full bg-[#F97316]" /> Disponível
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-sky-400" /> Próxima semana
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full bg-[#EF4444]" /> Não concluído
