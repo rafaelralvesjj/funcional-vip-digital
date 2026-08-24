@@ -8,7 +8,10 @@ import StudentSurveyPanel from "@/components/aluno/StudentSurveyPanel";
 import EmailNotificationReminder from "@/components/aluno/EmailNotificationReminder";
 import { StudentDidYouKnowCard } from "@/components/aluno/StudentDidYouKnowCard";
 import {
+  addDaysToCivilKey,
   canValidateWorkoutCivilDate,
+  getSaoPauloCivilKey,
+  getWeekStartCivilKey,
   getWorkoutValidationDeadlineCivilKey,
   getWorkoutValidationState,
 } from "@/lib/workout-validation-window";
@@ -1207,11 +1210,19 @@ export default function AlunoPage() {
 
   function isFutureWorkoutDay(day: number | null): boolean {
     if (day === null) return false;
-    return getWorkoutValidationState(getSelectedWorkoutCivilKey(day)) === "FUTURE";
+
+    // A cor azul representa treino de semana futura já liberado para consulta.
+    // Calculamos a fronteira sempre pela data civil de Brasília para evitar
+    // qualquer virada antecipada causada por UTC/servidor.
+    const todayKey = getSaoPauloCivilKey(new Date());
+    const currentWeekStartKey = getWeekStartCivilKey(todayKey);
+    const nextWeekStartKey = addDaysToCivilKey(currentWeekStartKey, 7);
+
+    return getSelectedWorkoutCivilKey(day) >= nextWeekStartKey;
   }
 
   function isExpiredWorkoutDay(day: number): boolean {
-    if (!hasPlan(day) || isCompleted(day)) return false;
+    if (!hasPlan(day) || isCompleted(day) || isFutureWorkoutDay(day)) return false;
     return getWorkoutValidationState(getSelectedWorkoutCivilKey(day)) === "EXPIRED";
   }
 
