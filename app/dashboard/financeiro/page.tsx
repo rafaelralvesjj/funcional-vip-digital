@@ -49,6 +49,7 @@ type ContractItem = {
   paymentMode?: string | null;
   source?: string | null;
   notes?: string | null;
+  renewedFromContractId?: string | null;
   createdAt: string;
 };
 
@@ -231,6 +232,7 @@ export default function FinanceiroPage() {
   const [loading, setLoading] = useState(true);
   const [savingContract, setSavingContract] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
+  const [renewingContractId, setRenewingContractId] = useState("");
   const [filter, setFilter] = useState("VENCENDO");
   const [paymentFilter, setPaymentFilter] = useState("TODOS");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -502,6 +504,14 @@ export default function FinanceiroPage() {
     return payments.filter((payment) => payment.status === paymentFilter);
   }, [paymentsData, paymentFilter]);
 
+  const renewedSourceContractIds = useMemo(() => {
+    return new Set(
+      (contractsData?.contracts || [])
+        .filter((contract) => contract.renewedFromContractId && contract.status !== "CANCELLED")
+        .map((contract) => String(contract.renewedFromContractId))
+    );
+  }, [contractsData]);
+
   function contractFilterLabel(item: string): string {
     const labels: Record<string, string> = {
       VENCENDO: "Vencendo",
@@ -579,6 +589,48 @@ export default function FinanceiroPage() {
     }
 
     setSavingContract(false);
+  }
+
+  async function handleRenewContract(contract: ContractItem) {
+    if (renewingContractId) return;
+
+    const confirmed = window.confirm(
+      `Renovar o contrato de ${contract.studentName}?\n\nO próximo ciclo será criado automaticamente para começar no dia seguinte ao término do contrato atual, com cobrança de ${formatMoney(contract.priceCents)} em aberto. O contrato atual continuará ativo até o vencimento.`
+    );
+
+    if (!confirmed) return;
+
+    setRenewingContractId(contract.id);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`/api/student-contracts/${contract.id}/renew`, {
+        method: "POST",
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text:
+            json?.message ||
+            `Renovação criada. A cobrança de ${formatMoney(contract.priceCents)} está em aberto para o próximo ciclo.`,
+        });
+        setFilter("PAGAMENTO");
+        if (json?.contract?.id) {
+          setPaymentContractId(json.contract.id);
+          setPaymentAmountReais(String(contract.priceCents / 100));
+        }
+        await loadData();
+      } else {
+        setMessage({ type: "error", text: json?.error || "Erro ao renovar contrato." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao renovar contrato." });
+    }
+
+    setRenewingContractId("");
   }
 
   async function handleUpdateContractStatus(contractId: string, status: string) {
@@ -1535,6 +1587,23 @@ export default function FinanceiroPage() {
                     >
                       Finalizar
                     </button>
+                  )}
+
+                  {contract.type === "PAID" && contract.status === "ACTIVE" && (
+                    renewedSourceContractIds.has(contract.id) ? (
+                      <span className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#6b6b6b] px-3 py-2 text-xs font-semibold">
+                        Renovação criada
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleRenewContract(contract)}
+                        disabled={Boolean(renewingContractId)}
+                        className="rounded-xl bg-[#00A19C]/15 border border-[#00A19C]/30 text-[#00A19C] px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {renewingContractId === contract.id ? "Renovando..." : "Renovar"}
+                      </button>
+                    )
                   )}
 
                   <button
