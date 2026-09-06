@@ -6,6 +6,7 @@ import JSZip from "jszip";
 import Link from "next/link";
 import { getSaoPauloCivilDateInput, getSaoPauloWeekday } from "@/lib/planning-window";
 import { resolveRecurringWorkoutOffsets } from "@/lib/student-workout-days";
+import { buildExplicitExerciseRequestContext, prioritizeExplicitExerciseMentions } from "@/lib/exercise-library-priority";
 
 type StudentOption = {
   id: string;
@@ -1111,10 +1112,16 @@ export default function ResumoAlunoPage() {
 
   function selectPromptLibrary(summaryData: SummaryResponse): LibraryExercise[] {
     const consolidatedContext = buildConsolidatedTrainingContext(summaryData);
+    const explicitExerciseContext = buildExplicitExerciseRequestContext({
+      openQuestions: summaryData.openQuestions,
+      activePreferences: summaryData.technicalContext?.activePreferences,
+      approvedMemories: summaryData.technicalContext?.approvedMemories,
+    });
     const context = normalizePromptSearch(
       [
         summaryData.summaryText,
         JSON.stringify(consolidatedContext),
+        explicitExerciseContext,
         selectedStudent?.name,
         summaryData.evolutionContext?.reason,
       ]
@@ -1171,20 +1178,27 @@ export default function ResumoAlunoPage() {
       })
       .sort((a, b) => b.score - a.score || a.index - b.index);
 
-    if (!wantsGymMachines) {
-      return scored.slice(0, 32).map((item) => item.exercise);
-    }
+    const rankedExercises = !wantsGymMachines
+      ? scored.map((item) => item.exercise)
+      : (() => {
+          // Em academia completa com preferência confirmada por máquinas, mantemos
+          // aparelhos no topo e depois completamos com as demais alternativas.
+          const machineFirst = scored.filter((item) => item.isMachineBased).slice(0, 18);
+          const selectedIds = new Set(machineFirst.map((item) => item.exercise.id));
+          const complementary = scored
+            .filter((item) => !selectedIds.has(item.exercise.id))
+            .map((item) => item.exercise);
+          return [...machineFirst.map((item) => item.exercise), ...complementary];
+        })();
 
-    // Em academia completa com preferência confirmada por máquinas, garantimos
-    // que a IA enxergue os exercícios de aparelhos. Depois completamos a lista
-    // com alternativas relevantes para aquecimento, mobilidade e core.
-    const machineFirst = scored.filter((item) => item.isMachineBased).slice(0, 18);
-    const selectedIds = new Set(machineFirst.map((item) => item.exercise.id));
-    const complementary = scored
-      .filter((item) => !selectedIds.has(item.exercise.id))
-      .slice(0, Math.max(32 - machineFirst.length, 0));
-
-    return [...machineFirst, ...complementary].slice(0, 32).map((item) => item.exercise);
+    // Pedidos explícitos do aluno/professor/memória técnica são soberanos sobre
+    // o corte de 32 opções. Se o exercício existe e está elegível, ele entra.
+    return prioritizeExplicitExerciseMentions({
+      rankedExercises,
+      eligibleExercises: eligibleLibrary,
+      explicitContext: explicitExerciseContext,
+      limit: 32,
+    });
   }
 
   function getExerciseLibraryPromptLines(summaryData: SummaryResponse): string[] {
@@ -1611,10 +1625,16 @@ export default function ResumoAlunoPage() {
 
   function selectPromptLibraryFor(summaryData: SummaryResponse, studentNameForSearch: string): LibraryExercise[] {
     const consolidatedContext = buildConsolidatedTrainingContext(summaryData);
+    const explicitExerciseContext = buildExplicitExerciseRequestContext({
+      openQuestions: summaryData.openQuestions,
+      activePreferences: summaryData.technicalContext?.activePreferences,
+      approvedMemories: summaryData.technicalContext?.approvedMemories,
+    });
     const context = normalizePromptSearch(
       [
         summaryData.summaryText,
         JSON.stringify(consolidatedContext),
+        explicitExerciseContext,
         studentNameForSearch,
         summaryData.evolutionContext?.reason,
       ]
@@ -1664,17 +1684,23 @@ export default function ResumoAlunoPage() {
       })
       .sort((a, b) => b.score - a.score || a.index - b.index);
 
-    if (!wantsGymMachines) {
-      return scored.slice(0, 32).map((item) => item.exercise);
-    }
+    const rankedExercises = !wantsGymMachines
+      ? scored.map((item) => item.exercise)
+      : (() => {
+          const machineFirst = scored.filter((item) => item.isMachineBased).slice(0, 18);
+          const selectedIds = new Set(machineFirst.map((item) => item.exercise.id));
+          const complementary = scored
+            .filter((item) => !selectedIds.has(item.exercise.id))
+            .map((item) => item.exercise);
+          return [...machineFirst.map((item) => item.exercise), ...complementary];
+        })();
 
-    const machineFirst = scored.filter((item) => item.isMachineBased).slice(0, 18);
-    const selectedIds = new Set(machineFirst.map((item) => item.exercise.id));
-    const complementary = scored
-      .filter((item) => !selectedIds.has(item.exercise.id))
-      .slice(0, Math.max(32 - machineFirst.length, 0));
-
-    return [...machineFirst, ...complementary].slice(0, 32).map((item) => item.exercise);
+    return prioritizeExplicitExerciseMentions({
+      rankedExercises,
+      eligibleExercises: eligibleLibrary,
+      explicitContext: explicitExerciseContext,
+      limit: 32,
+    });
   }
 
   function getExerciseLibraryPromptLinesFor(summaryData: SummaryResponse, studentNameForSearch: string): string[] {
@@ -2551,7 +2577,7 @@ export default function ResumoAlunoPage() {
       );
       zip.file(
         "CONTEXTO/BIBLIOTECA_EXERCICIOS.json",
-        JSON.stringify(selectPromptLibrary(summary).map((exercise) => ({
+        JSON.stringify(selectPromptLibrary(packageSummary).map((exercise) => ({
           exerciseId: exercise.id,
           name: exercise.name,
           group: exercise.muscleGroup,
