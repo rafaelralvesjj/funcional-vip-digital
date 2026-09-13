@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getSaoPauloCivilDateInput, getSaoPauloWeekday } from "@/lib/planning-window";
 import { resolveRecurringWorkoutOffsets } from "@/lib/student-workout-days";
 import { buildExplicitExerciseRequestContext, prioritizeExplicitExerciseMentions } from "@/lib/exercise-library-priority";
+import { buildWorkoutGenerationStrategy, getRecentlyUsedExerciseNames, rotateRecentlyUsedExercises } from "@/lib/workout-generation-strategy";
 
 type StudentOption = {
   id: string;
@@ -1110,6 +1111,17 @@ export default function ResumoAlunoPage() {
       .join("\n");
   }
 
+  function getWorkoutGenerationStrategy(summaryData: SummaryResponse) {
+    const recentExerciseNames = getRecentlyUsedExerciseNames(summaryData.summaryText || "", exerciseLibrary);
+
+    return buildWorkoutGenerationStrategy({
+      summaryText: summaryData.summaryText || "",
+      openQuestions: summaryData.openQuestions || [],
+      recentExerciseNames,
+      librarySize: exerciseLibrary.filter((exercise) => exercise.active !== false).length,
+    });
+  }
+
   function selectPromptLibrary(summaryData: SummaryResponse): LibraryExercise[] {
     const consolidatedContext = buildConsolidatedTrainingContext(summaryData);
     const explicitExerciseContext = buildExplicitExerciseRequestContext({
@@ -1191,13 +1203,17 @@ export default function ResumoAlunoPage() {
           return [...machineFirst.map((item) => item.exercise), ...complementary];
         })();
 
-    // Pedidos explícitos do aluno/professor/memória técnica são soberanos sobre
-    // o corte de 32 opções. Se o exercício existe e está elegível, ele entra.
+    const recentExerciseNames = getWorkoutGenerationStrategy(summaryData).recentExerciseNames;
+    const rotatedExercises = rotateRecentlyUsedExercises(rankedExercises, recentExerciseNames);
+
+    // Pedidos explícitos continuam soberanos. Para reduzir repetição, exercícios
+    // dos últimos planos são deslocados para o fim e o leque enviado à IA foi
+    // ampliado. Assim o motor troca o exercício, mas preserva o objetivo/padrão.
     return prioritizeExplicitExerciseMentions({
-      rankedExercises,
+      rankedExercises: rotatedExercises,
       eligibleExercises: eligibleLibrary,
       explicitContext: explicitExerciseContext,
-      limit: 32,
+      limit: 64,
     });
   }
 
@@ -1314,6 +1330,7 @@ export default function ResumoAlunoPage() {
       `CONTEXTO CONSOLIDADO E PRECEDÊNCIA: ${JSON.stringify(consolidatedContext)}`,
       `DÚVIDAS/FEEDBACKS ABERTOS DO ALUNO — CONTEXTO OBRIGATÓRIO: ${JSON.stringify(summaryData.openQuestions || [])}`,
       "REGRA PARA DÚVIDAS/FEEDBACKS ABERTOS: considere o conteúdo ao ajustar o próximo treino. Preserve o que o aluno disse que funcionou, incorpore pedidos de ajuste quando forem seguros e coerentes, e leve alertas operacionais para reviewAlerts. Uma mensagem ainda sem resposta NÃO bloqueia a geração do treino por si só; bloqueie apenas quando houver pausa por cuidado aberta ou outra condição de segurança já sinalizada pelo sistema. O professor responderá/revisará antes da liberação final.",
+      ...getWorkoutGenerationStrategy(summaryData).promptLines,
       `CONTEXTO ESSENCIAL DO ALUNO: ${compactContext}`,
       ...getExerciseLibraryPromptLines(summaryData),
       "",
@@ -1695,11 +1712,14 @@ export default function ResumoAlunoPage() {
           return [...machineFirst.map((item) => item.exercise), ...complementary];
         })();
 
+    const recentExerciseNames = getWorkoutGenerationStrategy(summaryData).recentExerciseNames;
+    const rotatedExercises = rotateRecentlyUsedExercises(rankedExercises, recentExerciseNames);
+
     return prioritizeExplicitExerciseMentions({
-      rankedExercises,
+      rankedExercises: rotatedExercises,
       eligibleExercises: eligibleLibrary,
       explicitContext: explicitExerciseContext,
-      limit: 32,
+      limit: 56,
     });
   }
 
@@ -1768,6 +1788,7 @@ export default function ResumoAlunoPage() {
       })}`,
       `CONTEXTO CONSOLIDADO E PRECEDÊNCIA: ${JSON.stringify(consolidatedContext)}`,
       `DÚVIDAS/FEEDBACKS ABERTOS DO ALUNO — CONTEXTO OBRIGATÓRIO: ${JSON.stringify(summaryData.openQuestions || [])}`,
+      ...getWorkoutGenerationStrategy(summaryData).promptLines,
       `CONTEXTO ESSENCIAL DO ALUNO: ${compactContext}`,
       ...getExerciseLibraryPromptLinesFor(summaryData, student.name),
       `FORMATO PARA ESTE ALUNO DENTRO DE "results": {"studentId":"${student.id}","studentName":"${student.name.replaceAll('"', "'")}","aiValidation":${JSON.stringify(validationPayload)},"evolutionDecision":{"status":"PRE_PLANEJAMENTO_CONSERVADOR","reason":"motivo objetivo","requiresReviewBeforeRelease":true,"reviewAlerts":[]},"workouts":[{"name":"Treino A","date":"${schedule[0]?.date || "AAAA-MM-DD"}","description":"","objective":"","focusAreas":"","intensity":"leve|moderada|alta","estimatedDurationMinutes":40,"estimatedCaloriesMin":0,"estimatedCaloriesMax":0,"studentSummary":"","safetyNote":"","notes":"","exercises":[{"exerciseId":"ID_DA_BIBLIOTECA","series":3,"reps":"10-12","weight":"a definir pelo professor","restTime":"60s","notes":"","order":0}]}]} — gerar exatamente ${expectedWorkoutCount} treino(s) para este aluno.`,

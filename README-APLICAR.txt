@@ -1,60 +1,32 @@
-CORREÇÃO — REVISÃO PROFUNDA SEM TREINO FUTURO
+CORREÇÃO — MOTOR DE MONTAGEM DINÂMICA / VARIAÇÃO DE EXERCÍCIOS
+Data: 13/09/2026
 
-Base:
-- aplicar sobre o main atual enviado em 13/09/2026
-- recomendado criar a branch:
-  fix/revisao-profunda-sem-treino-futuro
+OBJETIVO
+1. Usar melhor a biblioteca ativa de exercícios.
+2. Evitar repetição automática de exercícios usados recentemente quando houver equivalente seguro.
+3. Preservar 1–2 exercícios âncora quando houver pedido explícito, motivo técnico/médico ou necessidade de acompanhamento.
+4. Quando o aluno pedir treino dinâmico/combinado/metabólico, estruturar como pares A1/A2, B1/B2, C1/C2: faz o primeiro, faz o segundo e só então descansa.
+5. Aplicar a mesma regra tanto no fluxo individual quanto no Montar treinos em lote.
 
-Causa raiz:
-- "Gerar revisão profunda do treino" chamava o mesmo endpoint de adaptação
-  e herdava a trava que exige treino pendente/futuro elegível.
-- Quando o aluno não tinha treino elegível, o backend respondia 409:
-  "Não há treinos pendentes ou futuros elegíveis para adaptação."
+ARQUIVOS
+SUBSTITUIR:
+- app/dashboard/resumo-aluno/page.tsx
 
-Nova regra:
-1. "Alterar treino com IA"
-   - continua exigindo treino existente e elegível;
-   - sem treino elegível continua retornando 409.
+CRIAR:
+- lib/workout-generation-strategy.ts
 
-2. "Gerar revisão profunda do treino"
-   - quando existem treinos elegíveis, mantém o fluxo atual de auditoria/adaptação;
-   - quando NÃO existem treinos elegíveis, gera um pacote de REVISÃO/PLANEJAMENTO.
+TESTE OPCIONAL (recomendado manter no repositório):
+- tests/workout-generation-strategy.test.ts
 
-O pacote de revisão sem treino futuro inclui:
-- conversa atual;
-- conversas abertas recentes do aluno;
-- perfil básico do aluno;
-- memória técnica;
-- orientações médicas ativas;
-- eventos de cuidado;
-- até 12 treinos recentes com exercícios;
-- biblioteca ativa de exercícios;
-- modelo de resposta para recomendação de nova programação.
+IMPORTANTE
+- Este pacote NÃO altera package.json.
+- Este pacote NÃO executa Prisma, NÃO faz db push e NÃO altera banco de dados.
+- Não apague outros arquivos do projeto.
 
-Segurança do fluxo:
-- o pacote de planejamento deixa workouts vazio, porque não existe workoutId elegível;
-- a IA é instruída a não afirmar que alterou/publicou treinos;
-- a recomendação deve ser revisada pelo professor antes de criar novos treinos;
-- o front-end identifica X-Review-Only e não mostra "Validar adaptação" /
-  "Aplicar alterações" quando não existe treino a editar.
-
-Validação executada:
-- TDD: o teste novo falhou antes da implementação porque o helper ainda não existia.
-- Depois da correção:
-  node --experimental-strip-types --test tests/workout-adjustment-review-mode.test.ts
-  Resultado: 5 testes aprovados, 0 falhas.
-
-- Checagem TypeScript dos arquivos alterados:
-  não foram detectados erros locais/sintáticos.
-  O comando não consegue resolver Next/React/JSZip porque o ZIP do repositório
-  não traz node_modules neste sandbox.
-
-Build:
-- build completo NÃO foi executado neste ambiente por ausência das dependências instaladas.
-- depois de aplicar na branch de desenvolvimento, confirmar o build verde da Vercel
-  antes de fazer merge no main.
-
-Teste funcional esperado depois do deploy DEV:
-A) Denize sem treino futuro + "Gerar revisão profunda" -> baixa ZIP normalmente.
-B) Denize sem treino futuro + "Alterar treino com IA" -> continua bloqueado.
-C) Aluno com treino futuro + ambos os botões -> fluxo atual continua funcionando.
+COMO TESTAR DEPOIS DO DEPLOY
+1. Gerar novamente o pacote/Prompt JSON da Denize.
+2. Confirmar que o prompt mostra REGRA DE VARIEDADE SISTEMÁTICA.
+3. Confirmar que aparece MÉTODO DINÂMICO SOLICITADO com A1/A2.
+4. Conferir que exercícios usados recentemente são de-priorizados.
+5. Gerar treino e verificar notes com A1 -, A2 -, B1 -, B2 -.
+6. Fazer um teste no modo lote para confirmar que as mesmas regras aparecem por aluno.
