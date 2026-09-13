@@ -5,6 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { getStudentTechnicalContext } from "@/lib/student-technical-memory";
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 import JSZip from "jszip";
+import {
+  buildDeepReviewOnlyPromptLines,
+  buildDeepReviewOnlyResponseModel,
+  resolveConversationPackageMode,
+} from "@/lib/workout-adjustment-review";
 
 
 type AdjustmentAction =
@@ -918,14 +923,142 @@ export async function POST(req: NextRequest) {
       const batchContext = await getConversationBatchContext({ conversationId, userId, role });
       if ("error" in batchContext) return NextResponse.json({ error: batchContext.error }, { status: batchContext.status });
       const activeMedicalGuidance = getActiveMedicalGuidance(batchContext.technicalContext);
+      const requestedPackageDepth = requestedReviewDepth === "DEEP" ? "DEEP" : "STANDARD";
       const reviewDepth =
-        requestedReviewDepth === "DEEP" || activeMedicalGuidance.length > 0
+        requestedPackageDepth === "DEEP" || activeMedicalGuidance.length > 0
           ? "DEEP"
           : "STANDARD";
 
       if (action === "PREPARE_CONVERSATION_PACKAGE") {
-        if (batchContext.workouts.length === 0) return NextResponse.json({ error: "Não há treinos pendentes ou futuros elegíveis para adaptação." }, { status: 409 });
+        // Somente o botão explícito de revisão profunda pode gerar um pacote
+        // sem treino futuro. Orientação médica pode aprofundar uma adaptação
+        // existente, mas não transforma "Alterar treino" em planejamento novo.
+        const packageMode = resolveConversationPackageMode(requestedPackageDepth, batchContext.workouts.length);
+        if (packageMode === "BLOCKED_NO_ELIGIBLE") {
+          return NextResponse.json({ error: "Não há treinos pendentes ou futuros elegíveis para adaptação." }, { status: 409 });
+        }
+
         const library = await prisma.exerciseLibrary.findMany({ where: { active: true }, orderBy: { name: "asc" } });
+
+        if (packageMode === "DEEP_REVIEW_ONLY") {
+          const [recentWorkouts, recentOpenQuestions] = await Promise.all([
+            prisma.workout.findMany({
+              where: { studentId: batchContext.student.id, workoutPlanId: { not: null } },
+              orderBy: { date: "desc" },
+              take: 12,
+              include: { workoutPlan: { include: { exercises: { orderBy: { order: "asc" } } } } },
+            }),
+            prisma.question.findMany({
+              where: { studentId: batchContext.student.id, parentId: null, resolvedAt: null },
+              orderBy: { createdAt: "desc" },
+              take: 10,
+              include: {
+                children: {
+                  orderBy: { createdAt: "asc" },
+                  select: { content: true, senderRole: true, createdAt: true },
+                },
+              },
+            }),
+          ]);
+
+          const recentWorkoutPayload = recentWorkouts.map((workout: any) => ({
+            workoutId: workout.id,
+            date: workout.date.toISOString().slice(0, 10),
+            status: workout.status,
+            plan: workout.workoutPlan
+              ? {
+                  workoutPlanId: workout.workoutPlan.id,
+                  name: workout.workoutPlan.name,
+                  description: workout.workoutPlan.description,
+                  objective: workout.workoutPlan.objective,
+                  focusAreas: workout.workoutPlan.focusAreas,
+                  intensity: workout.workoutPlan.intensity,
+                  estimatedDurationMinutes: workout.workoutPlan.estimatedDurationMinutes,
+                  exercises: workout.workoutPlan.exercises.map((exercise: any) => ({
+                    exerciseId: exercise.libraryExerciseId,
+                    name: exercise.name,
+                    series: exercise.series,
+                    reps: exercise.reps,
+                    weight: exercise.weight,
+                    restTime: exercise.restTime,
+                    notes: exercise.notes,
+                    order: exercise.order,
+                  })),
+                }
+              : null,
+          }));
+
+          const openQuestionPayload = recentOpenQuestions.map((question: any) => ({
+            conversationId: question.id,
+            content: question.content,
+            senderRole: question.senderRole,
+            createdAt: question.createdAt,
+            replies: question.children,
+          }));
+
+          const model = buildDeepReviewOnlyResponseModel(activeMedicalGuidance);
+          const prompt = [
+            ...MANUAL_AI_EXECUTION_HEADER_LINES,
+            ...buildDeepReviewOnlyPromptLines(),
+            ...(activeMedicalGuidance.length > 0
+              ? [
+                  "guidanceCoverage é OBRIGATÓRIO: cada guidanceKey de CONTEXTO/ORIENTACOES_MEDICAS_ATIVAS.json deve aparecer exatamente uma vez, explicando como foi considerada na recomendação.",
+                ]
+              : []),
+          ].join("\n");
+
+          const zip = new JSZip();
+          zip.file("LEIA_PRIMEIRO.txt", prompt);
+          zip.file("MODELO_RESPOSTA.json", JSON.stringify(model, null, 2));
+          zip.file("CONTEXTO/CONVERSA_ATUAL.json", JSON.stringify([
+            { role: batchContext.conversation.senderRole, content: batchContext.conversation.content, createdAt: batchContext.conversation.createdAt },
+            ...batchContext.conversation.children,
+          ], null, 2));
+          zip.file("CONTEXTO/CONVERSAS_ABERTAS_RECENTES.json", JSON.stringify(openQuestionPayload, null, 2));
+          zip.file("CONTEXTO/PERFIL_ALUNO.json", JSON.stringify({
+            studentId: batchContext.student.id,
+            name: batchContext.student.name,
+            email: batchContext.student.email || batchContext.student.userAuth?.email || null,
+            birthDate: batchContext.student.userAuth?.birthDate || null,
+            notes: batchContext.student.notes || null,
+          }, null, 2));
+          zip.file("CONTEXTO/MEMORIA_TECNICA.json", JSON.stringify(batchContext.technicalContext || {}, null, 2));
+          zip.file("CONTEXTO/ORIENTACOES_MEDICAS_ATIVAS.json", JSON.stringify(activeMedicalGuidance, null, 2));
+          zip.file("CONTEXTO/EVENTOS_DE_CUIDADO.json", JSON.stringify(batchContext.openCareEvents, null, 2));
+          zip.file("CONTEXTO/TREINOS_ELEGIVEIS.json", JSON.stringify([], null, 2));
+          zip.file("CONTEXTO/TREINOS_RECENTES.json", JSON.stringify(recentWorkoutPayload, null, 2));
+          zip.file("CONTEXTO/BIBLIOTECA_EXERCICIOS.json", JSON.stringify(library.map((e:any)=>({ exerciseId:e.id,name:e.name,group:e.muscleGroup,location:e.locationTags,equipment:e.equipmentTags,intensity:e.intensity })), null, 2));
+          zip.file("manifesto.json", JSON.stringify({
+            packageType: "WORKOUT_DEEP_REVIEW_ONLY_FROM_CONVERSATION",
+            conversationId,
+            studentId: batchContext.student.id,
+            studentName: batchContext.student.name,
+            eligibleWorkoutIds: [],
+            eligibleWorkoutDates: [],
+            recentWorkoutCount: recentWorkoutPayload.length,
+            openConversationCount: openQuestionPayload.length,
+            openCareEventCount: batchContext.openCareEvents.length,
+            reviewDepth,
+            reviewOnly: true,
+            medicalGuidanceCount: activeMedicalGuidance.length,
+            generatedAt: new Date().toISOString(),
+          }, null, 2));
+
+          const output = await zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
+          return new NextResponse(output, {
+            status: 200,
+            headers: {
+              "Content-Type":"application/zip",
+              "Content-Disposition": `attachment; filename="pacote-revisao-profunda-${batchContext.student.name.toLowerCase().replace(/[^a-z0-9]+/gi,"-")}.zip"`,
+              "Cache-Control":"no-store",
+              "X-Eligible-Workout-Count":"0",
+              "X-Eligible-Workout-Details": encodeURIComponent(JSON.stringify([])),
+              "X-Review-Mode":"DEEP",
+              "X-Review-Only":"true",
+              "X-Medical-Guidance-Count": String(activeMedicalGuidance.length),
+            },
+          });
+        }
         const history = [
           { role: batchContext.conversation.senderRole, content: batchContext.conversation.content, createdAt: batchContext.conversation.createdAt },
           ...batchContext.conversation.children,

@@ -125,6 +125,7 @@ type BatchAdjustmentDraftState = {
   eligibleWorkouts?: BatchEligibleWorkout[];
   openCareEventCount?: number;
   reviewDepth?: "STANDARD" | "DEEP";
+  reviewOnly?: boolean;
   medicalGuidanceCount?: number;
   impactSummaries?: WorkoutImpactSummary[];
   impactWarning?: string | null;
@@ -742,6 +743,7 @@ export default function DashboardConversationList({
         ? "DEEP"
         : "STANDARD";
       const medicalGuidanceCount = Number(response.headers.get("X-Medical-Guidance-Count") || 0);
+      const reviewOnly = String(response.headers.get("X-Review-Only") || "").toLowerCase() === "true";
       let eligibleWorkouts: BatchEligibleWorkout[] = [];
       const encodedDetails = response.headers.get("X-Eligible-Workout-Details") || "";
       if (encodedDetails) {
@@ -759,14 +761,17 @@ export default function DashboardConversationList({
           eligibleWorkoutCount: count,
           eligibleWorkouts,
           reviewDepth: effectiveReviewDepth,
+          reviewOnly,
           medicalGuidanceCount,
         },
       }));
       setSuccessById((current) => ({
         ...current,
-        [conversation.id]: effectiveReviewDepth === "DEEP"
-          ? `Pacote de REVISÃO PROFUNDA gerado para ${count} treino(s). A IA deverá auditar cada exercício${medicalGuidanceCount > 0 ? ` e cobrir ${medicalGuidanceCount} orientação(ões) médica(s) ativa(s)` : ""}.`
-          : `Um único pacote foi gerado para ${count} treino(s). A IA deve devolver exatamente esses mesmos workoutId, sem usar códigos genéricos.`,
+        [conversation.id]: reviewOnly
+          ? `Pacote de REVISÃO PROFUNDA gerado sem treino futuro existente. Ele reúne histórico, contexto técnico e conversas abertas para orientar uma nova programação.`
+          : effectiveReviewDepth === "DEEP"
+            ? `Pacote de REVISÃO PROFUNDA gerado para ${count} treino(s). A IA deverá auditar cada exercício${medicalGuidanceCount > 0 ? ` e cobrir ${medicalGuidanceCount} orientação(ões) médica(s) ativa(s)` : ""}.`
+            : `Um único pacote foi gerado para ${count} treino(s). A IA deve devolver exatamente esses mesmos workoutId, sem usar códigos genéricos.`,
       }));
     } catch (error) {
       console.error("Prepare conversation adjustment error:", error);
@@ -1308,13 +1313,17 @@ export default function DashboardConversationList({
                     {batchAdjustmentDraft && (
                       <>
                         <p className="text-[11px] text-cyan-100">
-                          Um único pacote preparado para {batchAdjustmentDraft.eligibleWorkoutCount || 0} treino(s).
+                          {batchAdjustmentDraft.reviewOnly
+                            ? "Pacote de revisão profunda preparado sem treino futuro elegível. Ele serve para diagnosticar o momento atual e orientar a próxima programação."
+                            : `Um único pacote preparado para ${batchAdjustmentDraft.eligibleWorkoutCount || 0} treino(s).`}
                         </p>
                         {batchAdjustmentDraft.reviewDepth === "DEEP" ? (
                           <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 p-3 text-[11px] text-amber-100">
                             <p className="font-semibold">Revisão profunda ativa</p>
                             <p className="mt-1 text-amber-100/80">
-                              A IA deverá revisar cada exercício original e justificar manter, modificar, substituir ou retirar.
+                              {batchAdjustmentDraft.reviewOnly
+                                ? "Como não existe treino futuro elegível, a IA deverá usar histórico, memória técnica, conversas abertas e biblioteca para propor uma nova programação para revisão do professor — sem afirmar que alterou ou publicou treinos."
+                                : "A IA deverá revisar cada exercício original e justificar manter, modificar, substituir ou retirar."}
                               {batchAdjustmentDraft.medicalGuidanceCount
                                 ? ` Há ${batchAdjustmentDraft.medicalGuidanceCount} orientação(ões) médica(s) que também precisam ser cobertas explicitamente.`
                                 : ""}
@@ -1339,48 +1348,56 @@ export default function DashboardConversationList({
                             ))}
                           </div>
                         ) : null}
-                        <input type="file" accept=".txt,.json,text/plain,application/json" onChange={(event) => handleImportBatchResponse(conversation.id, event.target.files?.[0])} className="block w-full text-[11px] text-[#d4d4d4]" />
-                        <textarea rows={8} value={batchAdjustmentDraft.manualResponse} onChange={(event) => setBatchAdjustmentByConversationId((current)=>({ ...current,[conversation.id]:{ ...(current[conversation.id] || { manualResponse:"" }), manualResponse:event.target.value, proposal:undefined } }))} placeholder="Cole aqui o JSON ou importe o TXT devolvido pela IA" className="w-full rounded-lg border border-cyan-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none" />
-                        <button type="button" onClick={() => handleValidateBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey) || !batchAdjustmentDraft.manualResponse.trim()} className="w-full rounded-lg border border-cyan-400/30 px-3 py-2 text-[11px] font-semibold text-cyan-200 disabled:opacity-50">Validar adaptação</button>
-                        {batchAdjustmentDraft.proposal && (
-                          <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3 space-y-2">
-                            <p className="text-xs font-semibold text-emerald-300">{batchAdjustmentDraft.proposal.workouts.length} treino(s) prontos para alteração</p>
-                            {batchAdjustmentDraft.openCareEventCount ? <p className="text-[11px] text-amber-300">Há evento de cuidado aberto. A publicação ficará bloqueada até a resolução.</p> : null}
-                            <p className="text-[11px] text-[#d4d4d4]">{batchAdjustmentDraft.proposal.rationale}</p>
-                            {batchAdjustmentDraft.impactWarning ? (
-                              <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-[11px] font-medium text-amber-200">
-                                {batchAdjustmentDraft.impactWarning}
-                              </p>
-                            ) : null}
-                            {batchAdjustmentDraft.impactSummaries?.length ? (
-                              <div className="space-y-2 rounded-lg border border-white/10 bg-black/20 p-3">
-                                <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">Impacto real — antes → depois</p>
-                                {batchAdjustmentDraft.impactSummaries.map((impact) => (
-                                  <div key={impact.workoutId} className="rounded-lg border border-white/10 bg-black/20 p-2 text-[10px] text-[#d4d4d4]">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <p className="font-semibold text-[#f5f5f5]">{impact.workoutName}</p>
-                                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${impact.impactLevel === "HIGH" ? "bg-emerald-500/20 text-emerald-300" : impact.impactLevel === "MEDIUM" ? "bg-amber-500/20 text-amber-200" : "bg-red-500/20 text-red-200"}`}>
-                                        Impacto {impact.impactLevel === "HIGH" ? "alto" : impact.impactLevel === "MEDIUM" ? "médio" : "baixo"}
-                                      </span>
-                                    </div>
-                                    <p className="mt-1">
-                                      Antes: {impact.originalExerciseCount} exercício(s) · Depois: {impact.newExerciseCount}
-                                    </p>
-                                    <p className="mt-1">
-                                      Mantidos sem mudança: {impact.keptUnchangedCount} · Modificados: {impact.modifiedCount} · Retirados/substituídos: {impact.removedCount} · Novos: {impact.addedCount}
-                                    </p>
-                                    {batchAdjustmentDraft.reviewDepth === "DEEP" ? (
-                                      <p className="mt-1 text-cyan-100/80">
-                                        Auditoria: manter {impact.auditDecisionCounts.KEEP} · modificar {impact.auditDecisionCounts.MODIFY} · substituir {impact.auditDecisionCounts.REPLACE} · retirar {impact.auditDecisionCounts.REMOVE}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                            <p className="text-[11px] font-medium text-cyan-200">Aplicar altera somente os treinos. A resposta ao aluno será revisada e enviada separadamente pelo botão Responder.</p>
-                            <button type="button" onClick={() => handleApplyBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey)} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Aplicar alterações nos treinos</button>
+                        {batchAdjustmentDraft.reviewOnly ? (
+                          <div className="rounded-lg border border-cyan-300/20 bg-black/20 p-3 text-[11px] leading-relaxed text-cyan-100">
+                            O ZIP foi gerado em modo de planejamento. Não existe treino futuro para validar ou aplicar automaticamente neste momento. Use o pacote na IA para receber a recomendação da próxima programação e revise-a antes de criar os novos treinos.
                           </div>
+                        ) : (
+                          <>
+                            <input type="file" accept=".txt,.json,text/plain,application/json" onChange={(event) => handleImportBatchResponse(conversation.id, event.target.files?.[0])} className="block w-full text-[11px] text-[#d4d4d4]" />
+                            <textarea rows={8} value={batchAdjustmentDraft.manualResponse} onChange={(event) => setBatchAdjustmentByConversationId((current)=>({ ...current,[conversation.id]:{ ...(current[conversation.id] || { manualResponse:"" }), manualResponse:event.target.value, proposal:undefined } }))} placeholder="Cole aqui o JSON ou importe o TXT devolvido pela IA" className="w-full rounded-lg border border-cyan-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none" />
+                            <button type="button" onClick={() => handleValidateBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey) || !batchAdjustmentDraft.manualResponse.trim()} className="w-full rounded-lg border border-cyan-400/30 px-3 py-2 text-[11px] font-semibold text-cyan-200 disabled:opacity-50">Validar adaptação</button>
+                            {batchAdjustmentDraft.proposal && (
+                              <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3 space-y-2">
+                                <p className="text-xs font-semibold text-emerald-300">{batchAdjustmentDraft.proposal.workouts.length} treino(s) prontos para alteração</p>
+                                {batchAdjustmentDraft.openCareEventCount ? <p className="text-[11px] text-amber-300">Há evento de cuidado aberto. A publicação ficará bloqueada até a resolução.</p> : null}
+                                <p className="text-[11px] text-[#d4d4d4]">{batchAdjustmentDraft.proposal.rationale}</p>
+                                {batchAdjustmentDraft.impactWarning ? (
+                                  <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 text-[11px] font-medium text-amber-200">
+                                    {batchAdjustmentDraft.impactWarning}
+                                  </p>
+                                ) : null}
+                                {batchAdjustmentDraft.impactSummaries?.length ? (
+                                  <div className="space-y-2 rounded-lg border border-white/10 bg-black/20 p-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">Impacto real — antes → depois</p>
+                                    {batchAdjustmentDraft.impactSummaries.map((impact) => (
+                                      <div key={impact.workoutId} className="rounded-lg border border-white/10 bg-black/20 p-2 text-[10px] text-[#d4d4d4]">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <p className="font-semibold text-[#f5f5f5]">{impact.workoutName}</p>
+                                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${impact.impactLevel === "HIGH" ? "bg-emerald-500/20 text-emerald-300" : impact.impactLevel === "MEDIUM" ? "bg-amber-500/20 text-amber-200" : "bg-red-500/20 text-red-200"}`}>
+                                            Impacto {impact.impactLevel === "HIGH" ? "alto" : impact.impactLevel === "MEDIUM" ? "médio" : "baixo"}
+                                          </span>
+                                        </div>
+                                        <p className="mt-1">
+                                          Antes: {impact.originalExerciseCount} exercício(s) · Depois: {impact.newExerciseCount}
+                                        </p>
+                                        <p className="mt-1">
+                                          Mantidos sem mudança: {impact.keptUnchangedCount} · Modificados: {impact.modifiedCount} · Retirados/substituídos: {impact.removedCount} · Novos: {impact.addedCount}
+                                        </p>
+                                        {batchAdjustmentDraft.reviewDepth === "DEEP" ? (
+                                          <p className="mt-1 text-cyan-100/80">
+                                            Auditoria: manter {impact.auditDecisionCounts.KEEP} · modificar {impact.auditDecisionCounts.MODIFY} · substituir {impact.auditDecisionCounts.REPLACE} · retirar {impact.auditDecisionCounts.REMOVE}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                <p className="text-[11px] font-medium text-cyan-200">Aplicar altera somente os treinos. A resposta ao aluno será revisada e enviada separadamente pelo botão Responder.</p>
+                                <button type="button" onClick={() => handleApplyBatchAdjustment(conversation)} disabled={Boolean(adjustmentLoadingKey)} className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50">Aplicar alterações nos treinos</button>
+                              </div>
+                            )}
+                          </>
                         )}
                       </>
                     )}
@@ -1471,65 +1488,76 @@ export default function DashboardConversationList({
 
                     {batchAdjustmentDraft && (
                       <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 p-4 space-y-3">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">Importar resposta da IA</p>
-                        <p className="text-[11px] leading-relaxed text-[#d4d4d4]">
-                          O pacote foi preparado para {batchAdjustmentDraft.eligibleWorkoutCount || 0} treino(s). Importe o TXT/JSON devolvido pela IA ou cole o conteúdo abaixo.
-                        </p>
-                        {batchAdjustmentDraft.eligibleWorkouts?.length ? (
-                          <div className="space-y-2 rounded-lg border border-cyan-400/15 bg-black/20 p-3">
-                            {batchAdjustmentDraft.eligibleWorkouts.map((workout) => (
-                              <div key={workout.workoutId} className="text-[11px]">
-                                <p className="font-semibold text-[#f5f5f5]">{workout.name}</p>
-                                <p className="text-[#a1a1a1]">{formatDateTime(workout.date)} · {workout.status}</p>
+                        {batchAdjustmentDraft.reviewOnly ? (
+                          <>
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">Revisão profunda para planejamento</p>
+                            <p className="text-[11px] leading-relaxed text-[#d4d4d4]">
+                              O pacote foi gerado sem treino futuro elegível. Ele reúne histórico, contexto técnico e conversas abertas para orientar a próxima programação. Não há adaptação automática para validar ou aplicar neste momento.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-cyan-300">Importar resposta da IA</p>
+                            <p className="text-[11px] leading-relaxed text-[#d4d4d4]">
+                              O pacote foi preparado para {batchAdjustmentDraft.eligibleWorkoutCount || 0} treino(s). Importe o TXT/JSON devolvido pela IA ou cole o conteúdo abaixo.
+                            </p>
+                            {batchAdjustmentDraft.eligibleWorkouts?.length ? (
+                              <div className="space-y-2 rounded-lg border border-cyan-400/15 bg-black/20 p-3">
+                                {batchAdjustmentDraft.eligibleWorkouts.map((workout) => (
+                                  <div key={workout.workoutId} className="text-[11px]">
+                                    <p className="font-semibold text-[#f5f5f5]">{workout.name}</p>
+                                    <p className="text-[#a1a1a1]">{formatDateTime(workout.date)} · {workout.status}</p>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        ) : null}
-                        <input
-                          type="file"
-                          accept=".txt,.json,text/plain,application/json"
-                          onChange={(event) => handleImportBatchResponse(conversation.id, event.target.files?.[0])}
-                          className="block w-full text-[11px] text-[#d4d4d4]"
-                        />
-                        <textarea
-                          rows={8}
-                          value={batchAdjustmentDraft.manualResponse}
-                          onChange={(event) => setBatchAdjustmentByConversationId((current) => ({
-                            ...current,
-                            [conversation.id]: {
-                              ...(current[conversation.id] || { manualResponse: "" }),
-                              manualResponse: event.target.value,
-                              proposal: undefined,
-                            },
-                          }))}
-                          placeholder="Cole aqui o JSON ou importe o TXT devolvido pela IA"
-                          className="w-full rounded-lg border border-cyan-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleValidateBatchAdjustment(conversation)}
-                          disabled={Boolean(adjustmentLoadingKey) || !batchAdjustmentDraft.manualResponse.trim()}
-                          className="w-full rounded-lg border border-cyan-400/30 px-3 py-2 text-[11px] font-semibold text-cyan-200 disabled:opacity-50"
-                        >
-                          Validar adaptação
-                        </button>
-                        {batchAdjustmentDraft.proposal && (
-                          <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3 space-y-2">
-                            <p className="text-xs font-semibold text-emerald-300">{batchAdjustmentDraft.proposal.workouts.length} treino(s) prontos para alteração</p>
-                            {batchAdjustmentDraft.openCareEventCount ? (
-                              <p className="text-[11px] text-amber-300">Há evento de cuidado aberto. A publicação ficará bloqueada até a resolução.</p>
                             ) : null}
-                            <p className="text-[11px] text-[#d4d4d4]">{batchAdjustmentDraft.proposal.rationale}</p>
-                            <p className="text-[11px] font-medium text-cyan-200">Aplicar altera somente os treinos. A resposta ao aluno será revisada e enviada separadamente pelo botão Responder.</p>
+                            <input
+                              type="file"
+                              accept=".txt,.json,text/plain,application/json"
+                              onChange={(event) => handleImportBatchResponse(conversation.id, event.target.files?.[0])}
+                              className="block w-full text-[11px] text-[#d4d4d4]"
+                            />
+                            <textarea
+                              rows={8}
+                              value={batchAdjustmentDraft.manualResponse}
+                              onChange={(event) => setBatchAdjustmentByConversationId((current) => ({
+                                ...current,
+                                [conversation.id]: {
+                                  ...(current[conversation.id] || { manualResponse: "" }),
+                                  manualResponse: event.target.value,
+                                  proposal: undefined,
+                                },
+                              }))}
+                              placeholder="Cole aqui o JSON ou importe o TXT devolvido pela IA"
+                              className="w-full rounded-lg border border-cyan-400/20 bg-black/30 px-3 py-3 font-mono text-[11px] text-[#f5f5f5] outline-none"
+                            />
                             <button
                               type="button"
-                              onClick={() => handleApplyBatchAdjustment(conversation)}
-                              disabled={Boolean(adjustmentLoadingKey)}
-                              className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50"
+                              onClick={() => handleValidateBatchAdjustment(conversation)}
+                              disabled={Boolean(adjustmentLoadingKey) || !batchAdjustmentDraft.manualResponse.trim()}
+                              className="w-full rounded-lg border border-cyan-400/30 px-3 py-2 text-[11px] font-semibold text-cyan-200 disabled:opacity-50"
                             >
-                              Aplicar alterações nos treinos
+                              Validar adaptação
                             </button>
-                          </div>
+                            {batchAdjustmentDraft.proposal && (
+                              <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3 space-y-2">
+                                <p className="text-xs font-semibold text-emerald-300">{batchAdjustmentDraft.proposal.workouts.length} treino(s) prontos para alteração</p>
+                                {batchAdjustmentDraft.openCareEventCount ? (
+                                  <p className="text-[11px] text-amber-300">Há evento de cuidado aberto. A publicação ficará bloqueada até a resolução.</p>
+                                ) : null}
+                                <p className="text-[11px] text-[#d4d4d4]">{batchAdjustmentDraft.proposal.rationale}</p>
+                                <p className="text-[11px] font-medium text-cyan-200">Aplicar altera somente os treinos. A resposta ao aluno será revisada e enviada separadamente pelo botão Responder.</p>
+                                <button
+                                  type="button"
+                                  onClick={() => handleApplyBatchAdjustment(conversation)}
+                                  disabled={Boolean(adjustmentLoadingKey)}
+                                  className="w-full rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-bold text-black disabled:opacity-50"
+                                >
+                                  Aplicar alterações nos treinos
+                                </button>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     )}
