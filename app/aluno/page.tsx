@@ -1,5 +1,6 @@
 "use client";
 import WorkoutMuscleMap from "@/components/WorkoutMuscleMap";
+import { groupCombinedSequenceExercises, getCombinedSequenceInstruction } from "@/lib/workout-combined-sequence";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { signOut } from "next-auth/react";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
@@ -1434,6 +1435,58 @@ export default function AlunoPage() {
   const unreadCount = notices.filter((n: any) => !n.readByStudent).length;
   const pendingCount = questions.filter((q: any) => getThreadStatus(q) === "new_reply").length;
   const profileImageUrl = getImageUrl(studentImage || dashboardSummary?.student?.image || null);
+
+  function renderWorkoutExerciseCard(ex: any, badge: string) {
+    const progress = exerciseProgress[ex.id];
+    const done = progress?.status === "CONCLUIDO";
+    const skipped = progress?.status === "PULADO";
+
+    return (
+      <div
+        key={ex.id || `${badge}-${ex.name}`}
+        className={`rounded-xl p-2.5 border transition ${done ? "bg-green-500/10 border-green-500/30" : skipped ? "bg-amber-500/10 border-amber-500/30" : "bg-[#1a1a1a] border-[#ffffff08]"}`}
+      >
+        <div className="flex items-start gap-2">
+          <div
+            className={`min-w-8 h-8 px-1 rounded-lg text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 border ${done ? "bg-green-500 text-white border-green-400" : "bg-[#00A19C]/15 text-[#55D4CF] border-[#00A19C]/30"}`}
+          >
+            {done ? "✓" : badge}
+          </div>
+          <button type="button" onClick={() => { setSelectedExercise(ex); setImgError(false); setShowSequenceImage(false); setShowExerciseVideo(false); }} className="flex-1 min-w-0 text-left">
+            <p className={`text-sm font-medium ${done ? "text-green-300 line-through decoration-green-500/50" : "text-[#f5f5f5]"}`}>{ex.name}</p>
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[9px] text-[#a1a1a1]">
+              <span>{ex.series || '-'} séries x {ex.reps || '-'} reps</span>
+              {ex.weight && <span>Carga: {ex.weight}</span>}
+              {ex.restTime && <span className={String(ex.restTime).toLowerCase().includes("sem descanso") ? "font-semibold text-[#55D4CF]" : ""}>Descanso: {ex.restTime}</span>}
+            </div>
+            {done && <p className="mt-1 text-[9px] text-green-400">Feito {progress?.effort ? `• ${progress.effort === "FACIL" ? "Fácil" : progress.effort === "DIFICIL" ? "Difícil" : "Na medida"}` : ""}</p>}
+            {skipped && <p className="mt-1 text-[9px] text-amber-300">Não realizado • {progress.skipReason}</p>}
+          </button>
+          {!isCompleted(selectedDay!) && canValidateWorkoutDay(selectedDay) && (
+            <div className="flex shrink-0 flex-col gap-1.5">
+              <button
+                type="button"
+                disabled={savingExerciseId === ex.id}
+                onClick={() => saveExerciseProgress(ex, done ? "PENDENTE" : "CONCLUIDO")}
+                className={`min-w-[68px] rounded-lg border px-2 py-1.5 text-[9px] font-semibold transition ${done ? "border-green-500/40 bg-green-500/15 text-green-300" : "border-[#00A19C]/40 bg-[#00A19C]/15 text-[#55D4CF]"}`}
+              >
+                {savingExerciseId === ex.id ? "Salvando..." : done ? "✓ Feito" : "Marcar feito"}
+              </button>
+              {!done && (
+                <button
+                  type="button"
+                  onClick={() => { setSkipExercise(ex); setSkipReason(""); }}
+                  className="min-w-[68px] rounded-lg border border-[#ffffff10] px-2 py-1 text-[9px] text-[#a1a1a1]"
+                >
+                  Não fiz
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (loading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><p className="text-[#a1a1a1]">Carregando...</p></div>;
   return (
     <div className="space-y-3">
@@ -2194,53 +2247,48 @@ export default function AlunoPage() {
                 ) : null;
               })()}
 
-              {selectedPlan.exercises?.sort((a: any, b: any) => a.order - b.order).map((ex: any, idx: number) => {
-                const progress = exerciseProgress[ex.id];
-                const done = progress?.status === "CONCLUIDO";
-                const skipped = progress?.status === "PULADO";
-                return (
-                <div key={ex.id || idx}
-                  className={`rounded-xl p-2.5 border transition ${done ? "bg-green-500/10 border-green-500/30" : skipped ? "bg-amber-500/10 border-amber-500/30" : "bg-[#1a1a1a] border-[#ffffff08]"}`}>
-                  <div className="flex items-start gap-2">
-                    <div
-                      className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5 border ${done ? "bg-green-500 text-white border-green-400" : "bg-[#00A19C]/15 text-[#00A19C] border-[#00A19C]/30"}`}
-                    >
-                      {done ? "✓" : idx + 1}
+              {groupCombinedSequenceExercises(Array.isArray(selectedPlan.exercises) ? selectedPlan.exercises : []).map((group: any, groupIndex: number) => {
+                if (group.type === "combined") {
+                  const rounds = Number(group.exercises?.[0]?.series || 0);
+                  return (
+                    <div key={`combined-${group.label}-${groupIndex}`} className="rounded-2xl border-2 border-[#00A19C]/35 bg-[#00A19C]/5 p-3 space-y-2">
+                      <div className="rounded-xl bg-[#00A19C]/10 border border-[#00A19C]/25 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[12px] font-extrabold text-[#55D4CF] tracking-wide">
+                            COMBINADO {group.label}{rounds > 0 ? ` — ${rounds} VOLTAS` : ""}
+                          </p>
+                          <span className="rounded-full bg-[#00A19C]/15 border border-[#00A19C]/20 px-2 py-1 text-[9px] font-semibold text-[#55D4CF]">
+                            DESCANSA SÓ NO FINAL
+                          </span>
+                        </div>
+                        <p className="mt-2 text-[11px] leading-relaxed text-[#f5f5f5]">
+                          {getCombinedSequenceInstruction(group)}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] font-semibold">
+                          {group.exercises.map((exercise: any, index: number) => (
+                            <span key={`${group.label}-${index}`} className="flex items-center gap-1.5">
+                              <span className="rounded-md bg-[#111] border border-[#ffffff10] px-2 py-1 text-[#e5e5e5]">
+                                {group.label}{index + 1}. {exercise.name}
+                              </span>
+                              {index < group.exercises.length - 1 && <span className="text-[#55D4CF]">→ SEM DESCANSO →</span>}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {group.exercises.map((ex: any, index: number) => renderWorkoutExerciseCard(ex, `${group.label}${index + 1}`))}
                     </div>
-                    <button type="button" onClick={() => { setSelectedExercise(ex); setImgError(false); setShowSequenceImage(false); setShowExerciseVideo(false); }} className="flex-1 min-w-0 text-left">
-                      <p className={`text-sm font-medium ${done ? "text-green-300 line-through decoration-green-500/50" : "text-[#f5f5f5]"}`}>{ex.name}</p>
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-[9px] text-[#a1a1a1]">
-                        <span>{ex.series || '-'} series x {ex.reps || '-'} reps</span>
-                        {ex.weight && <span>Carga: {ex.weight}kg</span>}
-                        {ex.restTime && <span>Descanso: {ex.restTime}</span>}
-                      </div>
-                      {done && <p className="mt-1 text-[9px] text-green-400">Feito {progress?.effort ? `• ${progress.effort === "FACIL" ? "Fácil" : progress.effort === "DIFICIL" ? "Difícil" : "Na medida"}` : ""}</p>}
-                      {skipped && <p className="mt-1 text-[9px] text-amber-300">Não realizado • {progress.skipReason}</p>}
-                    </button>
-                    {!isCompleted(selectedDay!) && canValidateWorkoutDay(selectedDay) && (
-                      <div className="flex shrink-0 flex-col gap-1.5">
-                        <button
-                          type="button"
-                          disabled={savingExerciseId === ex.id}
-                          onClick={() => saveExerciseProgress(ex, done ? "PENDENTE" : "CONCLUIDO")}
-                          className={`min-w-[68px] rounded-lg border px-2 py-1.5 text-[9px] font-semibold transition ${done ? "border-green-500/40 bg-green-500/15 text-green-300" : "border-[#00A19C]/40 bg-[#00A19C]/15 text-[#55D4CF]"}`}
-                        >
-                          {savingExerciseId === ex.id ? "Salvando..." : done ? "✓ Feito" : "Marcar feito"}
-                        </button>
-                        {!done && (
-                          <button
-                            type="button"
-                            onClick={() => { setSkipExercise(ex); setSkipReason(""); }}
-                            className="min-w-[68px] rounded-lg border border-[#ffffff10] px-2 py-1 text-[9px] text-[#a1a1a1]"
-                          >
-                            Não fiz
-                          </button>
-                        )}
-                      </div>
-                    )}
+                  );
+                }
+
+                const ex = group.exercises[0];
+                const badge = String(Number(ex?.order ?? groupIndex) + 1);
+                return (
+                  <div key={`single-${ex?.id || groupIndex}`} className="space-y-1">
+                    <p className="px-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#a1a1a1]">Exercício individual</p>
+                    {renderWorkoutExerciseCard(ex, badge)}
                   </div>
-                </div>
-              )})}
+                );
+              })}
               {(!selectedPlan.exercises || selectedPlan.exercises.length === 0) && (
                 <p className="text-center text-[#6b6b6b] text-sm py-6">Nenhum exercicio cadastrado neste treino.</p>
               )}

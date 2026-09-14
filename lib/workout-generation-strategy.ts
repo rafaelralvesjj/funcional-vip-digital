@@ -85,7 +85,9 @@ export function buildWorkoutGenerationStrategy(input: {
 }) {
   const questionText = collectQuestionText(input.openQuestions || []).join(" ");
   const combined = normalize(`${input.summaryText || ""} ${questionText}`);
-  const dynamicPairedSetsRequested = /(dinamic|combinad|sequencia metabol|metabolic|superset|super set|bi-set|biset|intercalad|um exercicio.*outro.*descans)/i.test(combined);
+  const combinedSequenceRequested = /(dinamic|combinad|sequencia metabol|metabolic|superset|super set|bi-set|biset|intercalad|um exercicio.*outro.*descans|uma serie de cada exercicio direto)/i.test(combined);
+  const dynamicPairedSetsRequested = combinedSequenceRequested;
+  const strengthOnlyBecauseRuns = /(ja corre|corrida|corredor|corredora).*(somente musculacao|so musculacao|apenas musculacao|musculacao na academia|cardio.*dias de corrida)|(somente musculacao|so musculacao|apenas musculacao|musculacao na academia).*(ja corre|corrida|corredor|corredora)/i.test(combined);
   const recentExerciseNames = Array.from(new Set(input.recentExerciseNames || [])).filter(Boolean);
 
   const promptLines = [
@@ -101,18 +103,27 @@ export function buildWorkoutGenerationStrategy(input: {
     );
   }
 
-  if (dynamicPairedSetsRequested) {
+  if (combinedSequenceRequested) {
     promptLines.push(
-      "MÉTODO DINÂMICO SOLICITADO: estruturar o treino em pares A1/A2, B1/B2, C1/C2. Executar A1 e A2 em sequência, com transição curta, e descansar somente após completar a dupla.",
-      "DESCANSO DOS PARES: usar em geral 0-20s apenas para transição entre A1 e A2 e 60-90s após A2 antes de repetir a dupla, ajustando por segurança, técnica e intensidade.",
-      "PREFERÊNCIA DE COMBINAÇÃO: quando seguro, combinar grupos não concorrentes ou inferior + superior para aumentar densidade sem transformar o treino em cardio aleatório. Não usar saltos/impacto se houver restrição.",
-      "MARCAÇÃO NO JSON: em notes de cada exercício, começar com 'A1 -', 'A2 -', 'B1 -', 'B2 -' etc., para a tela deixar clara a sequência ao professor/aluno.",
-      "O caráter metabólico deve vir da densidade e da organização dos pares, não de carga excessiva nem de eliminar o descanso necessário."
+      "MÉTODO COMBINADO SOLICITADO: montar COMBINADOS/SEQUÊNCIAS com 2 ou 3 exercícios (A1/A2 ou A1/A2/A3, depois B1/B2 etc.). Fazer 1 série de cada exercício direto, sem descanso entre os exercícios do mesmo combinado; descansar somente depois do último exercício e então repetir a sequência.",
+      "DESCANSO DOS COMBINADOS: em geral usar 45-60s após o último exercício do combinado; pode usar 30-60s quando a técnica e a segurança permitirem. Não inserir descanso entre A1 e A2/A3 além da transição necessária para trocar posição/equipamento.",
+      "COERÊNCIA DO COMBINADO: os exercícios devem formar uma sequência lógica para o objetivo do treino, mas não precisam obrigatoriamente trabalhar o mesmo músculo. Pode combinar movimentos da mesma região, músculos complementares ou exercícios de regiões diferentes quando isso fizer sentido para densidade e logística.",
+      "NEM TODO EXERCÍCIO PRECISA ESTAR EM COMBINADO: protocolos específicos, isometrias, exercícios terapêuticos/técnicos ou movimentos que exigem maior controle podem ficar isolados com seu próprio descanso.",
+      "MARCAÇÃO NO JSON: em notes de cada exercício do combinado, começar com 'A1 —', 'A2 —', 'A3 —', 'B1 —', 'B2 —' etc. No restTime dos exercícios intermediários escrever 'sem descanso até A2/A3'; no último escrever, por exemplo, '45s após o combinado A'.",
+      "VARIAÇÃO DA SEMANA: não repetir a mesma combinação de exercícios em todos os treinos. Mantenha o objetivo muscular/padrão, mas varie os exercícios quando houver alternativa segura na biblioteca."
+    );
+  }
+
+  if (strengthOnlyBecauseRuns) {
+    promptLines.push(
+      "MUSCULAÇÃO SEM CARDIO: o contexto informa que o aluno já corre em dias separados e quer a academia somente para musculação. Não adicionar cardio, HIIT, climber, corrida, bike, escada ou elíptico como parte deste treino de academia, salvo se houver pedido explícito posterior."
     );
   }
 
   return {
     dynamicPairedSetsRequested,
+    combinedSequenceRequested,
+    strengthOnlyBecauseRuns,
     recentExerciseNames,
     promptLines,
   };

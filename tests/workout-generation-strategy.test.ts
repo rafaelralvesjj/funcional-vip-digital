@@ -6,7 +6,7 @@ import {
   rotateRecentlyUsedExercises,
 } from '../lib/workout-generation-strategy.ts';
 
-test('detecta pedido de treino combinado/dinâmico e exige blocos A1/A2 com descanso após a dupla', () => {
+test('detecta pedido de treino combinado/dinâmico e exige sequência com descanso após o combinado', () => {
   const strategy = buildWorkoutGenerationStrategy({
     summaryText: 'Aluno treina em academia e prefere máquinas.',
     openQuestions: [
@@ -19,7 +19,7 @@ test('detecta pedido de treino combinado/dinâmico e exige blocos A1/A2 com desc
 
   assert.equal(strategy.dynamicPairedSetsRequested, true);
   assert.match(strategy.promptLines.join('\n'), /A1.*A2.*descans/i);
-  assert.match(strategy.promptLines.join('\n'), /60.*90/);
+  assert.match(strategy.promptLines.join('\n'), /45.*60/);
 });
 
 test('prioriza exercícios ainda não usados recentemente e mantém os recentes disponíveis no fim', () => {
@@ -74,4 +74,35 @@ test('extrai exercícios usados nos últimos planos a partir do resumo do aluno'
     'Agachamento no Smith',
     'Remada baixa na polia',
   ]);
+});
+
+test('pedido de combinado no estilo sequência permite 2 ou 3 exercícios e descanso só ao final', () => {
+  const strategy = buildWorkoutGenerationStrategy({
+    summaryText: 'A aluna quer treino combinado no estilo sequência e já corre em dias separados.',
+    openQuestions: [{ content: 'Quero igual ao exemplo: uma série de cada exercício direto e depois descanso' }],
+    recentExerciseNames: [],
+    librarySize: 127,
+  });
+
+  const prompt = strategy.promptLines.join('\n');
+  assert.equal(strategy.combinedSequenceRequested, true);
+  assert.match(prompt, /2 ou 3 exerc[ií]cios/i);
+  assert.match(prompt, /sem descanso entre/i);
+  assert.match(prompt, /30-60s|45-60s/i);
+  assert.match(prompt, /A1.*A2.*A3/i);
+  assert.match(prompt, /n[aã]o precisam obrigatoriamente trabalhar o mesmo m[uú]sculo/i);
+});
+
+test('quando contexto diz que cardio já é feito na corrida, o treino de academia fica só musculação', () => {
+  const strategy = buildWorkoutGenerationStrategy({
+    summaryText: 'A aluna já corre e agora faz somente musculação na academia. Cardio fica nos dias de corrida.',
+    openQuestions: [{ content: 'Quero treino combinado de musculação' }],
+    recentExerciseNames: [],
+    librarySize: 127,
+  });
+
+  const prompt = strategy.promptLines.join('\n');
+  assert.equal(strategy.strengthOnlyBecauseRuns, true);
+  assert.match(prompt, /não adicionar cardio|nao adicionar cardio/i);
+  assert.match(prompt, /muscula[cç][aã]o/i);
 });

@@ -1,32 +1,29 @@
-CORREÇÃO — MOTOR DE MONTAGEM DINÂMICA / VARIAÇÃO DE EXERCÍCIOS
-Data: 13/09/2026
+CORREÇÃO — MOTOR + TELA DE SEQUÊNCIA COMBINADA — 14/09/2026
 
 OBJETIVO
-1. Usar melhor a biblioteca ativa de exercícios.
-2. Evitar repetição automática de exercícios usados recentemente quando houver equivalente seguro.
-3. Preservar 1–2 exercícios âncora quando houver pedido explícito, motivo técnico/médico ou necessidade de acompanhamento.
-4. Quando o aluno pedir treino dinâmico/combinado/metabólico, estruturar como pares A1/A2, B1/B2, C1/C2: faz o primeiro, faz o segundo e só então descansa.
-5. Aplicar a mesma regra tanto no fluxo individual quanto no Montar treinos em lote.
+1. O motor deixa de tratar "combinado" apenas como dupla A1/A2.
+2. Passa a aceitar COMBINADOS de 2 ou 3 exercícios: A1/A2 ou A1/A2/A3.
+3. Regra: 1 série de cada exercício direto, sem descanso entre eles; descanso apenas após o último e depois repetir a sequência.
+4. Nem todo exercício precisa estar em combinado: protocolos clínicos/técnicos podem ficar isolados.
+5. Se o contexto disser que o aluno já corre e quer academia só para musculação, o motor NÃO adiciona cardio/HIIT/bike/esteira/escada/elíptico.
+6. Mantém variedade sistemática: prioriza exercícios não usados recentemente, preservando âncoras quando necessário.
+7. Na tela do aluno, exercícios marcados A1/A2/A3 passam a aparecer agrupados como COMBINADO A/B/C, com instrução visual clara:
+   EXERCÍCIO 1 → SEM DESCANSO → EXERCÍCIO 2/3 → DESCANSO NO FINAL → REPETIR.
 
-ARQUIVOS
-SUBSTITUIR:
-- app/dashboard/resumo-aluno/page.tsx
+ARQUIVOS PARA SUBSTITUIR/CRIAR NO REPOSITÓRIO
+- SUBSTITUIR: lib/workout-generation-strategy.ts
+- CRIAR:      lib/workout-combined-sequence.ts
+- SUBSTITUIR: app/aluno/page.tsx
 
-CRIAR:
-- lib/workout-generation-strategy.ts
-
-TESTE OPCIONAL (recomendado manter no repositório):
+TESTES INCLUÍDOS (opcional subir, recomendado)
 - tests/workout-generation-strategy.test.ts
+- tests/workout-combined-sequence.test.ts
+
+NÃO ALTERA
+- package.json
+- schema.prisma
+- banco de dados
+- rotas de API
 
 IMPORTANTE
-- Este pacote NÃO altera package.json.
-- Este pacote NÃO executa Prisma, NÃO faz db push e NÃO altera banco de dados.
-- Não apague outros arquivos do projeto.
-
-COMO TESTAR DEPOIS DO DEPLOY
-1. Gerar novamente o pacote/Prompt JSON da Denize.
-2. Confirmar que o prompt mostra REGRA DE VARIEDADE SISTEMÁTICA.
-3. Confirmar que aparece MÉTODO DINÂMICO SOLICITADO com A1/A2.
-4. Conferir que exercícios usados recentemente são de-priorizados.
-5. Gerar treino e verificar notes com A1 -, A2 -, B1 -, B2 -.
-6. Fazer um teste no modo lote para confirmar que as mesmas regras aparecem por aluno.
+Envie os 3 arquivos de produção juntos. app/aluno/page.tsx importa lib/workout-combined-sequence.ts; se o helper novo não for criado, o build falhará.
