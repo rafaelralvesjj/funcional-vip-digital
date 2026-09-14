@@ -1,6 +1,11 @@
 "use client";
 import WorkoutMuscleMap from "@/components/WorkoutMuscleMap";
-import { groupCombinedSequenceExercises, getCombinedSequenceInstruction } from "@/lib/workout-combined-sequence";
+import {
+  groupCombinedSequenceExercises,
+  getCombinedSequenceInstruction,
+  getCombinedSequenceRest,
+  getStandaloneExerciseKind,
+} from "@/lib/workout-combined-sequence";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { signOut } from "next-auth/react";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
@@ -2250,41 +2255,78 @@ export default function AlunoPage() {
               {groupCombinedSequenceExercises(Array.isArray(selectedPlan.exercises) ? selectedPlan.exercises : []).map((group: any, groupIndex: number) => {
                 if (group.type === "combined") {
                   const rounds = Number(group.exercises?.[0]?.series || 0);
+                  const rest = getCombinedSequenceRest(group);
                   return (
-                    <div key={`combined-${group.label}-${groupIndex}`} className="rounded-2xl border-2 border-[#00A19C]/35 bg-[#00A19C]/5 p-3 space-y-2">
-                      <div className="rounded-xl bg-[#00A19C]/10 border border-[#00A19C]/25 p-3">
+                    <div key={`combined-${group.label}-${groupIndex}`} className="overflow-hidden rounded-2xl border-2 border-[#00A19C]/45 bg-[#00A19C]/5">
+                      <div className="border-b border-[#00A19C]/25 bg-[#00A19C]/10 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-[12px] font-extrabold text-[#55D4CF] tracking-wide">
-                            COMBINADO {group.label}{rounds > 0 ? ` — ${rounds} VOLTAS` : ""}
-                          </p>
-                          <span className="rounded-full bg-[#00A19C]/15 border border-[#00A19C]/20 px-2 py-1 text-[9px] font-semibold text-[#55D4CF]">
-                            DESCANSA SÓ NO FINAL
+                          <div>
+                            <p className="text-[13px] font-extrabold tracking-wide text-[#55D4CF]">
+                              COMBINADO {group.label}{rounds > 0 ? ` — ${rounds} VOLTAS` : ""}
+                            </p>
+                            <p className="mt-1 text-[10px] font-semibold text-[#f5f5f5]">
+                              Faça a sequência inteira. O descanso vem só depois do último exercício.
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-[#00A19C]/30 bg-[#0a0a0a] px-2 py-1 text-[9px] font-bold text-[#55D4CF]">
+                            SEM DESCANSO DENTRO DO BLOCO
                           </span>
                         </div>
-                        <p className="mt-2 text-[11px] leading-relaxed text-[#f5f5f5]">
+                      </div>
+
+                      <div className="space-y-0 p-3">
+                        {group.exercises.map((ex: any, index: number) => (
+                          <div key={ex.id || `${group.label}-${index}`}>
+                            {renderWorkoutExerciseCard(ex, `${group.label}${index + 1}`)}
+                            {index < group.exercises.length - 1 && (
+                              <div className="my-1 flex flex-col items-center justify-center py-1 text-center">
+                                <span className="text-lg leading-none text-[#55D4CF]">↓</span>
+                                <span className="rounded-full border border-[#00A19C]/25 bg-[#00A19C]/10 px-3 py-1 text-[9px] font-extrabold tracking-wide text-[#55D4CF]">
+                                  VÁ DIRETO — SEM DESCANSO
+                                </span>
+                                <span className="text-lg leading-none text-[#55D4CF]">↓</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        <div className="mt-3 rounded-xl border border-amber-400/35 bg-amber-500/10 p-3 text-center">
+                          <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-300">
+                            AGORA DESCANSE {rest}
+                          </p>
+                          <p className="mt-1 text-[10px] text-[#f5f5f5]">
+                            Depois, volte ao {group.label}1 e repita o COMBINADO {group.label}{rounds > 0 ? ` até completar ${rounds} voltas` : " conforme indicado"}.
+                          </p>
+                        </div>
+
+                        <p className="mt-2 text-center text-[9px] leading-relaxed text-[#8f8f8f]">
                           {getCombinedSequenceInstruction(group)}
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] font-semibold">
-                          {group.exercises.map((exercise: any, index: number) => (
-                            <span key={`${group.label}-${index}`} className="flex items-center gap-1.5">
-                              <span className="rounded-md bg-[#111] border border-[#ffffff10] px-2 py-1 text-[#e5e5e5]">
-                                {group.label}{index + 1}. {exercise.name}
-                              </span>
-                              {index < group.exercises.length - 1 && <span className="text-[#55D4CF]">→ SEM DESCANSO →</span>}
-                            </span>
-                          ))}
-                        </div>
                       </div>
-                      {group.exercises.map((ex: any, index: number) => renderWorkoutExerciseCard(ex, `${group.label}${index + 1}`))}
                     </div>
                   );
                 }
 
                 const ex = group.exercises[0];
                 const badge = String(Number(ex?.order ?? groupIndex) + 1);
+                const standaloneKind = getStandaloneExerciseKind(ex?.notes);
+                const standaloneTitle = standaloneKind === "technical"
+                  ? "EXERCÍCIO TÉCNICO — FAÇA COM ATENÇÃO"
+                  : standaloneKind === "finisher"
+                    ? "FINALIZAÇÃO — RITMO MAIS CONTROLADO"
+                    : "EXERCÍCIO ISOLADO";
+                const standaloneHint = standaloneKind === "technical"
+                  ? "Este exercício fica fora dos combinados porque tem uma orientação técnica específica."
+                  : standaloneKind === "finisher"
+                    ? "Este é o fechamento do treino. A ideia é reduzir a exigência e terminar com controle."
+                    : "Faça este exercício sozinho e cumpra o descanso indicado antes de seguir.";
+
                 return (
-                  <div key={`single-${ex?.id || groupIndex}`} className="space-y-1">
-                    <p className="px-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#a1a1a1]">Exercício individual</p>
+                  <div key={`single-${ex?.id || groupIndex}`} className="rounded-2xl border border-[#ffffff12] bg-[#101010] p-2.5">
+                    <div className="mb-2 rounded-lg border border-[#ffffff10] bg-[#171717] p-2.5">
+                      <p className="text-[10px] font-extrabold tracking-[0.08em] text-[#d4d4d4]">{standaloneTitle}</p>
+                      <p className="mt-1 text-[9px] leading-relaxed text-[#8f8f8f]">{standaloneHint}</p>
+                    </div>
                     {renderWorkoutExerciseCard(ex, badge)}
                   </div>
                 );
