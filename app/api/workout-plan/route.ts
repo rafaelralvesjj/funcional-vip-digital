@@ -14,6 +14,11 @@ import {
   pickDistributedWorkoutOffsets,
   resolveRecurringWorkoutOffsets,
 } from "@/lib/student-workout-days";
+import {
+  normalizeWorkoutPlanToNormalFormat,
+  resolveWorkoutFormatMode,
+  shouldNormalizeWorkoutPlanToNormalFormat,
+} from "@/lib/workout-format-consistency";
 
 const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
 const WORKOUT_STATUS_PENDING = "PENDENTE";
@@ -2166,6 +2171,116 @@ export async function POST(req: NextRequest) {
   }
 }
 
+
+const WORKOUT_FORMAT_MUTABLE_STATUSES = [
+  WORKOUT_STATUS_PENDING,
+  WORKOUT_STATUS_PRE_PLANNED,
+  WORKOUT_STATUS_NEEDS_REVIEW,
+];
+
+const WORKOUT_FORMAT_FINAL_STATUSES = [
+  "CONCLUIDO",
+  "CONCLUIDO_PARCIALMENTE",
+  "NAO_REALIZADO",
+  "NAO_CONCLUIDO_COM_RELATO",
+  "INTERROMPIDO_CUIDADO",
+  "ARQUIVADO",
+  "ARCHIVED",
+  "CANCELADO",
+  "CANCELLED",
+  "SUBSTITUIDO",
+  "SUBSTITUTED",
+];
+
+/**
+ * Corrige treinos ainda abertos que foram gravados no formato combinado por
+ * contaminação de contexto. O padrão é NORMAL; COMBINADO só é preservado quando
+ * existe preferência ativa e explícita daquele aluno.
+ *
+ * Não toca em treino encerrado/histórico.
+ */
+async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
+  const preferences = await prisma.studentTrainingPreference.findMany({
+    where: {
+      studentId,
+      status: "ACTIVE",
+    },
+    select: {
+      summary: true,
+      originalMessage: true,
+      status: true,
+      updatedAt: true,
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 30,
+  });
+
+  const mode = resolveWorkoutFormatMode(preferences);
+  if (mode === "COMBINED") {
+    return { mode, normalizedPlanIds: [] as string[] };
+  }
+
+  const openPlans = await prisma.workoutPlan.findMany({
+    where: {
+      studentId,
+      active: true,
+      workouts: {
+        some: {
+          status: { in: WORKOUT_FORMAT_MUTABLE_STATUSES },
+        },
+      },
+    },
+    include: {
+      exercises: { orderBy: { order: "asc" } },
+      workouts: { select: { status: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const candidates = openPlans.filter((plan) => {
+    const hasFinalWorkout = plan.workouts.some((workout) =>
+      WORKOUT_FORMAT_FINAL_STATUSES.includes(String(workout.status || "").toUpperCase())
+    );
+
+    return !hasFinalWorkout && shouldNormalizeWorkoutPlanToNormalFormat(plan, mode);
+  });
+
+  if (candidates.length === 0) {
+    return { mode, normalizedPlanIds: [] as string[] };
+  }
+
+  await prisma.$transaction(
+    candidates.flatMap((plan) => {
+      const normalized = normalizeWorkoutPlanToNormalFormat(plan);
+      const planUpdate = prisma.workoutPlan.update({
+        where: { id: plan.id },
+        data: {
+          description: normalized.description || null,
+          studentSummary: normalized.studentSummary || null,
+          notes: normalized.notes || null,
+        },
+      });
+
+      const exerciseUpdates = (normalized.exercises || []).map((exercise: any) =>
+        prisma.exercise.update({
+          where: { id: String(exercise.id) },
+          data: {
+            notes: exercise.notes || null,
+            restTime: exercise.restTime || "60s",
+          },
+        })
+      );
+
+      return [planUpdate, ...exerciseUpdates];
+    })
+  );
+
+  return {
+    mode,
+    normalizedPlanIds: candidates.map((plan) => plan.id),
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -2185,6 +2300,8 @@ export async function GET(req: NextRequest) {
       ? new Date(`${referenceDateParam}T12:00:00`)
       : new Date();
     const isStudentUser = role === "STUDENT";
+    const canNormalizeOpenWorkoutFormat =
+      Boolean(currentUserId) && ["STUDENT", "TEACHER", "GESTOR", "ADMIN"].includes(role);
 
     if (id) {
       let plan = await prisma.workoutPlan.findUnique({
@@ -2217,6 +2334,15 @@ export async function GET(req: NextRequest) {
         );
       }
 
+      let normalizedPlanIds: string[] = [];
+
+      // A correção de formato não pode depender de o usuário estar logado como aluno.
+      // Professor/gestor também precisa conseguir abrir um treino já salvo incorretamente
+      // e fazer o sistema persistir a volta ao formato NORMAL.
+      if (canNormalizeOpenWorkoutFormat) {
+        normalizedPlanIds = (await ensureOpenWorkoutPlansMatchStudentFormat(plan.studentId)).normalizedPlanIds;
+      }
+
       if (isStudentUser) {
         const student = await prisma.student.findUnique({
           where: { id: plan.studentId },
@@ -2233,7 +2359,7 @@ export async function GET(req: NextRequest) {
           studentId: plan.studentId,
         });
 
-        if (releaseResult.count > 0) {
+        if (releaseResult.count > 0 || normalizedPlanIds.includes(plan.id)) {
           plan = await prisma.workoutPlan.findUnique({
             where: { id },
             include: {
@@ -2277,6 +2403,36 @@ export async function GET(req: NextRequest) {
             { status: 404 }
           );
         }
+      } else if (normalizedPlanIds.includes(plan.id)) {
+        plan = await prisma.workoutPlan.findUnique({
+          where: { id },
+          include: {
+            exercises: {
+              orderBy: { order: "asc" },
+              include: {
+                libraryExercise: {
+                  select: { muscleGroup: true },
+                },
+              },
+            },
+            workouts: {
+              select: {
+                id: true,
+                status: true,
+                date: true,
+                notes: true,
+              },
+              orderBy: { date: "asc" },
+            },
+          },
+        });
+
+        if (!plan) {
+          return NextResponse.json(
+            { error: "Workout plan not found" },
+            { status: 404 }
+          );
+        }
       }
 
       return NextResponse.json(plan);
@@ -2288,6 +2444,13 @@ export async function GET(req: NextRequest) {
         active: true,
         workouts: { some: {} },
       };
+
+      // Corrige também quando o professor/gestor abre o aluno. Antes, a
+      // normalização só rodava dentro do acesso STUDENT; por isso um treino já
+      // salvo como combinado podia continuar assim na tela administrativa.
+      if (canNormalizeOpenWorkoutFormat) {
+        await ensureOpenWorkoutPlansMatchStudentFormat(studentId);
+      }
 
       if (isStudentUser) {
         const student = await prisma.student.findUnique({
