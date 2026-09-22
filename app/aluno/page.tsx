@@ -6,6 +6,11 @@ import {
   getCombinedSequenceRest,
   getStandaloneExerciseKind,
 } from "@/lib/workout-combined-sequence";
+import {
+  buildWorkoutMobilityRoutine,
+  type MobilityRoutineItem,
+  type WorkoutMobilityRoutine,
+} from "@/lib/workout-mobility";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { signOut } from "next-auth/react";
 import { AlunoCommercialStatusPanel } from "@/components/aluno/AlunoCommercialStatusPanel";
@@ -277,8 +282,14 @@ export default function AlunoPage() {
   const [imgError, setImgError] = useState(false);
   const [showSequenceImage, setShowSequenceImage] = useState(false);
   const [showExerciseVideo, setShowExerciseVideo] = useState(false);
+  const [exerciseLibrary, setExerciseLibrary] = useState<LibraryExercise[]>([]);
   const [exerciseLibraryByName, setExerciseLibraryByName] = useState<Record<string, LibraryExercise>>({});
   const [exerciseLibraryById, setExerciseLibraryById] = useState<Record<string, LibraryExercise>>({});
+  const [mobilityRoutine, setMobilityRoutine] = useState<WorkoutMobilityRoutine | null>(null);
+  const [mobilityFlowMode, setMobilityFlowMode] = useState<
+    "PRE_OFFER" | "PRE_ROUTINE" | "POST_OFFER" | "POST_ROUTINE" | null
+  >(null);
+  const [pendingCompletionSummary, setPendingCompletionSummary] = useState<typeof completionSummary>(null);
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
   const [sendingCareEvent, setSendingCareEvent] = useState(false);
   const [careEventDetail, setCareEventDetail] = useState("");
@@ -369,7 +380,7 @@ export default function AlunoPage() {
     );
   }
 
-  async function fetchExerciseLibrary() {
+  async function fetchExerciseLibrary(): Promise<LibraryExercise[]> {
     try {
       const res = await fetch("/api/exercise-library?active=1", {
         cache: "no-store",
@@ -391,10 +402,14 @@ export default function AlunoPage() {
           }
         });
 
+        setExerciseLibrary(exercises);
         setExerciseLibraryByName(byName);
         setExerciseLibraryById(byId);
+        return exercises;
       }
     } catch {}
+
+    return [];
   }
 
   function compactText(value?: unknown): string {
@@ -809,13 +824,17 @@ export default function AlunoPage() {
                 : "Treino encerrado com relato enviado ao professor."),
         });
 
+        let nextCompletionSummary: typeof completionSummary = null;
+        let completionSkippedDetails: string[] = [];
+
         if (completionStatus === "CONCLUIDO" || completionStatus === "CONCLUIDO_PARCIALMENTE") {
           const totals = getExerciseTotals();
           const skippedDetails = (selectedPlan.exercises || [])
             .filter((exercise: any) => exerciseProgress[exercise.id]?.status === "PULADO")
             .map((exercise: any) => `${exercise.name}: ${exerciseProgress[exercise.id]?.skipReason || "motivo informado"}`);
           const experience = data?.completionExperience || {};
-          setCompletionSummary({
+          completionSkippedDetails = skippedDetails;
+          nextCompletionSummary = {
             partial: completionStatus === "CONCLUIDO_PARCIALMENTE",
             done: totals.done,
             skipped: totals.skipped,
@@ -841,7 +860,7 @@ export default function AlunoPage() {
               (completionStatus === "CONCLUIDO_PARCIALMENTE"
                 ? "PASSO CONCLUÍDO"
                 : "TREINO CONCLUÍDO"),
-          });
+          };
         }
 
         await fetchWorkouts(studentId);
@@ -849,6 +868,33 @@ export default function AlunoPage() {
         await fetchCareEvents(studentId);
         await fetchDashboardSummary();
         setShowWorkoutModal(false);
+
+        if (nextCompletionSummary) {
+          const hasPainSignal =
+            careEventType === "DOR_DESCONFORTO" ||
+            completionSkippedDetails.some((item) => /dor|desconforto/i.test(item));
+
+          if (!hasPainSignal) {
+            const availableLibrary = exerciseLibrary.length > 0
+              ? exerciseLibrary
+              : await fetchExerciseLibrary();
+            const routine = buildWorkoutMobilityRoutine({
+              phase: "POST",
+              workout: selectedPlan,
+              library: availableLibrary,
+            });
+
+            if (routine.items.length >= 3) {
+              setPendingCompletionSummary(nextCompletionSummary);
+              setMobilityRoutine(routine);
+              setMobilityFlowMode("POST_OFFER");
+            } else {
+              setCompletionSummary(nextCompletionSummary);
+            }
+          } else {
+            setCompletionSummary(nextCompletionSummary);
+          }
+        }
       } else {
         setMessage({
           type: "error",
@@ -1283,7 +1329,7 @@ export default function AlunoPage() {
       return planStr === dateStr;
     }) || null;
   }
-  function handleDayClick(day: number) {
+  async function handleDayClick(day: number) {
     if (isStudentTrainingBlocked()) {
       setMessage({
         type: "error",
@@ -1299,6 +1345,9 @@ export default function AlunoPage() {
     setSelectedDay(day);
     setSelectedExercise(null);
     setSelectedPlan(null);
+    setMobilityFlowMode(null);
+    setMobilityRoutine(null);
+    setPendingCompletionSummary(null);
 
     if (selectedDate >= getStudentPlanVisibilityLimit()) {
       return;
@@ -1309,10 +1358,70 @@ export default function AlunoPage() {
       setSelectedPlan(plan);
       setExerciseProgress({});
       setCareEventDetail("");
-      setShowWorkoutModal(true);
       void fetchExerciseProgress(plan.id, day);
+
+      if (!isCompleted(day) && canValidateWorkoutDay(day)) {
+        const availableLibrary = exerciseLibrary.length > 0
+          ? exerciseLibrary
+          : await fetchExerciseLibrary();
+        const routine = buildWorkoutMobilityRoutine({
+          phase: "PRE",
+          workout: plan,
+          library: availableLibrary,
+        });
+
+        if (routine.items.length >= 3) {
+          setMobilityRoutine(routine);
+          setMobilityFlowMode("PRE_OFFER");
+          setShowWorkoutModal(false);
+          return;
+        }
+      }
+
+      setShowWorkoutModal(true);
     }
   }
+
+  function openMobilityExercise(item: MobilityRoutineItem) {
+    setSelectedExercise({
+      ...item,
+      id: item.id,
+      libraryExerciseId: item.id,
+      series: 1,
+      reps: item.durationLabel,
+      weight: null,
+      restTime: "Transição curta",
+      notes: item.shortCue,
+      __mobilityFlow: true,
+    });
+    setImgError(false);
+    setShowSequenceImage(false);
+    setShowExerciseVideo(false);
+  }
+
+  function skipPreWorkoutPreparation() {
+    setMobilityFlowMode(null);
+    setMobilityRoutine(null);
+    setShowWorkoutModal(true);
+  }
+
+  function finishPreWorkoutPreparation() {
+    setMobilityFlowMode(null);
+    setMobilityRoutine(null);
+    setShowWorkoutModal(true);
+  }
+
+  function finishPostWorkoutMobility() {
+    setMobilityFlowMode(null);
+    setMobilityRoutine(null);
+    setCompletionSummary(pendingCompletionSummary);
+    setPendingCompletionSummary(null);
+  }
+
+  function skipPostWorkoutMobility() {
+    finishPostWorkoutMobility();
+  }
+
   function isToday(day: number) {
     const d = new Date();
     return day === d.getDate() && currentMonth === d.getMonth() && currentYear === d.getFullYear();
@@ -2001,6 +2110,150 @@ export default function AlunoPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {mobilityRoutine && (mobilityFlowMode === "PRE_OFFER" || mobilityFlowMode === "POST_OFFER") && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-[#00A19C]/25 bg-[#111] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <span className="inline-flex rounded-full border border-[#00A19C]/30 bg-[#00A19C]/10 px-2.5 py-1 text-[9px] font-bold tracking-[0.12em] text-[#55D4CF]">
+                  RÁPIDO • CERCA DE 5 MIN
+                </span>
+                <h2 className="mt-3 text-xl font-bold text-[#f5f5f5]">
+                  {mobilityFlowMode === "PRE_OFFER"
+                    ? "Quer preparar o corpo antes de começar?"
+                    : "Quer finalizar o treino com mais cuidado?"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={mobilityFlowMode === "PRE_OFFER" ? skipPreWorkoutPreparation : skipPostWorkoutMobility}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a1a1a1] transition hover:bg-white/10 hover:text-white"
+                aria-label="Fechar"
+              >
+                X
+              </button>
+            </div>
+
+            <p className="mt-3 text-sm leading-relaxed text-[#d4d4d4]">
+              {mobilityRoutine.importance}
+            </p>
+
+            <div className="mt-4 rounded-xl border border-[#ffffff10] bg-[#181818] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#00A19C]">
+                {mobilityFlowMode === "PRE_OFFER" ? "Preparação opcional" : "Finalização opcional"}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#bdbdbd]">
+                {mobilityFlowMode === "PRE_OFFER"
+                  ? "Você pode fazer a preparação rápida ou ir direto para o seu treino. Pular esta etapa não impede o treino."
+                  : "Você pode fazer a mobilidade e o alongamento agora ou encerrar. Seu treino principal já foi registrado."}
+              </p>
+            </div>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setMobilityFlowMode(mobilityFlowMode === "PRE_OFFER" ? "PRE_ROUTINE" : "POST_ROUTINE")}
+                className="rounded-xl bg-[#00A19C] px-4 py-3 text-xs font-bold text-[#062c2a] transition hover:bg-[#55D4CF]"
+              >
+                {mobilityFlowMode === "PRE_OFFER" ? "Fazer preparação de 5 min" : "Fazer 5 min de mobilidade"}
+              </button>
+              <button
+                type="button"
+                onClick={mobilityFlowMode === "PRE_OFFER" ? skipPreWorkoutPreparation : skipPostWorkoutMobility}
+                className="rounded-xl border border-[#ffffff15] bg-[#1a1a1a] px-4 py-3 text-xs font-semibold text-[#cfcfcf] transition hover:border-[#ffffff30]"
+              >
+                {mobilityFlowMode === "PRE_OFFER" ? "Começar treino agora" : "Encerrar sem alongamento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mobilityRoutine && (mobilityFlowMode === "PRE_ROUTINE" || mobilityFlowMode === "POST_ROUTINE") && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[#00A19C]/25 bg-[#111] shadow-2xl">
+            <div className="border-b border-[#ffffff10] p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <span className="inline-flex rounded-full border border-[#00A19C]/30 bg-[#00A19C]/10 px-2.5 py-1 text-[9px] font-bold tracking-[0.12em] text-[#55D4CF]">
+                    {mobilityFlowMode === "PRE_ROUTINE" ? "ANTES DO TREINO" : "DEPOIS DO TREINO"}
+                  </span>
+                  <h2 className="mt-2 text-lg font-bold text-[#f5f5f5]">{mobilityRoutine.title}</h2>
+                  <p className="mt-1 text-[11px] text-[#a1a1a1]">{mobilityRoutine.subtitle}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={mobilityFlowMode === "PRE_ROUTINE" ? skipPreWorkoutPreparation : skipPostWorkoutMobility}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a1a1a1] transition hover:bg-white/10 hover:text-white"
+                  aria-label="Pular etapa"
+                >
+                  X
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2 overflow-y-auto p-4">
+              {mobilityRoutine.items.map((item, index) => {
+                const videoUrl = getImageUrl(getExerciseVideoUrl({ ...item, libraryExerciseId: item.id }) || undefined);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => openMobilityExercise(item)}
+                    className="w-full rounded-xl border border-[#ffffff10] bg-[#181818] p-3 text-left transition hover:border-[#00A19C]/45 hover:bg-[#1d1d1d]"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#00A19C]/30 bg-[#00A19C]/10 text-[11px] font-bold text-[#55D4CF]">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-[#f5f5f5]">{item.name}</p>
+                          <span className="rounded-full border border-[#ffffff10] px-2 py-0.5 text-[9px] text-[#bdbdbd]">
+                            {item.durationLabel}
+                          </span>
+                          {videoUrl && (
+                            <span className="rounded-full border border-[#00A19C]/25 bg-[#00A19C]/10 px-2 py-0.5 text-[9px] font-semibold text-[#55D4CF]">
+                              Vídeo disponível
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[10px] leading-relaxed text-[#a1a1a1]">{item.shortCue}</p>
+                        <p className="mt-1 text-[9px] font-semibold text-[#00A19C]">Toque para ver como executar</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+
+              <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
+                <p className="text-[10px] font-semibold text-amber-300">Importante</p>
+                <p className="mt-1 text-[10px] leading-relaxed text-[#e5e5e5]">
+                  Faça tudo sem dor e sem forçar amplitude. Se o professor orientou evitar algum movimento ou se algo incomodar, pule esse exercício e siga para o próximo.
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-[#ffffff10] p-4">
+              <button
+                type="button"
+                onClick={mobilityFlowMode === "PRE_ROUTINE" ? finishPreWorkoutPreparation : finishPostWorkoutMobility}
+                className="w-full rounded-xl bg-[#00A19C] py-3 text-xs font-bold text-[#062c2a] transition hover:bg-[#55D4CF]"
+              >
+                {mobilityFlowMode === "PRE_ROUTINE" ? "Concluir preparação e abrir treino" : "Concluir e finalizar treino"}
+              </button>
+              <button
+                type="button"
+                onClick={mobilityFlowMode === "PRE_ROUTINE" ? skipPreWorkoutPreparation : skipPostWorkoutMobility}
+                className="mt-2 w-full py-2 text-[10px] text-[#7d7d7d] hover:text-[#bdbdbd]"
+              >
+                {mobilityFlowMode === "PRE_ROUTINE" ? "Pular preparação" : "Pular alongamento"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2708,7 +2961,7 @@ export default function AlunoPage() {
               )}
             </div>
             <div className="p-3 border-t border-[#ffffff10] space-y-2">
-              {!isCompleted(selectedDay || 0) && canValidateWorkoutDay(selectedDay) && (
+              {!selectedExercise.__mobilityFlow && !isCompleted(selectedDay || 0) && canValidateWorkoutDay(selectedDay) && (
                 <div className="space-y-2">
                   <button
                     type="button"
