@@ -114,3 +114,53 @@ export function getStandaloneExerciseKind(notes: unknown): StandaloneExerciseKin
   if (text.includes("ISOLADO TÉCNICO") || text.includes("ISOLADO TECNICO")) return "technical";
   return "single";
 }
+
+export type WorkoutPlanLike = {
+  name?: string;
+  description?: string;
+  objective?: string;
+  studentSummary?: string;
+  notes?: string;
+  exercises?: SequenceExercise[];
+  [key: string]: unknown;
+};
+
+/**
+ * Decide qual apresentação o aluno deve ver.
+ *
+ * A tela combinada é uma característica do treino específico. Não basta haver
+ * rótulos A1/A2 em anotações antigas: o próprio treino precisa declarar ou
+ * estruturar de forma inequívoca o método combinado.
+ */
+export function isCombinedWorkoutPlan(workout: WorkoutPlanLike | null | undefined): boolean {
+  if (!workout) return false;
+
+  const exercises = Array.isArray(workout.exercises) ? workout.exercises : [];
+  const groups = groupCombinedSequenceExercises(exercises);
+  if (!groups.some((group) => group.type === "combined")) return false;
+
+  const workoutText = [
+    workout.name,
+    workout.description,
+    workout.objective,
+    workout.studentSummary,
+    workout.notes,
+  ]
+    .map((value) => String(value ?? ""))
+    .join(" ");
+
+  if (/\bcombinad[oa]s?\b|\bbi-?set\b|\bsuper\s*set\b|\bsuperset\b|\bsequ[eê]ncia\s+metab[oó]lica\b/i.test(workoutText)) {
+    return true;
+  }
+
+  const exerciseText = exercises
+    .map((exercise) => `${String(exercise.notes ?? "")} ${String(exercise.restTime ?? "")}`)
+    .join(" ");
+
+  if (/\bCOMBINADO\s+[A-Z]\b/i.test(exerciseText)) return true;
+
+  const hasNoRestTransition = /(?:sem\s+descanso|v[aá]\s+direto|direto)\s*(?:at[eé]|para|→|-)?\s*[A-Z][2-3]\b/i.test(exerciseText);
+  const hasRepeatAfterRest = /(?:ap[oó]s\s+(?:o\s+)?combinado|volte\s+ao\s+[A-Z]1|repita\s+[A-Z]1|repita\s+o\s+combinado)/i.test(exerciseText);
+
+  return hasNoRestTransition && hasRepeatAfterRest;
+}

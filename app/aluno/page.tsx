@@ -5,6 +5,7 @@ import {
   getCombinedSequenceInstruction,
   getCombinedSequenceRest,
   getStandaloneExerciseKind,
+  isCombinedWorkoutPlan,
 } from "@/lib/workout-combined-sequence";
 import {
   buildWorkoutMobilityRoutine,
@@ -2505,7 +2506,8 @@ export default function AlunoPage() {
                 ) : null;
               })()}
 
-              {groupCombinedSequenceExercises(Array.isArray(selectedPlan.exercises) ? selectedPlan.exercises : []).map((group: any, groupIndex: number) => {
+              {isCombinedWorkoutPlan(selectedPlan) ? (
+                groupCombinedSequenceExercises(Array.isArray(selectedPlan.exercises) ? selectedPlan.exercises : []).map((group: any, groupIndex: number) => {
                 if (group.type === "combined") {
                   const rounds = Number(group.exercises?.[0]?.series || 0);
                   const rest = getCombinedSequenceRest(group);
@@ -2583,7 +2585,16 @@ export default function AlunoPage() {
                     {renderWorkoutExerciseCard(ex, badge)}
                   </div>
                 );
-              })}
+                })
+              ) : (
+                [...(Array.isArray(selectedPlan.exercises) ? selectedPlan.exercises : [])]
+                  .sort((a: any, b: any) => Number(a?.order ?? 0) - Number(b?.order ?? 0))
+                  .map((ex: any, index: number) => (
+                    <div key={`normal-${ex?.id || index}`} className="rounded-2xl border border-[#ffffff12] bg-[#101010] p-2.5">
+                      {renderWorkoutExerciseCard(ex, String(index + 1))}
+                    </div>
+                  ))
+              )}
               {(!selectedPlan.exercises || selectedPlan.exercises.length === 0) && (
                 <p className="text-center text-[#6b6b6b] text-sm py-6">Nenhum exercicio cadastrado neste treino.</p>
               )}

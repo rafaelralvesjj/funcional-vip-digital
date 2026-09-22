@@ -1117,6 +1117,7 @@ export default function ResumoAlunoPage() {
     return buildWorkoutGenerationStrategy({
       summaryText: summaryData.summaryText || "",
       openQuestions: summaryData.openQuestions || [],
+      activePreferences: summaryData.technicalContext?.activePreferences || [],
       recentExerciseNames,
       librarySize: exerciseLibrary.filter((exercise) => exercise.active !== false).length,
     });
