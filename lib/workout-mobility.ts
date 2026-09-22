@@ -20,7 +20,6 @@ export type MobilityLibraryExercise = {
   restrictionTags?: string | null;
   levelTags?: string | null;
   intensity?: string | null;
-  [key: string]: unknown;
 };
 
 export type MobilityWorkoutContext = {
