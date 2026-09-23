@@ -1,17 +1,16 @@
-CORREÇÃO URGENTE — RESTAURAR TREINOS COMBINADOS JÁ SALVOS DA DENIZE
-
-Subir as pastas app e lib na raiz do repositório, substituindo os arquivos existentes.
+CORREÇÃO — TREINO DIFERENTE ENTRE CELULARES / DISPOSITIVOS
 
 Arquivos:
+- app/aluno/page.tsx
 - app/api/workout-plan/route.ts
 - lib/workout-format-consistency.ts
 
-O reparo atua nos dois planos já corrompidos pela normalização anterior:
-- 23/09/2026 — Treino B — Combinado misto com aparelhos
-- 25/09/2026 — Treino C — Combinado geral com aparelhos âncora
+O que corrige:
+1. A tela do aluno não usa mais um treino antigo que ficou guardado em memória ao reabrir a aba/app.
+2. Ao tocar no dia do treino, o plano é relido diretamente do servidor com cache desativado.
+3. Ao voltar para o app ou colocar a aba em foco, a lista de treinos é atualizada novamente.
+4. A API de treino passa a responder com no-store/no-cache.
+5. Se a própria API corrigir um treino no banco (NORMAL <-> COMBINADO), ela relê o plano depois da gravação antes de devolver a resposta. Isso elimina o caso em que o primeiro aparelho recebe o formato antigo e o próximo recebe o novo.
+6. Mantém a lógica atual: Rafael NORMAL; Denize COMBINADO enquanto não houver pedido explícito posterior para mudar o método.
 
-Ao abrir os treinos da Denize após o deploy READY, o sistema regrava o banco com A1/A2, B1/B2, C1/C2 e D1/D2 e restaura o descanso somente ao fim de cada dupla.
-
-Também mantém a regra geral por aluno:
-- último pedido explícito de método decide NORMAL x COMBINADO;
-- uma preferência posterior sobre aparelho/equipamento não apaga o método anterior.
+Não altera Prisma/schema e não exige comando de banco.

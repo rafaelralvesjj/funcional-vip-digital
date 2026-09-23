@@ -520,6 +520,23 @@ export default function AlunoPage() {
       fetchExerciseLibrary();
     }
   }, [studentId, currentMonth, currentYear]);
+
+  useEffect(() => {
+    if (!studentId) return;
+
+    const refreshPlansWhenVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void fetchPlans(studentId);
+    };
+
+    window.addEventListener("focus", refreshPlansWhenVisible);
+    document.addEventListener("visibilitychange", refreshPlansWhenVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshPlansWhenVisible);
+      document.removeEventListener("visibilitychange", refreshPlansWhenVisible);
+    };
+  }, [studentId, currentMonth, currentYear]);
   async function fetchStudentInfo() {
     try {
       const res = await fetch("/api/auth/session");
@@ -573,7 +590,14 @@ export default function AlunoPage() {
   }
   async function fetchPlans(id: string) {
     try {
-      const res = await fetch("/api/workout-plan?studentId=" + id);
+      const params = new URLSearchParams({
+        studentId: id,
+        _ts: String(Date.now()),
+      });
+      const res = await fetch(`/api/workout-plan?${params.toString()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       if (res.ok) {
         const data = await res.json();
         const rawPlans = Array.isArray(data) ? data : [];
@@ -1356,10 +1380,33 @@ export default function AlunoPage() {
 
     const plan = getPlanForDay(day);
     if (plan) {
-      setSelectedPlan(plan);
+      // Sempre reler o plano no banco ao abrir. Isso evita que uma aba restaurada
+      // ou um dispositivo com estado antigo mostre NORMAL enquanto outro mostra COMBINADO.
+      let freshPlan = plan;
+      try {
+        const params = new URLSearchParams({
+          id: String(plan.id),
+          _ts: String(Date.now()),
+        });
+        const freshResponse = await fetch(`/api/workout-plan?${params.toString()}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        });
+        if (freshResponse.ok) {
+          const latest = await freshResponse.json();
+          if (latest?.id) {
+            freshPlan = latest;
+            setPlans((current: any[]) =>
+              current.map((item: any) => item?.id === latest.id ? latest : item)
+            );
+          }
+        }
+      } catch {}
+
+      setSelectedPlan(freshPlan);
       setExerciseProgress({});
       setCareEventDetail("");
-      void fetchExerciseProgress(plan.id, day);
+      void fetchExerciseProgress(freshPlan.id, day);
 
       if (!isCompleted(day) && canValidateWorkoutDay(day)) {
         const availableLibrary = exerciseLibrary.length > 0
@@ -1367,7 +1414,7 @@ export default function AlunoPage() {
           : await fetchExerciseLibrary();
         const routine = buildWorkoutMobilityRoutine({
           phase: "PRE",
-          workout: plan,
+          workout: freshPlan,
           library: availableLibrary,
         });
 

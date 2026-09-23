@@ -22,6 +22,16 @@ import {
   shouldRestoreWorkoutPlanToCombinedFormat,
 } from "@/lib/workout-format-consistency";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
 const WORKOUT_STATUS_PENDING = "PENDENTE";
 const WORKOUT_STATUS_NEEDS_REVIEW = "PRECISA_REVISAO";
@@ -2425,13 +2435,16 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      let normalizedPlanIds: string[] = [];
+      let changedFormatPlanIds: string[] = [];
 
-      // A correção de formato não pode depender de o usuário estar logado como aluno.
-      // Professor/gestor também precisa conseguir abrir um treino já salvo incorretamente
-      // e fazer o sistema persistir a volta ao formato NORMAL.
+      // Se o GET corrigir o formato no banco, precisamos reler o mesmo plano antes
+      // de responder. Sem isso, a primeira abertura pode receber o objeto antigo.
       if (canNormalizeOpenWorkoutFormat) {
-        normalizedPlanIds = (await ensureOpenWorkoutPlansMatchStudentFormat(plan.studentId)).normalizedPlanIds;
+        const formatSync = await ensureOpenWorkoutPlansMatchStudentFormat(plan.studentId);
+        changedFormatPlanIds = [
+          ...formatSync.normalizedPlanIds,
+          ...(formatSync.restoredPlanIds || []),
+        ];
       }
 
       if (isStudentUser) {
@@ -2450,7 +2463,7 @@ export async function GET(req: NextRequest) {
           studentId: plan.studentId,
         });
 
-        if (releaseResult.count > 0 || normalizedPlanIds.includes(plan.id)) {
+        if (releaseResult.count > 0 || changedFormatPlanIds.includes(plan.id)) {
           plan = await prisma.workoutPlan.findUnique({
             where: { id },
             include: {
@@ -2494,7 +2507,7 @@ export async function GET(req: NextRequest) {
             { status: 404 }
           );
         }
-      } else if (normalizedPlanIds.includes(plan.id)) {
+      } else if (changedFormatPlanIds.includes(plan.id)) {
         plan = await prisma.workoutPlan.findUnique({
           where: { id },
           include: {
@@ -2526,7 +2539,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      return NextResponse.json(plan);
+      return NextResponse.json(plan, { headers: NO_STORE_HEADERS });
     }
 
     if (studentId) {
@@ -2595,7 +2608,7 @@ export async function GET(req: NextRequest) {
       });
 
       if (!includeSummary) {
-        return NextResponse.json(plans);
+        return NextResponse.json(plans, { headers: NO_STORE_HEADERS });
       }
 
       const { startOfWeek, endOfWeek } = getWeekRange(referenceDate);
@@ -2729,7 +2742,7 @@ export async function GET(req: NextRequest) {
             ? `Contrato ativo encontrado para esta semana. Como o contrato começa em ${formatDatePtBr(activeContract.startDate)}, o treino será salvo a partir dessa data.`
             : null
           : "Este aluno não possui contrato ativo para a data selecionada.",
-      });
+      }, { headers: NO_STORE_HEADERS });
     }
 
     return NextResponse.json(
