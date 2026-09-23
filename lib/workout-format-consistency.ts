@@ -55,21 +55,24 @@ export function detectWorkoutFormatPreference(value: unknown): WorkoutFormatMode
 }
 
 /**
- * Resolve o formato usando a preferência ativa mais recente que fale do método.
- * Na ausência de pedido explícito, o padrão da Funcional UP é treino NORMAL.
+ * O método do treino precisa persistir até que o aluno o mude explicitamente.
+ * Por isso, não olhamos apenas preferências ACTIVE: uma preferência de método
+ * pode ter sido superseded por outra do mesmo grupo (ex.: aparelhos) sem que o
+ * aluno tenha desistido do formato combinado/normal.
+ *
+ * Regra: usar a mensagem mais recente, em todo o histórico recente de
+ * preferências, que fale explicitamente do método.
  */
 export function resolveWorkoutFormatMode(
   preferences: WorkoutFormatPreferenceLike[] | null | undefined
 ): WorkoutFormatMode {
-  const active = [...(preferences || [])]
-    .filter((item) => String(item?.status || "ACTIVE").toUpperCase() === "ACTIVE")
-    .sort((a, b) => {
-      const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      return bTime - aTime;
-    });
+  const ordered = [...(preferences || [])].sort((a, b) => {
+    const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+    return bTime - aTime;
+  });
 
-  for (const preference of active) {
+  for (const preference of ordered) {
     const mode = detectWorkoutFormatPreference(
       `${String(preference.originalMessage || "")} ${String(preference.summary || "")}`
     );
@@ -101,9 +104,6 @@ export function normalizeCombinedRestTime(value: unknown, fallback = "60s"): str
   const raw = String(value ?? "").trim();
   if (!raw) return fallback;
 
-  const normalized = normalize(raw);
-
-  // No último exercício do combinado normalmente já existe o descanso correto.
   const explicitAfter = raw.match(/(\d+\s*(?:-\s*\d+)?\s*s)\s*(?:ap[oó]s|→|->)/i);
   if (explicitAfter && /combinad|dupla|volte|repita/i.test(raw)) {
     return explicitAfter[1].replace(/\s+/g, "");
@@ -125,7 +125,6 @@ export function normalizeCombinedRestTime(value: unknown, fallback = "60s"): str
     return duration ? duration.replace(/\s+/g, "") : fallback;
   }
 
-  // Se já era um descanso autônomo (ex.: 45s, 60-75s), preserva.
   if (/^\d+\s*(?:-\s*\d+)?\s*s$/i.test(raw)) {
     return raw.replace(/\s+/g, "");
   }

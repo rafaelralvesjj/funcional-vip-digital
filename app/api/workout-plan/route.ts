@@ -2203,7 +2203,6 @@ async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
   const preferences = await prisma.studentTrainingPreference.findMany({
     where: {
       studentId,
-      status: "ACTIVE",
     },
     select: {
       summary: true,
@@ -2212,7 +2211,7 @@ async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
       updatedAt: true,
     },
     orderBy: { updatedAt: "desc" },
-    take: 30,
+    take: 50,
   });
 
   const mode = resolveWorkoutFormatMode(preferences);
