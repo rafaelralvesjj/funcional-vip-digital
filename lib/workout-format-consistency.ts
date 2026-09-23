@@ -190,6 +190,106 @@ export function normalizeWorkoutPlanToNormalFormat<T extends WorkoutPlanFormatLi
   } as T;
 }
 
+function cleanNormalFormatMarker(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  const cleaned = raw
+    .replace(/\s*Formato normal:\s*faça cada exercício individualmente, cumpra as séries e respeite o descanso indicado antes de seguir para o próximo\.?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  return cleaned || null;
+}
+
+function extractRestDuration(value: unknown, fallback = "60s"): string {
+  const raw = String(value ?? "").trim();
+  const match = raw.match(/\b\d+(?:\s*[-–]\s*\d+)?\s*(?:s|seg|segs|segundos?|min|minutos?)\b/i);
+  return match?.[0]?.replace(/\s+/g, "") || fallback;
+}
+
+function alphaLabel(index: number): string {
+  return String.fromCharCode(65 + Math.min(Math.max(index, 0), 25));
+}
+
+/**
+ * Reconstitui um treino combinado que foi indevidamente achatado para NORMAL
+ * pela correção anterior. Só deve ser aplicado quando:
+ * - a preferência atual do aluno é COMBINED; e
+ * - o plano ainda declara intenção combinada; e
+ * - existe o marcador "Formato normal" inserido pelo normalizador.
+ *
+ * A restauração usa pares sequenciais A1/A2, B1/B2... e reaproveita o tempo
+ * de descanso que permaneceu salvo em cada segundo exercício do par.
+ */
+export function restoreWorkoutPlanToCombinedFormat<T extends WorkoutPlanFormatLike>(plan: T): T {
+  const exercises = Array.isArray(plan.exercises) ? [...plan.exercises] : [];
+
+  const restoredExercises = exercises.map((exercise, index) => {
+    const pairIndex = Math.floor(index / 2);
+    const position = (index % 2) + 1;
+    const label = alphaLabel(pairIndex);
+    const baseNotes = String(exercise.notes ?? "").trim();
+    const prefixedNotes = `${label}${position} — ${baseNotes || String(exercise.name || "Exercício")}`;
+
+    if (position === 1 && index + 1 < exercises.length) {
+      return {
+        ...exercise,
+        notes: prefixedNotes,
+        restTime: `SEM DESCANSO → ${label}2`,
+      };
+    }
+
+    if (position === 2) {
+      const duration = extractRestDuration(exercise.restTime, "60s");
+      return {
+        ...exercise,
+        notes: prefixedNotes,
+        restTime: `DESCANSE ${duration} → volte ao ${label}1`,
+      };
+    }
+
+    return exercise;
+  });
+
+  const cleanedNotes = cleanNormalFormatMarker(plan.notes);
+  const combinedInstruction =
+    "Formato combinado: faça A1→A2 e só então descanse; repita a mesma lógica nos blocos B, C e D conforme os exercícios do treino.";
+
+  return {
+    ...plan,
+    notes: cleanedNotes ? `${cleanedNotes} ${combinedInstruction}` : combinedInstruction,
+    exercises: restoredExercises,
+  } as T;
+}
+
+export function shouldRestoreWorkoutPlanToCombinedFormat(
+  plan: WorkoutPlanFormatLike | null | undefined,
+  mode: WorkoutFormatMode
+): boolean {
+  if (mode !== "COMBINED" || !plan) return false;
+  if (isCombinedWorkoutPlan(plan as any)) return false;
+
+  const notes = String(plan.notes ?? "");
+  if (!/Formato normal:/i.test(notes)) return false;
+
+  const workoutText = [
+    plan.name,
+    plan.description,
+    plan.objective,
+    plan.studentSummary,
+    plan.notes,
+  ]
+    .map((value) => String(value ?? ""))
+    .join(" ");
+
+  if (!/\bcombinad[oa]s?\b|\bdin[aâ]mic[oa]\b|\bsequ[eê]ncia\b/i.test(workoutText)) {
+    return false;
+  }
+
+  return Array.isArray(plan.exercises) && plan.exercises.length >= 2;
+}
+
 export function shouldNormalizeWorkoutPlanToNormalFormat(
   plan: WorkoutPlanFormatLike | null | undefined,
   mode: WorkoutFormatMode

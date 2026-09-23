@@ -16,8 +16,10 @@ import {
 } from "@/lib/student-workout-days";
 import {
   normalizeWorkoutPlanToNormalFormat,
+  restoreWorkoutPlanToCombinedFormat,
   resolveWorkoutFormatMode,
   shouldNormalizeWorkoutPlanToNormalFormat,
+  shouldRestoreWorkoutPlanToCombinedFormat,
 } from "@/lib/workout-format-consistency";
 
 const WORKOUT_STATUS_PRE_PLANNED = "PRE_PLANEJADO";
@@ -2215,9 +2217,6 @@ async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
   });
 
   const mode = resolveWorkoutFormatMode(preferences);
-  if (mode === "COMBINED") {
-    return { mode, normalizedPlanIds: [] as string[] };
-  }
 
   const openPlans = await prisma.workoutPlan.findMany({
     where: {
@@ -2236,16 +2235,108 @@ async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
     orderBy: { createdAt: "desc" },
   });
 
-  const candidates = openPlans.filter((plan) => {
+  const mutablePlans = openPlans.filter((plan) => {
     const hasFinalWorkout = plan.workouts.some((workout) =>
       WORKOUT_FORMAT_FINAL_STATUSES.includes(String(workout.status || "").toUpperCase())
     );
 
-    return !hasFinalWorkout && shouldNormalizeWorkoutPlanToNormalFormat(plan, mode);
+    return !hasFinalWorkout;
   });
 
+  // Reparo cirúrgico dos dois treinos da Denize que foram achatados para NORMAL
+  // pela versão anterior em 22/09. Os IDs são dos planos já existentes no banco;
+  // o bloco só roda enquanto ainda existir o marcador "Formato normal". Depois da
+  // restauração ele vira no-op e não afeta futuros treinos nem uma mudança futura
+  // de preferência da aluna.
+  const denizeRepairPlanIds = new Set([
+    "0c3fc816-722d-470c-acaa-651dc4c8afdf", // 23/09 - Treino B
+    "77ab5fb8-e11e-40e2-9353-184ecac08762", // 25/09 - Treino C
+  ]);
+  const denizeEmergencyRestoreCandidates =
+    studentId === "aecf26ec-fbf5-4e36-acc2-701bb6bae4e9"
+      ? mutablePlans.filter(
+          (plan) =>
+            denizeRepairPlanIds.has(plan.id) &&
+            shouldRestoreWorkoutPlanToCombinedFormat(plan, "COMBINED")
+        )
+      : [];
+
+  if (denizeEmergencyRestoreCandidates.length > 0) {
+    await prisma.$transaction(
+      denizeEmergencyRestoreCandidates.flatMap((plan) => {
+        const restored = restoreWorkoutPlanToCombinedFormat(plan);
+        const planUpdate = prisma.workoutPlan.update({
+          where: { id: plan.id },
+          data: { notes: restored.notes || null },
+        });
+
+        const exerciseUpdates = (restored.exercises || []).map((exercise: any) =>
+          prisma.exercise.update({
+            where: { id: String(exercise.id) },
+            data: {
+              notes: exercise.notes || null,
+              restTime: exercise.restTime || "60s",
+            },
+          })
+        );
+
+        return [planUpdate, ...exerciseUpdates];
+      })
+    );
+
+    return {
+      mode: "COMBINED" as const,
+      normalizedPlanIds: [] as string[],
+      restoredPlanIds: denizeEmergencyRestoreCandidates.map((plan) => plan.id),
+    };
+  }
+
+  if (mode === "COMBINED") {
+    const restoreCandidates = mutablePlans.filter((plan) =>
+      shouldRestoreWorkoutPlanToCombinedFormat(plan, mode)
+    );
+
+    if (restoreCandidates.length === 0) {
+      return { mode, normalizedPlanIds: [] as string[], restoredPlanIds: [] as string[] };
+    }
+
+    await prisma.$transaction(
+      restoreCandidates.flatMap((plan) => {
+        const restored = restoreWorkoutPlanToCombinedFormat(plan);
+        const planUpdate = prisma.workoutPlan.update({
+          where: { id: plan.id },
+          data: {
+            notes: restored.notes || null,
+          },
+        });
+
+        const exerciseUpdates = (restored.exercises || []).map((exercise: any) =>
+          prisma.exercise.update({
+            where: { id: String(exercise.id) },
+            data: {
+              notes: exercise.notes || null,
+              restTime: exercise.restTime || "60s",
+            },
+          })
+        );
+
+        return [planUpdate, ...exerciseUpdates];
+      })
+    );
+
+    return {
+      mode,
+      normalizedPlanIds: [] as string[],
+      restoredPlanIds: restoreCandidates.map((plan) => plan.id),
+    };
+  }
+
+  const candidates = mutablePlans.filter((plan) =>
+    shouldNormalizeWorkoutPlanToNormalFormat(plan, mode)
+  );
+
   if (candidates.length === 0) {
-    return { mode, normalizedPlanIds: [] as string[] };
+    return { mode, normalizedPlanIds: [] as string[], restoredPlanIds: [] as string[] };
   }
 
   await prisma.$transaction(
@@ -2277,6 +2368,7 @@ async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
   return {
     mode,
     normalizedPlanIds: candidates.map((plan) => plan.id),
+    restoredPlanIds: [] as string[],
   };
 }
 

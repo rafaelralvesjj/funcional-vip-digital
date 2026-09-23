@@ -1,10 +1,17 @@
-CORREÇÃO BUILD VERCEL — workout-adjustments
+CORREÇÃO URGENTE — RESTAURAR TREINOS COMBINADOS JÁ SALVOS DA DENIZE
 
-Substitua no Git apenas:
-app/api/workout-adjustments/route.ts
+Subir as pastas app e lib na raiz do repositório, substituindo os arquivos existentes.
 
-Correção aplicada:
-- Map.entries() convertido com Array.from(...)
-- Map.keys() convertido com Array.from(...)
+Arquivos:
+- app/api/workout-plan/route.ts
+- lib/workout-format-consistency.ts
 
-O componente DashboardConversationList.tsx não precisa ser reenviado neste ajuste.
+O reparo atua nos dois planos já corrompidos pela normalização anterior:
+- 23/09/2026 — Treino B — Combinado misto com aparelhos
+- 25/09/2026 — Treino C — Combinado geral com aparelhos âncora
+
+Ao abrir os treinos da Denize após o deploy READY, o sistema regrava o banco com A1/A2, B1/B2, C1/C2 e D1/D2 e restaura o descanso somente ao fim de cada dupla.
+
+Também mantém a regra geral por aluno:
+- último pedido explícito de método decide NORMAL x COMBINADO;
+- uma preferência posterior sobre aparelho/equipamento não apaga o método anterior.
