@@ -17,7 +17,7 @@ import {
 import {
   normalizeWorkoutPlanToNormalFormat,
   restoreWorkoutPlanToCombinedFormat,
-  resolveWorkoutFormatMode,
+  resolveExplicitWorkoutFormatMode,
   shouldNormalizeWorkoutPlanToNormalFormat,
   shouldRestoreWorkoutPlanToCombinedFormat,
 } from "@/lib/workout-format-consistency";
@@ -2226,7 +2226,10 @@ async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
     take: 50,
   });
 
-  const mode = resolveWorkoutFormatMode(preferences);
+  // Só uma preferência EXPLÍCITA pode reescrever o formato de um treino já salvo.
+  // Ausência de preferência na tabela não significa "NORMAL": o próprio plano
+  // importado é a fonte de verdade do método até o aluno pedir mudança.
+  const mode = resolveExplicitWorkoutFormatMode(preferences);
 
   const openPlans = await prisma.workoutPlan.findMany({
     where: {
@@ -2301,13 +2304,16 @@ async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
     };
   }
 
-  if (mode === "COMBINED") {
+  // COMBINED explícito ou ausência de preferência explícita: nunca achatar o
+  // treino para NORMAL. Se ele já foi achatado por uma versão anterior, restaura
+  // a partir da intenção combinada preservada em nome/descrição/resumo.
+  if (mode !== "NORMAL") {
     const restoreCandidates = mutablePlans.filter((plan) =>
       shouldRestoreWorkoutPlanToCombinedFormat(plan, mode)
     );
 
     if (restoreCandidates.length === 0) {
-      return { mode, normalizedPlanIds: [] as string[], restoredPlanIds: [] as string[] };
+      return { mode: mode || "PRESERVE", normalizedPlanIds: [] as string[], restoredPlanIds: [] as string[] };
     }
 
     await prisma.$transaction(
@@ -2335,7 +2341,7 @@ async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
     );
 
     return {
-      mode,
+      mode: mode || "PRESERVE",
       normalizedPlanIds: [] as string[],
       restoredPlanIds: restoreCandidates.map((plan) => plan.id),
     };

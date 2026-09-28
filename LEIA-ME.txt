@@ -1,16 +1,22 @@
-CORREÇÃO — TREINO DIFERENTE ENTRE CELULARES / DISPOSITIVOS
+CORREÇÃO — PRESERVAR TREINO COMBINADO SALVO
+
+Problema confirmado em produção em 28/09/2026:
+- os treinos importados da Denize foram criados com nome/descrição de COMBINADO;
+- logo após a leitura da API, o sistema os regravou como NORMAL (60s entre todos os exercícios e marcador "Formato normal").
+
+Causa:
+- ausência de uma preferência explícita na tabela studentTrainingPreference era tratada como NORMAL;
+- isso autorizava o sistema a achatar um treino que o próprio plano declarava como combinado.
+
+Correção:
+- ausência de preferência explícita passa a PRESERVAR o formato do plano salvo;
+- só um pedido explícito de NORMAL pode converter treino combinado em normal;
+- plano que declara intenção combinada e já foi achatado pela versão anterior é restaurado automaticamente ao ser aberto;
+- blocos voltam como A1→A2→descanso, B1→B2→descanso etc.;
+- cadeira extensora técnica/finalização ficam isoladas quando o plano indicar isso.
 
 Arquivos:
-- app/aluno/page.tsx
 - app/api/workout-plan/route.ts
 - lib/workout-format-consistency.ts
 
-O que corrige:
-1. A tela do aluno não usa mais um treino antigo que ficou guardado em memória ao reabrir a aba/app.
-2. Ao tocar no dia do treino, o plano é relido diretamente do servidor com cache desativado.
-3. Ao voltar para o app ou colocar a aba em foco, a lista de treinos é atualizada novamente.
-4. A API de treino passa a responder com no-store/no-cache.
-5. Se a própria API corrigir um treino no banco (NORMAL <-> COMBINADO), ela relê o plano depois da gravação antes de devolver a resposta. Isso elimina o caso em que o primeiro aparelho recebe o formato antigo e o próximo recebe o novo.
-6. Mantém a lógica atual: Rafael NORMAL; Denize COMBINADO enquanto não houver pedido explícito posterior para mudar o método.
-
-Não altera Prisma/schema e não exige comando de banco.
+Não é necessário reimportar os treinos da Denize. Após o deploy ficar READY, abrir o treino dispara a restauração dos planos pendentes já salvos.

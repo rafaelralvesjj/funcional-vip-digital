@@ -63,9 +63,9 @@ export function detectWorkoutFormatPreference(value: unknown): WorkoutFormatMode
  * Regra: usar a mensagem mais recente, em todo o histórico recente de
  * preferências, que fale explicitamente do método.
  */
-export function resolveWorkoutFormatMode(
+export function resolveExplicitWorkoutFormatMode(
   preferences: WorkoutFormatPreferenceLike[] | null | undefined
-): WorkoutFormatMode {
+): WorkoutFormatMode | null {
   const ordered = [...(preferences || [])].sort((a, b) => {
     const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
     const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
@@ -79,7 +79,18 @@ export function resolveWorkoutFormatMode(
     if (mode) return mode;
   }
 
-  return "NORMAL";
+  return null;
+}
+
+/**
+ * Mantém compatibilidade com os pontos que precisam de um padrão para geração.
+ * Para MUTAR treino já salvo, use resolveExplicitWorkoutFormatMode: ausência de
+ * preferência explícita não autoriza reescrever um treino combinado como normal.
+ */
+export function resolveWorkoutFormatMode(
+  preferences: WorkoutFormatPreferenceLike[] | null | undefined
+): WorkoutFormatMode {
+  return resolveExplicitWorkoutFormatMode(preferences) || "NORMAL";
 }
 
 function stripCombinedExercisePrefix(value: unknown): string | null {
@@ -224,37 +235,80 @@ function alphaLabel(index: number): string {
  */
 export function restoreWorkoutPlanToCombinedFormat<T extends WorkoutPlanFormatLike>(plan: T): T {
   const exercises = Array.isArray(plan.exercises) ? [...plan.exercises] : [];
+  const restoredExercises: WorkoutExerciseFormatLike[] = [];
+  let pairIndex = 0;
 
-  const restoredExercises = exercises.map((exercise, index) => {
-    const pairIndex = Math.floor(index / 2);
-    const position = (index % 2) + 1;
+  function standaloneKind(exercise: WorkoutExerciseFormatLike): "technical" | "finisher" | null {
+    const text = normalize(exercise.notes);
+    if (!text) return null;
+
+    if (
+      /^final(?:izacao)?\b/.test(text) ||
+      /\bfinalizacao\b/.test(text)
+    ) {
+      return "finisher";
+    }
+
+    if (
+      /isolado tecnico|tecnic[oa].*cadeira extensora|cadeira extensora.*tecnic|protocolo.*cadeira extensora/.test(text)
+    ) {
+      return "technical";
+    }
+
+    return null;
+  }
+
+  for (let index = 0; index < exercises.length;) {
+    const current = exercises[index];
+    const currentKind = standaloneKind(current);
+
+    if (currentKind) {
+      const rawNotes = String(current.notes ?? "").trim();
+      restoredExercises.push({
+        ...current,
+        notes:
+          currentKind === "technical"
+            ? `ISOLADO TÉCNICO — ${rawNotes.replace(/^[A-Z]\s*(?:[-—–:]|\|)\s*/i, "")}`
+            : `FINALIZAÇÃO — ${rawNotes.replace(/^final(?:ização|izacao)?\s*(?:[-—–:]|\|)\s*/i, "")}`,
+      });
+      index += 1;
+      continue;
+    }
+
+    const next = exercises[index + 1];
+    const nextKind = next ? standaloneKind(next) : null;
+
+    if (!next || nextKind) {
+      restoredExercises.push(current);
+      index += 1;
+      continue;
+    }
+
     const label = alphaLabel(pairIndex);
-    const baseNotes = String(exercise.notes ?? "").trim();
-    const prefixedNotes = `${label}${position} — ${baseNotes || String(exercise.name || "Exercício")}`;
+    const currentNotes = String(current.notes ?? "").trim() || String(current.name || "Exercício");
+    const nextNotes = String(next.notes ?? "").trim() || String(next.name || "Exercício");
+    const duration = extractRestDuration(next.restTime, "60s");
 
-    if (position === 1 && index + 1 < exercises.length) {
-      return {
-        ...exercise,
-        notes: prefixedNotes,
+    restoredExercises.push(
+      {
+        ...current,
+        notes: `COMBINADO ${label} — 3 VOLTAS | ${label}1 — ${currentNotes}`,
         restTime: `SEM DESCANSO → ${label}2`,
-      };
-    }
-
-    if (position === 2) {
-      const duration = extractRestDuration(exercise.restTime, "60s");
-      return {
-        ...exercise,
-        notes: prefixedNotes,
+      },
+      {
+        ...next,
+        notes: `COMBINADO ${label} — ${label}2 — ${nextNotes}`,
         restTime: `DESCANSE ${duration} → volte ao ${label}1`,
-      };
-    }
+      }
+    );
 
-    return exercise;
-  });
+    pairIndex += 1;
+    index += 2;
+  }
 
   const cleanedNotes = cleanNormalFormatMarker(plan.notes);
   const combinedInstruction =
-    "Formato combinado: faça A1→A2 e só então descanse; repita a mesma lógica nos blocos B, C e D conforme os exercícios do treino.";
+    "Formato combinado: execute cada bloco A1→A2, B1→B2 e assim por diante sem descanso entre os exercícios; descanse somente depois do último exercício do bloco e repita as voltas. Itens marcados como isolado técnico ou finalização seguem a orientação própria.";
 
   return {
     ...plan,
@@ -265,9 +319,9 @@ export function restoreWorkoutPlanToCombinedFormat<T extends WorkoutPlanFormatLi
 
 export function shouldRestoreWorkoutPlanToCombinedFormat(
   plan: WorkoutPlanFormatLike | null | undefined,
-  mode: WorkoutFormatMode
+  mode: WorkoutFormatMode | null
 ): boolean {
-  if (mode !== "COMBINED" || !plan) return false;
+  if (mode === "NORMAL" || !plan) return false;
   if (isCombinedWorkoutPlan(plan as any)) return false;
 
   const notes = String(plan.notes ?? "");
@@ -292,7 +346,7 @@ export function shouldRestoreWorkoutPlanToCombinedFormat(
 
 export function shouldNormalizeWorkoutPlanToNormalFormat(
   plan: WorkoutPlanFormatLike | null | undefined,
-  mode: WorkoutFormatMode
+  mode: WorkoutFormatMode | null
 ): boolean {
   return mode === "NORMAL" && isCombinedWorkoutPlan((plan || null) as any);
 }
