@@ -101,3 +101,16 @@ export function shouldShowContractCta(params: {
   const daysRemaining = getTrialDaysRemaining(params.window, params.now ?? new Date());
   return daysRemaining <= TRIAL_CTA_DAYS_BEFORE_END;
 }
+
+/**
+ * Frase canônica para qualquer aviso/e-mail sobre o teste: sempre o limite
+ * real (TRIAL_MAX_WORKOUTS), nunca workoutsPerMonth do ServicePlan. Única
+ * fonte da mensagem para não deixar um dos textos (Notice, e-mail do aluno,
+ * e-mail da gestão) dessincronizar dos demais.
+ */
+export function formatTrialPeriodSummary(
+  endDateText: string,
+  maxWorkouts: number = TRIAL_MAX_WORKOUTS
+): string {
+  return `Seu período de teste vai até ${endDateText} e inclui até ${maxWorkouts} treino(s).`;
+}

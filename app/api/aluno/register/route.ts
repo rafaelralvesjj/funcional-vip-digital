@@ -9,8 +9,12 @@ import {
   formatPreferredWorkoutDays,
   normalizePreferredWorkoutDays,
 } from "@/lib/student-workout-days";
-import { getTrialWindow, TRIAL_MAX_WORKOUTS } from "@/lib/trial-window";
-import { assertTrialPlanConfigured, TrialPlanNotConfiguredError } from "@/lib/trial-plan";
+import { getTrialWindow, TRIAL_MAX_WORKOUTS, formatTrialPeriodSummary } from "@/lib/trial-window";
+import {
+  assertTrialPlanConfigured,
+  TrialPlanNotConfiguredError,
+  TrialPlanIncompatibleError,
+} from "@/lib/trial-plan";
 
 type BodySource = FormData | Record<string, any>;
 
@@ -214,24 +218,24 @@ function buildOnboardingStatusText({
 function buildTrialWelcomeContent({
   studentName,
   endDateText,
-  workoutsPerWeek,
-  workoutsPerMonth,
+  paidWorkoutsPerWeek,
+  maxWorkouts,
   onboardingComplete,
   missingOnboardingLabels,
 }: {
   studentName: string;
   endDateText: string;
-  workoutsPerWeek: number;
-  workoutsPerMonth: number;
+  paidWorkoutsPerWeek: number;
+  maxWorkouts: number;
   onboardingComplete: boolean;
   missingOnboardingLabels: string[];
 }): string {
   return [
     `Oi, ${studentName}! Que bom ter você com a gente.`,
     "",
-    "Seu cadastro está concluído e sua experiência gratuita já começou.",
-    `Sua experiência fica válida até ${endDateText}.`,
-    `Nesse período, estão previstos ${workoutsPerWeek} treino(s) por semana, totalizando ${workoutsPerMonth} treino(s) no ciclo.`,
+    "Seu cadastro está concluído e seu período de teste de 7 dias já começou.",
+    formatTrialPeriodSummary(endDateText, maxWorkouts),
+    `Depois do teste, o plano contratado é de ${paidWorkoutsPerWeek} treino(s) por semana.`,
     "",
     onboardingComplete
       ? "Recebemos sua ficha inicial. Ela será usada pelo professor para conhecer seu momento e preparar uma proposta mais segura e direcionada."
@@ -248,7 +252,7 @@ function buildTrialWelcomeContent({
     "",
     "Você já pode acessar sua área com o e-mail e a senha cadastrados para acompanhar avisos, treinos e próximos passos.",
     "",
-    "Este é um ciclo gratuito de experiência. Perto do encerramento, a gestão vai orientar você sobre as opções para continuar.",
+    "Este é um período de teste de 7 dias. Perto do encerramento, a gestão vai orientar você sobre as opções para continuar.",
     "",
     "Gestão do Funcional UP Digital",
     "Mensagem automática de boas-vindas enviada pela plataforma.",
@@ -263,8 +267,8 @@ function buildManagementNewTrialStudentContent({
   studentPhone,
   startDateText,
   endDateText,
-  workoutsPerWeek,
-  workoutsPerMonth,
+  paidWorkoutsPerWeek,
+  maxWorkouts,
   source,
   onboardingComplete,
   missingOnboardingLabels,
@@ -275,8 +279,8 @@ function buildManagementNewTrialStudentContent({
   studentPhone?: string | null;
   startDateText: string;
   endDateText: string;
-  workoutsPerWeek: number;
-  workoutsPerMonth: number;
+  paidWorkoutsPerWeek: number;
+  maxWorkouts: number;
   source: string;
   onboardingComplete: boolean;
   missingOnboardingLabels: string[];
@@ -285,13 +289,14 @@ function buildManagementNewTrialStudentContent({
   return [
     "Olá, equipe de gestão.",
     "",
-    `${studentName} concluiu o cadastro para a experiência gratuita.`,
+    `${studentName} concluiu o cadastro para o período de teste de 7 dias.`,
     `E-mail: ${studentEmail}`,
     studentPhone ? `Telefone/WhatsApp cadastrado: ${studentPhone}` : null,
     `Origem do cadastro: ${source}.`,
-    `Início da experiência: ${startDateText}.`,
+    `Início do período de teste: ${startDateText}.`,
     `Término previsto: ${endDateText}.`,
-    `Programação contratada: ${workoutsPerWeek} treino(s) por semana e ${workoutsPerMonth} treino(s) no ciclo.`,
+    formatTrialPeriodSummary(endDateText, maxWorkouts),
+    `Plano contratado depois do teste: ${paidWorkoutsPerWeek} treino(s) por semana.`,
     "",
     buildOnboardingStatusText({
       onboardingComplete,
@@ -338,9 +343,11 @@ async function getOptionalImage(source: BodySource): Promise<string | null> {
 
 /**
  * Sem fallback silencioso: se nenhum ServicePlan com allowTrial=true e
- * active=true estiver configurado, o cadastro deve falhar com um erro
- * operacional claro (ver TrialPlanNotConfiguredError), nunca criar um
- * plano hard-coded automaticamente.
+ * active=true estiver configurado (TrialPlanNotConfiguredError), ou se o
+ * único configurado não for compatível com a oferta comercial atual de
+ * 3x/semana — por exemplo, um plano antigo de 2x/semana ainda marcado como
+ * allowTrial=true (TrialPlanIncompatibleError) — o cadastro deve falhar com
+ * um erro operacional claro, nunca prosseguir com dados antigos/incoerentes.
  */
 async function getTrialPlan() {
   const plan = await prisma.servicePlan.findFirst({
@@ -541,7 +548,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!acceptedTerms) {
-      return NextResponse.json({ error: "Você precisa aceitar os termos da experiência gratuita." }, { status: 400 });
+      return NextResponse.json({ error: "Você precisa aceitar os termos do período de teste." }, { status: 400 });
     }
 
     if (trainingResources.errors.length > 0) {
@@ -659,10 +666,10 @@ export async function POST(req: NextRequest) {
       });
 
       const notes = [
-        "Cadastro criado pelo fluxo de experiência gratuita.",
+        "Cadastro criado pelo fluxo de período de teste.",
         `Origem: ${source}.`,
-        `Início da experiência: ${startDateText}.`,
-        `Fim da experiência: ${endDateText}.`,
+        `Início do período de teste: ${startDateText}.`,
+        `Fim do período de teste: ${endDateText}.`,
         buildOnboardingStatusText({
           onboardingComplete: onboardingStatus.onboardingComplete,
           missingLabels: onboardingStatus.missingLabels,
@@ -718,7 +725,7 @@ export async function POST(req: NextRequest) {
           acceptedAt: new Date(),
           activatedAt: new Date(),
           notes: [
-            "Termo de experiência gratuita aceito digitalmente.",
+            "Termo do período de teste aceito digitalmente.",
             `Versão do termo: ${termsVersion}.`,
             ip ? `IP: ${ip}.` : null,
             userAgent ? `User-Agent: ${userAgent}.` : null,
@@ -746,12 +753,12 @@ export async function POST(req: NextRequest) {
 
       const notice = await tx.notice.create({
         data: {
-          title: "Sua experiência gratuita começou",
+          title: "Seu período de teste começou",
           content: buildTrialWelcomeContent({
             studentName: student.name,
             endDateText,
-            workoutsPerWeek: contract.workoutsPerWeek,
-            workoutsPerMonth: contract.workoutsPerMonth,
+            paidWorkoutsPerWeek: contract.workoutsPerWeek,
+            maxWorkouts: contract.totalContractedWorkouts,
             onboardingComplete: onboardingStatus.onboardingComplete,
             missingOnboardingLabels: onboardingStatus.missingLabels,
           }),
@@ -765,15 +772,15 @@ export async function POST(req: NextRequest) {
 
       const managementNotice = await tx.notice.create({
         data: {
-          title: "Novo aluno em experiência: vincular professor",
+          title: "Novo aluno em período de teste: vincular professor",
           content: buildManagementNewTrialStudentContent({
             studentName: student.name,
             studentEmail: email,
             studentPhone: student.phone,
             startDateText,
             endDateText,
-            workoutsPerWeek: contract.workoutsPerWeek,
-            workoutsPerMonth: contract.workoutsPerMonth,
+            paidWorkoutsPerWeek: contract.workoutsPerWeek,
+            maxWorkouts: contract.totalContractedWorkouts,
             source,
             onboardingComplete: onboardingStatus.onboardingComplete,
             missingOnboardingLabels: onboardingStatus.missingLabels,
@@ -799,7 +806,7 @@ export async function POST(req: NextRequest) {
               source: "LANDING_PAGE",
               title: "Ficha inicial incompleta",
               description: [
-                "Aluno iniciou experiência gratuita, mas ainda faltam informações mínimas para personalização segura.",
+                "Aluno iniciou período de teste, mas ainda faltam informações mínimas para personalização segura.",
                 `Campos a confirmar: ${onboardingStatus.missingLabels.join(", ")}.`,
                 "Enquanto a ficha estiver incompleta, orientar treino inicial conservador e confirmar dados antes de progredir carga/intensidade.",
               ].join("\n"),
@@ -846,13 +853,13 @@ export async function POST(req: NextRequest) {
       const safeStartDateText = escapeHtml(formatDatePtBr(result.startDate));
       const safeEndDateText = escapeHtml(formatDatePtBr(result.endDate));
       const safeLoginUrl = escapeHtml(loginUrl);
-      const title = "Sua experiência gratuita começou";
+      const title = "Seu período de teste começou";
       const text = [
         `Oi, ${name}! Que bom ter você com a gente.`,
         "",
-        "Seu cadastro está concluído e sua experiência gratuita já começou.",
-        `Sua experiência fica válida até ${formatDatePtBr(result.endDate)}.`,
-        `Nesse período, estão previstos ${result.workoutsPerWeek} treino(s) por semana, totalizando ${result.workoutsPerMonth} treino(s) no ciclo.`,
+        "Seu cadastro está concluído e seu período de teste de 7 dias já começou.",
+        formatTrialPeriodSummary(formatDatePtBr(result.endDate), result.totalContractedWorkouts),
+        `Depois do teste, o plano contratado é de ${result.workoutsPerWeek} treino(s) por semana.`,
         "",
         "Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.",
         "Depois do vínculo, use o chat da plataforma para falar com o professor sobre dúvidas de treino. O WhatsApp fica reservado para contatos específicos da gestão.",
@@ -881,12 +888,13 @@ export async function POST(req: NextRequest) {
               <h2 style="color:#00A19C; margin:0 0 16px;">${escapeHtml(title)}</h2>
               <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeName}</strong>! Que bom ter você com a gente.</p>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-                Seu cadastro está concluído e sua experiência gratuita já começou.
+                Seu cadastro está concluído e seu período de teste de 7 dias já começou.
               </p>
               <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
                 <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Início: <strong style="color:#f5f5f5;">${safeStartDateText}</strong></p>
                 <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Validade: <strong style="color:#f5f5f5;">${safeEndDateText}</strong></p>
-                <p style="color:#d4d4d4; font-size:13px; margin:0;">Programação: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
+                <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Treinos incluídos no teste: <strong style="color:#f5f5f5;">até ${result.totalContractedWorkouts}</strong></p>
+                <p style="color:#d4d4d4; font-size:13px; margin:0;">Plano contratado depois do teste: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
               </div>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.</p>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Depois do vínculo, use o chat da plataforma para dúvidas de treino. Assim, o acompanhamento fica registrado e organizado. O WhatsApp fica reservado para contatos específicos da gestão.</p>
@@ -902,7 +910,7 @@ export async function POST(req: NextRequest) {
         `,
       });
     } catch (error) {
-      console.error("Erro ao enviar e-mail de experiência gratuita:", error);
+      console.error("Erro ao enviar e-mail de período de teste:", error);
     }
 
     try {
@@ -926,14 +934,15 @@ export async function POST(req: NextRequest) {
           const text = [
             `Oi, ${managementName}!`,
             "",
-            `${result.studentName} concluiu o cadastro para a experiência gratuita.`,
+            `${result.studentName} concluiu o cadastro para o período de teste de 7 dias.`,
             `E-mail do aluno: ${result.email}`,
             result.phone ? `Telefone/WhatsApp: ${result.phone}` : null,
-            `Início da experiência: ${formatDatePtBr(result.startDate)}.`,
+            `Início do período de teste: ${formatDatePtBr(result.startDate)}.`,
             `Término previsto: ${formatDatePtBr(result.endDate)}.`,
-            `Programação: ${result.workoutsPerWeek} treino(s) por semana e ${result.workoutsPerMonth} treino(s) no ciclo.`,
+            formatTrialPeriodSummary(formatDatePtBr(result.endDate), result.totalContractedWorkouts),
+            `Plano contratado depois do teste: ${result.workoutsPerWeek} treino(s) por semana.`,
             "",
-            "O aluno já está na janela de início da experiência.",
+            "O aluno já está na janela de início do período de teste.",
             "",
             "Próxima ação: revisar o cadastro e vincular um professor responsável.",
             "",
@@ -950,7 +959,7 @@ export async function POST(req: NextRequest) {
               <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #2a2a2a;border-radius:16px;padding:24px;">
                 <h2 style="color:#00A19C;margin:0 0 16px;">Novo aluno para vínculo</h2>
                 <p style="color:#f5f5f5;font-size:15px;line-height:1.6;">Oi, <strong>${safeManagementName}</strong>!</p>
-                <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">${safeStudentName}</strong> concluiu o cadastro para a experiência gratuita.</p>
+                <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">${safeStudentName}</strong> concluiu o cadastro para o período de teste de 7 dias.</p>
                 <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:14px;margin:16px 0;">
                   <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">E-mail: <strong style="color:#f5f5f5;">${safeStudentEmail}</strong></p>
                   ${
@@ -960,10 +969,11 @@ export async function POST(req: NextRequest) {
                   }
                   <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">Início: <strong style="color:#f5f5f5;">${safeStartDateText}</strong></p>
                   <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">Término previsto: <strong style="color:#f5f5f5;">${safeEndDateText}</strong></p>
-                  <p style="color:#d4d4d4;font-size:13px;margin:0;">Programação: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
+                  <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">Treinos incluídos no teste: <strong style="color:#f5f5f5;">até ${result.totalContractedWorkouts}</strong></p>
+                  <p style="color:#d4d4d4;font-size:13px;margin:0;">Plano contratado depois do teste: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
                 </div>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
-                  O aluno já está na janela de início da experiência.
+                  O aluno já está na janela de início do período de teste.
                 </p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">Próxima ação:</strong> revisar o cadastro e vincular um professor responsável.</p>
                 <a href="${safeManagementLinkUrl}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Organizar vínculo</a>
@@ -994,6 +1004,13 @@ export async function POST(req: NextRequest) {
     if (error instanceof TrialPlanNotConfiguredError) {
       return NextResponse.json(
         { error: error.message, code: "TRIAL_PLAN_NOT_CONFIGURED" },
+        { status: 503 }
+      );
+    }
+
+    if (error instanceof TrialPlanIncompatibleError) {
+      return NextResponse.json(
+        { error: error.message, code: "TRIAL_PLAN_INCOMPATIBLE" },
         { status: 503 }
       );
     }

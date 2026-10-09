@@ -6,6 +6,7 @@ import {
   isTrialWindowExpired,
   isTrialWorkoutCapReached,
   shouldShowContractCta,
+  formatTrialPeriodSummary,
   TRIAL_DURATION_DAYS,
   TRIAL_MAX_WORKOUTS,
 } from '../lib/trial-window.ts';
@@ -118,4 +119,16 @@ test('cenário E2E 1 — cadastro na sexta-feira: começa na sexta, não pula pa
   assert.equal(window.startCivilDate, '2026-10-16');
   assert.notEqual(window.startCivilDate, '2026-10-19'); // segunda-feira seguinte
   assert.equal(isTrialWorkoutCapReached(3), true);
+});
+
+test('formatTrialPeriodSummary usa o limite real do teste (3), nunca workoutsPerMonth do plano', () => {
+  const texto = formatTrialPeriodSummary('16/10/2026');
+  assert.equal(texto, 'Seu período de teste vai até 16/10/2026 e inclui até 3 treino(s).');
+  assert.doesNotMatch(texto, /ciclo/);
+  assert.doesNotMatch(texto, /12/);
+});
+
+test('formatTrialPeriodSummary aceita um limite explícito diferente do default', () => {
+  const texto = formatTrialPeriodSummary('20/11/2026', 5);
+  assert.equal(texto, 'Seu período de teste vai até 20/11/2026 e inclui até 5 treino(s).');
 });

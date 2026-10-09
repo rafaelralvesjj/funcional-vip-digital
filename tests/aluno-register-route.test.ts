@@ -44,3 +44,23 @@ test('contrato de teste usa o limite real de 3 treinos (TRIAL_MAX_WORKOUTS), nã
   const source = readRouteSource();
   assert.match(source, /totalContractedWorkouts:\s*TRIAL_MAX_WORKOUTS/);
 });
+
+// Complemento (não a principal fonte de confiança): a regra em si — nunca
+// usar workoutsPerMonth/"no ciclo" para comunicar o teste, nunca aceitar um
+// ServicePlan incompatível com a oferta de 3x/semana — é validada por
+// comportamento em tests/trial-window.test.ts e tests/trial-plan.test.ts.
+test('nenhuma mensagem do cadastro menciona "no ciclo" nem "experiência gratuita"', () => {
+  const source = readRouteSource();
+  assert.doesNotMatch(source, /no ciclo/);
+  assert.doesNotMatch(source, /experiência gratuita/i);
+});
+
+test('cadastro usa formatTrialPeriodSummary para comunicar o limite do teste, não workoutsPerMonth', () => {
+  const source = readRouteSource();
+  assert.match(source, /formatTrialPeriodSummary/);
+});
+
+test('cadastro valida compatibilidade da oferta de teste com a frequência comercial atual (3x/semana)', () => {
+  const source = readRouteSource();
+  assert.match(source, /TrialPlanIncompatibleError/);
+});
