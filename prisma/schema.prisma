@@ -363,6 +363,7 @@ model ServicePlanBillingOption {
 
   servicePlan ServicePlan @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
 
+  @@unique([servicePlanId, billingCycle])
   @@index([servicePlanId])
   @@index([active])
   @@map("service_plan_billing_options")

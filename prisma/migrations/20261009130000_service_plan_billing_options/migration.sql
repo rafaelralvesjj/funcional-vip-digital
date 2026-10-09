@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS "service_plan_billing_options" (
   "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "service_plan_billing_options_pkey" PRIMARY KEY ("id")
 );
+CREATE UNIQUE INDEX IF NOT EXISTS "service_plan_billing_options_service_plan_id_billing_cycle_key" ON "service_plan_billing_options"("service_plan_id", "billing_cycle");
 CREATE INDEX IF NOT EXISTS "service_plan_billing_options_service_plan_id_idx" ON "service_plan_billing_options"("service_plan_id");
 CREATE INDEX IF NOT EXISTS "service_plan_billing_options_active_idx" ON "service_plan_billing_options"("active");
 DO $$ BEGIN
