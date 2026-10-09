@@ -5,13 +5,12 @@ import { buildTrainingResourceSummary } from "@/lib/student-training-resources";
 import * as bcrypt from "bcryptjs";
 import { sendEmail } from "@/lib/sendEmail";
 import { getManagementRecipientEmail } from "@/lib/email-recipient-policy";
-import { getSaoPauloCivilDateInput, parseCivilDateInput } from "@/lib/planning-window";
 import {
   formatPreferredWorkoutDays,
-  getPreferredWorkoutOffsets,
   normalizePreferredWorkoutDays,
-  resolveRecurringWorkoutOffsets,
 } from "@/lib/student-workout-days";
+import { getTrialWindow, TRIAL_MAX_WORKOUTS } from "@/lib/trial-window";
+import { assertTrialPlanConfigured, TrialPlanNotConfiguredError } from "@/lib/trial-plan";
 
 type BodySource = FormData | Record<string, any>;
 
@@ -48,72 +47,6 @@ function normalizeEmail(email: string): string {
 
 function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "");
-}
-
-function startOfDay(date: Date): Date {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
-}
-
-function withMidday(date: Date): Date {
-  const normalized = new Date(date);
-  normalized.setHours(12, 0, 0, 0);
-  return normalized;
-}
-
-function addMonthsMinusOneDay(startDate: Date, months: number): Date {
-  const endDate = new Date(startDate);
-  endDate.setMonth(endDate.getMonth() + Math.max(months, 1));
-  endDate.setDate(endDate.getDate() - 1);
-  endDate.setHours(23, 59, 59, 999);
-
-  return endDate;
-}
-
-function getFirstSafeTrialStartDate(
-  referenceDate = new Date(),
-  workoutsPerWeek?: number | null,
-  preferredWorkoutDays?: unknown
-): {
-  startDate: Date;
-  shiftedToNextWeek: boolean;
-  reason: string | null;
-} {
-  const reference =
-    parseCivilDateInput(getSaoPauloCivilDateInput(referenceDate)) || startOfDay(referenceDate);
-  const day = reference.getDay();
-  const todayOffset = day === 0 ? 6 : day - 1;
-  const weeklyLimit = Math.min(Math.max(Number(workoutsPerWeek || 0), 0), 7);
-  const normalizedPreferredDays = normalizePreferredWorkoutDays(preferredWorkoutDays);
-  const scheduledOffsets =
-    normalizedPreferredDays.length > weeklyLimit
-      ? getPreferredWorkoutOffsets(normalizedPreferredDays)
-      : resolveRecurringWorkoutOffsets(weeklyLimit, normalizedPreferredDays);
-  const remainingScheduledDays = scheduledOffsets.filter(
-    (offset) => offset >= todayOffset
-  );
-
-  // Se a semana atual ainda comporta toda a meta da experiência nos dias
-  // escolhidos, o aluno pode começar agora — inclusive sexta, sábado ou domingo.
-  if (!weeklyLimit || remainingScheduledDays.length >= weeklyLimit) {
-    return {
-      startDate: withMidday(reference),
-      shiftedToNextWeek: false,
-      reason: null,
-    };
-  }
-
-  const nextMonday = new Date(reference);
-  const daysUntilMonday = day === 0 ? 1 : 8 - day;
-  nextMonday.setDate(reference.getDate() + daysUntilMonday);
-
-  return {
-    startDate: withMidday(nextMonday),
-    shiftedToNextWeek: true,
-    reason:
-      "A semana atual não comporta todos os treinos previstos nos dias escolhidos. A experiência começará na próxima segunda-feira para preservar a programação completa.",
-  };
 }
 
 function getAppLoginUrl(): string {
@@ -280,32 +213,23 @@ function buildOnboardingStatusText({
 
 function buildTrialWelcomeContent({
   studentName,
-  startDateText,
   endDateText,
   workoutsPerWeek,
   workoutsPerMonth,
   onboardingComplete,
   missingOnboardingLabels,
-  shiftedToNextWeek,
 }: {
   studentName: string;
-  startDateText: string;
   endDateText: string;
   workoutsPerWeek: number;
   workoutsPerMonth: number;
   onboardingComplete: boolean;
   missingOnboardingLabels: string[];
-  shiftedToNextWeek: boolean;
 }): string {
   return [
     `Oi, ${studentName}! Que bom ter você com a gente.`,
     "",
-    shiftedToNextWeek
-      ? `Seu cadastro está concluído e sua experiência foi organizada para começar em ${startDateText}, na primeira janela segura de acompanhamento.`
-      : "Seu cadastro está concluído e sua experiência gratuita já começou.",
-    shiftedToNextWeek
-      ? "Isso não significa atraso: escolhemos essa data para que você comece com uma semana inteira, sem treinos corridos ou acumulados."
-      : null,
+    "Seu cadastro está concluído e sua experiência gratuita já começou.",
     `Sua experiência fica válida até ${endDateText}.`,
     `Nesse período, estão previstos ${workoutsPerWeek} treino(s) por semana, totalizando ${workoutsPerMonth} treino(s) no ciclo.`,
     "",
@@ -345,7 +269,6 @@ function buildManagementNewTrialStudentContent({
   onboardingComplete,
   missingOnboardingLabels,
   onboardingLines,
-  shiftedToNextWeek,
 }: {
   studentName: string;
   studentEmail: string;
@@ -358,7 +281,6 @@ function buildManagementNewTrialStudentContent({
   onboardingComplete: boolean;
   missingOnboardingLabels: string[];
   onboardingLines: string[];
-  shiftedToNextWeek: boolean;
 }): string {
   return [
     "Olá, equipe de gestão.",
@@ -370,9 +292,6 @@ function buildManagementNewTrialStudentContent({
     `Início da experiência: ${startDateText}.`,
     `Término previsto: ${endDateText}.`,
     `Programação contratada: ${workoutsPerWeek} treino(s) por semana e ${workoutsPerMonth} treino(s) no ciclo.`,
-    shiftedToNextWeek
-      ? "Como o cadastro aconteceu no fim da semana, o início foi direcionado para a próxima janela segura. Não é necessário recuperar treinos da semana do cadastro."
-      : null,
     "",
     buildOnboardingStatusText({
       onboardingComplete,
@@ -382,11 +301,9 @@ function buildManagementNewTrialStudentContent({
     onboardingLines.length > 0 ? "Informações iniciais recebidas:" : null,
     ...onboardingLines.map((line) => `- ${line}`),
     "",
-    shiftedToNextWeek
-      ? "Próximo passo: vincular um professor responsável e garantir que a primeira semana esteja preparada para a data de início."
-      : onboardingComplete
-        ? "Próximo passo: vincular um professor responsável e orientar a preparação dos primeiros treinos com base na ficha inicial."
-        : "Próximo passo: vincular um professor, confirmar os dados que faltam e manter a primeira prescrição conservadora até a ficha estar completa.",
+    onboardingComplete
+      ? "Próximo passo: vincular um professor responsável e orientar a preparação dos primeiros treinos com base na ficha inicial."
+      : "Próximo passo: vincular um professor, confirmar os dados que faltam e manter a primeira prescrição conservadora até a ficha estar completa.",
     "",
     "Mensagem automática de apoio operacional para a gestão.",
   ]
@@ -419,8 +336,14 @@ async function getOptionalImage(source: BodySource): Promise<string | null> {
   return `data:${file.type};base64,${buffer.toString("base64")}`;
 }
 
+/**
+ * Sem fallback silencioso: se nenhum ServicePlan com allowTrial=true e
+ * active=true estiver configurado, o cadastro deve falhar com um erro
+ * operacional claro (ver TrialPlanNotConfiguredError), nunca criar um
+ * plano hard-coded automaticamente.
+ */
 async function getTrialPlan() {
-  let plan = await prisma.servicePlan.findFirst({
+  const plan = await prisma.servicePlan.findFirst({
     where: {
       allowTrial: true,
       active: true,
@@ -431,25 +354,7 @@ async function getTrialPlan() {
     ],
   });
 
-  if (plan) return plan;
-
-  plan = await prisma.servicePlan.create({
-    data: {
-      name: "Experiência grátis - 1 mês",
-      description:
-        "Ciclo de experiência para o aluno conhecer a plataforma e testar o acompanhamento.",
-      workoutsPerWeek: 2,
-      workoutsPerMonth: 8,
-      durationMonths: 1,
-      priceCents: 0,
-      active: true,
-      trialDays: 30,
-      allowTrial: true,
-      sortOrder: 1,
-    },
-  });
-
-  return plan;
+  return assertTrialPlanConfigured(plan);
 }
 
 function getClientIp(req: NextRequest): string | null {
@@ -693,14 +598,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Janela de teste fixa de 7 dias a partir do instante do cadastro —
+    // nunca adiada para a próxima segunda-feira ou qualquer outro dia, e
+    // independente de durationMonths/trialDays do ServicePlan (ver
+    // especificação Fase A, 3.2).
     const durationMonths = Math.max(Number(trialPlan.durationMonths || 1), 1);
-    const safeWindow = getFirstSafeTrialStartDate(
-      new Date(),
-      trialWeeklyLimit,
-      preferredWorkoutDays
-    );
-    const startDate = safeWindow.startDate;
-    const endDate = addMonthsMinusOneDay(startDate, durationMonths);
+    const trialWindow = getTrialWindow(new Date());
+    const startDate = trialWindow.startDate;
+    const endDate = trialWindow.endDate;
     const startDateText = formatDatePtBr(startDate);
     const endDateText = formatDatePtBr(endDate);
     const passwordHash = await bcrypt.hash(password, 10);
@@ -756,8 +661,6 @@ export async function POST(req: NextRequest) {
       const notes = [
         "Cadastro criado pelo fluxo de experiência gratuita.",
         `Origem: ${source}.`,
-        safeWindow.shiftedToNextWeek ? "Programação inicial transferida para a próxima semana para preservar a quantidade de treinos prevista." : null,
-        safeWindow.reason ? safeWindow.reason : null,
         `Início da experiência: ${startDateText}.`,
         `Fim da experiência: ${endDateText}.`,
         buildOnboardingStatusText({
@@ -769,9 +672,9 @@ export async function POST(req: NextRequest) {
         .filter(Boolean)
         .join("\n");
 
-      const studentCommercialStatus = safeWindow.shiftedToNextWeek
-        ? "EXPERIENCIA_AGENDADA"
-        : "EXPERIENCIA_ATIVA";
+      // Teste sempre começa imediatamente: nunca mais EXPERIENCIA_AGENDADA
+      // por causa de adiamento de data (ver lib/trial-window.ts).
+      const studentCommercialStatus = "EXPERIENCIA_ATIVA";
 
       const student = await tx.student.create({
         data: {
@@ -805,18 +708,18 @@ export async function POST(req: NextRequest) {
           durationMonths,
           workoutsPerWeek: trialPlan.workoutsPerWeek,
           workoutsPerMonth: trialPlan.workoutsPerMonth,
-          totalContractedWorkouts: trialPlan.workoutsPerMonth * durationMonths,
+          // Limite real do teste: no máximo TRIAL_MAX_WORKOUTS treinos no
+          // total dos 7 dias corridos, não workoutsPerMonth * duração do
+          // plano (ver especificação Fase A, 3.1/3.2).
+          totalContractedWorkouts: TRIAL_MAX_WORKOUTS,
           priceCents: 0,
           paymentMode: "GRATUITO",
           source,
           acceptedAt: new Date(),
-          activatedAt: safeWindow.shiftedToNextWeek ? null : new Date(),
+          activatedAt: new Date(),
           notes: [
             "Termo de experiência gratuita aceito digitalmente.",
             `Versão do termo: ${termsVersion}.`,
-            safeWindow.shiftedToNextWeek
-              ? "Início comercial ajustado para a primeira janela segura de acompanhamento."
-              : null,
             ip ? `IP: ${ip}.` : null,
             userAgent ? `User-Agent: ${userAgent}.` : null,
           ]
@@ -843,18 +746,14 @@ export async function POST(req: NextRequest) {
 
       const notice = await tx.notice.create({
         data: {
-          title: safeWindow.shiftedToNextWeek
-            ? "Sua experiência está agendada para começar bem"
-            : "Sua experiência gratuita começou",
+          title: "Sua experiência gratuita começou",
           content: buildTrialWelcomeContent({
             studentName: student.name,
-            startDateText,
             endDateText,
             workoutsPerWeek: contract.workoutsPerWeek,
             workoutsPerMonth: contract.workoutsPerMonth,
             onboardingComplete: onboardingStatus.onboardingComplete,
             missingOnboardingLabels: onboardingStatus.missingLabels,
-            shiftedToNextWeek: safeWindow.shiftedToNextWeek,
           }),
           type: "COMERCIAL",
           targetRole: "STUDENT",
@@ -866,9 +765,7 @@ export async function POST(req: NextRequest) {
 
       const managementNotice = await tx.notice.create({
         data: {
-          title: safeWindow.shiftedToNextWeek
-            ? "Novo aluno em experiência: organizar início seguro"
-            : "Novo aluno em experiência: vincular professor",
+          title: "Novo aluno em experiência: vincular professor",
           content: buildManagementNewTrialStudentContent({
             studentName: student.name,
             studentEmail: email,
@@ -881,7 +778,6 @@ export async function POST(req: NextRequest) {
             onboardingComplete: onboardingStatus.onboardingComplete,
             missingOnboardingLabels: onboardingStatus.missingLabels,
             onboardingLines,
-            shiftedToNextWeek: safeWindow.shiftedToNextWeek,
           }),
           type: "COMERCIAL",
           targetRole: "GESTOR",
@@ -914,19 +810,6 @@ export async function POST(req: NextRequest) {
             },
           });
 
-      if (safeWindow.shiftedToNextWeek) {
-        await tx.contractLifecycleEvent.create({
-          data: {
-            contractId: contract.id,
-            studentId: student.id,
-            eventType: "TRIAL_START_DELAYED_SAFE_WINDOW",
-            eventKey: startDate.toISOString().slice(0, 10),
-            channel: "SISTEMA",
-            noticeId: notice.id,
-          },
-        });
-      }
-
       return {
         userId: authUser.id,
         studentId: student.id,
@@ -949,7 +832,6 @@ export async function POST(req: NextRequest) {
         onboardingCareEventId: onboardingCareEvent?.id || null,
         onboardingComplete: onboardingStatus.onboardingComplete,
         missingOnboardingLabels: onboardingStatus.missingLabels,
-        shiftedToNextWeek: safeWindow.shiftedToNextWeek,
         managementRecipients: [{
           id: notificationAuthor?.id || "management-email",
           name: notificationAuthor?.name || "Gestão",
@@ -964,18 +846,11 @@ export async function POST(req: NextRequest) {
       const safeStartDateText = escapeHtml(formatDatePtBr(result.startDate));
       const safeEndDateText = escapeHtml(formatDatePtBr(result.endDate));
       const safeLoginUrl = escapeHtml(loginUrl);
-      const title = result.shiftedToNextWeek
-        ? "Sua experiência está agendada para começar bem"
-        : "Sua experiência gratuita começou";
+      const title = "Sua experiência gratuita começou";
       const text = [
         `Oi, ${name}! Que bom ter você com a gente.`,
         "",
-        result.shiftedToNextWeek
-          ? `Seu cadastro está concluído e sua experiência foi organizada para começar em ${formatDatePtBr(result.startDate)}, na primeira janela segura de acompanhamento.`
-          : "Seu cadastro está concluído e sua experiência gratuita já começou.",
-        result.shiftedToNextWeek
-          ? "Isso não significa atraso. A data foi escolhida para que você comece com uma semana inteira, sem treinos corridos ou acumulados."
-          : null,
+        "Seu cadastro está concluído e sua experiência gratuita já começou.",
         `Sua experiência fica válida até ${formatDatePtBr(result.endDate)}.`,
         `Nesse período, estão previstos ${result.workoutsPerWeek} treino(s) por semana, totalizando ${result.workoutsPerMonth} treino(s) no ciclo.`,
         "",
@@ -1006,13 +881,8 @@ export async function POST(req: NextRequest) {
               <h2 style="color:#00A19C; margin:0 0 16px;">${escapeHtml(title)}</h2>
               <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeName}</strong>! Que bom ter você com a gente.</p>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">
-                ${result.shiftedToNextWeek
-                  ? `Seu cadastro está concluído e sua experiência foi organizada para começar em <strong style="color:#f5f5f5;">${safeStartDateText}</strong>, na primeira janela segura de acompanhamento.`
-                  : "Seu cadastro está concluído e sua experiência gratuita já começou."}
+                Seu cadastro está concluído e sua experiência gratuita já começou.
               </p>
-              ${result.shiftedToNextWeek
-                ? `<p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Isso não significa atraso. Escolhemos essa data para que você comece com uma semana inteira, sem treinos corridos ou acumulados.</p>`
-                : ""}
               <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
                 <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Início: <strong style="color:#f5f5f5;">${safeStartDateText}</strong></p>
                 <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Validade: <strong style="color:#f5f5f5;">${safeEndDateText}</strong></p>
@@ -1063,9 +933,7 @@ export async function POST(req: NextRequest) {
             `Término previsto: ${formatDatePtBr(result.endDate)}.`,
             `Programação: ${result.workoutsPerWeek} treino(s) por semana e ${result.workoutsPerMonth} treino(s) no ciclo.`,
             "",
-            result.shiftedToNextWeek
-              ? "Como o cadastro aconteceu no fim da semana, o início foi direcionado para a próxima janela segura."
-              : "O aluno já está na janela de início da experiência.",
+            "O aluno já está na janela de início da experiência.",
             "",
             "Próxima ação: revisar o cadastro e vincular um professor responsável.",
             "",
@@ -1095,11 +963,7 @@ export async function POST(req: NextRequest) {
                   <p style="color:#d4d4d4;font-size:13px;margin:0;">Programação: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
                 </div>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
-                  ${
-                    result.shiftedToNextWeek
-                      ? "Como o cadastro aconteceu no fim da semana, o início foi direcionado para a próxima janela segura."
-                      : "O aluno já está na janela de início da experiência."
-                  }
+                  O aluno já está na janela de início da experiência.
                 </p>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;"><strong style="color:#f5f5f5;">Próxima ação:</strong> revisar o cadastro e vincular um professor responsável.</p>
                 <a href="${safeManagementLinkUrl}" style="display:inline-block;background:#00A19C;color:#0a0a0a;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 18px;border-radius:10px;">Organizar vínculo</a>
@@ -1126,6 +990,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ...result });
   } catch (error: any) {
     console.error("POST /api/aluno/register error:", error);
+
+    if (error instanceof TrialPlanNotConfiguredError) {
+      return NextResponse.json(
+        { error: error.message, code: "TRIAL_PLAN_NOT_CONFIGURED" },
+        { status: 503 }
+      );
+    }
 
     if (error?.code === "P2002") {
       return NextResponse.json(
