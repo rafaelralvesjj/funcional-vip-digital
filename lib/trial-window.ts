@@ -1,4 +1,4 @@
-import { getSaoPauloCivilDateInput, parseCivilDateInput } from "./planning-window";
+import { getSaoPauloCivilDateInput } from "./planning-window";
 
 /**
  * Janela de teste: 7 dias civis a partir do cadastro, nunca adiada para
@@ -7,6 +7,11 @@ import { getSaoPauloCivilDateInput, parseCivilDateInput } from "./planning-windo
 export const TRIAL_DURATION_DAYS = 7;
 export const TRIAL_MAX_WORKOUTS = 3;
 export const TRIAL_CTA_DAYS_BEFORE_END = 2;
+
+// America/Sao_Paulo não observa horário de verão desde 2019: offset fixo
+// -03:00 o ano inteiro. Usar o offset explícito (em vez de Intl) deixa o
+// cálculo do instante de fim do dia independente do fuso do servidor.
+const SAO_PAULO_UTC_OFFSET = "-03:00";
 
 export type TrialWindow = {
   startDate: Date;
@@ -27,28 +32,34 @@ function diffCivilDays(fromCivilDate: string, toCivilDate: string): number {
   );
 }
 
+/** Aritmética pura sobre a string de data civil, sem instante/fuso envolvido. */
+function addCivilDays(civilDateInput: string, days: number): string {
+  const anchor = new Date(`${civilDateInput}T00:00:00Z`);
+  anchor.setUTCDate(anchor.getUTCDate() + days);
+  return anchor.toISOString().slice(0, 10);
+}
+
+function endOfCivilDayInSaoPaulo(civilDateInput: string): Date {
+  return new Date(`${civilDateInput}T23:59:59.999${SAO_PAULO_UTC_OFFSET}`);
+}
+
 /**
- * Início do teste = data civil de América/São_Paulo do cadastro, sempre.
- * Nunca empurra para a próxima segunda-feira ou qualquer outro dia: a
- * programação dentro da semana se ajusta aos dias preferidos do aluno, mas
- * o início do teste em si não muda por causa disso.
+ * Início do teste = instante real do cadastro (não meio-dia, não a data
+ * civil truncada). Nunca empurra para a próxima segunda-feira ou qualquer
+ * outro dia: a programação dentro da semana se ajusta aos dias preferidos
+ * do aluno, mas o início do teste em si não muda por causa disso.
  */
 export function getTrialWindow(referenceDate: Date = new Date()): TrialWindow {
-  const startCivilDate = getSaoPauloCivilDateInput(referenceDate);
-  const startDate = parseCivilDateInput(startCivilDate);
-  if (!startDate) {
-    throw new Error("Não foi possível resolver a data civil de início do teste.");
-  }
-
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + (TRIAL_DURATION_DAYS - 1));
-  endDate.setHours(23, 59, 59, 999);
+  const startDate = new Date(referenceDate);
+  const startCivilDate = getSaoPauloCivilDateInput(startDate);
+  const endCivilDate = addCivilDays(startCivilDate, TRIAL_DURATION_DAYS - 1);
+  const endDate = endOfCivilDayInSaoPaulo(endCivilDate);
 
   return {
     startDate,
     endDate,
     startCivilDate,
-    endCivilDate: getSaoPauloCivilDateInput(endDate),
+    endCivilDate,
     maxWorkouts: TRIAL_MAX_WORKOUTS,
   };
 }

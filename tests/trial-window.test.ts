@@ -84,6 +84,33 @@ test('CTA não aparece quando já existe contrato pago ativo ou agendado', () =>
   );
 });
 
+test('startDate preserva exatamente o instante do cadastro, não o trunca para meio-dia', () => {
+  const cadastro = new Date('2026-10-10T12:34:56-03:00');
+  const window = getTrialWindow(cadastro);
+
+  assert.equal(window.startDate.getTime(), cadastro.getTime());
+  assert.equal(window.startDate.toISOString(), cadastro.toISOString());
+});
+
+test('endDate é exatamente 16/10/2026 23:59:59.999 em America/Sao_Paulo, sem depender do fuso do servidor', () => {
+  const cadastro = new Date('2026-10-10T12:34:56-03:00');
+  const window = getTrialWindow(cadastro);
+  const esperado = new Date('2026-10-16T23:59:59.999-03:00');
+
+  assert.equal(window.endCivilDate, '2026-10-16');
+  assert.equal(window.endDate.getTime(), esperado.getTime());
+  assert.equal(window.endDate.toISOString(), '2026-10-17T02:59:59.999Z');
+});
+
+test('instante perto da virada UTC não avança o dia civil indevidamente (01:00Z ainda é 09/10 em SP)', () => {
+  const cadastro = new Date('2026-10-10T01:00:00Z'); // 2026-10-09T22:00:00 em America/Sao_Paulo
+  const window = getTrialWindow(cadastro);
+
+  assert.equal(window.startCivilDate, '2026-10-09');
+  assert.equal(window.endCivilDate, '2026-10-15');
+  assert.equal(window.startDate.getTime(), cadastro.getTime());
+});
+
 test('cenário E2E 1 — cadastro na sexta-feira: começa na sexta, não pula para segunda', () => {
   const sexta = saoPauloNoon('2026-10-16');
   const window = getTrialWindow(sexta);
