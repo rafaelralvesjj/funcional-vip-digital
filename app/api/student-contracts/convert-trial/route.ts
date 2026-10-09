@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 import { normalizePreferredWorkoutDays } from "@/lib/student-workout-days";
-import { resolvePaidContractStart } from "@/lib/trial-window";
+import { resolveContractPaymentTransition } from "@/lib/contract-payment-transition";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -439,23 +439,18 @@ export async function POST(request: NextRequest) {
       durationMonths = billingOption.billingCycle === "ANNUAL" ? 12 : 1;
     }
 
-    // Nunca encurtar o teste quando o pagamento é confirmado antes do fim
-    // dele — ver especificação Fase A, 3.4. isPaymentConfirmed controla o
-    // ContractPayment (foi pago ou não); paidDuringTrial decide quando o
-    // contrato pago realmente começa a valer, preservando os 7 dias de
-    // teste integralmente quando o pagamento for antecipado.
-    const isPaymentConfirmed = paymentStatus === "PAGO";
-    let startDate = requestedStartDate;
-    let paidDuringTrial = false;
-
-    if (isPaymentConfirmed) {
-      const resolution = resolvePaidContractStart({
-        trialEndDate: trial.endDate,
-        paymentConfirmedAt: new Date(),
-      });
-      startDate = resolution.startDate;
-      paidDuringTrial = resolution.paidDuringTrial;
-    }
+    // Transição EM_ABERTO → PAGO centralizada (lib/contract-payment-transition.ts):
+    // decide de uma só vez status/commercialStatus/startDate/acceptedAt/activatedAt,
+    // nunca encurtando o teste quando o pagamento é confirmado antes do fim dele
+    // (ver especificação Fase A, 3.4). Mesma função que o futuro webhook do
+    // Asaas vai chamar quando a confirmação de pagamento chegar de forma
+    // assíncrona, para não reimplementar (e arriscar dessincronizar) a regra.
+    const transition = resolveContractPaymentTransition({
+      paymentStatus,
+      trialEndDate: trial.endDate,
+      requestedStartDate,
+    });
+    const { paidDuringTrial, shouldActivateNow, startDate } = transition;
 
     const endDate = addMonthsMinusOneDay(startDate, durationMonths);
 
@@ -475,13 +470,11 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // shouldActivateNow = contrato pago realmente em vigor agora: pagamento
-      // confirmado E não adiado para preservar o teste. Quando paidDuringTrial
-      // é true, o pagamento está confirmado mas o contrato só começa a valer
-      // no dia seguinte ao fim do teste — por isso o TRIAL em curso NÃO pode
-      // ser finalizado agora (ele continua valendo até seu próprio endDate).
-      const shouldActivateNow = isPaymentConfirmed && !paidDuringTrial;
-
+      // shouldActivateNow já vem decidido por resolveContractPaymentTransition:
+      // contrato pago realmente em vigor agora (pagamento confirmado E não
+      // adiado para preservar o teste). Quando paidDuringTrial é true, o TRIAL
+      // em curso NÃO pode ser finalizado agora — continua valendo até seu
+      // próprio endDate.
       if (shouldActivateNow) {
         await tx.studentContract.updateMany({
           where: {
@@ -508,12 +501,8 @@ export async function POST(request: NextRequest) {
           // findActiveWorkoutContract, hasContractStarted) tratarem o
           // contrato corretamente assim que seu próprio startDate chegar,
           // sem depender de um cron para "promover" o status depois.
-          status: isPaymentConfirmed ? "ACTIVE" : "AWAITING_PAYMENT",
-          commercialStatus: !isPaymentConfirmed
-            ? "AGUARDANDO_PAGAMENTO"
-            : paidDuringTrial
-              ? "CONTRATO_PAGO_AGENDADO"
-              : "CONTRATO_ATIVO",
+          status: transition.status,
+          commercialStatus: transition.commercialStatus,
           startDate,
           endDate,
           durationMonths,
@@ -535,8 +524,8 @@ export async function POST(request: NextRequest) {
             .join("\n"),
           renewedFromContractId: trial.id,
           createdById: userId,
-          acceptedAt: isPaymentConfirmed ? new Date() : null,
-          activatedAt: shouldActivateNow ? new Date() : null,
+          acceptedAt: transition.acceptedAt,
+          activatedAt: transition.activatedAt,
         },
         include: {
           student: {
