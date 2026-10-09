@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pickCurrentContract, hasContractStarted } from '../lib/student-dashboard-summary.ts';
+import {
+  pickCurrentContract,
+  hasContractStarted,
+  computeShowContractCta,
+} from '../lib/student-dashboard-summary.ts';
 
 function daysFromNow(days: number): Date {
   const date = new Date();
@@ -163,4 +167,92 @@ test('um contrato PAID futuro não esconde um TRIAL que já expirou quando não 
   // contrato futuro nunca seja escolhido como "atual" antes de começar.
   assert.notEqual(atual?.id, 'paid-futuro');
   assert.equal(atual?.id, 'trial-1');
+});
+
+// computeShowContractCta: CTA "Contratar plano" (Fase 3).
+test('CTA não aparece quando faltam mais de 2 dias para o fim do teste', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'ACTIVE',
+      startDate: daysFromNow(-1),
+      endDate: daysFromNow(6),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), false);
+});
+
+test('CTA aparece a partir de 2 dias antes do fim do teste', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'ACTIVE',
+      startDate: daysFromNow(-5),
+      endDate: daysFromNow(2),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), true);
+});
+
+test('CTA continua aparecendo depois que o teste expira, sem contrato pago', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'ACTIVE',
+      startDate: daysFromNow(-10),
+      endDate: daysFromNow(-3),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), true);
+});
+
+test('CTA some quando já existe um PAID ativo', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'FINALIZED',
+      startDate: daysFromNow(-10),
+      endDate: daysFromNow(-3),
+    },
+    {
+      type: 'PAID',
+      status: 'ACTIVE',
+      startDate: daysFromNow(-2),
+      endDate: daysFromNow(28),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), false);
+});
+
+test('CTA some quando já existe um PAID agendado (AWAITING_PAYMENT ou ACTIVE futuro)', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'ACTIVE',
+      startDate: daysFromNow(-6),
+      endDate: daysFromNow(1),
+    },
+    {
+      type: 'PAID',
+      status: 'AWAITING_PAYMENT',
+      startDate: daysFromNow(2),
+      endDate: daysFromNow(32),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), false);
+});
+
+test('CTA é falso quando não há nenhum TRIAL', () => {
+  assert.equal(computeShowContractCta([]), false);
+  assert.equal(
+    computeShowContractCta([
+      { type: 'PAID', status: 'FINALIZED', startDate: daysFromNow(-40), endDate: daysFromNow(-10) },
+    ]),
+    false
+  );
 });
