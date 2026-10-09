@@ -11,7 +11,7 @@ import {
 } from "@/lib/student-workout-days";
 import { getTrialWindow, TRIAL_MAX_WORKOUTS, formatTrialPeriodSummary } from "@/lib/trial-window";
 import {
-  assertTrialPlanConfigured,
+  selectTrialPlan,
   TrialPlanNotConfiguredError,
   TrialPlanIncompatibleError,
 } from "@/lib/trial-plan";
@@ -235,7 +235,7 @@ function buildTrialWelcomeContent({
     "",
     "Seu cadastro está concluído e seu período de teste de 7 dias já começou.",
     formatTrialPeriodSummary(endDateText, maxWorkouts),
-    `Depois do teste, o plano contratado é de ${paidWorkoutsPerWeek} treino(s) por semana.`,
+    `Se você decidir continuar depois do teste, o plano disponível é de ${paidWorkoutsPerWeek} treino(s) por semana.`,
     "",
     onboardingComplete
       ? "Recebemos sua ficha inicial. Ela será usada pelo professor para conhecer seu momento e preparar uma proposta mais segura e direcionada."
@@ -296,7 +296,7 @@ function buildManagementNewTrialStudentContent({
     `Início do período de teste: ${startDateText}.`,
     `Término previsto: ${endDateText}.`,
     formatTrialPeriodSummary(endDateText, maxWorkouts),
-    `Plano contratado depois do teste: ${paidWorkoutsPerWeek} treino(s) por semana.`,
+    `Plano disponível após o teste: ${paidWorkoutsPerWeek} treino(s) por semana.`,
     "",
     buildOnboardingStatusText({
       onboardingComplete,
@@ -343,14 +343,20 @@ async function getOptionalImage(source: BodySource): Promise<string | null> {
 
 /**
  * Sem fallback silencioso: se nenhum ServicePlan com allowTrial=true e
- * active=true estiver configurado (TrialPlanNotConfiguredError), ou se o
- * único configurado não for compatível com a oferta comercial atual de
- * 3x/semana — por exemplo, um plano antigo de 2x/semana ainda marcado como
- * allowTrial=true (TrialPlanIncompatibleError) — o cadastro deve falhar com
- * um erro operacional claro, nunca prosseguir com dados antigos/incoerentes.
+ * active=true estiver configurado (TrialPlanNotConfiguredError), ou se
+ * nenhum dos configurados for compatível com a oferta comercial atual de
+ * 3x/semana — por exemplo, só existir um plano antigo de 2x/semana ainda
+ * marcado como allowTrial=true (TrialPlanIncompatibleError) — o cadastro
+ * deve falhar com um erro operacional claro, nunca prosseguir com dados
+ * antigos/incoerentes. Se existir um plano antigo incompatível E um plano
+ * novo compatível, o novo é selecionado (ver selectTrialPlan).
  */
 async function getTrialPlan() {
-  const plan = await prisma.servicePlan.findFirst({
+  // Busca TODOS os planos de teste ativos — nunca só o primeiro por
+  // sortOrder/createdAt — para que selectTrialPlan possa escolher
+  // explicitamente o compatível com a oferta atual (3x/semana) mesmo
+  // quando um plano antigo incompatível tem prioridade de ordenação maior.
+  const plans = await prisma.servicePlan.findMany({
     where: {
       allowTrial: true,
       active: true,
@@ -361,7 +367,7 @@ async function getTrialPlan() {
     ],
   });
 
-  return assertTrialPlanConfigured(plan);
+  return selectTrialPlan(plans);
 }
 
 function getClientIp(req: NextRequest): string | null {
@@ -859,7 +865,7 @@ export async function POST(req: NextRequest) {
         "",
         "Seu cadastro está concluído e seu período de teste de 7 dias já começou.",
         formatTrialPeriodSummary(formatDatePtBr(result.endDate), result.totalContractedWorkouts),
-        `Depois do teste, o plano contratado é de ${result.workoutsPerWeek} treino(s) por semana.`,
+        `Se você decidir continuar depois do teste, o plano disponível é de ${result.workoutsPerWeek} treino(s) por semana.`,
         "",
         "Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.",
         "Depois do vínculo, use o chat da plataforma para falar com o professor sobre dúvidas de treino. O WhatsApp fica reservado para contatos específicos da gestão.",
@@ -894,7 +900,7 @@ export async function POST(req: NextRequest) {
                 <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Início: <strong style="color:#f5f5f5;">${safeStartDateText}</strong></p>
                 <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Validade: <strong style="color:#f5f5f5;">${safeEndDateText}</strong></p>
                 <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Treinos incluídos no teste: <strong style="color:#f5f5f5;">até ${result.totalContractedWorkouts}</strong></p>
-                <p style="color:#d4d4d4; font-size:13px; margin:0;">Plano contratado depois do teste: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
+                <p style="color:#d4d4d4; font-size:13px; margin:0;">Plano disponível após o teste: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
               </div>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Agora a gestão vai vincular um professor responsável. Quando a primeira semana estiver pronta, você receberá um novo aviso no painel e por e-mail.</p>
               <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Depois do vínculo, use o chat da plataforma para dúvidas de treino. Assim, o acompanhamento fica registrado e organizado. O WhatsApp fica reservado para contatos específicos da gestão.</p>
@@ -940,7 +946,7 @@ export async function POST(req: NextRequest) {
             `Início do período de teste: ${formatDatePtBr(result.startDate)}.`,
             `Término previsto: ${formatDatePtBr(result.endDate)}.`,
             formatTrialPeriodSummary(formatDatePtBr(result.endDate), result.totalContractedWorkouts),
-            `Plano contratado depois do teste: ${result.workoutsPerWeek} treino(s) por semana.`,
+            `Plano disponível após o teste: ${result.workoutsPerWeek} treino(s) por semana.`,
             "",
             "O aluno já está na janela de início do período de teste.",
             "",
@@ -970,7 +976,7 @@ export async function POST(req: NextRequest) {
                   <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">Início: <strong style="color:#f5f5f5;">${safeStartDateText}</strong></p>
                   <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">Término previsto: <strong style="color:#f5f5f5;">${safeEndDateText}</strong></p>
                   <p style="color:#d4d4d4;font-size:13px;margin:0 0 8px;">Treinos incluídos no teste: <strong style="color:#f5f5f5;">até ${result.totalContractedWorkouts}</strong></p>
-                  <p style="color:#d4d4d4;font-size:13px;margin:0;">Plano contratado depois do teste: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
+                  <p style="color:#d4d4d4;font-size:13px;margin:0;">Plano disponível após o teste: <strong style="color:#f5f5f5;">${result.workoutsPerWeek} treino(s) por semana</strong></p>
                 </div>
                 <p style="color:#d4d4d4;font-size:14px;line-height:1.6;">
                   O aluno já está na janela de início do período de teste.

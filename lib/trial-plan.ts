@@ -46,21 +46,37 @@ export function isTrialPlanCompatibleWithCurrentOffer(
 }
 
 /**
- * Único ponto de seleção/validação da oferta de teste usado no cadastro:
- * falha com erro claro tanto na ausência de oferta quanto numa oferta
- * tecnicamente "allowTrial=true, active=true" mas incompatível com a
- * frequência comercial atual (ex.: um plano antigo de 2x/semana).
+ * Único ponto de seleção/validação da oferta de teste usado no cadastro.
+ * Recebe TODOS os ServicePlan com allowTrial=true e active=true — nunca um
+ * já escolhido de antemão — e decide explicitamente:
+ *
+ * 1. se existir algum compatível com a oferta atual (workoutsPerWeek=3),
+ *    seleciona esse (o de maior prioridade na ordem recebida, tipicamente
+ *    sortOrder/createdAt da consulta);
+ * 2. senão, se existir pelo menos um plano de teste ativo (mas com outra
+ *    frequência — ex.: um plano antigo de 2x/semana), lança
+ *    TrialPlanIncompatibleError;
+ * 3. senão (nenhum plano de teste ativo), lança TrialPlanNotConfiguredError.
+ *
+ * Um plano antigo incompatível nunca impede a seleção de um plano novo
+ * compatível coexistindo na mesma lista.
  */
-export function assertTrialPlanConfigured<T extends TrialPlanLike>(
-  plan: T | null | undefined
+export function selectTrialPlan<T extends TrialPlanLike>(
+  plans: T[] | null | undefined
 ): T {
-  if (!plan) {
+  const candidates = plans || [];
+
+  if (candidates.length === 0) {
     throw new TrialPlanNotConfiguredError();
   }
 
-  if (!isTrialPlanCompatibleWithCurrentOffer(plan)) {
-    throw new TrialPlanIncompatibleError(plan);
+  const compatible = candidates.find((plan) =>
+    isTrialPlanCompatibleWithCurrentOffer(plan)
+  );
+
+  if (compatible) {
+    return compatible;
   }
 
-  return plan;
+  throw new TrialPlanIncompatibleError(candidates[0]);
 }

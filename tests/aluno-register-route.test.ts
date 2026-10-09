@@ -64,3 +64,16 @@ test('cadastro valida compatibilidade da oferta de teste com a frequência comer
   const source = readRouteSource();
   assert.match(source, /TrialPlanIncompatibleError/);
 });
+
+test('cadastro busca TODOS os planos de teste ativos (findMany) e usa selectTrialPlan, não findFirst + validação isolada', () => {
+  const source = readRouteSource();
+  assert.match(source, /servicePlan\.findMany/);
+  assert.match(source, /selectTrialPlan\(/);
+  assert.doesNotMatch(source, /servicePlan\.findFirst/);
+});
+
+test('copy do plano futuro nunca diz "plano contratado" antes de o aluno decidir continuar', () => {
+  const source = readRouteSource();
+  assert.doesNotMatch(source, /plano contratado/i);
+  assert.match(source, /plano dispon[ií]vel/i);
+});
