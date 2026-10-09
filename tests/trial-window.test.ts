@@ -7,6 +7,7 @@ import {
   isTrialWorkoutCapReached,
   shouldShowContractCta,
   formatTrialPeriodSummary,
+  resolvePaidContractStart,
   TRIAL_DURATION_DAYS,
   TRIAL_MAX_WORKOUTS,
 } from '../lib/trial-window.ts';
@@ -131,4 +132,51 @@ test('formatTrialPeriodSummary usa o limite real do teste (3), nunca workoutsPer
 test('formatTrialPeriodSummary aceita um limite explícito diferente do default', () => {
   const texto = formatTrialPeriodSummary('20/11/2026', 5);
   assert.equal(texto, 'Seu período de teste vai até 20/11/2026 e inclui até 5 treino(s).');
+});
+
+// resolvePaidContractStart — exemplo exato da especificação (3.4): teste
+// 10/10 a 16/10; pagamento confirmado 14/10; contrato pago começa 17/10.
+test('pagamento confirmado durante o teste: contrato pago começa no dia civil seguinte ao fim do teste', () => {
+  const window = getTrialWindow(new Date('2026-10-10T12:00:00-03:00'));
+  const pagamento = new Date('2026-10-14T09:00:00-03:00');
+
+  const resolucao = resolvePaidContractStart({ trialEndDate: window.endDate, paymentConfirmedAt: pagamento });
+
+  assert.equal(resolucao.paidDuringTrial, true);
+  assert.equal(resolucao.startDate.toISOString(), '2026-10-17T03:00:00.000Z');
+});
+
+test('os 7 dias de teste continuam valendo integralmente quando o pagamento é antecipado (endDate do teste não muda)', () => {
+  const window = getTrialWindow(new Date('2026-10-10T12:00:00-03:00'));
+  const pagamento = new Date('2026-10-14T09:00:00-03:00');
+
+  resolvePaidContractStart({ trialEndDate: window.endDate, paymentConfirmedAt: pagamento });
+
+  // A janela do teste em si é imutável — resolvePaidContractStart não a altera.
+  assert.equal(window.endCivilDate, '2026-10-16');
+  assert.equal(window.endDate.toISOString(), '2026-10-17T02:59:59.999Z');
+});
+
+test('pagamento confirmado exatamente no último instante do teste ainda preserva os 7 dias (início no dia seguinte)', () => {
+  const window = getTrialWindow(new Date('2026-10-10T12:00:00-03:00'));
+  const pagamento = new Date(window.endDate.getTime());
+
+  const resolucao = resolvePaidContractStart({ trialEndDate: window.endDate, paymentConfirmedAt: pagamento });
+
+  assert.equal(resolucao.paidDuringTrial, true);
+  assert.equal(resolucao.startDate.toISOString(), '2026-10-17T03:00:00.000Z');
+});
+
+test('pagamento confirmado depois de o teste já ter terminado: contrato pago começa na confirmação, não no dia seguinte', () => {
+  const window = getTrialWindow(new Date('2026-10-10T12:00:00-03:00'));
+  const pagamento = new Date(window.endDate.getTime() + 1); // 1ms depois do fim do teste
+  const pagamentoTardio = new Date('2026-10-20T15:30:00-03:00');
+
+  const resolucaoLogoApos = resolvePaidContractStart({ trialEndDate: window.endDate, paymentConfirmedAt: pagamento });
+  assert.equal(resolucaoLogoApos.paidDuringTrial, false);
+  assert.equal(resolucaoLogoApos.startDate.getTime(), pagamento.getTime());
+
+  const resolucaoTardia = resolvePaidContractStart({ trialEndDate: window.endDate, paymentConfirmedAt: pagamentoTardio });
+  assert.equal(resolucaoTardia.paidDuringTrial, false);
+  assert.equal(resolucaoTardia.startDate.getTime(), pagamentoTardio.getTime());
 });

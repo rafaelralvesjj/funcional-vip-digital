@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { filterServicePlansEligibleForPaidContracting } from "@/lib/service-plan-eligibility";
 
 type StudentOption = {
   id: string;
@@ -14,6 +15,14 @@ type StudentOption = {
   active: boolean;
 };
 
+type PlanBillingOption = {
+  id: string;
+  billingCycle: string;
+  amountCents: number;
+  active: boolean;
+  recommended: boolean;
+};
+
 type PlanOption = {
   id: string;
   name: string;
@@ -24,6 +33,7 @@ type PlanOption = {
   allowTrial: boolean;
   trialDays: number;
   active: boolean;
+  billingOptions?: PlanBillingOption[];
 };
 
 type ContractItem = {
@@ -407,12 +417,11 @@ export default function FinanceiroPage() {
   }, [contractsData]);
 
   const paidPlans = useMemo(() => {
-    // allowTrial não indica mais "só serve para teste": no modelo atual, o
-    // mesmo ServicePlan atende teste e contratação paga (diferenciados pela
-    // BillingOption/contrato, não por essa flag). Excluir allowTrial=true
-    // aqui deixaria a conversão sem nenhum plano elegível assim que a oferta
-    // única entrar em produção.
-    return (contractsData?.plans || []).filter((plan) => plan.active !== false);
+    // Regra explícita de elegibilidade (lib/service-plan-eligibility.ts):
+    // modelo novo = ativo com BillingOption ativa; compatibilidade legada =
+    // plano pago antigo ativo (allowTrial=false); um plano antigo só de
+    // teste (allowTrial=true, sem BillingOption) nunca aparece aqui.
+    return filterServicePlansEligibleForPaidContracting(contractsData?.plans || []);
   }, [contractsData]);
 
   const selectedConversionPlan = useMemo(() => {

@@ -44,3 +44,30 @@ test('financeiro: o seletor de plano para conversão não exclui mais planos com
   const source = readFinanceiroPageSource();
   assert.doesNotMatch(source, /filter\(\(plan\)\s*=>\s*!plan\.allowTrial/);
 });
+
+test('financeiro: usa a regra explícita de elegibilidade (lib/service-plan-eligibility), não um filtro ad-hoc', () => {
+  const source = readFinanceiroPageSource();
+  assert.match(source, /from ["']@\/lib\/service-plan-eligibility["']/);
+  assert.match(source, /filterServicePlansEligibleForPaidContracting\(/);
+});
+
+// Preservação dos 7 dias de teste quando o pagamento é antecipado (ver
+// lib/trial-window.ts, resolvePaidContractStart) — comportamento real é
+// testado em tests/trial-window.test.ts; aqui só confirmamos que a rota
+// de fato usa a função central em vez de aceitar startDate/finalizar o
+// TRIAL incondicionalmente quando o pagamento vem confirmado.
+test('convert-trial usa resolvePaidContractStart para decidir o início do contrato pago, não aceita startDate do corpo quando o pagamento está confirmado', () => {
+  const source = readRouteSource();
+  assert.match(source, /from ["']@\/lib\/trial-window["']/);
+  assert.match(source, /resolvePaidContractStart\(/);
+});
+
+test('convert-trial não finaliza o TRIAL automaticamente quando o pagamento é confirmado durante o teste (paidDuringTrial)', () => {
+  const source = readRouteSource();
+  assert.match(source, /shouldActivateNow\s*=\s*isPaymentConfirmed\s*&&\s*!paidDuringTrial/);
+});
+
+test('convert-trial usa um commercialStatus distinto para contrato pago agendado (não confunde com CONTRATO_ATIVO)', () => {
+  const source = readRouteSource();
+  assert.match(source, /CONTRATO_PAGO_AGENDADO/);
+});

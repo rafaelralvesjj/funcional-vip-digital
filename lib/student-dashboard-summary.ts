@@ -167,7 +167,22 @@ function moneyRelevantPayment(payments: any[]) {
   })[0];
 }
 
-function pickCurrentContract(contracts: any[], activeCarePause?: any | null) {
+/**
+ * Um contrato só conta como "em vigor agora" se seu startDate já chegou.
+ * Sem essa checagem, um contrato pago criado com status ACTIVE mas startDate
+ * no futuro (ex.: pagamento antecipado que preserva os 7 dias de teste —
+ * ver resolvePaidContractStart em lib/trial-window.ts) seria tratado como o
+ * contrato atual antes da hora, escondendo o teste que ainda é válido.
+ */
+export function hasContractStarted(
+  contract: { startDate: Date | string },
+  today: Date = new Date()
+): boolean {
+  const startDate = startOfDay(new Date(contract.startDate));
+  return startDate.getTime() <= startOfDay(today).getTime();
+}
+
+export function pickCurrentContract(contracts: any[], activeCarePause?: any | null) {
   if (!contracts?.length) return null;
 
   const today = startOfDay(new Date());
@@ -177,6 +192,7 @@ function pickCurrentContract(contracts: any[], activeCarePause?: any | null) {
     const isNotExpired = endDate.getTime() >= today.getTime();
 
     return (
+      hasContractStarted(contract, today) &&
       isNotExpired &&
       ["ACTIVE", "AWAITING_PAYMENT", "SUSPENDED"].includes(contract.status)
     );

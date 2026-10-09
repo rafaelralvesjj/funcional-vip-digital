@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
 import { normalizePreferredWorkoutDays } from "@/lib/student-workout-days";
+import { resolvePaidContractStart } from "@/lib/trial-window";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -135,6 +136,10 @@ async function notifyStudentAboutConversion({
   authorId: string;
 }) {
   const isPaid = String(payment?.status || "").toUpperCase() === "PAGO";
+  // Pagamento confirmado, mas o contrato só começa a valer depois do fim do
+  // teste (ver resolvePaidContractStart em lib/trial-window.ts) — o aluno
+  // não pode ler isso como "já está ativo agora".
+  const isScheduled = paidContract.commercialStatus === "CONTRATO_PAGO_AGENDADO";
   const student = paidContract.student;
   const studentName = student?.name || "aluno";
   const planName = paidContract.plan?.name || "plano pago";
@@ -145,26 +150,14 @@ async function notifyStudentAboutConversion({
     userAuthId: student?.userAuthId,
   });
 
-  const title = isPaid
-    ? "Sua continuidade está confirmada"
-    : "Seu plano está pronto para continuar";
+  const title = !isPaid
+    ? "Seu plano está pronto para continuar"
+    : isScheduled
+      ? "Pagamento confirmado — continuidade programada"
+      : "Sua continuidade está confirmada";
 
-  const content = isPaid
+  const content = !isPaid
     ? [
-        `Oi, ${studentName}! Temos uma boa notícia.`,
-        "",
-        `Sua experiência foi convertida para o plano ${planName}, e o contrato já está ativo.`,
-        `Novo período de acompanhamento: ${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}.`,
-        `Programação prevista: ${paidContract.workoutsPerWeek} treino(s) por semana e ${paidContract.workoutsPerMonth} treino(s) por mês.`,
-        "",
-        "Seu histórico, suas conversas e sua evolução continuam salvos. Você pode seguir acompanhando os treinos normalmente pelo painel.",
-        "Para dúvidas de treino, use o chat da plataforma. Para assuntos financeiros, fale com a gestão pelo canal indicado por ela.",
-        "",
-        "Que bom seguir com você nessa jornada!",
-        "Gestão do Funcional UP Digital",
-        "Mensagem automática de confirmação enviada pela plataforma.",
-      ].join("\n")
-    : [
         `Oi, ${studentName}!`,
         "",
         `A gestão deixou seu plano ${planName} preparado para dar continuidade ao acompanhamento.`,
@@ -181,7 +174,36 @@ async function notifyStudentAboutConversion({
         "Mensagem automática de acompanhamento comercial enviada pela plataforma.",
       ]
         .filter(Boolean)
-        .join("\n");
+        .join("\n")
+    : isScheduled
+      ? [
+          `Oi, ${studentName}! Temos uma boa notícia.`,
+          "",
+          `Seu pagamento foi confirmado e sua continuidade no plano ${planName} está garantida.`,
+          `Para você aproveitar o período de teste até o fim, o novo contrato começa em ${formatDatePtBr(paidContract.startDate)} e vai até ${formatDatePtBr(paidContract.endDate)}.`,
+          "Até lá, seu período de teste continua valendo normalmente, sem nenhuma mudança.",
+          `Programação prevista a partir do início do contrato: ${paidContract.workoutsPerWeek} treino(s) por semana.`,
+          "",
+          "Seu histórico, suas conversas e sua evolução continuam salvos.",
+          "",
+          "Que bom seguir com você nessa jornada!",
+          "Gestão do Funcional UP Digital",
+          "Mensagem automática de confirmação enviada pela plataforma.",
+        ].join("\n")
+      : [
+          `Oi, ${studentName}! Temos uma boa notícia.`,
+          "",
+          `Sua experiência foi convertida para o plano ${planName}, e o contrato já está ativo.`,
+          `Novo período de acompanhamento: ${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}.`,
+          `Programação prevista: ${paidContract.workoutsPerWeek} treino(s) por semana e ${paidContract.workoutsPerMonth} treino(s) por mês.`,
+          "",
+          "Seu histórico, suas conversas e sua evolução continuam salvos. Você pode seguir acompanhando os treinos normalmente pelo painel.",
+          "Para dúvidas de treino, use o chat da plataforma. Para assuntos financeiros, fale com a gestão pelo canal indicado por ela.",
+          "",
+          "Que bom seguir com você nessa jornada!",
+          "Gestão do Funcional UP Digital",
+          "Mensagem automática de confirmação enviada pela plataforma.",
+        ].join("\n");
 
   const notificationTasks: Promise<unknown>[] = [
     prisma.notice.create({
@@ -205,25 +227,8 @@ async function notifyStudentAboutConversion({
 
     const text = `${content}\n\nAcessar meu painel: ${alunoUrl}`;
 
-    const html = isPaid
+    const html = !isPaid
       ? `
-        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
-          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
-            <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
-            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Temos uma boa notícia.</p>
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Sua experiência foi convertida para o plano <strong style="color:#f5f5f5;">${safePlanName}</strong>, e seu contrato já está ativo.</p>
-            <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
-              <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Período: <strong style="color:#f5f5f5;">${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}</strong></p>
-              <p style="color:#d4d4d4; font-size:13px; margin:0;">Programação: <strong style="color:#f5f5f5;">${paidContract.workoutsPerWeek} treino(s) por semana</strong></p>
-            </div>
-            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Seu histórico, suas conversas e sua evolução continuam salvos. Para dúvidas de treino, use o chat da plataforma.</p>
-            <a href="${safeAlunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meu painel</a>
-            <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional UP Digital</p>
-            <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de confirmação enviada pela plataforma.</p>
-          </div>
-        </div>
-      `
-      : `
         <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
           <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
             <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
@@ -240,6 +245,42 @@ async function notifyStudentAboutConversion({
             <a href="${safeAlunoUrl}" style="display:inline-block; color:#00A19C; font-weight:bold; font-size:13px; margin-top:8px;">Acessar meu painel</a>
             <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional UP Digital</p>
             <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de acompanhamento comercial enviada pela plataforma.</p>
+          </div>
+        </div>
+      `
+      : isScheduled
+        ? `
+        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+            <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
+            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Temos uma boa notícia.</p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Seu pagamento foi confirmado e sua continuidade no plano <strong style="color:#f5f5f5;">${safePlanName}</strong> está garantida. Para você aproveitar o período de teste até o fim, o novo contrato só começa depois.</p>
+            <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
+              <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Novo contrato começa em: <strong style="color:#f5f5f5;">${formatDatePtBr(paidContract.startDate)}</strong></p>
+              <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Vai até: <strong style="color:#f5f5f5;">${formatDatePtBr(paidContract.endDate)}</strong></p>
+              <p style="color:#d4d4d4; font-size:13px; margin:0;">Programação a partir do início: <strong style="color:#f5f5f5;">${paidContract.workoutsPerWeek} treino(s) por semana</strong></p>
+            </div>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Até lá, seu período de teste continua valendo normalmente, sem nenhuma mudança. Seu histórico, suas conversas e sua evolução continuam salvos.</p>
+            <a href="${safeAlunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meu painel</a>
+            <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional UP Digital</p>
+            <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de confirmação enviada pela plataforma.</p>
+          </div>
+        </div>
+      `
+        : `
+        <div style="font-family: Arial, sans-serif; background:#0a0a0a; padding:24px;">
+          <div style="max-width:560px; margin:0 auto; background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:24px;">
+            <h2 style="color:#00A19C; margin:0 0 16px;">${safeTitle}</h2>
+            <p style="color:#f5f5f5; font-size:15px; line-height:1.5;">Oi, <strong>${safeStudentName}</strong>! Temos uma boa notícia.</p>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Sua experiência foi convertida para o plano <strong style="color:#f5f5f5;">${safePlanName}</strong>, e seu contrato já está ativo.</p>
+            <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:14px; margin:16px 0;">
+              <p style="color:#d4d4d4; font-size:13px; margin:0 0 8px;">Período: <strong style="color:#f5f5f5;">${formatDatePtBr(paidContract.startDate)} a ${formatDatePtBr(paidContract.endDate)}</strong></p>
+              <p style="color:#d4d4d4; font-size:13px; margin:0;">Programação: <strong style="color:#f5f5f5;">${paidContract.workoutsPerWeek} treino(s) por semana</strong></p>
+            </div>
+            <p style="color:#d4d4d4; font-size:14px; line-height:1.6;">Seu histórico, suas conversas e sua evolução continuam salvos. Para dúvidas de treino, use o chat da plataforma.</p>
+            <a href="${safeAlunoUrl}" style="display:inline-block; background:#00A19C; color:#0a0a0a; text-decoration:none; font-weight:bold; font-size:14px; padding:12px 18px; border-radius:10px;">Acessar meu painel</a>
+            <p style="color:#d4d4d4; font-size:13px; margin-top:22px;">Gestão do Funcional UP Digital</p>
+            <p style="color:#6b6b6b; font-size:11px; margin-top:4px;">Mensagem automática de confirmação enviada pela plataforma.</p>
           </div>
         </div>
       `;
@@ -282,7 +323,12 @@ export async function POST(request: NextRequest) {
     const billingOptionId = String(body?.billingOptionId || "").trim() || null;
     let durationMonths = Math.max(toInt(body?.durationMonths, 1), 1);
     let priceCents = toInt(body?.priceCents, 0);
-    const startDate = parseDate(body?.startDate);
+    // Só usado quando o pagamento ainda não está confirmado (contrato criado
+    // aguardando pagamento, com data planejada pelo gestor). Quando o
+    // pagamento já vem confirmado (PAGO), a data real é sempre calculada por
+    // resolvePaidContractStart, nunca aceita do corpo da requisição — ver
+    // mais abaixo.
+    const requestedStartDate = parseDate(body?.startDate);
     const dueDate = parseDate(body?.dueDate);
     const paymentMethod = String(body?.paymentMethod || "PIX").toUpperCase();
     const paymentStatus = String(body?.paymentStatus || "EM_ABERTO").toUpperCase();
@@ -393,6 +439,24 @@ export async function POST(request: NextRequest) {
       durationMonths = billingOption.billingCycle === "ANNUAL" ? 12 : 1;
     }
 
+    // Nunca encurtar o teste quando o pagamento é confirmado antes do fim
+    // dele — ver especificação Fase A, 3.4. isPaymentConfirmed controla o
+    // ContractPayment (foi pago ou não); paidDuringTrial decide quando o
+    // contrato pago realmente começa a valer, preservando os 7 dias de
+    // teste integralmente quando o pagamento for antecipado.
+    const isPaymentConfirmed = paymentStatus === "PAGO";
+    let startDate = requestedStartDate;
+    let paidDuringTrial = false;
+
+    if (isPaymentConfirmed) {
+      const resolution = resolvePaidContractStart({
+        trialEndDate: trial.endDate,
+        paymentConfirmedAt: new Date(),
+      });
+      startDate = resolution.startDate;
+      paidDuringTrial = resolution.paidDuringTrial;
+    }
+
     const endDate = addMonthsMinusOneDay(startDate, durationMonths);
 
     const preferredWorkoutDays = normalizePreferredWorkoutDays(trial.student.preferredWorkoutDays);
@@ -411,7 +475,12 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const shouldActivateNow = paymentStatus === "PAGO";
+      // shouldActivateNow = contrato pago realmente em vigor agora: pagamento
+      // confirmado E não adiado para preservar o teste. Quando paidDuringTrial
+      // é true, o pagamento está confirmado mas o contrato só começa a valer
+      // no dia seguinte ao fim do teste — por isso o TRIAL em curso NÃO pode
+      // ser finalizado agora (ele continua valendo até seu próprio endDate).
+      const shouldActivateNow = isPaymentConfirmed && !paidDuringTrial;
 
       if (shouldActivateNow) {
         await tx.studentContract.updateMany({
@@ -434,8 +503,17 @@ export async function POST(request: NextRequest) {
           professorId: trial.professorId,
           contractNumber: contractNumber("CTR"),
           type: "PAID",
-          status: shouldActivateNow ? "ACTIVE" : "AWAITING_PAYMENT",
-          commercialStatus: shouldActivateNow ? "CONTRATO_ATIVO" : "AGUARDANDO_PAGAMENTO",
+          // status permanece ACTIVE mesmo quando paidDuringTrial=true (início
+          // no futuro): isso é o que já faz as consultas por data (ex.:
+          // findActiveWorkoutContract, hasContractStarted) tratarem o
+          // contrato corretamente assim que seu próprio startDate chegar,
+          // sem depender de um cron para "promover" o status depois.
+          status: isPaymentConfirmed ? "ACTIVE" : "AWAITING_PAYMENT",
+          commercialStatus: !isPaymentConfirmed
+            ? "AGUARDANDO_PAGAMENTO"
+            : paidDuringTrial
+              ? "CONTRATO_PAGO_AGENDADO"
+              : "CONTRATO_ATIVO",
           startDate,
           endDate,
           durationMonths,
@@ -448,13 +526,16 @@ export async function POST(request: NextRequest) {
           notes: [
             "Contrato criado pela conversão da experiência gratuita.",
             `Experiência de origem: ${trial.contractNumber || trial.id}.`,
+            paidDuringTrial
+              ? `Pagamento confirmado antes do fim do teste: início programado para ${formatDatePtBr(startDate)}, preservando os 7 dias de teste até ${formatDatePtBr(trial.endDate)}.`
+              : null,
             notes || null,
           ]
             .filter(Boolean)
             .join("\n"),
           renewedFromContractId: trial.id,
           createdById: userId,
-          acceptedAt: shouldActivateNow ? new Date() : null,
+          acceptedAt: isPaymentConfirmed ? new Date() : null,
           activatedAt: shouldActivateNow ? new Date() : null,
         },
         include: {
@@ -520,7 +601,9 @@ export async function POST(request: NextRequest) {
           resolvedById: userId,
           resolutionNotes: shouldActivateNow
             ? "Experiência convertida para contrato pago ativo."
-            : "Contrato pago criado e aguardando pagamento.",
+            : paidDuringTrial
+              ? "Pagamento confirmado: contrato pago agendado para começar após o fim do teste."
+              : "Contrato pago criado e aguardando pagamento.",
         },
       });
 
@@ -528,6 +611,7 @@ export async function POST(request: NextRequest) {
         paidContract,
         payment,
         activatedNow: shouldActivateNow,
+        paidDuringTrial,
       };
     });
 
@@ -545,7 +629,9 @@ export async function POST(request: NextRequest) {
       ok: true,
       message: result.activatedNow
         ? "Experiência convertida em contrato pago, pagamento marcado como pago e aluno notificado."
-        : "Contrato pago criado aguardando pagamento. A experiência permanece ativa até o pagamento ser confirmado ou até vencer. Aluno notificado sobre o pagamento.",
+        : result.paidDuringTrial
+          ? `Pagamento confirmado antes do fim do teste: contrato pago agendado para começar em ${formatDatePtBr(result.paidContract.startDate)}, preservando os 7 dias de teste. Aluno notificado.`
+          : "Contrato pago criado aguardando pagamento. A experiência permanece ativa até o pagamento ser confirmado ou até vencer. Aluno notificado sobre o pagamento.",
       contract: result.paidContract,
       payment: result.payment,
     });

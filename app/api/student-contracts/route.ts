@@ -167,6 +167,15 @@ function normalizePlan(plan: any) {
     allowTrial: plan.allowTrial,
     trialDays: plan.trialDays,
     active: plan.active,
+    // Exposto para quem for decidir elegibilidade para contratação/conversão
+    // paga (ver lib/service-plan-eligibility.ts) sem depender de allowTrial.
+    billingOptions: (plan.billingOptions || []).map((option: any) => ({
+      id: option.id,
+      billingCycle: option.billingCycle,
+      amountCents: option.amountCents,
+      active: option.active,
+      recommended: option.recommended,
+    })),
   };
 }
 
@@ -375,6 +384,9 @@ export async function GET(request: NextRequest) {
       prisma.servicePlan.findMany({
         where: {
           active: true,
+        },
+        include: {
+          billingOptions: true,
         },
         orderBy: [
           {
