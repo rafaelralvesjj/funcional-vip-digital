@@ -1,15 +1,23 @@
 /**
  * Cria/atualiza a oferta comercial atual (3 treinos/semana + 7 dias de
- * teste + mensal R$9,90/anual R$99,90 recomendado) e desativa, só para
- * novas vendas, qualquer outro ServicePlan ativo — sem apagar nada.
- *
- * Idempotente: pode ser executado quantas vezes for preciso, em qualquer
- * ambiente. Nunca roda sozinho — é um passo manual e explícito, do mesmo
- * jeito que db:migrate:deploy: primeiro contra o banco do Preview, depois
- * (só com aprovação) contra produção.
+ * teste + mensal R$9,90/anual R$99,90 recomendado). Idempotente: pode ser
+ * executado quantas vezes for preciso, em qualquer ambiente. Nunca roda
+ * sozinho — é um passo manual e explícito, do mesmo jeito que
+ * db:migrate:deploy: primeiro contra o banco do Preview, depois (só com
+ * aprovação) contra produção.
  *
  *   DATABASE_URL="<preview>" npx tsx scripts/setup-trial-offer.ts
  *   DATABASE_URL="<producao>" npx tsx scripts/setup-trial-offer.ts
+ *
+ * Por padrão NÃO desativa nenhum ServicePlan antigo: app/api/student-
+ * contracts/convert-trial/route.ts ainda não tem o fluxo de contratação via
+ * Asaas/BillingOption testado em produção, e desativar os planos pagos
+ * antigos agora deixaria a conversão de teste->pago sem nenhuma opção
+ * coerente para quem ainda depende do fluxo manual. A desativação já está
+ * implementada, mas só roda com a flag --deactivate-old-plans, para ser
+ * ligada deliberadamente quando o novo fluxo estiver operacional e testado:
+ *
+ *   DATABASE_URL="<producao>" npx tsx scripts/setup-trial-offer.ts --deactivate-old-plans
  *
  * Reaproveita as constantes já usadas pela lógica do teste (lib/trial-plan.ts,
  * lib/trial-window.ts) para que a oferta semeada aqui nunca saia de sincronia
@@ -29,6 +37,8 @@ const OFFER_NAME = "Funcional UP — 3 treinos por semana";
 const WORKOUTS_PER_MONTH = 12;
 const MONTHLY_PRICE_CENTS = 990;
 const ANNUAL_PRICE_CENTS = 9990;
+const BILLING_PROVIDER = "ASAAS";
+const DEACTIVATE_OLD_PLANS = process.argv.includes("--deactivate-old-plans");
 
 function describeDatabaseTarget(): string {
   const url = process.env.DATABASE_URL;
@@ -107,6 +117,7 @@ async function main() {
           amountCents: option.amountCents,
           recommended: option.recommended,
           active: true,
+          provider: BILLING_PROVIDER,
         },
         create: {
           servicePlanId: plan.id,
@@ -114,30 +125,41 @@ async function main() {
           amountCents: option.amountCents,
           recommended: option.recommended,
           active: true,
+          provider: BILLING_PROVIDER,
         },
       });
       console.log(
         `  Opção ${option.billingCycle}: R$ ${(option.amountCents / 100).toFixed(2)}${
           option.recommended ? " (recomendada)" : ""
-        } OK.`
+        } [${BILLING_PROVIDER}] OK.`
       );
     }
 
-    // Desativa para NOVAS vendas qualquer outro plano ativo — nunca apaga.
-    // Contratos existentes guardam sua própria cópia de workoutsPerWeek/
-    // priceCents/etc. no momento da criação (StudentContract), então
-    // desativar o ServicePlan não afeta contratos já ativos; só tira o
-    // plano antigo das listagens/pickers usados para criar contratos novos.
-    const deactivated = await tx.servicePlan.updateMany({
-      where: {
-        id: { not: plan.id },
-        active: true,
-      },
-      data: { active: false },
-    });
-    console.log(
-      `${deactivated.count} plano(s) antigo(s) desativado(s) para novas vendas (nenhum apagado).`
-    );
+    if (DEACTIVATE_OLD_PLANS) {
+      // Desativa para NOVAS vendas qualquer outro plano ativo — nunca apaga.
+      // Contratos existentes guardam sua própria cópia de workoutsPerWeek/
+      // priceCents/etc. no momento da criação (StudentContract), então
+      // desativar o ServicePlan não afeta contratos já ativos; só tira o
+      // plano antigo das listagens/pickers usados para criar contratos novos.
+      const deactivated = await tx.servicePlan.updateMany({
+        where: {
+          id: { not: plan.id },
+          active: true,
+        },
+        data: { active: false },
+      });
+      console.log(
+        `${deactivated.count} plano(s) antigo(s) desativado(s) para novas vendas (nenhum apagado).`
+      );
+    } else {
+      console.log(
+        "Planos antigos NÃO foram desativados (padrão) — o fluxo de conversão " +
+          "teste->pago ainda não está pronto para o novo modelo (ver " +
+          "app/api/student-contracts/convert-trial/route.ts). Rode de novo com " +
+          "--deactivate-old-plans quando o fluxo via Asaas/BillingOption estiver " +
+          "operacional e testado."
+      );
+    }
 
     return plan;
   });

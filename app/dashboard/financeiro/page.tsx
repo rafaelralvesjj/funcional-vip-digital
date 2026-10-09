@@ -407,7 +407,12 @@ export default function FinanceiroPage() {
   }, [contractsData]);
 
   const paidPlans = useMemo(() => {
-    return (contractsData?.plans || []).filter((plan) => !plan.allowTrial && plan.active !== false);
+    // allowTrial não indica mais "só serve para teste": no modelo atual, o
+    // mesmo ServicePlan atende teste e contratação paga (diferenciados pela
+    // BillingOption/contrato, não por essa flag). Excluir allowTrial=true
+    // aqui deixaria a conversão sem nenhum plano elegível assim que a oferta
+    // única entrar em produção.
+    return (contractsData?.plans || []).filter((plan) => plan.active !== false);
   }, [contractsData]);
 
   const selectedConversionPlan = useMemo(() => {

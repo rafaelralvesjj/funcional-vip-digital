@@ -279,10 +279,10 @@ export async function POST(request: NextRequest) {
 
     const trialContractId = String(body?.trialContractId || "").trim();
     const planId = String(body?.planId || "").trim();
-    const durationMonths = Math.max(toInt(body?.durationMonths, 1), 1);
+    const billingOptionId = String(body?.billingOptionId || "").trim() || null;
+    let durationMonths = Math.max(toInt(body?.durationMonths, 1), 1);
+    let priceCents = toInt(body?.priceCents, 0);
     const startDate = parseDate(body?.startDate);
-    const endDate = addMonthsMinusOneDay(startDate, durationMonths);
-    const priceCents = toInt(body?.priceCents, 0);
     const dueDate = parseDate(body?.dueDate);
     const paymentMethod = String(body?.paymentMethod || "PIX").toUpperCase();
     const paymentStatus = String(body?.paymentStatus || "EM_ABERTO").toUpperCase();
@@ -304,9 +304,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (priceCents <= 0) {
+    if (!billingOptionId && priceCents <= 0) {
       return NextResponse.json(
-        { error: "Informe o valor do plano pago." },
+        { error: "Informe o valor do plano pago ou selecione uma opção de cobrança." },
         { status: 400 }
       );
     }
@@ -366,12 +366,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (paidPlan.allowTrial) {
-      return NextResponse.json(
-        { error: "Selecione um plano pago, não o plano de experiência grátis." },
-        { status: 400 }
-      );
+    // ServicePlan.allowTrial não distingue mais "plano de teste" de "plano
+    // pago": no modelo atual, um único ServicePlan atende as duas pontas
+    // (teste e contratação), diferenciadas pela ServicePlanBillingOption
+    // escolhida e pelo StudentContract.type ("TRIAL" vs "PAID") — nunca por
+    // essa flag. Rejeitar aqui bloquearia toda conversão assim que a oferta
+    // única (allowTrial=true) entrar em produção.
+
+    if (billingOptionId) {
+      const billingOption = await prisma.servicePlanBillingOption.findUnique({
+        where: { id: billingOptionId },
+      });
+
+      if (
+        !billingOption ||
+        billingOption.servicePlanId !== paidPlan.id ||
+        billingOption.active === false
+      ) {
+        return NextResponse.json(
+          { error: "Opção de cobrança inválida para o plano selecionado." },
+          { status: 400 }
+        );
+      }
+
+      priceCents = billingOption.amountCents;
+      durationMonths = billingOption.billingCycle === "ANNUAL" ? 12 : 1;
     }
+
+    const endDate = addMonthsMinusOneDay(startDate, durationMonths);
 
     const preferredWorkoutDays = normalizePreferredWorkoutDays(trial.student.preferredWorkoutDays);
     if (
