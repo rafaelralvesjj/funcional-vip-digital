@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { sendEmail } from "@/lib/sendEmail";
+import { activatePaidContractFromTrial } from "@/lib/contract-activation";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -116,7 +117,15 @@ function getStudentCommercialStatus(contract: {
   return "SEM_CONTRATO_ATIVO";
 }
 
-async function activateContractAfterPayment(tx: any, contractId: string) {
+/**
+ * Ativação genérica (contratos não originados de uma experiência) continua
+ * aqui. Quando o contrato é PAID e vem de um TRIAL (renewedFromContractId),
+ * a decisão é delegada a activatePaidContractFromTrial (lib/contract-activation.ts)
+ * — a mesma função pensada para o futuro webhook do Asaas, para nunca
+ * reimplementar a regra de preservar os 7 dias de teste quando o pagamento
+ * é antecipado.
+ */
+async function activateContractAfterPayment(tx: any, contractId: string, paidAt?: Date) {
   const contract = await tx.studentContract.findUnique({
     where: {
       id: contractId,
@@ -125,6 +134,10 @@ async function activateContractAfterPayment(tx: any, contractId: string) {
 
   if (!contract) {
     throw new Error("Contrato não encontrado para ativação.");
+  }
+
+  if (contract.type === "PAID" && contract.renewedFromContractId) {
+    return activatePaidContractFromTrial(tx, contract, paidAt ?? new Date());
   }
 
   const now = new Date();
@@ -639,6 +652,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Contrato não encontrado." }, { status: 404 });
     }
 
+    const paidAt = status === "PAGO" ? new Date() : null;
+
     const payment = await prisma.$transaction(async (tx) => {
       const created = await tx.contractPayment.create({
         data: {
@@ -646,7 +661,7 @@ export async function POST(request: NextRequest) {
           studentId: contract.studentId,
           amountCents,
           dueDate,
-          paidAt: status === "PAGO" ? new Date() : null,
+          paidAt,
           status,
           method,
           provider,
@@ -696,7 +711,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (status === "PAGO" && activateContract) {
-        await activateContractAfterPayment(tx, contractId);
+        await activateContractAfterPayment(tx, contractId, paidAt ?? undefined);
       }
 
       return created;
@@ -828,7 +843,7 @@ export async function PUT(request: NextRequest) {
       });
 
       if (status === "PAGO" && activateContract) {
-        await activateContractAfterPayment(tx, existing.contractId);
+        await activateContractAfterPayment(tx, existing.contractId, paidAt ?? undefined);
       }
 
       return updated;

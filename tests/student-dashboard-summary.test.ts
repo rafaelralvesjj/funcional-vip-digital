@@ -89,6 +89,54 @@ test('pagamento tardio (contrato PAID começa imediatamente) também é selecion
   assert.equal(atual?.id, 'paid-imediato');
 });
 
+// Caso pedido na revisão: o gestor pode criar o contrato PAID com pagamento
+// ainda EM_ABERTO (AWAITING_PAYMENT) enquanto o aluno está em teste. Isso
+// não pode fazer o aluno ver "aguardando pagamento" com o teste ainda
+// rolando — o TRIAL válido continua sendo o contrato atual até terminar.
+test('TRIAL válido + PAID AWAITING_PAYMENT: o TRIAL continua sendo o contrato atual', () => {
+  const trial = {
+    id: 'trial-1',
+    type: 'TRIAL',
+    status: 'ACTIVE',
+    startDate: daysFromNow(-5),
+    endDate: daysFromNow(2), // teste ainda válido por mais 2 dias
+  };
+
+  const paidAguardandoPagamento = {
+    id: 'paid-pendente',
+    type: 'PAID',
+    status: 'AWAITING_PAYMENT',
+    startDate: daysFromNow(-1), // já "começaria" hoje, mas o pagamento não foi confirmado
+    endDate: daysFromNow(29),
+  };
+
+  const atual = pickCurrentContract([paidAguardandoPagamento, trial]);
+
+  assert.equal(atual?.id, 'trial-1');
+});
+
+test('depois que o TRIAL termina, o PAID AWAITING_PAYMENT passa a ser o contrato atual (AGUARDANDO_PAGAMENTO)', () => {
+  const trialExpirado = {
+    id: 'trial-1',
+    type: 'TRIAL',
+    status: 'ACTIVE', // ainda não processado pelo cron, mas já expirou
+    startDate: daysFromNow(-10),
+    endDate: daysFromNow(-3),
+  };
+
+  const paidAguardandoPagamento = {
+    id: 'paid-pendente',
+    type: 'PAID',
+    status: 'AWAITING_PAYMENT',
+    startDate: daysFromNow(-1),
+    endDate: daysFromNow(29),
+  };
+
+  const atual = pickCurrentContract([paidAguardandoPagamento, trialExpirado]);
+
+  assert.equal(atual?.id, 'paid-pendente');
+});
+
 test('um contrato PAID futuro não esconde um TRIAL que já expirou quando não há mais nenhum contrato vigente', () => {
   // Caso de borda: TRIAL expirado e PAID ainda não começou. Nenhum dos
   // dois está "em vigor agora" — pickCurrentContract cai no fallback
