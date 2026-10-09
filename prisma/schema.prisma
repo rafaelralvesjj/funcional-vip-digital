@@ -344,9 +344,28 @@ model ServicePlan {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   contracts StudentContract[]
+  billingOptions ServicePlanBillingOption[]
 
   @@index([active])
   @@map("service_plans")
+}
+
+model ServicePlanBillingOption {
+  id            String   @id @default(uuid())
+  servicePlanId String   @map("service_plan_id")
+  billingCycle  String   @map("billing_cycle")
+  amountCents   Int      @map("amount_cents")
+  active        Boolean  @default(true)
+  recommended   Boolean  @default(false)
+  provider      String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  servicePlan ServicePlan @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+
+  @@index([servicePlanId])
+  @@index([active])
+  @@map("service_plan_billing_options")
 }
 
 model StudentContract {
