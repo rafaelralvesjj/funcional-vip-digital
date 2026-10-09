@@ -363,7 +363,8 @@ model ServicePlanBillingOption {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  servicePlan ServicePlan @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+  servicePlan ServicePlan       @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+  contracts   StudentContract[]
 
   @@unique([servicePlanId, billingCycle])
   @@index([servicePlanId])
@@ -397,15 +398,25 @@ model StudentContract {
   suspendedAt             DateTime? @map("suspended_at")
   renewedFromContractId   String?   @map("renewed_from_contract_id")
   createdById             String?   @map("created_by_id")
+  // Auditoria estruturada da oferta/aceite no momento da contratação (Fase 3,
+  // revisão): billingOptionId referencia a opção realmente escolhida;
+  // billingCycle copia o ciclo da opção para o histórico sobreviver mesmo se
+  // a opção for desativada depois. termsVersion/termsAcceptedAt (timestamp
+  // do servidor, nunca do cliente) registram o aceite fora de `notes`.
+  billingOptionId         String?   @map("billing_option_id")
+  billingCycle            String?   @map("billing_cycle")
+  termsVersion            String?   @map("terms_version")
+  termsAcceptedAt         DateTime? @map("terms_accepted_at")
   createdAt               DateTime  @default(now()) @map("created_at")
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
-  student             Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  plan                ServicePlan?      @relation(fields: [planId], references: [id])
-  professor           User?             @relation("ContractProfessor", fields: [professorId], references: [id])
-  createdBy           User?             @relation("ContractCreatedBy", fields: [createdById], references: [id])
-  renewedFromContract StudentContract?  @relation("ContractRenewal", fields: [renewedFromContractId], references: [id])
-  renewedContracts    StudentContract[] @relation("ContractRenewal")
+  student             Student                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  plan                ServicePlan?              @relation(fields: [planId], references: [id])
+  billingOption       ServicePlanBillingOption? @relation(fields: [billingOptionId], references: [id])
+  professor           User?                     @relation("ContractProfessor", fields: [professorId], references: [id])
+  createdBy           User?                     @relation("ContractCreatedBy", fields: [createdById], references: [id])
+  renewedFromContract StudentContract?          @relation("ContractRenewal", fields: [renewedFromContractId], references: [id])
+  renewedContracts    StudentContract[]         @relation("ContractRenewal")
   workoutPlans        WorkoutPlan[]
   workouts            Workout[]
   careEvents          StudentCareEvent[]
@@ -417,8 +428,16 @@ model StudentContract {
   @@index([status])
   @@index([commercialStatus])
   @@index([startDate, endDate])
+  @@index([billingOptionId])
   @@map("student_contracts")
 }
+
+// Trava de concorrência para o checkout self-service (Fase 3, revisão):
+// índice único parcial, criado via SQL puro na migration (não representável
+// no DSL do Prisma), garantindo no Postgres que um aluno nunca tenha dois
+// StudentContract PAID em AWAITING_PAYMENT ao mesmo tempo — duas requisições
+// de checkout simultâneas para o mesmo aluno colidem nesse índice, e só uma
+// consegue reservar o slot antes de chamar a Asaas (ver lib/checkout-reservation.ts).
 
 
 model ContractPayment {

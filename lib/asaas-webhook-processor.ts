@@ -1,13 +1,41 @@
-import { activatePaidContractFromTrial, type ContractTx } from "./contract-activation";
+import { activatePaidContractFromTrial, extendMonthlyAccessPeriod, type ContractTx } from "./contract-activation";
 import type { NormalizedAsaasWebhookEvent } from "./asaas-webhook";
 
 export type AsaasWebhookProcessorTx = ContractTx & {
   contractPayment: {
     findUnique: (args: { where: { providerPaymentId: string } }) => Promise<any>;
-    findFirst: (args: { where: { externalReference: string } }) => Promise<any>;
+    findFirst: (args: { where: Record<string, any> }) => Promise<any>;
+    create: (args: { data: any }) => Promise<any>;
     update: (args: { where: { id: string }; data: any }) => Promise<any>;
   };
 };
+
+export type ProcessWebhookResult = {
+  handled: boolean;
+  reason?:
+    | "payment_not_found"
+    | "contract_not_found"
+    | "payment_not_open"
+    | "event_type_ignored";
+};
+
+/**
+ * Razões que significam "ainda não temos o registro local correspondente" —
+ * quase sempre uma corrida entre o webhook chegando e a nossa própria
+ * persistência (checkout) terminando de gravar. NUNCA podem ser tratadas
+ * como "evento resolvido": a rota (app/api/webhooks/asaas/route.ts) usa isto
+ * para decidir não marcar o WebhookEvent como processado e devolver um
+ * status que faz a Asaas reentregar o webhook mais tarde — perder um desses
+ * eventos significa um pagamento confirmado que nunca ativa o contrato.
+ */
+const RETRIABLE_REASONS = new Set<ProcessWebhookResult["reason"]>([
+  "payment_not_found",
+  "contract_not_found",
+]);
+
+export function isRetriableWebhookReason(reason: ProcessWebhookResult["reason"] | undefined): boolean {
+  return Boolean(reason && RETRIABLE_REASONS.has(reason));
+}
 
 /**
  * Lógica de negócio do webhook, separada da orquestração de idempotência
@@ -15,76 +43,189 @@ export type AsaasWebhookProcessorTx = ContractTx & {
  * `tx` (sem banco), do mesmo jeito que activatePaidContractFromTrial em
  * tests/contract-activation.test.ts.
  *
- * Confirmação de pagamento (PAYMENT_CONFIRMED/PAYMENT_RECEIVED): localiza o
- * ContractPayment por providerPaymentId (ou, na falta, por
- * externalReference), marca PAGO e delega a ativação do contrato a
- * activatePaidContractFromTrial — a MESMA função que a conversão manual
- * usa, garantindo que o webhook nunca reimplemente (e desincronize) a regra
- * de preservar o teste quando o pagamento é antecipado.
+ * Confirmação de pagamento (PAYMENT_CONFIRMED/PAYMENT_RECEIVED):
+ * 1. Localiza o ContractPayment por providerPaymentId — é a MESMA cobrança
+ *    já registrada (ex.: reentrega do mesmo evento, ou a primeira
+ *    confirmação do checkout). Marca PAGO e delega a ativação do contrato a
+ *    activatePaidContractFromTrial — a MESMA função que a conversão manual
+ *    usa, garantindo que o webhook nunca reimplemente (e desincronize) a
+ *    regra de preservar o teste quando o pagamento é antecipado.
+ * 2. Se não achar por providerPaymentId mas o evento trouxer
+ *    providerSubscriptionId, procura outro ContractPayment da MESMA
+ *    assinatura (qualquer um, para achar o contrato) — isso significa uma
+ *    NOVA mensalidade gerada pela Asaas (payment.id sempre muda a cada
+ *    ciclo). Cria um ContractPayment PRÓPRIO para essa cobrança (nunca
+ *    reaproveita a linha da primeira mensalidade) e, dependendo do estado do
+ *    contrato: se ainda não tinha sido ativado (acceptedAt nulo), é na
+ *    verdade a primeira confirmação (delega a activatePaidContractFromTrial
+ *    normalmente); se já estava ativo, é uma renovação — estende o período
+ *    de acesso (extendMonthlyAccessPeriod) sem reprocessar a ativação.
+ * 3. Se não achar de nenhuma forma, devolve reason="payment_not_found"
+ *    (retriable — ver isRetriableWebhookReason).
  *
  * PAYMENT_OVERDUE só marca o ContractPayment como ATRASADO, sem mexer no
- * contrato. Qualquer outro tipo de evento é no-op (a rota responde 200
- * mesmo assim, para a Asaas não ficar retentando).
+ * contrato. Qualquer outro tipo de evento é no-op final (a rota responde 200
+ * mesmo assim, para a Asaas não ficar retentando algo que não vamos tratar).
  */
 export async function processAsaasWebhookEvent(
   tx: AsaasWebhookProcessorTx,
   normalized: NormalizedAsaasWebhookEvent
-): Promise<{ handled: boolean; reason?: string }> {
+): Promise<ProcessWebhookResult> {
   if (normalized.isPaymentConfirmation) {
-    const payment =
-      (normalized.providerPaymentId
-        ? await tx.contractPayment.findUnique({
-            where: { providerPaymentId: normalized.providerPaymentId },
-          })
-        : null) ||
-      (normalized.externalReference
-        ? await tx.contractPayment.findFirst({
-            where: { externalReference: normalized.externalReference },
-          })
-        : null);
+    return processPaymentConfirmation(tx, normalized);
+  }
 
-    if (!payment) {
-      return { handled: false, reason: "payment_not_found" };
-    }
+  if (normalized.isOverdue) {
+    return processOverdue(tx, normalized);
+  }
 
-    const paymentConfirmedAt = payment.paidAt || new Date();
+  return { handled: false, reason: "event_type_ignored" };
+}
 
-    if (payment.status !== "PAGO") {
-      await tx.contractPayment.update({
-        where: { id: payment.id },
-        data: {
-          status: "PAGO",
-          paidAt: paymentConfirmedAt,
-          providerPaymentId: payment.providerPaymentId || normalized.providerPaymentId,
-        },
-      });
-    }
+async function findPaymentByProviderPaymentId(tx: AsaasWebhookProcessorTx, providerPaymentId: string | null) {
+  if (!providerPaymentId) return null;
+  return tx.contractPayment.findUnique({ where: { providerPaymentId } });
+}
 
-    const contract = await tx.studentContract.findUnique({ where: { id: payment.contractId } });
+async function findAnyPaymentBySubscription(tx: AsaasWebhookProcessorTx, providerSubscriptionId: string | null) {
+  if (!providerSubscriptionId) return null;
+  return tx.contractPayment.findFirst({ where: { providerSubscriptionId } });
+}
 
-    if (!contract) {
-      return { handled: false, reason: "contract_not_found" };
-    }
+async function processPaymentConfirmation(
+  tx: AsaasWebhookProcessorTx,
+  normalized: NormalizedAsaasWebhookEvent
+): Promise<ProcessWebhookResult> {
+  const exactPayment =
+    (await findPaymentByProviderPaymentId(tx, normalized.providerPaymentId)) ||
+    (normalized.externalReference
+      ? await tx.contractPayment.findFirst({ where: { externalReference: normalized.externalReference } })
+      : null);
 
+  if (exactPayment) {
+    return confirmExistingPayment(tx, exactPayment, normalized);
+  }
+
+  // payment.id novo, mas pertence a uma assinatura que já conhecemos: é uma
+  // nova mensalidade recorrente, não a primeira cobrança do checkout.
+  const sameSubscriptionPayment = await findAnyPaymentBySubscription(tx, normalized.providerSubscriptionId);
+
+  if (sameSubscriptionPayment) {
+    return confirmNewRecurringCycle(tx, sameSubscriptionPayment, normalized);
+  }
+
+  return { handled: false, reason: "payment_not_found" };
+}
+
+async function confirmExistingPayment(
+  tx: AsaasWebhookProcessorTx,
+  payment: any,
+  normalized: NormalizedAsaasWebhookEvent
+): Promise<ProcessWebhookResult> {
+  const paymentConfirmedAt = payment.paidAt || new Date();
+
+  if (payment.status !== "PAGO") {
+    await tx.contractPayment.update({
+      where: { id: payment.id },
+      data: {
+        status: "PAGO",
+        paidAt: paymentConfirmedAt,
+        providerPaymentId: payment.providerPaymentId || normalized.providerPaymentId,
+        providerSubscriptionId: payment.providerSubscriptionId || normalized.providerSubscriptionId,
+      },
+    });
+  }
+
+  const contract = await tx.studentContract.findUnique({ where: { id: payment.contractId } });
+
+  if (!contract) {
+    return { handled: false, reason: "contract_not_found" };
+  }
+
+  await activatePaidContractFromTrial(tx, contract, paymentConfirmedAt);
+  return { handled: true };
+}
+
+async function confirmNewRecurringCycle(
+  tx: AsaasWebhookProcessorTx,
+  previousPayment: any,
+  normalized: NormalizedAsaasWebhookEvent
+): Promise<ProcessWebhookResult> {
+  const contract = await tx.studentContract.findUnique({ where: { id: previousPayment.contractId } });
+
+  if (!contract) {
+    return { handled: false, reason: "contract_not_found" };
+  }
+
+  const paymentConfirmedAt = new Date();
+  const amountCents =
+    typeof normalized.value === "number" ? Math.round(normalized.value * 100) : previousPayment.amountCents;
+  const dueDate = normalized.dueDate ? new Date(`${normalized.dueDate}T12:00:00`) : paymentConfirmedAt;
+
+  // ContractPayment PRÓPRIO para esta mensalidade — nunca reaproveita a
+  // linha da cobrança anterior, para manter o histórico de cada ciclo pago.
+  await tx.contractPayment.create({
+    data: {
+      contractId: contract.id,
+      studentId: previousPayment.studentId,
+      amountCents,
+      dueDate,
+      status: "PAGO",
+      paidAt: paymentConfirmedAt,
+      method: previousPayment.method || "UNDEFINED",
+      provider: "ASAAS",
+      externalReference: normalized.externalReference || previousPayment.externalReference,
+      providerPaymentId: normalized.providerPaymentId,
+      providerSubscriptionId: normalized.providerSubscriptionId,
+    },
+  });
+
+  if (!contract.acceptedAt) {
+    // O contrato ainda não tinha sido ativado (ex.: a primeira mensalidade
+    // da assinatura confirmou direto nesta nova cobrança, sem passar antes
+    // por confirmExistingPayment). Trata como a primeira confirmação de
+    // verdade.
     await activatePaidContractFromTrial(tx, contract, paymentConfirmedAt);
     return { handled: true };
   }
 
-  if (normalized.isOverdue && normalized.providerPaymentId) {
-    const payment = await tx.contractPayment.findUnique({
-      where: { providerPaymentId: normalized.providerPaymentId },
-    });
+  // Contrato já ativo: isto é uma renovação — estende o acesso, não
+  // reativa nem reprocessa a transição EM_ABERTO -> PAGO de novo.
+  const newEndDate = extendMonthlyAccessPeriod({
+    currentEndDate: new Date(contract.endDate),
+    paymentConfirmedAt,
+  });
 
-    if (payment && payment.status === "EM_ABERTO") {
-      await tx.contractPayment.update({
-        where: { id: payment.id },
-        data: { status: "ATRASADO" },
-      });
-      return { handled: true };
-    }
+  await tx.studentContract.update({
+    where: { id: contract.id },
+    data: { endDate: newEndDate },
+  });
 
-    return { handled: false, reason: "payment_not_found_or_not_open" };
+  return { handled: true };
+}
+
+async function processOverdue(
+  tx: AsaasWebhookProcessorTx,
+  normalized: NormalizedAsaasWebhookEvent
+): Promise<ProcessWebhookResult> {
+  if (!normalized.providerPaymentId) {
+    return { handled: false, reason: "payment_not_found" };
   }
 
-  return { handled: false, reason: "event_type_ignored" };
+  const payment = await findPaymentByProviderPaymentId(tx, normalized.providerPaymentId);
+
+  if (!payment) {
+    return { handled: false, reason: "payment_not_found" };
+  }
+
+  if (payment.status !== "EM_ABERTO") {
+    return { handled: false, reason: "payment_not_open" };
+  }
+
+  await tx.contractPayment.update({
+    where: { id: payment.id },
+    data: { status: "ATRASADO" },
+  });
+
+  return { handled: true };
 }

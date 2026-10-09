@@ -9,6 +9,7 @@ import {
   createAsaasPayment,
   createAsaasSubscription,
   listAsaasSubscriptionPayments,
+  ASAAS_CLIENT_USER_AGENT,
 } from '../lib/asaas-client.ts';
 
 function fakeFetch(handler: (url: string, init: any) => { status: number; body: unknown }) {
@@ -62,6 +63,30 @@ test('createAsaasCustomer nunca envia credencial em texto puro no corpo, só no 
   const body = JSON.parse(capturedInit.body);
   assert.equal(body.externalReference, 'chk_abc');
   assert.doesNotMatch(capturedInit.body, /minha-chave-secreta/);
+});
+
+test('toda chamada à Asaas envia um User-Agent identificando a aplicação', async () => {
+  const capturedHeaders: any[] = [];
+
+  const config = getAsaasClientConfig({
+    apiKey: 'key',
+    baseUrl: 'https://api-sandbox.asaas.com/v3',
+    fetchImpl: fakeFetch((_url, init) => {
+      capturedHeaders.push(init.headers);
+      return { status: 200, body: { id: 'cus_123' } };
+    }) as any,
+  });
+
+  await createAsaasCustomer(config, {
+    name: 'Fulano',
+    email: 'fulano@example.com',
+    cpfCnpj: '12345678900',
+    externalReference: 'chk_abc',
+  });
+
+  assert.equal(capturedHeaders.length, 1);
+  assert.equal(capturedHeaders[0]['User-Agent'], ASAAS_CLIENT_USER_AGENT);
+  assert.ok(ASAAS_CLIENT_USER_AGENT.length > 0);
 });
 
 test('findAsaasCustomerByExternalReference devolve null quando não encontra nenhum', async () => {

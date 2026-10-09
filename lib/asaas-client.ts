@@ -89,6 +89,13 @@ export function getAsaasClientConfig(overrides?: Partial<AsaasClientConfig>): As
   };
 }
 
+/**
+ * A Asaas recomenda (e em parte da API exige) um User-Agent identificando a
+ * aplicação chamadora, nunca o default genérico do runtime — revisão pediu
+ * explicitamente para nunca omitir esse header.
+ */
+export const ASAAS_CLIENT_USER_AGENT = "FuncionalUpDigital/1.0";
+
 async function asaasRequest<T>(
   config: AsaasClientConfig,
   path: string,
@@ -98,6 +105,7 @@ async function asaasRequest<T>(
     method: init.method,
     headers: {
       "Content-Type": "application/json",
+      "User-Agent": ASAAS_CLIENT_USER_AGENT,
       access_token: config.apiKey,
     },
     body: init.body ? JSON.stringify(init.body) : undefined,

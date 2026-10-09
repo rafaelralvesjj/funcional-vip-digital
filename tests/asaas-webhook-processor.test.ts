@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { processAsaasWebhookEvent } from '../lib/asaas-webhook-processor.ts';
+import { processAsaasWebhookEvent, isRetriableWebhookReason } from '../lib/asaas-webhook-processor.ts';
 import { normalizeAsaasWebhookEvent } from '../lib/asaas-webhook.ts';
 
 type Row = Record<string, any>;
@@ -56,11 +56,21 @@ function createFakeTx(params: { contracts?: Row[]; payments?: Row[] }) {
         }
         return null;
       },
-      findFirst: async ({ where }: { where: { externalReference: string } }) => {
+      // Genérico o bastante para casar por externalReference OU por
+      // providerSubscriptionId, como o Prisma real faria com um `where`
+      // de campo único.
+      findFirst: async ({ where }: { where: Row }) => {
         for (const payment of paymentsById.values()) {
-          if (payment.externalReference === where.externalReference) return { ...payment };
+          const matches = Object.entries(where).every(([key, value]) => payment[key] === value);
+          if (matches) return { ...payment };
         }
         return null;
+      },
+      create: async ({ data }: { data: Row }) => {
+        const id = data.id || `payment-${paymentsById.size + 1}`;
+        const created = { id, ...data };
+        paymentsById.set(id, created);
+        return { ...created };
       },
       update: async ({ where, data }: { where: { id: string }; data: Row }) => {
         const updated = { ...paymentsById.get(where.id), ...data };
@@ -219,6 +229,171 @@ test('PAYMENT_OVERDUE marca o pagamento ATRASADO sem mexer no contrato', async (
   assert.equal(result.handled, true);
   assert.equal(paymentsById.get('payment-1')?.status, 'ATRASADO');
   assert.deepEqual(contractsById.get('paid-1'), contract);
+});
+
+test('contrato não encontrado localmente: handled=false, reason contract_not_found (retriable)', async () => {
+  // Pagamento existe, mas aponta pra um contractId que não está no "banco"
+  // (ex.: corrida/atraso de replicação) — nunca deve ser tratado como
+  // "ignorado"; precisa ser reprocessado depois.
+  const payment = buildPendingPayment({ contractId: 'contrato-inexistente' });
+  const { tx } = createFakeTx({ contracts: [], payments: [payment] });
+
+  const normalized = normalizeAsaasWebhookEvent({
+    event: 'PAYMENT_CONFIRMED',
+    payment: { id: 'pay_asaas_123', status: 'CONFIRMED' },
+  });
+
+  const result = await processAsaasWebhookEvent(tx as any, normalized);
+  assert.equal(result.handled, false);
+  assert.equal(result.reason, 'contract_not_found');
+  assert.equal(isRetriableWebhookReason(result.reason), true);
+});
+
+test('isRetriableWebhookReason: só payment_not_found e contract_not_found pedem reentrega', () => {
+  assert.equal(isRetriableWebhookReason('payment_not_found'), true);
+  assert.equal(isRetriableWebhookReason('contract_not_found'), true);
+  assert.equal(isRetriableWebhookReason('event_type_ignored'), false);
+  assert.equal(isRetriableWebhookReason('payment_not_open'), false);
+  assert.equal(isRetriableWebhookReason(undefined), false);
+});
+
+test('webhook chegando antes da persistência local do checkout: payment_not_found na primeira tentativa, sucesso depois que o registro existe', async () => {
+  const trial = buildTrial();
+  const contract = buildPendingContract();
+  const { tx, contractsById, paymentsById } = createFakeTx({ contracts: [trial, contract], payments: [] });
+
+  const normalized = normalizeAsaasWebhookEvent({
+    event: 'PAYMENT_CONFIRMED',
+    payment: { id: 'pay_asaas_123', status: 'CONFIRMED', externalReference: 'chk_abc' },
+  });
+
+  // 1ª entrega: o checkout (que cria o ContractPayment local) ainda não
+  // terminou de gravar quando o webhook chega.
+  const firstAttempt = await processAsaasWebhookEvent(tx as any, normalized);
+  assert.equal(firstAttempt.handled, false);
+  assert.equal(firstAttempt.reason, 'payment_not_found');
+  assert.equal(isRetriableWebhookReason(firstAttempt.reason), true);
+
+  // A persistência local termina (o checkout grava o ContractPayment).
+  paymentsById.set('payment-1', buildPendingPayment({ paidAt: new Date('2026-10-14T09:00:00-03:00') }));
+
+  // Reentrega (mesmo payload.id, nova tentativa da Asaas ou reprocessamento
+  // manual): agora encontra o registro e ativa normalmente.
+  const retry = await processAsaasWebhookEvent(tx as any, normalized);
+  assert.equal(retry.handled, true);
+  assert.equal(paymentsById.get('payment-1')?.status, 'PAGO');
+  assert.equal(contractsById.get('paid-1')?.commercialStatus, 'CONTRATO_PAGO_AGENDADO');
+});
+
+test('nova mensalidade recorrente (payment.id novo, mesma subscription) com contrato já ativo: cria ContractPayment próprio e estende o endDate', async () => {
+  const firstCycleContract = buildPendingContract({
+    status: 'ACTIVE',
+    commercialStatus: 'CONTRATO_ATIVO',
+    acceptedAt: new Date('2026-10-14T09:00:00-03:00'),
+    startDate: new Date('2026-10-14T12:00:00-03:00'),
+    endDate: new Date('2026-11-13T12:00:00-03:00'),
+  });
+  const firstCyclePayment = buildPendingPayment({
+    status: 'PAGO',
+    paidAt: new Date('2026-10-14T09:00:00-03:00'),
+    providerPaymentId: 'pay_mes_1',
+    providerSubscriptionId: 'sub_123',
+    amountCents: 990,
+  });
+  const { tx, contractsById, paymentsById } = createFakeTx({
+    contracts: [firstCycleContract],
+    payments: [firstCyclePayment],
+  });
+
+  const normalized = normalizeAsaasWebhookEvent({
+    event: 'PAYMENT_CONFIRMED',
+    payment: {
+      id: 'pay_mes_2', // payment.id NOVO — a Asaas sempre gera um por ciclo.
+      status: 'CONFIRMED',
+      subscription: 'sub_123',
+      value: 9.9,
+      dueDate: '2026-11-14',
+    },
+  });
+
+  const result = await processAsaasWebhookEvent(tx as any, normalized);
+  assert.equal(result.handled, true);
+
+  // A cobrança do primeiro mês continua intacta, como seu próprio registro.
+  assert.equal(paymentsById.get('payment-1')?.providerPaymentId, 'pay_mes_1');
+  assert.equal(paymentsById.get('payment-1')?.status, 'PAGO');
+
+  // Uma nova linha foi criada para o segundo mês — nunca reaproveitou a primeira.
+  const allPayments = [...paymentsById.values()];
+  const secondCyclePayment = allPayments.find((payment) => payment.providerPaymentId === 'pay_mes_2');
+  assert.ok(secondCyclePayment, 'esperava um ContractPayment novo para pay_mes_2');
+  assert.equal(secondCyclePayment.status, 'PAGO');
+  assert.equal(secondCyclePayment.providerSubscriptionId, 'sub_123');
+  assert.equal(secondCyclePayment.amountCents, 990);
+  assert.equal(allPayments.length, 2);
+
+  // O contrato foi estendido em mais um mês, não reativado do zero.
+  const updatedContract = contractsById.get('paid-1');
+  assert.equal(updatedContract?.endDate.toISOString(), new Date('2026-12-13T12:00:00-03:00').toISOString());
+  assert.equal(updatedContract?.commercialStatus, 'CONTRATO_ATIVO');
+});
+
+test('nova mensalidade recorrente processada duas vezes (mesmo payment.id): idempotente, não cria uma segunda linha', async () => {
+  const firstCycleContract = buildPendingContract({
+    status: 'ACTIVE',
+    commercialStatus: 'CONTRATO_ATIVO',
+    acceptedAt: new Date('2026-10-14T09:00:00-03:00'),
+    endDate: new Date('2026-11-13T12:00:00-03:00'),
+  });
+  const firstCyclePayment = buildPendingPayment({
+    status: 'PAGO',
+    providerPaymentId: 'pay_mes_1',
+    providerSubscriptionId: 'sub_123',
+  });
+  const { tx, paymentsById } = createFakeTx({ contracts: [firstCycleContract], payments: [firstCyclePayment] });
+
+  const normalized = normalizeAsaasWebhookEvent({
+    event: 'PAYMENT_CONFIRMED',
+    payment: { id: 'pay_mes_2', status: 'CONFIRMED', subscription: 'sub_123', value: 9.9 },
+  });
+
+  await processAsaasWebhookEvent(tx as any, normalized);
+  assert.equal(paymentsById.size, 2);
+
+  // Reentrega do MESMO evento (ex.: webhook duplicado chegando por outro
+  // caminho) — agora pay_mes_2 já existe, então cai no caminho de
+  // confirmExistingPayment, que é idempotente (já está PAGO).
+  await processAsaasWebhookEvent(tx as any, normalized);
+  assert.equal(paymentsById.size, 2, 'não deveria criar uma terceira linha de pagamento');
+});
+
+test('primeira confirmação chegando pelo caminho da assinatura (sem bater em providerPaymentId): ativa o contrato normalmente', async () => {
+  const trial = buildTrial();
+  // Contrato pendente cujo ContractPayment inicial já tem providerSubscriptionId
+  // mas, por alguma falha ao consultar a Asaas no checkout, ficou sem
+  // providerPaymentId (cenário defensivo) — localizável pela assinatura.
+  const contract = buildPendingContract();
+  const pendingPayment = buildPendingPayment({
+    providerPaymentId: null,
+    providerSubscriptionId: 'sub_999',
+    externalReference: null,
+  });
+  const { tx, contractsById, paymentsById } = createFakeTx({
+    contracts: [trial, contract],
+    payments: [pendingPayment],
+  });
+
+  const normalized = normalizeAsaasWebhookEvent({
+    event: 'PAYMENT_CONFIRMED',
+    payment: { id: 'pay_primeira_cobranca', status: 'CONFIRMED', subscription: 'sub_999', value: 9.9 },
+  });
+
+  const result = await processAsaasWebhookEvent(tx as any, normalized);
+  assert.equal(result.handled, true);
+
+  const updatedContract = contractsById.get('paid-1');
+  assert.ok(updatedContract?.acceptedAt, 'contrato deveria ter sido ativado');
+  assert.equal([...paymentsById.values()].length, 2);
 });
 
 test('evento desconhecido é ignorado (handled=false), sem nenhuma escrita', async () => {

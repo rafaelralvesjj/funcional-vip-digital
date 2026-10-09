@@ -35,6 +35,7 @@ test('verifyAsaasWebhookToken aceita só o token exatamente igual ao configurado
 
 test('normalizeAsaasWebhookEvent reconhece PAYMENT_CONFIRMED e PAYMENT_RECEIVED como confirmação de pagamento', () => {
   const confirmed = normalizeAsaasWebhookEvent({
+    id: 'evt_1',
     event: 'PAYMENT_CONFIRMED',
     payment: { id: 'pay_1', status: 'CONFIRMED', externalReference: 'chk_abc' },
   });
@@ -42,13 +43,54 @@ test('normalizeAsaasWebhookEvent reconhece PAYMENT_CONFIRMED e PAYMENT_RECEIVED 
   assert.equal(confirmed.isOverdue, false);
   assert.equal(confirmed.providerPaymentId, 'pay_1');
   assert.equal(confirmed.externalReference, 'chk_abc');
-  assert.equal(confirmed.eventId, 'PAYMENT_CONFIRMED:pay_1');
+  assert.equal(confirmed.eventId, 'evt_1');
 
   const received = normalizeAsaasWebhookEvent({
+    id: 'evt_2',
     event: 'PAYMENT_RECEIVED',
     payment: { id: 'pay_2', status: 'RECEIVED' },
   });
   assert.equal(received.isPaymentConfirmation, true);
+});
+
+test('normalizeAsaasWebhookEvent usa payload.id (identificador oficial da Asaas) como eventId, não um valor inventado', () => {
+  const event = normalizeAsaasWebhookEvent({
+    id: 'evt_oficial_123',
+    event: 'PAYMENT_CONFIRMED',
+    payment: { id: 'pay_1', status: 'CONFIRMED' },
+  });
+  assert.equal(event.eventId, 'evt_oficial_123');
+});
+
+test('normalizeAsaasWebhookEvent: mesmo payload.id gera o mesmo eventId (base da deduplicação de reentrega)', () => {
+  const payload = {
+    id: 'evt_reentrega_123',
+    event: 'PAYMENT_CONFIRMED',
+    payment: { id: 'pay_1', status: 'CONFIRMED' },
+  };
+
+  const first = normalizeAsaasWebhookEvent(payload);
+  const redelivery = normalizeAsaasWebhookEvent({ ...payload });
+
+  assert.equal(first.eventId, redelivery.eventId);
+});
+
+test('normalizeAsaasWebhookEvent: duas mensalidades diferentes da mesma assinatura (payment.id distinto) geram eventId distinto mesmo com o mesmo subscription', () => {
+  const month1 = normalizeAsaasWebhookEvent({
+    id: 'evt_mes_1',
+    event: 'PAYMENT_CONFIRMED',
+    payment: { id: 'pay_mes_1', status: 'CONFIRMED', subscription: 'sub_123' },
+  });
+  const month2 = normalizeAsaasWebhookEvent({
+    id: 'evt_mes_2',
+    event: 'PAYMENT_CONFIRMED',
+    payment: { id: 'pay_mes_2', status: 'CONFIRMED', subscription: 'sub_123' },
+  });
+
+  assert.notEqual(month1.eventId, month2.eventId);
+  assert.equal(month1.providerSubscriptionId, 'sub_123');
+  assert.equal(month2.providerSubscriptionId, 'sub_123');
+  assert.notEqual(month1.providerPaymentId, month2.providerPaymentId);
 });
 
 test('normalizeAsaasWebhookEvent não trata outros eventos como confirmação de pagamento', () => {
@@ -76,7 +118,7 @@ test('normalizeAsaasWebhookEvent reconhece PAYMENT_OVERDUE separadamente (nunca 
 });
 
 test('normalizeAsaasWebhookEvent gera eventId diferente para cada combinação (eventType, paymentId)', () => {
-  const a = normalizeAsaasWebhookEvent({ event: 'PAYMENT_CONFIRMED', payment: { id: 'pay_1', status: 'CONFIRMED' } });
-  const b = normalizeAsaasWebhookEvent({ event: 'PAYMENT_RECEIVED', payment: { id: 'pay_1', status: 'RECEIVED' } });
+  const a = normalizeAsaasWebhookEvent({ id: 'evt_a', event: 'PAYMENT_CONFIRMED', payment: { id: 'pay_1', status: 'CONFIRMED' } });
+  const b = normalizeAsaasWebhookEvent({ id: 'evt_b', event: 'PAYMENT_RECEIVED', payment: { id: 'pay_1', status: 'RECEIVED' } });
   assert.notEqual(a.eventId, b.eventId);
 });

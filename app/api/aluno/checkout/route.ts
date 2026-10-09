@@ -15,6 +15,7 @@ import {
 } from "@/lib/asaas-client";
 import { buildCheckoutExternalReference } from "@/lib/checkout-reference";
 import { assertTermsAccepted, TermsNotAcceptedError, CHECKOUT_TERMS_VERSION } from "@/lib/checkout-terms";
+import { reserveCheckoutSlot, CheckoutAlreadyPendingError } from "@/lib/checkout-reservation";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,12 @@ function getClientIp(req: NextRequest): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  // Reservado na fase 1 (reserveCheckoutSlot); se a fase 2 (Asaas) falhar,
+  // compensamos removendo essas linhas para o aluno poder tentar de novo —
+  // ver o catch de AsaasApiError/AsaasConfigError mais abaixo.
+  let reservedContractId: string | null = null;
+  let reservedPaymentId: string | null = null;
+
   try {
     const session = await getServerSession(authOptions);
     const sessionUser = session?.user as { id?: string; email?: string | null } | undefined;
@@ -119,8 +126,9 @@ export async function POST(req: NextRequest) {
 
     const today = startOfDay(new Date());
 
-    // Bloqueia novo checkout se já existe um contrato pago em vigor ou
-    // agendado — nunca cria uma segunda cobrança/assinatura em paralelo.
+    // Checagem rápida (não durável sozinha — ver reserveCheckoutSlot para a
+    // trava real): evita a chamada à Asaas no caminho comum de "já existe um
+    // contrato pago", sem depender dela para a exclusão mútua de verdade.
     const existingPaidContract = student.contracts.find((contract) => {
       if (contract.type !== "PAID") return false;
       if (!["ACTIVE", "AWAITING_PAYMENT"].includes(contract.status)) return false;
@@ -200,9 +208,94 @@ export async function POST(req: NextRequest) {
       throw error;
     }
 
-    // Reaproveita o cliente Asaas já existente (por Student.asaasCustomerId
-    // ou por busca em externalReference=student.id) em vez de criar um
-    // cliente duplicado a cada tentativa de checkout.
+    const isMonthly = billingOption.billingCycle === "MONTHLY";
+    const durationMonths = isMonthly ? 1 : 12;
+    const checkoutExternalReference = buildCheckoutExternalReference();
+
+    const activeTrial = student.contracts.find(
+      (contract) => contract.type === "TRIAL" && contract.status === "ACTIVE"
+    );
+
+    const placeholderStartDate = new Date();
+    const placeholderEndDate = addMonthsMinusOneDay(placeholderStartDate, durationMonths);
+    const termsAcceptedAt = new Date();
+    const ip = getClientIp(req);
+    const userAgent = req.headers.get("user-agent");
+    const description = `${billingOption.servicePlan.name} — ${isMonthly ? "mensal" : "anual"}`;
+
+    // Fase 1: reserva local, atômica e durável, ANTES de qualquer chamada
+    // remota. A trava real é o índice único parcial do Postgres (um PAID
+    // AWAITING_PAYMENT por aluno) — ver lib/checkout-reservation.ts. Isso
+    // fecha a corrida que existiria em "consulta -> cria na Asaas -> grava":
+    // duas requisições simultâneas não conseguem reservar o mesmo slot.
+    let reservation;
+    try {
+      reservation = await prisma.$transaction((tx) =>
+        reserveCheckoutSlot(tx as any, {
+          contractData: {
+            studentId: student.id,
+            planId: billingOption.servicePlanId,
+            professorId: activeTrial?.professorId || null,
+            contractNumber: `CTR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+            type: "PAID",
+            status: "AWAITING_PAYMENT",
+            commercialStatus: "AGUARDANDO_PAGAMENTO",
+            startDate: placeholderStartDate,
+            endDate: placeholderEndDate,
+            durationMonths,
+            workoutsPerWeek: billingOption.servicePlan.workoutsPerWeek,
+            workoutsPerMonth: billingOption.servicePlan.workoutsPerMonth,
+            totalContractedWorkouts: billingOption.servicePlan.workoutsPerMonth * durationMonths,
+            priceCents: billingOption.amountCents,
+            paymentMode: isMonthly ? "RECORRENTE" : "UNICO",
+            source: "CHECKOUT_ASAAS",
+            renewedFromContractId: activeTrial?.id || null,
+            // Auditoria estruturada (item 6 da revisão) — nunca só em notes.
+            billingOptionId: billingOption.id,
+            billingCycle: billingOption.billingCycle,
+            termsVersion: CHECKOUT_TERMS_VERSION,
+            termsAcceptedAt,
+            notes: [
+              "Checkout criado pelo próprio aluno (Asaas).",
+              `Opção de cobrança: ${billingOption.billingCycle} — ${description}.`,
+              `Termos aceitos: versão ${CHECKOUT_TERMS_VERSION} em ${termsAcceptedAt.toISOString()}.`,
+              ip ? `IP: ${ip}.` : null,
+              userAgent ? `User-Agent: ${userAgent}.` : null,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          },
+          buildPaymentData: (contractId) => ({
+            contractId,
+            studentId: student.id,
+            amountCents: billingOption.amountCents,
+            dueDate: placeholderStartDate,
+            status: "EM_ABERTO",
+            method: "UNDEFINED",
+            provider: "ASAAS",
+            externalReference: checkoutExternalReference,
+          }),
+        })
+      );
+    } catch (error) {
+      if (error instanceof CheckoutAlreadyPendingError) {
+        return NextResponse.json(
+          {
+            error: "Já existe um checkout sendo criado para você agora. Aguarde alguns segundos e atualize a página.",
+            code: "CHECKOUT_IN_PROGRESS",
+          },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
+
+    reservedContractId = reservation.contract.id;
+    reservedPaymentId = reservation.payment.id;
+
+    // Fase 2: chamada remota — fora de qualquer transação local (não dá pra
+    // fazer rollback de uma chamada HTTP já aceita pela Asaas). Falha aqui
+    // aciona a compensação no catch externo (remove a reserva da fase 1).
     let asaasCustomerId = student.asaasCustomerId;
 
     if (!asaasCustomerId) {
@@ -221,12 +314,7 @@ export async function POST(req: NextRequest) {
       asaasCustomerId = customer.id;
     }
 
-    const checkoutExternalReference = buildCheckoutExternalReference();
-    const isMonthly = billingOption.billingCycle === "MONTHLY";
-    const durationMonths = isMonthly ? 1 : 12;
     const amountValue = billingOption.amountCents / 100;
-    const planName = billingOption.servicePlan.name;
-    const description = `${planName} — ${isMonthly ? "mensal" : "anual"}`;
 
     let paymentLinkUrl: string | null = null;
     let providerPaymentId: string | null = null;
@@ -265,21 +353,8 @@ export async function POST(req: NextRequest) {
       if (payment.dueDate) dueDate = new Date(`${payment.dueDate}T12:00:00`);
     }
 
-    // TRIAL de origem (se houver) para a transição EM_ABERTO -> PAGO
-    // preservar os 7 dias de teste — a mesma resolveContractPaymentTransition
-    // usada pela conversão manual decide isso quando o webhook confirmar o
-    // pagamento (ver lib/contract-activation.ts). Aqui o contrato nasce
-    // AWAITING_PAYMENT; startDate/endDate reais só são calculados então.
-    const activeTrial = student.contracts.find(
-      (contract) => contract.type === "TRIAL" && contract.status === "ACTIVE"
-    );
-
-    const placeholderStartDate = new Date();
-    const placeholderEndDate = addMonthsMinusOneDay(placeholderStartDate, durationMonths);
-    const ip = getClientIp(req);
-    const userAgent = req.headers.get("user-agent");
-
-    const result = await prisma.$transaction(async (tx) => {
+    // Fase 3: finaliza a reserva com os dados reais da Asaas.
+    await prisma.$transaction(async (tx) => {
       if (!student.asaasCustomerId) {
         await tx.student.update({
           where: { id: student.id },
@@ -290,65 +365,34 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const contract = await tx.studentContract.create({
+      await tx.contractPayment.update({
+        where: { id: reservedPaymentId! },
         data: {
-          studentId: student.id,
-          planId: billingOption.servicePlanId,
-          professorId: activeTrial?.professorId || null,
-          contractNumber: `CTR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-          type: "PAID",
-          status: "AWAITING_PAYMENT",
-          commercialStatus: "AGUARDANDO_PAGAMENTO",
-          startDate: placeholderStartDate,
-          endDate: placeholderEndDate,
-          durationMonths,
-          workoutsPerWeek: billingOption.servicePlan.workoutsPerWeek,
-          workoutsPerMonth: billingOption.servicePlan.workoutsPerMonth,
-          totalContractedWorkouts: billingOption.servicePlan.workoutsPerMonth * durationMonths,
-          priceCents: billingOption.amountCents,
-          paymentMode: isMonthly ? "RECORRENTE" : "UNICO",
-          source: "CHECKOUT_ASAAS",
-          renewedFromContractId: activeTrial?.id || null,
-          notes: [
-            "Checkout criado pelo próprio aluno (Asaas).",
-            `Opção de cobrança: ${billingOption.billingCycle} — ${description}.`,
-            `Termos aceitos: versão ${CHECKOUT_TERMS_VERSION}.`,
-            ip ? `IP: ${ip}.` : null,
-            userAgent ? `User-Agent: ${userAgent}.` : null,
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        },
-      });
-
-      const payment = await tx.contractPayment.create({
-        data: {
-          contractId: contract.id,
-          studentId: student.id,
-          amountCents: billingOption.amountCents,
-          dueDate,
-          status: "EM_ABERTO",
-          method: "UNDEFINED",
-          provider: "ASAAS",
           paymentLinkUrl,
-          externalReference: checkoutExternalReference,
           providerPaymentId,
           providerSubscriptionId,
+          dueDate,
         },
       });
-
-      return { contract, payment };
     });
 
     return NextResponse.json({
       ok: true,
       reused: false,
       checkoutUrl: paymentLinkUrl,
-      contractId: result.contract.id,
-      paymentId: result.payment.id,
+      contractId: reservedContractId,
+      paymentId: reservedPaymentId,
     });
   } catch (error: any) {
     console.error("POST /api/aluno/checkout error:", error);
+
+    // Compensação: a reserva da fase 1 só faz sentido se a Asaas confirmar a
+    // cobrança. Sem isso, o índice único parcial deixaria o aluno travado,
+    // incapaz de tentar de novo.
+    if (reservedContractId) {
+      await prisma.contractPayment.deleteMany({ where: { contractId: reservedContractId } }).catch(() => {});
+      await prisma.studentContract.delete({ where: { id: reservedContractId } }).catch(() => {});
+    }
 
     if (error instanceof AsaasApiError) {
       return NextResponse.json(

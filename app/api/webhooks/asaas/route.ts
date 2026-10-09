@@ -7,11 +7,20 @@ import {
   AsaasWebhookConfigError,
   type AsaasWebhookPayload,
 } from "@/lib/asaas-webhook";
-import { processAsaasWebhookEvent } from "@/lib/asaas-webhook-processor";
+import { processAsaasWebhookEvent, isRetriableWebhookReason } from "@/lib/asaas-webhook-processor";
 
 export const dynamic = "force-dynamic";
 
 const PROVIDER = "ASAAS";
+
+/**
+ * Sinaliza um resultado "ainda não dá pra processar" (ex.: o webhook chegou
+ * antes da nossa própria persistência do checkout terminar) — nunca marcamos
+ * o WebhookEvent como processado nesse caso, e devolvemos um status que leva
+ * a Asaas a reentregar o evento mais tarde. Perder silenciosamente um
+ * desses significaria um pagamento confirmado que nunca ativa o contrato.
+ */
+class RetriableWebhookError extends Error {}
 
 /**
  * Fonte de verdade da ativação de contratos pagos: só este webhook (nunca a
@@ -93,7 +102,18 @@ export async function POST(req: NextRequest) {
       const result = await processAsaasWebhookEvent(tx as any, normalized);
 
       if (!result.handled) {
-        console.warn(`Webhook Asaas não aplicado (${normalized.eventType}): ${result.reason}.`);
+        if (isRetriableWebhookReason(result.reason)) {
+          // Não marca processedAt: a linha de WebhookEvent fica pendente e
+          // uma reentrega da Asaas (ou uma nova entrega com o mesmo
+          // payload.id) vai encontrá-la e tentar de novo. Lança para
+          // abortar esta transação (nada mais foi escrito) sem perder o
+          // evento.
+          throw new RetriableWebhookError(
+            `Webhook Asaas ainda não aplicável (${normalized.eventType}): ${result.reason}.`
+          );
+        }
+
+        console.warn(`Webhook Asaas ignorado (${normalized.eventType}): ${result.reason}.`);
       }
 
       await tx.webhookEvent.update({
@@ -104,6 +124,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {
+    if (error instanceof RetriableWebhookError) {
+      console.warn("POST /api/webhooks/asaas: evento pendente, pedindo reentrega:", error.message);
+      return NextResponse.json(
+        { error: "Registro local ainda não disponível. Reenvie este webhook em instantes." },
+        { status: 503 }
+      );
+    }
+
     console.error("POST /api/webhooks/asaas error:", error);
     return NextResponse.json({ error: "Erro ao processar webhook." }, { status: 500 });
   }

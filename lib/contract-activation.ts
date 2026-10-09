@@ -112,3 +112,27 @@ export async function activatePaidContractFromTrial(
 
   return updatedContract;
 }
+
+/**
+ * Renovação de uma assinatura MONTHLY já ativa (não é a primeira
+ * confirmação — essa passa por activatePaidContractFromTrial). Cada nova
+ * mensalidade confirmada pela Asaas estende o período de acesso em mais um
+ * mês a partir do endDate atual (nunca da data de pagamento, para não criar
+ * lacuna nem sobreposição entre ciclos pagos em dias ligeiramente
+ * diferentes) — a menos que o acesso já tenha expirado (ex.: pagamento
+ * atrasado processado depois do vencimento), caso em que o novo mês conta a
+ * partir da confirmação.
+ */
+export function extendMonthlyAccessPeriod(params: {
+  currentEndDate: Date;
+  paymentConfirmedAt: Date;
+}): Date {
+  const base =
+    params.currentEndDate.getTime() >= params.paymentConfirmedAt.getTime()
+      ? new Date(params.currentEndDate)
+      : new Date(params.paymentConfirmedAt);
+
+  const extended = new Date(base);
+  extended.setMonth(extended.getMonth() + 1);
+  return extended;
+}

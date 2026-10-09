@@ -23,13 +23,21 @@ export type AsaasWebhookPaymentStatus =
   | string;
 
 export type AsaasWebhookPayload = {
+  /**
+   * ID oficial do evento de webhook, gerado pela própria Asaas — único por
+   * entrega. É a chave de idempotência real (ver normalizeAsaasWebhookEvent);
+   * nunca inventamos uma quando ele vem preenchido.
+   */
+  id?: string;
   event: string;
   payment?: {
     id: string;
     status: AsaasWebhookPaymentStatus;
     externalReference?: string | null;
+    /** ID da assinatura Asaas quando esta cobrança veio de um ciclo recorrente. */
     subscription?: string | null;
     value?: number;
+    dueDate?: string | null;
     customer?: string;
   };
 };
@@ -39,8 +47,11 @@ export type NormalizedAsaasWebhookEvent = {
   eventId: string;
   eventType: string;
   providerPaymentId: string | null;
+  providerSubscriptionId: string | null;
   externalReference: string | null;
-  /** true = este evento deve confirmar o pagamento (ativar o contrato). */
+  value: number | null;
+  dueDate: string | null;
+  /** true = este evento deve confirmar o pagamento (ativar/renovar o contrato). */
   isPaymentConfirmation: boolean;
   /** true = este evento indica atraso (sem ativar nada, só sinalizar). */
   isOverdue: boolean;
@@ -49,7 +60,7 @@ export type NormalizedAsaasWebhookEvent = {
 /**
  * PAYMENT_CONFIRMED (cartão/boleto compensado) e PAYMENT_RECEIVED (Pix/saldo
  * já creditado) são os dois eventos da Asaas que significam "dinheiro
- * confirmado" — é isso, e só isso, que pode disparar a ativação do
+ * confirmado" — é isso, e só isso, que pode disparar a ativação/renovação do
  * contrato. Qualquer outro evento (criação, atualização, exclusão,
  * reembolso) nunca ativa nada.
  */
@@ -72,16 +83,23 @@ export function normalizeAsaasWebhookEvent(payload: AsaasWebhookPayload): Normal
   const eventType = String(payload?.event || "").trim().toUpperCase();
   const paymentId = payload?.payment?.id || null;
 
-  // Chave composta (não só o payment.id): a mesma cobrança pode gerar vários
-  // eventos distintos (ex.: PAYMENT_CREATED, depois PAYMENT_CONFIRMED) — cada
-  // um precisa de sua própria entrada de idempotência.
-  const eventId = paymentId ? `${eventType}:${paymentId}` : `${eventType}:sem-payment-id:${Date.now()}`;
+  // A Asaas já manda um `id` único por entrega de webhook — é isso que usamos
+  // como chave de idempotência, nunca algo inventado por nós (nem
+  // `${eventType}:${paymentId}`, que colidiria entre reentregas legítimas do
+  // MESMO evento vs. duas cobranças diferentes de uma assinatura recorrente
+  // cujo paymentId muda a cada mês; nem Date.now(), que nunca deduplicaria
+  // nada). O fallback composto só existe para não quebrar com um payload
+  // malformado/de teste sem `id` — não deve acontecer com a Asaas real.
+  const eventId = payload?.id || (paymentId ? `${eventType}:${paymentId}:sem-id-oficial` : `${eventType}:sem-identificador`);
 
   return {
     eventId,
     eventType,
     providerPaymentId: paymentId,
+    providerSubscriptionId: payload?.payment?.subscription || null,
     externalReference: payload?.payment?.externalReference || null,
+    value: typeof payload?.payment?.value === "number" ? payload.payment.value : null,
+    dueDate: payload?.payment?.dueDate || null,
     isPaymentConfirmation: PAYMENT_CONFIRMATION_EVENTS.has(eventType),
     isOverdue: PAYMENT_OVERDUE_EVENTS.has(eventType),
   };
