@@ -27,22 +27,23 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  accounts             Account[]
-  sessions             Session[]
-  students             Student[]
-  notices              Notice[]
-  questions            Question[]
-  studentAuths         Student[]    @relation("StudentAuth")
-  noticeProfessors     Notice[]     @relation("NoticeProfessor")
-  questionTeachers     Question[]   @relation("QuestionTeacher")
-  professorNoticeReads NoticeRead[] @relation("ProfessorNoticeRead")
-  careEventsAuthored  StudentCareEvent[] @relation("CareEventAuthor")
-  careEventsProfessor StudentCareEvent[] @relation("CareEventProfessor")
-  careEventsResolved  StudentCareEvent[] @relation("CareEventResolvedBy")
-  contractsProfessor      StudentContract[]  @relation("ContractProfessor")
-  contractsCreated        StudentContract[]  @relation("ContractCreatedBy")
-  contractPaymentsCreated ContractPayment[]   @relation("PaymentCreatedBy")
-  passwordResetTokens     PasswordResetToken[]
+  accounts                      Account[]
+  sessions                      Session[]
+  students                      Student[]
+  notices                       Notice[]
+  questions                     Question[]
+  studentAuths                  Student[]                    @relation("StudentAuth")
+  noticeProfessors              Notice[]                     @relation("NoticeProfessor")
+  questionTeachers              Question[]                   @relation("QuestionTeacher")
+  professorNoticeReads          NoticeRead[]                 @relation("ProfessorNoticeRead")
+  careEventsAuthored            StudentCareEvent[]           @relation("CareEventAuthor")
+  careEventsProfessor           StudentCareEvent[]           @relation("CareEventProfessor")
+  careEventsResolved            StudentCareEvent[]           @relation("CareEventResolvedBy")
+  contractsProfessor            StudentContract[]            @relation("ContractProfessor")
+  contractsCreated              StudentContract[]            @relation("ContractCreatedBy")
+  contractPaymentsCreated       ContractPayment[]            @relation("PaymentCreatedBy")
+  passwordResetTokens           PasswordResetToken[]
+  workoutMethodModeChangesActed StudentWorkoutMethodChange[] @relation("WorkoutMethodChangeActor")
 
   @@map("users")
 }
@@ -93,44 +94,77 @@ model Session {
 }
 
 model Student {
-  id                             String   @id @default(uuid())
-  userId                         String   @map("user_id")
+  id                             String    @id @default(uuid())
+  userId                         String    @map("user_id")
   name                           String
-  preferredName                  String?  @map("preferred_name")
+  preferredName                  String?   @map("preferred_name")
   email                          String?
   phone                          String?
   notes                          String?
   image                          String?
-  active                         Boolean  @default(true)
-  userAuthId                     String?  @unique @map("user_auth_id")
-  onboardingCompleto             Boolean  @default(false) @map("onboarding_completo")
-  contractedTrainingDaysPerMonth Int?     @map("contracted_training_days_per_month")
-  preferredWorkoutDays          String[] @default([]) @map("preferred_workout_days")
-  commercialStatus               String   @default("SEM_CONTRATO_ATIVO") @map("commercial_status")
-  cpfCnpj                         String?  @map("cpf_cnpj")
-  asaasCustomerId                 String?  @map("asaas_customer_id")
-  createdAt                      DateTime @default(now()) @map("created_at")
-  updatedAt                      DateTime @updatedAt @map("updated_at")
+  active                         Boolean   @default(true)
+  userAuthId                     String?   @unique @map("user_auth_id")
+  onboardingCompleto             Boolean   @default(false) @map("onboarding_completo")
+  contractedTrainingDaysPerMonth Int?      @map("contracted_training_days_per_month")
+  preferredWorkoutDays           String[]  @default([]) @map("preferred_workout_days")
+  commercialStatus               String    @default("SEM_CONTRATO_ATIVO") @map("commercial_status")
+  cpfCnpj                        String?   @map("cpf_cnpj")
+  asaasCustomerId                String?   @map("asaas_customer_id")
+  // Modo de treino estruturado — NUNCA inferido de texto (prompt, resumo,
+  // objetivo, perguntas/respostas, mensagens antigas, preferências
+  // históricas ou a palavra "combinado"). Todo aluno novo começa em NORMAL;
+  // ausência de valor aqui também é tratada como NORMAL em código (ver
+  // lib/workout-method-mode.ts) — o default do banco já cobre isso, mas o
+  // código nunca assume que a coluna é obrigatoriamente não-nula.
+  workoutMethodMode              String    @default("NORMAL") @map("workout_method_mode")
+  workoutMethodModeChangedAt     DateTime? @map("workout_method_mode_changed_at")
+  createdAt                      DateTime  @default(now()) @map("created_at")
+  updatedAt                      DateTime  @updatedAt @map("updated_at")
 
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userAuth         User?             @relation("StudentAuth", fields: [userAuthId], references: [id])
-  workoutPlans     WorkoutPlan[]
-  checkIns         CheckIn[]
-  weeklyFeedbacks  WeeklyFeedback[]
-  notices          Notice[]
-  questions        Question[]
-  workouts         Workout[]
-  avaliacoes       Avaliacao[]
-  noticeReads      NoticeRead[]
-  careEvents       StudentCareEvent[]
-  trainingPreferences StudentTrainingPreference[]
-  contracts        StudentContract[]
-  contractPayments        ContractPayment[]
-  contractLifecycleEvents ContractLifecycleEvent[]
-  exerciseProgress       WorkoutExerciseProgress[]
-  technicalMemories      StudentTechnicalMemory[]
+  user                     User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAuth                 User?                        @relation("StudentAuth", fields: [userAuthId], references: [id])
+  workoutPlans             WorkoutPlan[]
+  checkIns                 CheckIn[]
+  weeklyFeedbacks          WeeklyFeedback[]
+  notices                  Notice[]
+  questions                Question[]
+  workouts                 Workout[]
+  avaliacoes               Avaliacao[]
+  noticeReads              NoticeRead[]
+  careEvents               StudentCareEvent[]
+  trainingPreferences      StudentTrainingPreference[]
+  contracts                StudentContract[]
+  contractPayments         ContractPayment[]
+  contractLifecycleEvents  ContractLifecycleEvent[]
+  exerciseProgress         WorkoutExerciseProgress[]
+  technicalMemories        StudentTechnicalMemory[]
+  workoutMethodModeChanges StudentWorkoutMethodChange[]
 
   @@map("students")
+}
+
+// Histórico auditável de mudanças de Student.workoutMethodMode. Nunca
+// apagado/sobrescrito — cada mudança (sempre por confirmação explícita do
+// aluno, ou por migração/ação administrativa pontual) gera uma linha nova.
+model StudentWorkoutMethodChange {
+  id           String   @id @default(uuid())
+  studentId    String   @map("student_id")
+  previousMode String   @map("previous_mode")
+  newMode      String   @map("new_mode")
+  // Origem da mudança: STUDENT_SELF_SERVICE (confirmação explícita no app),
+  // MIGRATION_SCRIPT (seed administrativo pontual), ADMIN (ação futura da
+  // gestão), etc. — nunca inferida, sempre gravada pelo código que decidiu.
+  source       String   @default("STUDENT_SELF_SERVICE") @map("source")
+  actorUserId  String?  @map("actor_user_id")
+  changedAt    DateTime @default(now()) @map("changed_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  actorUser User?   @relation("WorkoutMethodChangeActor", fields: [actorUserId], references: [id])
+
+  @@index([studentId])
+  @@index([studentId, changedAt])
+  @@map("student_workout_method_changes")
 }
 
 model Avaliacao {
@@ -162,30 +196,30 @@ model Avaliacao {
 }
 
 model WorkoutPlan {
-  id                       String   @id @default(uuid())
-  studentId                String   @map("student_id")
+  id                       String    @id @default(uuid())
+  studentId                String    @map("student_id")
   name                     String
   description              String?
-  active                   Boolean  @default(true)
+  active                   Boolean   @default(true)
   notes                    String?
   date                     DateTime?
-  objective                String?  @db.Text
-  focusAreas               String?  @map("focus_areas") @db.Text
+  objective                String?   @db.Text
+  focusAreas               String?   @map("focus_areas") @db.Text
   intensity                String?
-  estimatedDurationMinutes Int?     @map("estimated_duration_minutes")
-  estimatedCaloriesMin     Int?     @map("estimated_calories_min")
-  estimatedCaloriesMax     Int?     @map("estimated_calories_max")
-  studentSummary           String?  @map("student_summary") @db.Text
-  safetyNote               String?  @map("safety_note") @db.Text
-  contractId               String?  @map("contract_id")
-  createdAt                DateTime @default(now()) @map("created_at")
-  updatedAt                DateTime @updatedAt @map("updated_at")
+  estimatedDurationMinutes Int?      @map("estimated_duration_minutes")
+  estimatedCaloriesMin     Int?      @map("estimated_calories_min")
+  estimatedCaloriesMax     Int?      @map("estimated_calories_max")
+  studentSummary           String?   @map("student_summary") @db.Text
+  safetyNote               String?   @map("safety_note") @db.Text
+  contractId               String?   @map("contract_id")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
 
-  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  contract  StudentContract? @relation(fields: [contractId], references: [id])
-  exercises Exercise[]
-  workouts  Workout[]
-  careEvents StudentCareEvent[]
+  student          Student                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  contract         StudentContract?          @relation(fields: [contractId], references: [id])
+  exercises        Exercise[]
+  workouts         Workout[]
+  careEvents       StudentCareEvent[]
   exerciseProgress WorkoutExerciseProgress[]
 
   @@map("workout_plans")
@@ -207,8 +241,8 @@ model Exercise {
   imageUrl          String?  @map("image_url")
   createdAt         DateTime @default(now()) @map("created_at")
 
-  workoutPlan     WorkoutPlan      @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
-  libraryExercise ExerciseLibrary? @relation(fields: [libraryExerciseId], references: [id])
+  workoutPlan     WorkoutPlan               @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+  libraryExercise ExerciseLibrary?          @relation(fields: [libraryExerciseId], references: [id])
   progress        WorkoutExerciseProgress[]
 
   @@index([libraryExerciseId])
@@ -216,37 +250,44 @@ model Exercise {
 }
 
 model Workout {
-  id            String   @id @default(uuid())
-  studentId     String   @map("student_id")
-  workoutPlanId String?  @map("workout_plan_id")
+  id            String    @id @default(uuid())
+  studentId     String    @map("student_id")
+  workoutPlanId String?   @map("workout_plan_id")
   date          DateTime
-  status        String   @default("PENDENTE")
+  status        String    @default("PENDENTE")
   notes         String?
-  contractId    String?  @map("contract_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  contractId    String?   @map("contract_id")
+  // Instante REAL em que o treino entrou pela primeira vez em CONCLUIDO/
+  // CONCLUIDO_PARCIALMENTE (gravado pelo servidor em POST /api/workout/
+  // mark-complete) — nunca sobrescrito em reenvio/idempotência. `date` é só
+  // a data PLANEJADA do treino; a janela de 30 dias do convite ao treino
+  // combinado (ver lib/workout-method-mode.ts) usa só este campo, nunca
+  // `date`. Histórico sem evidência confiável fica null por design — ver
+  // scripts/backfill-workout-completed-at.ts.
+  completedAt   DateTime? @map("completed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  workoutPlan WorkoutPlan?     @relation(fields: [workoutPlanId], references: [id])
-  contract    StudentContract? @relation(fields: [contractId], references: [id])
+  student     Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  workoutPlan WorkoutPlan?       @relation(fields: [workoutPlanId], references: [id])
+  contract    StudentContract?   @relation(fields: [contractId], references: [id])
   careEvents  StudentCareEvent[]
 
   @@map("workouts")
 }
 
-
 model WorkoutExerciseProgress {
-  id            String   @id @default(uuid())
-  studentId     String   @map("student_id")
-  workoutPlanId String   @map("workout_plan_id")
-  exerciseId    String   @map("exercise_id")
-  workoutDate   DateTime @map("workout_date")
-  status        String   @default("PENDENTE")
+  id            String    @id @default(uuid())
+  studentId     String    @map("student_id")
+  workoutPlanId String    @map("workout_plan_id")
+  exerciseId    String    @map("exercise_id")
+  workoutDate   DateTime  @map("workout_date")
+  status        String    @default("PENDENTE")
   effort        String?
-  skipReason    String?  @map("skip_reason")
+  skipReason    String?   @map("skip_reason")
   completedAt   DateTime? @map("completed_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
   workoutPlan WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
@@ -271,18 +312,17 @@ model CheckIn {
 }
 
 model WeeklyFeedback {
-  id        String   @id @default(uuid())
-  studentId String   @map("student_id")
+  id        String    @id @default(uuid())
+  studentId String    @map("student_id")
   content   String
   rating    Int?
   weekStart DateTime? @map("week_start")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@map("weekly_feedbacks")
 }
-
 
 model StudentCareEvent {
   id                   String    @id @default(uuid())
@@ -312,10 +352,10 @@ model StudentCareEvent {
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  student            Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  professor          User?        @relation("CareEventProfessor", fields: [professorId], references: [id])
-  author             User?        @relation("CareEventAuthor", fields: [authorId], references: [id])
-  resolvedBy         User?        @relation("CareEventResolvedBy", fields: [resolvedById], references: [id])
+  student            Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  professor          User?            @relation("CareEventProfessor", fields: [professorId], references: [id])
+  author             User?            @relation("CareEventAuthor", fields: [authorId], references: [id])
+  resolvedBy         User?            @relation("CareEventResolvedBy", fields: [resolvedById], references: [id])
   relatedWorkoutPlan WorkoutPlan?     @relation(fields: [relatedWorkoutPlanId], references: [id])
   relatedWorkout     Workout?         @relation(fields: [relatedWorkoutId], references: [id])
   contract           StudentContract? @relation(fields: [contractId], references: [id])
@@ -328,7 +368,6 @@ model StudentCareEvent {
   @@index([createdAt])
   @@map("student_care_events")
 }
-
 
 model ServicePlan {
   id               String   @id @default(uuid())
@@ -345,7 +384,7 @@ model ServicePlan {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  contracts StudentContract[]
+  contracts      StudentContract[]
   billingOptions ServicePlanBillingOption[]
 
   @@index([active])
@@ -439,19 +478,18 @@ model StudentContract {
 // de checkout simultâneas para o mesmo aluno colidem nesse índice, e só uma
 // consegue reservar o slot antes de chamar a Asaas (ver lib/checkout-reservation.ts).
 
-
 model ContractPayment {
-  id                String    @id @default(uuid())
-  contractId        String    @map("contract_id")
-  studentId         String    @map("student_id")
-  amountCents       Int       @default(0) @map("amount_cents")
-  dueDate           DateTime  @map("due_date")
-  paidAt            DateTime? @map("paid_at")
-  status            String    @default("EM_ABERTO")
-  method            String?   @default("PIX")
-  provider          String?
-  paymentLinkUrl    String?   @map("payment_link_url") @db.Text
-  externalReference String?   @map("external_reference")
+  id                     String    @id @default(uuid())
+  contractId             String    @map("contract_id")
+  studentId              String    @map("student_id")
+  amountCents            Int       @default(0) @map("amount_cents")
+  dueDate                DateTime  @map("due_date")
+  paidAt                 DateTime? @map("paid_at")
+  status                 String    @default("EM_ABERTO")
+  method                 String?   @default("PIX")
+  provider               String?
+  paymentLinkUrl         String?   @map("payment_link_url") @db.Text
+  externalReference      String?   @map("external_reference")
   // ID do pagamento/cobrança na Asaas (payment.id) — distinto de
   // externalReference, que é o nosso ID opaco enviado PARA a Asaas. Usado
   // pelo webhook para localizar o ContractPayment correspondente.
@@ -459,11 +497,11 @@ model ContractPayment {
   // ID da assinatura recorrente na Asaas (ciclo MONTHLY). Nulo para
   // cobrança única (ciclo ANNUAL).
   providerSubscriptionId String?   @map("provider_subscription_id")
-  receiptUrl        String?   @map("receipt_url") @db.Text
-  notes             String?   @db.Text
-  createdById       String?   @map("created_by_id")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  receiptUrl             String?   @map("receipt_url") @db.Text
+  notes                  String?   @db.Text
+  createdById            String?   @map("created_by_id")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
   contract  StudentContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
   student   Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -494,7 +532,6 @@ model WebhookEvent {
   @@map("webhook_events")
 }
 
-
 model ContractLifecycleEvent {
   id          String    @id @default(uuid())
   contractId  String    @map("contract_id")
@@ -517,16 +554,16 @@ model ContractLifecycleEvent {
 }
 
 model Notice {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   title       String?
   content     String
-  type        String   @default("AVISO")
-  authorId    String   @map("author_id")
-  studentId   String?  @map("student_id")
-  targetRole  String   @default("ALUNO") @map("targetRole")
-  professorId String?  @map("professorId")
+  type        String    @default("AVISO")
+  authorId    String    @map("author_id")
+  studentId   String?   @map("student_id")
+  targetRole  String    @default("ALUNO") @map("targetRole")
+  professorId String?   @map("professorId")
   expiresAt   DateTime? @map("expires_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   author    User         @relation(fields: [authorId], references: [id])
   student   Student?     @relation(fields: [studentId], references: [id])
@@ -553,50 +590,47 @@ model NoticeRead {
 }
 
 model Question {
-  id           String    @id @default(uuid())
-  studentId    String?   @map("student_id")
-  parentId     String?   @map("parent_id")
-  content      String
-  videoUrl     String?   @map("video_url")
-  imageUrl     String?   @map("image_url")
-  documentUrl  String?   @map("document_url") @db.Text
-  documentName String?   @map("document_name")
-  documentMimeType String? @map("document_mime_type")
-  answer       String?
-  answeredAt   DateTime? @map("answered_at")
-  answeredById String?   @map("answered_by_id")
-  resolvedAt   DateTime? @map("resolved_at")
-  teacherId    String?   @map("teacherId")
-  senderRole   String    @default("STUDENT") @map("senderRole")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id               String    @id @default(uuid())
+  studentId        String?   @map("student_id")
+  parentId         String?   @map("parent_id")
+  content          String
+  videoUrl         String?   @map("video_url")
+  imageUrl         String?   @map("image_url")
+  documentUrl      String?   @map("document_url") @db.Text
+  documentName     String?   @map("document_name")
+  documentMimeType String?   @map("document_mime_type")
+  answer           String?
+  answeredAt       DateTime? @map("answered_at")
+  answeredById     String?   @map("answered_by_id")
+  resolvedAt       DateTime? @map("resolved_at")
+  teacherId        String?   @map("teacherId")
+  senderRole       String    @default("STUDENT") @map("senderRole")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  student    Student?   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  parent     Question?  @relation("QuestionThread", fields: [parentId], references: [id])
-  children   Question[] @relation("QuestionThread")
+  student     Student?             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent      Question?            @relation("QuestionThread", fields: [parentId], references: [id])
+  children    Question[]           @relation("QuestionThread")
   attachments QuestionAttachment[]
-  answeredBy User?      @relation(fields: [answeredById], references: [id])
-  teacher    User?      @relation("QuestionTeacher", fields: [teacherId], references: [id])
+  answeredBy  User?                @relation(fields: [answeredById], references: [id])
+  teacher     User?                @relation("QuestionTeacher", fields: [teacherId], references: [id])
 
   @@map("questions")
 }
 
-
-
-
 model QuestionAttachment {
-  id           String   @id @default(uuid())
-  questionId   String   @map("question_id")
-  kind         String
-  url          String   @db.Text
-  name         String?
-  mimeType     String?  @map("mime_type")
-  sizeBytes    Int?     @map("size_bytes")
-  purpose      String?
+  id                 String    @id @default(uuid())
+  questionId         String    @map("question_id")
+  kind               String
+  url                String    @db.Text
+  name               String?
+  mimeType           String?   @map("mime_type")
+  sizeBytes          Int?      @map("size_bytes")
+  purpose            String?
   videoReviewSummary String?   @map("video_review_summary") @db.Text
   videoReviewedById  String?   @map("video_reviewed_by_id")
   videoReviewedAt    DateTime? @map("video_reviewed_at")
-  createdAt    DateTime @default(now()) @map("created_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
@@ -659,10 +693,10 @@ model StudentTrainingPreference {
 }
 
 model ExerciseLibrary {
-  id                String   @id @default(uuid())
-  name              String
-  description       String
-  muscleGroup       String
+  id                    String   @id @default(uuid())
+  name                  String
+  description           String
+  muscleGroup           String
   imageUrl              String?
   videoUrl              String?  @map("video_url") @db.Text
   sequenceImageUrl      String?  @map("sequence_image_url") @db.Text
@@ -673,18 +707,18 @@ model ExerciseLibrary {
   sequencePrompt        String?  @map("sequence_prompt") @db.Text
   active                Boolean  @default(true)
   objectiveTags         String?  @map("objective_tags") @db.Text
-  locationTags      String?  @map("location_tags") @db.Text
-  equipmentTags     String?  @map("equipment_tags") @db.Text
-  restrictionTags   String?  @map("restriction_tags") @db.Text
-  levelTags         String?  @map("level_tags") @db.Text
-  intensity         String?
-  instructions      String?  @db.Text
-  commonMistakes    String?  @map("common_mistakes") @db.Text
-  substitutions     String?  @db.Text
-  safetyNotes       String?  @map("safety_notes") @db.Text
-  contraindications String?  @db.Text
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  locationTags          String?  @map("location_tags") @db.Text
+  equipmentTags         String?  @map("equipment_tags") @db.Text
+  restrictionTags       String?  @map("restriction_tags") @db.Text
+  levelTags             String?  @map("level_tags") @db.Text
+  intensity             String?
+  instructions          String?  @db.Text
+  commonMistakes        String?  @map("common_mistakes") @db.Text
+  substitutions         String?  @db.Text
+  safetyNotes           String?  @map("safety_notes") @db.Text
+  contraindications     String?  @db.Text
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   exercises Exercise[]
 
@@ -752,27 +786,27 @@ model StudentReengagementEmail {
 }
 
 model EvolutionFeedback {
-  id                     String    @id @default(uuid())
-  studentId              String    @map("student_id")
-  professorId            String?   @map("professor_id")
-  milestone              Int
-  status                 String    @default("AGUARDANDO_BIOIMPEDANCIA")
-  completedWorkoutsCount Int       @default(0) @map("completed_workouts_count")
-  baselineAvaliacaoId    String?   @map("baseline_avaliacao_id")
-  currentAvaliacaoId     String?   @map("current_avaliacao_id")
-  bioRequestNoticeId     String?   @map("bio_request_notice_id")
-  professorNoticeId      String?   @map("professor_notice_id")
-  studentFeedbackNoticeId String?  @map("student_feedback_notice_id")
-  draft                  String?   @db.Text
-  finalContent           String?   @map("final_content") @db.Text
-  contractId             String?   @map("contract_id")
-  bioRequestedAt         DateTime? @map("bio_requested_at")
-  readyAt                DateTime? @map("ready_at")
-  sentAt                 DateTime? @map("sent_at")
-  createdAt              DateTime  @default(now()) @map("created_at")
-  updatedAt              DateTime  @updatedAt @map("updated_at")
+  id                      String    @id @default(uuid())
+  studentId               String    @map("student_id")
+  professorId             String?   @map("professor_id")
+  milestone               Int
+  status                  String    @default("AGUARDANDO_BIOIMPEDANCIA")
+  completedWorkoutsCount  Int       @default(0) @map("completed_workouts_count")
+  baselineAvaliacaoId     String?   @map("baseline_avaliacao_id")
+  currentAvaliacaoId      String?   @map("current_avaliacao_id")
+  bioRequestNoticeId      String?   @map("bio_request_notice_id")
+  professorNoticeId       String?   @map("professor_notice_id")
+  studentFeedbackNoticeId String?   @map("student_feedback_notice_id")
+  draft                   String?   @db.Text
+  finalContent            String?   @map("final_content") @db.Text
+  contractId              String?   @map("contract_id")
+  bioRequestedAt          DateTime? @map("bio_requested_at")
+  readyAt                 DateTime? @map("ready_at")
+  sentAt                  DateTime? @map("sent_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
-  contract               StudentContract? @relation(fields: [contractId], references: [id])
+  contract StudentContract? @relation(fields: [contractId], references: [id])
 
   @@unique([studentId, contractId, milestone])
   @@index([studentId])

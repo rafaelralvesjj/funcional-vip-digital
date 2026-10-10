@@ -9,6 +9,7 @@ type DashboardSummary = {
     email: string | null;
     phone: string | null;
     commercialStatus: string;
+    workoutMethodMode: "NORMAL" | "COMBINADO";
   };
   currentCycle: {
     id: string;
@@ -74,6 +75,7 @@ type DashboardSummary = {
     isTrialScheduledToStart?: boolean;
     daysUntilTrialStart?: number | null;
     showContractCta?: boolean;
+    showCombinedWorkoutCta?: boolean;
   };
   uiState:
     | "EXPERIENCIA_ATIVA"
@@ -145,6 +147,9 @@ export function AlunoCommercialStatusPanel() {
   const [loading, setLoading] = useState(true);
   const [requestStatus, setRequestStatus] = useState<RequestState>("idle");
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
+  const [pendingModeRequest, setPendingModeRequest] = useState<"NORMAL" | "COMBINADO" | null>(null);
+  const [modeChangeStatus, setModeChangeStatus] = useState<RequestState>("idle");
+  const [modeChangeMessage, setModeChangeMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -174,6 +179,59 @@ export function AlunoCommercialStatusPanel() {
       active = false;
     };
   }, []);
+
+  async function refreshSummary() {
+    try {
+      const response = await fetch("/api/aluno/dashboard-summary", {
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => null);
+
+      if (response.ok && data?.summary) {
+        setSummary(data.summary);
+      }
+    } catch {
+      // Mantém o resumo anterior na tela se a atualização falhar.
+    }
+  }
+
+  async function handleConfirmWorkoutMethodModeChange(requestedMode: "NORMAL" | "COMBINADO") {
+    setModeChangeStatus("loading");
+    setModeChangeMessage(null);
+
+    try {
+      const response = await fetch("/api/aluno/workout-method-mode", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ requestedMode }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Não foi possível alterar o modo de treino agora.");
+      }
+
+      setModeChangeStatus("success");
+      setPendingModeRequest(null);
+      setModeChangeMessage(
+        requestedMode === "COMBINADO"
+          ? "Pronto! Suas próximas programações vão seguir o treino combinado."
+          : "Pronto! Suas próximas programações voltam ao treino normal."
+      );
+
+      await refreshSummary();
+    } catch (error) {
+      setModeChangeStatus("error");
+      setModeChangeMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível alterar o modo de treino agora. Tente novamente mais tarde."
+      );
+    }
+  }
 
   async function handleContinueTrial() {
     setRequestStatus("loading");
@@ -362,6 +420,91 @@ export function AlunoCommercialStatusPanel() {
       {requestMessage && (
         <p className={"mt-1.5 text-[9px] leading-relaxed " + (requestStatus === "error" ? "text-red-300" : "text-emerald-200")}>
           {requestMessage}
+        </p>
+      )}
+
+      {summary.flags?.showCombinedWorkoutCta && pendingModeRequest !== "COMBINADO" && (
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[#00A19C]/30 bg-[#00A19C]/10 px-2.5 py-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold text-[#00A19C]">Experimente um treino combinado</p>
+            <p className="mt-0.5 text-[9px] leading-snug text-[#bdf5f2]">
+              Exercícios em sequência (ex. A1 → A2) antes do descanso.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setPendingModeRequest("COMBINADO");
+              setModeChangeStatus("idle");
+              setModeChangeMessage(null);
+            }}
+            className="shrink-0 rounded-lg bg-[#00A19C] px-3 py-1.5 text-[10px] font-semibold text-[#0a0a0a]"
+          >
+            Experimentar
+          </button>
+        </div>
+      )}
+
+      {summary.student.workoutMethodMode === "COMBINADO" && pendingModeRequest !== "NORMAL" && (
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[#ffffff10] bg-[#1a1a1a] px-2.5 py-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold text-[#e5e5e5]">Treino combinado ativo</p>
+            <p className="mt-0.5 text-[9px] leading-snug text-[#9a9a9a]">
+              Suas próximas programações seguem em sequência de exercícios.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setPendingModeRequest("NORMAL");
+              setModeChangeStatus("idle");
+              setModeChangeMessage(null);
+            }}
+            className="shrink-0 rounded-lg border border-[#ffffff20] px-3 py-1.5 text-[10px] font-semibold text-[#e5e5e5]"
+          >
+            Voltar para treino normal
+          </button>
+        </div>
+      )}
+
+      {pendingModeRequest && (
+        <div className="mt-2 rounded-lg border border-[#00A19C]/30 bg-[#0a0a0a] px-2.5 py-2">
+          <p className="text-[10px] font-semibold text-[#f5f5f5]">
+            {pendingModeRequest === "COMBINADO" ? "Mudar para treino combinado?" : "Voltar para treino normal?"}
+          </p>
+          <p className="mt-1 text-[9px] leading-relaxed text-[#bdbdbd]">
+            No <strong className="text-[#e5e5e5]">normal</strong>, cada exercício vem seguido de descanso. No{" "}
+            <strong className="text-[#e5e5e5]">combinado</strong>, 2 ou mais exercícios são feitos em sequência
+            (ex. A1 → A2) antes do descanso. Nos dois formatos o treino continua 100% personalizado e revisado
+            pelo seu professor — a mudança vale só para as próximas programações, sem alterar o treino atual
+            nem o histórico já salvo.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleConfirmWorkoutMethodModeChange(pendingModeRequest)}
+              disabled={modeChangeStatus === "loading"}
+              className="rounded-lg bg-[#00A19C] px-3 py-1.5 text-[10px] font-semibold text-[#0a0a0a] disabled:opacity-60"
+            >
+              {modeChangeStatus === "loading" ? "Confirmando..." : "Confirmar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingModeRequest(null)}
+              disabled={modeChangeStatus === "loading"}
+              className="rounded-lg border border-[#ffffff20] px-3 py-1.5 text-[10px] font-semibold text-[#e5e5e5] disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {modeChangeMessage && (
+        <p className={"mt-1.5 text-[9px] leading-relaxed " + (modeChangeStatus === "error" ? "text-red-300" : "text-emerald-200")}>
+          {modeChangeMessage}
         </p>
       )}
     </section>

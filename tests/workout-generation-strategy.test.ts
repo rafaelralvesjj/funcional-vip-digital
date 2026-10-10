@@ -6,20 +6,74 @@ import {
   rotateRecentlyUsedExercises,
 } from '../lib/workout-generation-strategy.ts';
 
-test('detecta pedido de treino combinado/dinâmico e exige sequência com descanso após o combinado', () => {
+test('workoutMethodMode=COMBINADO gera as instruções de sequência A1/A2 com descanso após o combinado', () => {
   const strategy = buildWorkoutGenerationStrategy({
+    workoutMethodMode: 'COMBINADO',
     summaryText: 'Aluno treina em academia e prefere máquinas.',
-    openQuestions: [
-      { content: 'Preciso de sequência metabólica de combinado' },
-      { content: 'Quero um treino dinâmico, um exercício intercalado com outro e depois descanso' },
-    ],
     recentExerciseNames: [],
     librarySize: 127,
   });
 
   assert.equal(strategy.dynamicPairedSetsRequested, true);
+  assert.equal(strategy.combinedSequenceRequested, true);
   assert.match(strategy.promptLines.join('\n'), /A1.*A2.*descans/i);
   assert.match(strategy.promptLines.join('\n'), /45.*60/);
+});
+
+test('workoutMethodMode=NORMAL nunca gera instrução de combinado, mesmo sem nenhum texto de contexto', () => {
+  const strategy = buildWorkoutGenerationStrategy({
+    workoutMethodMode: 'NORMAL',
+    recentExerciseNames: [],
+    librarySize: 127,
+  });
+
+  assert.equal(strategy.combinedSequenceRequested, false);
+  assert.equal(strategy.dynamicPairedSetsRequested, false);
+  assert.match(strategy.promptLines.join('\n'), /FORMATO PADR[ÃA]O NORMAL/i);
+});
+
+// REVISÃO: regra absoluta — nunca inferir NORMAL/COMBINADO por texto. A
+// palavra "combinado" (e sinônimos como "dinâmico"/"sequência metabólica")
+// aparecendo em objetivo, histórico (summaryText) ou mensagem
+// (openQuestions/activePreferences) NUNCA pode alterar nem influenciar a
+// decisão — só o workoutMethodMode estruturado decide.
+test('REVISÃO: texto contendo "combinado" em resumo/histórico/mensagem não altera nem influencia o modo', () => {
+  const textLadenWithCombinado = {
+    workoutMethodMode: 'NORMAL' as const,
+    summaryText:
+      'Histórico: aluno já treinou combinado antes, adora sequência metabólica e superset. Objetivo: treino combinado dinâmico.',
+    openQuestions: [
+      { content: 'Quero um treino combinado, com A1 e A2 e descanso só no final, por favor' },
+    ],
+    activePreferences: [
+      { originalMessage: 'Prefiro sempre treino combinado e bi-set, é meu método favorito' },
+    ],
+    recentExerciseNames: [],
+    librarySize: 127,
+  };
+
+  const strategy = buildWorkoutGenerationStrategy(textLadenWithCombinado);
+
+  // Mesmo com "combinado"/"sequência metabólica"/"bi-set"/A1/A2 em todo
+  // lugar no texto, o modo estruturado NORMAL prevalece sempre.
+  assert.equal(strategy.combinedSequenceRequested, false);
+  assert.equal(strategy.dynamicPairedSetsRequested, false);
+  assert.match(strategy.promptLines.join('\n'), /FORMATO PADR[ÃA]O NORMAL/i);
+  assert.doesNotMatch(strategy.promptLines.join('\n'), /M[ÉE]TODO COMBINADO SOLICITADO/i);
+
+  // E o inverso: modo estruturado COMBINADO, nenhum texto mencionando a
+  // palavra em lugar nenhum — ainda assim gera as instruções de combinado,
+  // porque a decisão não depende do texto.
+  const noTextMentioningCombinado = {
+    workoutMethodMode: 'COMBINADO' as const,
+    summaryText: 'Histórico: aluno treina academia, foco em pernas e costas.',
+    recentExerciseNames: [],
+    librarySize: 127,
+  };
+
+  const strategyFromStructuredFlag = buildWorkoutGenerationStrategy(noTextMentioningCombinado);
+  assert.equal(strategyFromStructuredFlag.combinedSequenceRequested, true);
+  assert.match(strategyFromStructuredFlag.promptLines.join('\n'), /M[ÉE]TODO COMBINADO SOLICITADO/i);
 });
 
 test('prioriza exercícios ainda não usados recentemente e mantém os recentes disponíveis no fim', () => {
@@ -40,8 +94,8 @@ test('prioriza exercícios ainda não usados recentemente e mantém os recentes 
 
 test('motor orienta variedade sistemática sem proibir exercícios âncora', () => {
   const strategy = buildWorkoutGenerationStrategy({
+    workoutMethodMode: 'NORMAL',
     summaryText: 'Histórico recente com musculação em academia.',
-    openQuestions: [],
     recentExerciseNames: ['Agachamento no Smith', 'Remada baixa na polia'],
     librarySize: 127,
   });
@@ -76,10 +130,10 @@ test('extrai exercícios usados nos últimos planos a partir do resumo do aluno'
   ]);
 });
 
-test('pedido de combinado no estilo sequência permite 2 ou 3 exercícios e descanso só ao final', () => {
+test('pedido estruturado de COMBINADO permite 2 ou 3 exercícios e descanso só ao final', () => {
   const strategy = buildWorkoutGenerationStrategy({
-    summaryText: 'A aluna quer treino combinado no estilo sequência e já corre em dias separados.',
-    openQuestions: [{ content: 'Quero igual ao exemplo: uma série de cada exercício direto e depois descanso' }],
+    workoutMethodMode: 'COMBINADO',
+    summaryText: 'A aluna já corre em dias separados.',
     recentExerciseNames: [],
     librarySize: 127,
   });
@@ -93,10 +147,10 @@ test('pedido de combinado no estilo sequência permite 2 ou 3 exercícios e desc
   assert.match(prompt, /n[aã]o precisam obrigatoriamente trabalhar o mesmo m[uú]sculo/i);
 });
 
-test('quando contexto diz que cardio já é feito na corrida, o treino de academia fica só musculação', () => {
+test('quando contexto diz que cardio já é feito na corrida, o treino de academia fica só musculação (preferência de conteúdo, não de modo)', () => {
   const strategy = buildWorkoutGenerationStrategy({
+    workoutMethodMode: 'COMBINADO',
     summaryText: 'A aluna já corre e agora faz somente musculação na academia. Cardio fica nos dias de corrida.',
-    openQuestions: [{ content: 'Quero treino combinado de musculação' }],
     recentExerciseNames: [],
     librarySize: 127,
   });
