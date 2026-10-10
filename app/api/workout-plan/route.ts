@@ -7,6 +7,7 @@ import { calculateAgeYears } from "@/lib/student-age";
 import { resolveStudentRecipientEmail } from "@/lib/email-recipient-policy";
 import { releaseCurrentWeekPreplannedWorkouts } from "@/lib/workout-status-lifecycle";
 import { getSaoPauloCivilDateInput, parseCivilDateInput } from "@/lib/planning-window";
+import { isTrialWorkoutCapReached } from "@/lib/trial-window";
 import {
   formatPreferredWorkoutDays,
   getPreferredWorkoutOffsets,
@@ -1778,6 +1779,39 @@ export async function POST(req: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    // Limite real do teste: no total dos 7 dias do contrato TRIAL, não por
+    // semana de calendário — um teste que atravessa a virada de semana não
+    // pode gerar mais do que totalContractedWorkouts treinos no total (ver
+    // especificação Fase A, 3.2 e lib/trial-window.ts).
+    if (activeContract.type === "TRIAL") {
+      const trialWorkoutPlansCount = await prisma.workoutPlan.count({
+        where: {
+          contractId: activeContract.id,
+          active: true,
+          workouts: {
+            some: {
+              status: { notIn: [...WEEKLY_CAPACITY_EXCLUDED_STATUSES] },
+            },
+          },
+        },
+      });
+
+      if (
+        isTrialWorkoutCapReached(
+          trialWorkoutPlansCount,
+          activeContract.totalContractedWorkouts
+        )
+      ) {
+        return NextResponse.json(
+          {
+            error: `Este aluno já atingiu o limite de ${activeContract.totalContractedWorkouts} treino(s) previstos para o período de teste. Para continuar criando treinos, oriente a contratação de um plano pago.`,
+            code: "TRIAL_WORKOUT_CAP_REACHED",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const { startOfWeek, endOfWeek } = getWeekRange(workoutDate);
