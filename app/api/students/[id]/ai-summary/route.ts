@@ -7,6 +7,7 @@ import { calculateAgeYears, formatBirthDateInput, formatBirthDatePtBr } from "@/
 import { MANUAL_AI_EXECUTION_HEADER_LINES } from "@/lib/manual-ai-execution-header";
 import { isStudentAssignedToProfessor, resolveStudentProfessor } from "@/lib/student-professor";
 import { formatPreferredWorkoutDays } from "@/lib/student-workout-days";
+import { normalizeWorkoutMethodMode } from "@/lib/workout-method-mode";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -722,6 +723,7 @@ export async function GET(
         onboardingCompleto: true,
         contractedTrainingDaysPerMonth: true,
         preferredWorkoutDays: true,
+        workoutMethodMode: true,
         createdAt: true,
         updatedAt: true,
         user: {
@@ -1425,6 +1427,7 @@ export async function GET(
         isMinor,
         professorName: professor?.name || null,
         weeklyLimit,
+        workoutMethodMode: normalizeWorkoutMethodMode(student.workoutMethodMode),
       },
       metrics: {
         avaliacoes: avaliacoes.length,

@@ -2,6 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { getStudentDisplayName } from "@/lib/display-name";
 import { shouldShowContractCta, trialWindowFromContractDates } from "@/lib/trial-window";
 import { pickMoneyRelevantPayment } from "@/lib/contract-payment-priority";
+import { normalizeWorkoutMethodMode, isEligibleForCombinedWorkoutInvite, type WorkoutMethodMode } from "@/lib/workout-method-mode";
+
+// Status que contam como "treino realmente concluído" para a janela de 30
+// dias do convite ao combinado (ver lib/workout-method-mode.ts) — os mesmos
+// usados em todo o resto do app para "o aluno fez esse treino".
+const COMPLETED_WORKOUT_STATUSES = ["CONCLUIDO", "CONCLUIDO_PARCIALMENTE"];
 
 export type StudentDashboardUiState =
   | "EXPERIENCIA_ATIVA"
@@ -32,6 +38,7 @@ export type StudentDashboardSummary = {
     phone: string | null;
     image: string | null;
     commercialStatus: string;
+    workoutMethodMode: WorkoutMethodMode;
   };
   currentCycle: {
     id: string;
@@ -97,6 +104,7 @@ export type StudentDashboardSummary = {
     daysUntilTrialStart: number | null;
     shouldEvaluateCommercialCompensation: boolean;
     showContractCta: boolean;
+    showCombinedWorkoutCta: boolean;
   };
   uiState: StudentDashboardUiState;
   hasActiveAccess: boolean;
@@ -278,6 +286,28 @@ export function computeShowContractCta(contracts: any[], today: Date = new Date(
     }),
     now: today,
     hasPaidContractActiveOrScheduled: hasPaidContractActiveOrScheduled(contracts, today),
+  });
+}
+
+/**
+ * CTA "Experimente um treino combinado": só aparece para quem ainda está em
+ * NORMAL (quem já está em COMBINADO vê a opção de voltar, não este convite)
+ * e só depois de 30 dias desde o primeiro treino REALMENTE concluído —
+ * nunca a partir de cadastro, contrato, WorkoutPlan criado ou semana
+ * liberada. Pura: toda a regra de elegibilidade vive em
+ * lib/workout-method-mode.ts; esta função só decide se o convite faz
+ * sentido mostrar (modo ainda NORMAL) em cima dela.
+ */
+export function computeShowCombinedWorkoutCta(params: {
+  workoutMethodMode: WorkoutMethodMode;
+  firstCompletedWorkoutDate: Date | null;
+  now?: Date;
+}): boolean {
+  if (params.workoutMethodMode !== "NORMAL") return false;
+
+  return isEligibleForCombinedWorkoutInvite({
+    firstCompletedWorkoutDate: params.firstCompletedWorkoutDate,
+    now: params.now,
   });
 }
 
@@ -478,6 +508,18 @@ export async function getStudentDashboardSummary(
           updatedAt: true,
         },
       },
+      // Só para a janela de 30 dias do convite ao treino combinado (ver
+      // lib/workout-method-mode.ts) — o primeiro treino REALMENTE
+      // concluído, nunca cadastro/contrato/WorkoutPlan criado/semana
+      // liberada.
+      workouts: {
+        where: {
+          status: { in: COMPLETED_WORKOUT_STATUSES },
+        },
+        orderBy: { date: "asc" },
+        take: 1,
+        select: { date: true },
+      },
     },
   });
 
@@ -486,6 +528,10 @@ export async function getStudentDashboardSummary(
   const activeCarePause = student.careEvents?.[0] || null;
   const contract = pickCurrentContract(student.contracts, activeCarePause);
   const payment = pickMoneyRelevantPayment(contract?.payments || []);
+  const workoutMethodMode = normalizeWorkoutMethodMode(student.workoutMethodMode);
+  const firstCompletedWorkoutDate = student.workouts?.[0]?.date
+    ? new Date(student.workouts[0].date)
+    : null;
 
   const fallbackProfessor = ["PROFESSOR", "TEACHER"].includes(student.user?.role)
     ? student.user
@@ -529,6 +575,10 @@ export async function getStudentDashboardSummary(
     daysUntilTrialStart,
     shouldEvaluateCommercialCompensation: Boolean(activeCarePause),
     showContractCta: computeShowContractCta(student.contracts),
+    showCombinedWorkoutCta: computeShowCombinedWorkoutCta({
+      workoutMethodMode,
+      firstCompletedWorkoutDate,
+    }),
   };
 
   const commercialImpactStatus = activeCarePause
@@ -565,6 +615,7 @@ export async function getStudentDashboardSummary(
       phone: student.phone,
       image: student.image || student.userAuth?.image || null,
       commercialStatus: student.commercialStatus,
+      workoutMethodMode,
     },
     currentCycle: contract
       ? {

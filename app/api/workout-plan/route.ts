@@ -15,14 +15,6 @@ import {
   pickDistributedWorkoutOffsets,
   resolveRecurringWorkoutOffsets,
 } from "@/lib/student-workout-days";
-import {
-  normalizeWorkoutPlanToNormalFormat,
-  restoreWorkoutPlanToCombinedFormat,
-  resolveExplicitWorkoutFormatMode,
-  shouldNormalizeWorkoutPlanToNormalFormat,
-  shouldRestoreWorkoutPlanToCombinedFormat,
-} from "@/lib/workout-format-consistency";
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
@@ -2218,210 +2210,6 @@ export async function POST(req: NextRequest) {
 }
 
 
-const WORKOUT_FORMAT_MUTABLE_STATUSES = [
-  WORKOUT_STATUS_PENDING,
-  WORKOUT_STATUS_PRE_PLANNED,
-  WORKOUT_STATUS_NEEDS_REVIEW,
-];
-
-const WORKOUT_FORMAT_FINAL_STATUSES = [
-  "CONCLUIDO",
-  "CONCLUIDO_PARCIALMENTE",
-  "NAO_REALIZADO",
-  "NAO_CONCLUIDO_COM_RELATO",
-  "INTERROMPIDO_CUIDADO",
-  "ARQUIVADO",
-  "ARCHIVED",
-  "CANCELADO",
-  "CANCELLED",
-  "SUBSTITUIDO",
-  "SUBSTITUTED",
-];
-
-/**
- * Corrige treinos ainda abertos que foram gravados no formato combinado por
- * contaminação de contexto. O padrão é NORMAL; COMBINADO só é preservado quando
- * existe preferência ativa e explícita daquele aluno.
- *
- * Não toca em treino encerrado/histórico.
- */
-async function ensureOpenWorkoutPlansMatchStudentFormat(studentId: string) {
-  const preferences = await prisma.studentTrainingPreference.findMany({
-    where: {
-      studentId,
-    },
-    select: {
-      summary: true,
-      originalMessage: true,
-      status: true,
-      updatedAt: true,
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 50,
-  });
-
-  // Só uma preferência EXPLÍCITA pode reescrever o formato de um treino já salvo.
-  // Ausência de preferência na tabela não significa "NORMAL": o próprio plano
-  // importado é a fonte de verdade do método até o aluno pedir mudança.
-  const mode = resolveExplicitWorkoutFormatMode(preferences);
-
-  const openPlans = await prisma.workoutPlan.findMany({
-    where: {
-      studentId,
-      active: true,
-      workouts: {
-        some: {
-          status: { in: WORKOUT_FORMAT_MUTABLE_STATUSES },
-        },
-      },
-    },
-    include: {
-      exercises: { orderBy: { order: "asc" } },
-      workouts: { select: { status: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const mutablePlans = openPlans.filter((plan) => {
-    const hasFinalWorkout = plan.workouts.some((workout) =>
-      WORKOUT_FORMAT_FINAL_STATUSES.includes(String(workout.status || "").toUpperCase())
-    );
-
-    return !hasFinalWorkout;
-  });
-
-  // Reparo cirúrgico dos dois treinos da Denize que foram achatados para NORMAL
-  // pela versão anterior em 22/09. Os IDs são dos planos já existentes no banco;
-  // o bloco só roda enquanto ainda existir o marcador "Formato normal". Depois da
-  // restauração ele vira no-op e não afeta futuros treinos nem uma mudança futura
-  // de preferência da aluna.
-  const denizeRepairPlanIds = new Set([
-    "0c3fc816-722d-470c-acaa-651dc4c8afdf", // 23/09 - Treino B
-    "77ab5fb8-e11e-40e2-9353-184ecac08762", // 25/09 - Treino C
-  ]);
-  const denizeEmergencyRestoreCandidates =
-    studentId === "aecf26ec-fbf5-4e36-acc2-701bb6bae4e9"
-      ? mutablePlans.filter(
-          (plan) =>
-            denizeRepairPlanIds.has(plan.id) &&
-            shouldRestoreWorkoutPlanToCombinedFormat(plan, "COMBINED")
-        )
-      : [];
-
-  if (denizeEmergencyRestoreCandidates.length > 0) {
-    await prisma.$transaction(
-      denizeEmergencyRestoreCandidates.flatMap((plan) => {
-        const restored = restoreWorkoutPlanToCombinedFormat(plan);
-        const planUpdate = prisma.workoutPlan.update({
-          where: { id: plan.id },
-          data: { notes: restored.notes || null },
-        });
-
-        const exerciseUpdates = (restored.exercises || []).map((exercise: any) =>
-          prisma.exercise.update({
-            where: { id: String(exercise.id) },
-            data: {
-              notes: exercise.notes || null,
-              restTime: exercise.restTime || "60s",
-            },
-          })
-        );
-
-        return [planUpdate, ...exerciseUpdates];
-      })
-    );
-
-    return {
-      mode: "COMBINED" as const,
-      normalizedPlanIds: [] as string[],
-      restoredPlanIds: denizeEmergencyRestoreCandidates.map((plan) => plan.id),
-    };
-  }
-
-  // COMBINED explícito ou ausência de preferência explícita: nunca achatar o
-  // treino para NORMAL. Se ele já foi achatado por uma versão anterior, restaura
-  // a partir da intenção combinada preservada em nome/descrição/resumo.
-  if (mode !== "NORMAL") {
-    const restoreCandidates = mutablePlans.filter((plan) =>
-      shouldRestoreWorkoutPlanToCombinedFormat(plan, mode)
-    );
-
-    if (restoreCandidates.length === 0) {
-      return { mode: mode || "PRESERVE", normalizedPlanIds: [] as string[], restoredPlanIds: [] as string[] };
-    }
-
-    await prisma.$transaction(
-      restoreCandidates.flatMap((plan) => {
-        const restored = restoreWorkoutPlanToCombinedFormat(plan);
-        const planUpdate = prisma.workoutPlan.update({
-          where: { id: plan.id },
-          data: {
-            notes: restored.notes || null,
-          },
-        });
-
-        const exerciseUpdates = (restored.exercises || []).map((exercise: any) =>
-          prisma.exercise.update({
-            where: { id: String(exercise.id) },
-            data: {
-              notes: exercise.notes || null,
-              restTime: exercise.restTime || "60s",
-            },
-          })
-        );
-
-        return [planUpdate, ...exerciseUpdates];
-      })
-    );
-
-    return {
-      mode: mode || "PRESERVE",
-      normalizedPlanIds: [] as string[],
-      restoredPlanIds: restoreCandidates.map((plan) => plan.id),
-    };
-  }
-
-  const candidates = mutablePlans.filter((plan) =>
-    shouldNormalizeWorkoutPlanToNormalFormat(plan, mode)
-  );
-
-  if (candidates.length === 0) {
-    return { mode, normalizedPlanIds: [] as string[], restoredPlanIds: [] as string[] };
-  }
-
-  await prisma.$transaction(
-    candidates.flatMap((plan) => {
-      const normalized = normalizeWorkoutPlanToNormalFormat(plan);
-      const planUpdate = prisma.workoutPlan.update({
-        where: { id: plan.id },
-        data: {
-          description: normalized.description || null,
-          studentSummary: normalized.studentSummary || null,
-          notes: normalized.notes || null,
-        },
-      });
-
-      const exerciseUpdates = (normalized.exercises || []).map((exercise: any) =>
-        prisma.exercise.update({
-          where: { id: String(exercise.id) },
-          data: {
-            notes: exercise.notes || null,
-            restTime: exercise.restTime || "60s",
-          },
-        })
-      );
-
-      return [planUpdate, ...exerciseUpdates];
-    })
-  );
-
-  return {
-    mode,
-    normalizedPlanIds: candidates.map((plan) => plan.id),
-    restoredPlanIds: [] as string[],
-  };
-}
-
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -2441,8 +2229,6 @@ export async function GET(req: NextRequest) {
       ? new Date(`${referenceDateParam}T12:00:00`)
       : new Date();
     const isStudentUser = role === "STUDENT";
-    const canNormalizeOpenWorkoutFormat =
-      Boolean(currentUserId) && ["STUDENT", "TEACHER", "GESTOR", "ADMIN"].includes(role);
 
     if (id) {
       let plan = await prisma.workoutPlan.findUnique({
@@ -2475,18 +2261,6 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      let changedFormatPlanIds: string[] = [];
-
-      // Se o GET corrigir o formato no banco, precisamos reler o mesmo plano antes
-      // de responder. Sem isso, a primeira abertura pode receber o objeto antigo.
-      if (canNormalizeOpenWorkoutFormat) {
-        const formatSync = await ensureOpenWorkoutPlansMatchStudentFormat(plan.studentId);
-        changedFormatPlanIds = [
-          ...formatSync.normalizedPlanIds,
-          ...(formatSync.restoredPlanIds || []),
-        ];
-      }
-
       if (isStudentUser) {
         const student = await prisma.student.findUnique({
           where: { id: plan.studentId },
@@ -2503,7 +2277,7 @@ export async function GET(req: NextRequest) {
           studentId: plan.studentId,
         });
 
-        if (releaseResult.count > 0 || changedFormatPlanIds.includes(plan.id)) {
+        if (releaseResult.count > 0) {
           plan = await prisma.workoutPlan.findUnique({
             where: { id },
             include: {
@@ -2547,36 +2321,6 @@ export async function GET(req: NextRequest) {
             { status: 404 }
           );
         }
-      } else if (changedFormatPlanIds.includes(plan.id)) {
-        plan = await prisma.workoutPlan.findUnique({
-          where: { id },
-          include: {
-            exercises: {
-              orderBy: { order: "asc" },
-              include: {
-                libraryExercise: {
-                  select: { muscleGroup: true },
-                },
-              },
-            },
-            workouts: {
-              select: {
-                id: true,
-                status: true,
-                date: true,
-                notes: true,
-              },
-              orderBy: { date: "asc" },
-            },
-          },
-        });
-
-        if (!plan) {
-          return NextResponse.json(
-            { error: "Workout plan not found" },
-            { status: 404 }
-          );
-        }
       }
 
       return NextResponse.json(plan, { headers: NO_STORE_HEADERS });
@@ -2588,13 +2332,6 @@ export async function GET(req: NextRequest) {
         active: true,
         workouts: { some: {} },
       };
-
-      // Corrige também quando o professor/gestor abre o aluno. Antes, a
-      // normalização só rodava dentro do acesso STUDENT; por isso um treino já
-      // salvo como combinado podia continuar assim na tela administrativa.
-      if (canNormalizeOpenWorkoutFormat) {
-        await ensureOpenWorkoutPlansMatchStudentFormat(studentId);
-      }
 
       if (isStudentUser) {
         const student = await prisma.student.findUnique({
