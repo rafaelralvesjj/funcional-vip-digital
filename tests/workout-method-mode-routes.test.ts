@@ -64,3 +64,68 @@ test('migração administrativa (Denize/Rafael) usa resolveWorkoutMethodModeChan
   assert.match(source, /resolveWorkoutMethodModeChange\(/);
   assert.match(source, /source:\s*["']MIGRATION_SCRIPT["']/);
 });
+
+// REVISÃO (PR #13, item 1): nunca usar Student.userId (professor
+// responsável) para localizar o aluno-alvo da rota self-service, e exigir
+// role STUDENT/ALUNO explicitamente (403 para qualquer outro papel).
+test('POST /api/aluno/workout-method-mode exige role STUDENT e nunca usa Student.userId para localizar o aluno', () => {
+  const source = readSource('app/api/aluno/workout-method-mode/route.ts');
+
+  assert.match(source, /isStudentSelfServiceRole\(/);
+  assert.match(source, /from ["']@\/lib\/workout-method-mode-access["']/);
+  assert.match(source, /status:\s*403/);
+  assert.match(source, /buildStudentSelfServiceWhere\(/);
+  assert.doesNotMatch(source, /\{\s*userId\s*\}/);
+  assert.doesNotMatch(source, /student\.userId/);
+});
+
+// REVISÃO (PR #13, item 2): a janela de 30 dias usa o instante REAL de
+// conclusão (Workout.completedAt), nunca a data planejada (Workout.date).
+test('POST /api/aluno/workout-method-mode e lib/student-dashboard-summary.ts usam Workout.completedAt, nunca Workout.date, para a elegibilidade do convite', () => {
+  const routeSource = readSource('app/api/aluno/workout-method-mode/route.ts');
+  const summarySource = readSource('lib/student-dashboard-summary.ts');
+
+  for (const source of [routeSource, summarySource]) {
+    assert.match(source, /completedAt:\s*\{\s*not:\s*null\s*\}/);
+    assert.match(source, /orderBy:\s*\{\s*completedAt:\s*["']asc["']\s*\}/);
+    assert.doesNotMatch(source, /orderBy:\s*\{\s*date:\s*["']asc["']\s*\}/);
+  }
+});
+
+test('POST /api/workout/mark-complete usa resolveWorkoutCompletedAt (nunca grava completedAt incondicionalmente)', () => {
+  const source = readSource('app/api/workout/mark-complete/route.ts');
+
+  assert.match(source, /from ["']@\/lib\/workout-completion["']/);
+  assert.match(source, /resolveWorkoutCompletedAt\(/);
+  assert.match(source, /completedAt:\s*completedAtToPersist/);
+});
+
+// REVISÃO (PR #13, item 3): NORMAL/COMBINADO nunca pode virar texto
+// arbitrário no banco — garantido por CHECK constraint no Postgres, não só
+// pelo código de aplicação.
+test('migration de modo de treino adiciona CHECK constraints para NORMAL/COMBINADO em students e student_workout_method_changes', () => {
+  const migrationSource = readSource(
+    'prisma/migrations/20261010020000_workout_method_mode_review_fixes/migration.sql'
+  );
+
+  assert.match(migrationSource, /students_workout_method_mode_check/);
+  assert.match(migrationSource, /CHECK\s*\(\s*"workout_method_mode"\s+IN\s*\(\s*'NORMAL',\s*'COMBINADO'\s*\)\s*\)/);
+
+  assert.match(migrationSource, /student_workout_method_changes_previous_mode_check/);
+  assert.match(migrationSource, /CHECK\s*\(\s*"previous_mode"\s+IN\s*\(\s*'NORMAL',\s*'COMBINADO'\s*\)\s*\)/);
+
+  assert.match(migrationSource, /student_workout_method_changes_new_mode_check/);
+  assert.match(migrationSource, /CHECK\s*\(\s*"new_mode"\s+IN\s*\(\s*'NORMAL',\s*'COMBINADO'\s*\)\s*\)/);
+
+  // Aditiva: nenhum DROP, e idempotente via DO $$ ... EXCEPTION WHEN duplicate_object.
+  assert.doesNotMatch(migrationSource, /DROP /);
+  assert.match(migrationSource, /EXCEPTION WHEN duplicate_object THEN NULL/);
+});
+
+test('migration de modo de treino adiciona workouts.completed_at de forma aditiva', () => {
+  const migrationSource = readSource(
+    'prisma/migrations/20261010020000_workout_method_mode_review_fixes/migration.sql'
+  );
+
+  assert.match(migrationSource, /ALTER TABLE "workouts" ADD COLUMN IF NOT EXISTS "completed_at"/);
+});

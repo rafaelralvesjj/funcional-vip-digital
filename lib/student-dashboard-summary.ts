@@ -509,16 +509,20 @@ export async function getStudentDashboardSummary(
         },
       },
       // Só para a janela de 30 dias do convite ao treino combinado (ver
-      // lib/workout-method-mode.ts) — o primeiro treino REALMENTE
-      // concluído, nunca cadastro/contrato/WorkoutPlan criado/semana
-      // liberada.
+      // lib/workout-method-mode.ts) — o instante REAL do primeiro treino
+      // concluído (Workout.completedAt), nunca a data planejada
+      // (Workout.date) nem cadastro/contrato/WorkoutPlan criado/semana
+      // liberada. Histórico sem completedAt confiável (ver
+      // scripts/backfill-workout-completed-at.ts) fica de fora por design —
+      // nunca libera o convite silenciosamente a partir da data planejada.
       workouts: {
         where: {
           status: { in: COMPLETED_WORKOUT_STATUSES },
+          completedAt: { not: null },
         },
-        orderBy: { date: "asc" },
+        orderBy: { completedAt: "asc" },
         take: 1,
-        select: { date: true },
+        select: { completedAt: true },
       },
     },
   });
@@ -529,8 +533,8 @@ export async function getStudentDashboardSummary(
   const contract = pickCurrentContract(student.contracts, activeCarePause);
   const payment = pickMoneyRelevantPayment(contract?.payments || []);
   const workoutMethodMode = normalizeWorkoutMethodMode(student.workoutMethodMode);
-  const firstCompletedWorkoutDate = student.workouts?.[0]?.date
-    ? new Date(student.workouts[0].date)
+  const firstCompletedWorkoutDate = student.workouts?.[0]?.completedAt
+    ? new Date(student.workouts[0].completedAt)
     : null;
 
   const fallbackProfessor = ["PROFESSOR", "TEACHER"].includes(student.user?.role)

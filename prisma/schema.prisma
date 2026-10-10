@@ -250,15 +250,23 @@ model Exercise {
 }
 
 model Workout {
-  id            String   @id @default(uuid())
-  studentId     String   @map("student_id")
-  workoutPlanId String?  @map("workout_plan_id")
+  id            String    @id @default(uuid())
+  studentId     String    @map("student_id")
+  workoutPlanId String?   @map("workout_plan_id")
   date          DateTime
-  status        String   @default("PENDENTE")
+  status        String    @default("PENDENTE")
   notes         String?
-  contractId    String?  @map("contract_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  contractId    String?   @map("contract_id")
+  // Instante REAL em que o treino entrou pela primeira vez em CONCLUIDO/
+  // CONCLUIDO_PARCIALMENTE (gravado pelo servidor em POST /api/workout/
+  // mark-complete) — nunca sobrescrito em reenvio/idempotência. `date` é só
+  // a data PLANEJADA do treino; a janela de 30 dias do convite ao treino
+  // combinado (ver lib/workout-method-mode.ts) usa só este campo, nunca
+  // `date`. Histórico sem evidência confiável fica null por design — ver
+  // scripts/backfill-workout-completed-at.ts.
+  completedAt   DateTime? @map("completed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   student     Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
   workoutPlan WorkoutPlan?       @relation(fields: [workoutPlanId], references: [id])

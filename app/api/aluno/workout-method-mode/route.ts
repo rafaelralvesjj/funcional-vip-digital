@@ -11,50 +11,47 @@ import {
   CombinedWorkoutInviteNotEligibleError,
   type WorkoutMethodMode,
 } from "@/lib/workout-method-mode";
+import {
+  isStudentSelfServiceRole,
+  buildStudentSelfServiceWhere,
+} from "@/lib/workout-method-mode-access";
 
 export const dynamic = "force-dynamic";
 
 // Mesmos status usados em todo o app para "o aluno fez esse treino" (ver
 // lib/student-dashboard-summary.ts) — janela de 30 dias do convite ao
-// combinado nunca conta cadastro, contrato, WorkoutPlan criado ou semana
-// liberada como início.
+// combinado usa o instante REAL de conclusão (Workout.completedAt), nunca a
+// data planejada (Workout.date), cadastro, contrato, WorkoutPlan criado ou
+// semana liberada.
 const COMPLETED_WORKOUT_STATUSES = ["CONCLUIDO", "CONCLUIDO_PARCIALMENTE"];
-
-function normalizeEmail(email?: string | null) {
-  return email?.trim().toLowerCase() || null;
-}
-
-function buildStudentWhere(userId?: string | null, email?: string | null) {
-  const orWhere: any[] = [];
-  const normalizedEmail = normalizeEmail(email);
-
-  if (userId) {
-    orWhere.push({ userAuthId: userId });
-    orWhere.push({ userId });
-  }
-
-  if (normalizedEmail) {
-    orWhere.push({ email: { equals: normalizedEmail, mode: "insensitive" } });
-    orWhere.push({ userAuth: { email: { equals: normalizedEmail, mode: "insensitive" } } });
-  }
-
-  return orWhere;
-}
 
 /**
  * Troca de modo de treino (NORMAL/COMBINADO) a pedido do próprio aluno.
- * Elegibilidade e regras de transição são sempre recalculadas aqui a partir
- * do banco — nunca confiadas ao cliente. Esta rota nunca lê, cria ou altera
- * WorkoutPlan/Workout/Exercise: a mudança afeta só as próximas
+ * Exclusiva de quem está autenticado como o próprio aluno — REVISÃO (PR #13,
+ * item 1): nunca usa Student.userId para localizar o aluno-alvo (esse campo
+ * é o professor responsável em vários fluxos do projeto; usá-lo aqui
+ * deixaria um professor autenticado alterar qualquer aluno vinculado a
+ * ele). Elegibilidade e regras de transição são sempre recalculadas aqui a
+ * partir do banco — nunca confiadas ao cliente. Esta rota nunca lê, cria ou
+ * altera WorkoutPlan/Workout/Exercise: a mudança afeta só as próximas
  * programações, decididas depois por lib/workout-generation-strategy.ts.
  */
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    const sessionUser = session?.user as { id?: string; email?: string | null } | undefined;
+    const sessionUser = session?.user as
+      | { id?: string; email?: string | null; role?: string | null }
+      | undefined;
 
     if (!sessionUser?.id && !sessionUser?.email) {
       return NextResponse.json({ ok: false, error: "Não autenticado." }, { status: 401 });
+    }
+
+    if (!isStudentSelfServiceRole(sessionUser?.role)) {
+      return NextResponse.json(
+        { ok: false, error: "Esta ação é exclusiva do próprio aluno." },
+        { status: 403 }
+      );
     }
 
     let body: any = null;
@@ -73,7 +70,10 @@ export async function POST(request: NextRequest) {
     }
     const requestedMode = requestedModeRaw as WorkoutMethodMode;
 
-    const orWhere = buildStudentWhere(sessionUser.id, sessionUser.email);
+    const orWhere = buildStudentSelfServiceWhere({
+      sessionUserId: sessionUser?.id || null,
+      sessionEmail: sessionUser?.email || null,
+    });
 
     if (!orWhere.length) {
       return NextResponse.json(
@@ -88,10 +88,13 @@ export async function POST(request: NextRequest) {
         id: true,
         workoutMethodMode: true,
         workouts: {
-          where: { status: { in: COMPLETED_WORKOUT_STATUSES } },
-          orderBy: { date: "asc" },
+          where: {
+            status: { in: COMPLETED_WORKOUT_STATUSES },
+            completedAt: { not: null },
+          },
+          orderBy: { completedAt: "asc" },
           take: 1,
-          select: { date: true },
+          select: { completedAt: true },
         },
       },
     });
@@ -104,8 +107,8 @@ export async function POST(request: NextRequest) {
     }
 
     const currentMode = normalizeWorkoutMethodMode(student.workoutMethodMode);
-    const firstCompletedWorkoutDate = student.workouts?.[0]?.date
-      ? new Date(student.workouts[0].date)
+    const firstCompletedWorkoutDate = student.workouts?.[0]?.completedAt
+      ? new Date(student.workouts[0].completedAt)
       : null;
 
     const isEligibleForCombined = isEligibleForCombinedWorkoutInvite({ firstCompletedWorkoutDate });
@@ -132,7 +135,7 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
-    const actorUserId = sessionUser.id || null;
+    const actorUserId = sessionUser?.id || null;
 
     await prisma.$transaction([
       prisma.student.update({

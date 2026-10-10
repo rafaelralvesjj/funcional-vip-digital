@@ -98,6 +98,29 @@ test('a função não aceita nenhuma outra data (cadastro/contrato/plano/libera�
   );
 });
 
+// REVISÃO (PR #13, item 2): a função só recebe firstCompletedWorkoutDate —
+// nunca Workout.date (data planejada) — então os cenários abaixo, embora
+// pareçam "sobre data planejada", só existem para deixar explícito que o
+// parâmetro usado pelo chamador real (ver app/api/aluno/workout-method-
+// mode/route.ts e lib/student-dashboard-summary.ts, que agora consultam
+// Workout.completedAt) tem que ser o instante REAL de conclusão. Um treino
+// "planejado" há 40 dias mas só concluído agora nunca é elegível...
+test('treino planejado há 40 dias mas concluído (completedAt) agora: ainda não elegível', () => {
+  assert.equal(
+    isEligibleForCombinedWorkoutInvite({ firstCompletedWorkoutDate: daysFromNow(0) }),
+    false
+  );
+});
+
+// ...e um treino planejado para hoje mas cujo completedAt real já tem 30
+// dias é elegível — porque só o instante de conclusão importa.
+test('treino planejado hoje mas conclusão (completedAt) registrada há 30 dias: elegível', () => {
+  assert.equal(
+    isEligibleForCombinedWorkoutInvite({ firstCompletedWorkoutDate: daysFromNow(-30) }),
+    true
+  );
+});
+
 // --- resolveWorkoutMethodModeChange ----------------------------------------
 
 test('confirmação explícita NORMAL -> COMBINADO', () => {
