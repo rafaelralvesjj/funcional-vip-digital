@@ -33,7 +33,7 @@ function diffCivilDays(fromCivilDate: string, toCivilDate: string): number {
 }
 
 /** Aritmética pura sobre a string de data civil, sem instante/fuso envolvido. */
-function addCivilDays(civilDateInput: string, days: number): string {
+export function addCivilDays(civilDateInput: string, days: number): string {
   const anchor = new Date(`${civilDateInput}T00:00:00Z`);
   anchor.setUTCDate(anchor.getUTCDate() + days);
   return anchor.toISOString().slice(0, 10);
@@ -41,6 +41,10 @@ function addCivilDays(civilDateInput: string, days: number): string {
 
 function endOfCivilDayInSaoPaulo(civilDateInput: string): Date {
   return new Date(`${civilDateInput}T23:59:59.999${SAO_PAULO_UTC_OFFSET}`);
+}
+
+function startOfCivilDayInSaoPaulo(civilDateInput: string): Date {
+  return new Date(`${civilDateInput}T00:00:00.000${SAO_PAULO_UTC_OFFSET}`);
 }
 
 /**
@@ -113,4 +117,52 @@ export function formatTrialPeriodSummary(
   maxWorkouts: number = TRIAL_MAX_WORKOUTS
 ): string {
   return `Seu período de teste vai até ${endDateText} e inclui até ${maxWorkouts} treino(s).`;
+}
+
+export type PaidContractStartResolution = {
+  /** Data/instante em que o contrato pago deve começar a valer. */
+  startDate: Date;
+  /**
+   * true = pagamento confirmado enquanto o teste ainda era válido: os 7 dias
+   * de teste são preservados integralmente (o contrato pago só começa no
+   * dia civil seguinte ao fim do teste). false = pagamento confirmado depois
+   * do teste já ter terminado: o contrato pago começa imediatamente, na
+   * confirmação.
+   */
+  paidDuringTrial: boolean;
+};
+
+/**
+ * Regra central e reutilizável (cadastro manual hoje, webhook Asaas amanhã)
+ * para nunca encurtar o teste quando o aluno paga antes do fim dele — ver
+ * especificação Fase A, 3.4. Pagar cedo não acelera nada: o contrato pago
+ * fica programado para o dia seguinte ao fim do teste, e o teste continua
+ * valendo normalmente até seu último dia civil. Pagar depois do teste já
+ * ter acabado começa o contrato pago imediatamente, na confirmação.
+ *
+ * Recebe só trialEndDate (não a TrialWindow inteira) de propósito: no
+ * momento da conversão/webhook, o que existe de verdade é o endDate já
+ * persistido no StudentContract do teste — não uma janela recém-calculada
+ * a partir de "agora".
+ */
+export function resolvePaidContractStart(params: {
+  trialEndDate: Date;
+  paymentConfirmedAt: Date;
+}): PaidContractStartResolution {
+  const trialEndCivilDate = getSaoPauloCivilDateInput(params.trialEndDate);
+  const paidDuringTrial =
+    params.paymentConfirmedAt.getTime() <= params.trialEndDate.getTime();
+
+  if (paidDuringTrial) {
+    const nextCivilDate = addCivilDays(trialEndCivilDate, 1);
+    return {
+      startDate: startOfCivilDayInSaoPaulo(nextCivilDate),
+      paidDuringTrial: true,
+    };
+  }
+
+  return {
+    startDate: new Date(params.paymentConfirmedAt),
+    paidDuringTrial: false,
+  };
 }

@@ -167,22 +167,66 @@ function moneyRelevantPayment(payments: any[]) {
   })[0];
 }
 
-function pickCurrentContract(contracts: any[], activeCarePause?: any | null) {
+/**
+ * Um contrato só conta como "em vigor agora" se seu startDate já chegou.
+ * Sem essa checagem, um contrato pago criado com status ACTIVE mas startDate
+ * no futuro (ex.: pagamento antecipado que preserva os 7 dias de teste —
+ * ver resolvePaidContractStart em lib/trial-window.ts) seria tratado como o
+ * contrato atual antes da hora, escondendo o teste que ainda é válido.
+ */
+export function hasContractStarted(
+  contract: { startDate: Date | string },
+  today: Date = new Date()
+): boolean {
+  const startDate = startOfDay(new Date(contract.startDate));
+  return startDate.getTime() <= startOfDay(today).getTime();
+}
+
+/**
+ * TRIAL em curso de verdade: ACTIVE, já começou e ainda não expirou. Usado
+ * para dar prioridade ao teste sobre um PAID AGUARDANDO_PAGAMENTO que o
+ * gestor tenha criado em paralelo (ver pickCurrentContract) — só depois que
+ * o teste termina de verdade é que o PAID pendente pode virar o contrato
+ * "atual" exibido ao aluno.
+ */
+function isTrialActiveAndValid(contract: any, today: Date): boolean {
+  if (contract.type !== "TRIAL" || contract.status !== "ACTIVE") return false;
+  if (!hasContractStarted(contract, today)) return false;
+
+  const endDate = startOfDay(new Date(contract.endDate));
+  return endDate.getTime() >= today.getTime();
+}
+
+export function pickCurrentContract(contracts: any[], activeCarePause?: any | null) {
   if (!contracts?.length) return null;
 
   const today = startOfDay(new Date());
+  const validActiveTrial = contracts.find((contract) => isTrialActiveAndValid(contract, today));
 
   const activeOrAwaiting = contracts.find((contract) => {
     const endDate = startOfDay(new Date(contract.endDate));
     const isNotExpired = endDate.getTime() >= today.getTime();
 
+    // Enquanto existir um TRIAL ACTIVE e válido, um PAID AGUARDANDO_PAGAMENTO
+    // não pode assumir como contrato atual — o teste em curso prevalece.
+    if (
+      contract.status === "AWAITING_PAYMENT" &&
+      validActiveTrial &&
+      validActiveTrial.id !== contract.id
+    ) {
+      return false;
+    }
+
     return (
+      hasContractStarted(contract, today) &&
       isNotExpired &&
       ["ACTIVE", "AWAITING_PAYMENT", "SUSPENDED"].includes(contract.status)
     );
   });
 
   if (activeOrAwaiting) return activeOrAwaiting;
+
+  if (validActiveTrial) return validActiveTrial;
 
   const trialStillValid = contracts.find((contract) => {
     const endDate = startOfDay(new Date(contract.endDate));
