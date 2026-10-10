@@ -14,7 +14,7 @@ function createFakeAsaasBackend() {
   const subscriptions = new Map<string, any>();
   const paymentsBySubscription = new Map<string, any[]>();
   const payments = new Map<string, any>();
-  const calls: { method: string; path: string }[] = [];
+  const calls: { method: string; path: string; body: any }[] = [];
   let nextSubscriptionPaymentsShouldFail = false;
 
   function respond(status: number, body: unknown) {
@@ -27,7 +27,7 @@ function createFakeAsaasBackend() {
 
   const fetchImpl = async (url: string, init: any) => {
     const path = url.replace('https://api-sandbox.asaas.com/v3', '');
-    calls.push({ method: init.method, path });
+    calls.push({ method: init.method, path, body: init.body ? JSON.parse(init.body) : null });
 
     if (init.method === 'POST' && path === '/subscriptions') {
       const body = JSON.parse(init.body);
@@ -249,6 +249,35 @@ test('ANNUAL, retomada com providerPaymentId já conhecido: busca a cobrança ex
 
   assert.equal(second.providerPaymentId, first.providerPaymentId);
   assert.equal(backend.countCalls('POST', '/payments'), 1, 'não deveria criar uma segunda cobrança');
+});
+
+// REVISÃO (ponto 2): a data da cobrança tem que ser a data civil de
+// America/Sao_Paulo, nunca new Date().toISOString().slice(0, 10) (UTC) — à
+// noite no Brasil, UTC já é o dia seguinte.
+test('REVISÃO (ponto 2): 2026-10-10T01:00:00Z (22h de 09/10 em São Paulo) gera vencimento 2026-10-09, não 2026-10-10', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'] });
+  t.mock.timers.setTime(new Date('2026-10-10T01:00:00Z').getTime());
+
+  try {
+    const backend = createFakeAsaasBackend();
+    const config = getAsaasClientConfig({ apiKey: 'key', fetchImpl: backend.fetchImpl as any });
+
+    await resolveCheckoutCharge({
+      config,
+      customerId: 'cus_1',
+      billingCycle: 'ANNUAL',
+      amountValue: 99.9,
+      description: 'Plano anual',
+      pending: emptyPending('chk_tz'),
+    });
+
+    const createCall = backend.calls.find((call) => call.method === 'POST' && call.path === '/payments');
+    assert.ok(createCall, 'esperava uma chamada POST /payments');
+    assert.equal(createCall!.body.dueDate, '2026-10-09');
+    assert.notEqual(createCall!.body.dueDate, '2026-10-10');
+  } finally {
+    t.mock.timers.reset();
+  }
 });
 
 test('ANNUAL: reconcilia por externalReference quando nada foi capturado localmente (mesmo cenário do ponto 1, para cobrança única)', async () => {

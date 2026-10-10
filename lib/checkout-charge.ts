@@ -10,6 +10,7 @@ import {
   findAsaasSubscriptionByExternalReference,
   findAsaasPaymentByExternalReference,
 } from "./asaas-client";
+import { getSaoPauloCivilDateInput } from "./planning-window";
 
 /**
  * Estado local já conhecido de uma tentativa de checkout (nova ou em
@@ -146,7 +147,10 @@ export async function resolveCheckoutCharge(params: {
   pending: PendingChargeState;
 }): Promise<ResolvedCharge> {
   const billingType: AsaasBillingType = "UNDEFINED";
-  const today = new Date().toISOString().slice(0, 10);
+  // Data civil de América/São_Paulo, nunca new Date().toISOString() — à noite
+  // no Brasil (ex.: 22h em São Paulo = 01h UTC do dia seguinte) o corte UTC
+  // adiantaria a data de vencimento em um dia.
+  const today = getSaoPauloCivilDateInput(new Date());
 
   if (params.billingCycle === "MONTHLY") {
     return resolveMonthlyCharge({

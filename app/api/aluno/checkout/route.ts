@@ -14,6 +14,8 @@ import { resolveCheckoutCharge } from "@/lib/checkout-charge";
 import { buildCheckoutExternalReference } from "@/lib/checkout-reference";
 import { assertTermsAccepted, TermsNotAcceptedError, CHECKOUT_TERMS_VERSION } from "@/lib/checkout-terms";
 import { reserveCheckoutSlot, CheckoutAlreadyPendingError } from "@/lib/checkout-reservation";
+import { addCivilMonthsMinusOneDayAsEndOfDay } from "@/lib/civil-month";
+import { findActivePaidContract, findPendingPaidReservation } from "@/lib/checkout-contract-lookup";
 
 export const dynamic = "force-dynamic";
 
@@ -48,13 +50,12 @@ function startOfDay(date: Date) {
   return normalized;
 }
 
+// Nunca o setMonth nativo de Date diretamente para a duração comercial do
+// placeholder — mesmo helper central de mês civil (com clamp, em
+// America/Sao_Paulo) já usado por lib/contract-activation.ts, para as duas
+// contas nunca divergirem.
 function addMonthsMinusOneDay(startDate: Date, months: number): Date {
-  const endDate = new Date(startDate);
-  endDate.setMonth(endDate.getMonth() + Math.max(months, 1));
-  endDate.setDate(endDate.getDate() - 1);
-  endDate.setHours(23, 59, 59, 999);
-
-  return endDate;
+  return addCivilMonthsMinusOneDayAsEndOfDay(startDate, Math.max(months, 1));
 }
 
 function getClientIp(req: NextRequest): string | null {
@@ -114,32 +115,33 @@ export async function POST(req: NextRequest) {
 
     const today = startOfDay(new Date());
 
-    const existingPaidContract = student.contracts.find((contract) => {
-      if (contract.type !== "PAID") return false;
-      if (!["ACTIVE", "AWAITING_PAYMENT"].includes(contract.status)) return false;
-      return startOfDay(new Date(contract.endDate)).getTime() >= today.getTime();
-    });
+    const activePaidContract: any = findActivePaidContract(student.contracts as any[], today);
 
-    if (existingPaidContract?.status === "ACTIVE") {
+    if (activePaidContract) {
       return NextResponse.json(
         { error: "Você já tem um contrato pago ativo.", code: "PAID_CONTRACT_ALREADY_ACTIVE" },
         { status: 409 }
       );
     }
 
-    // AWAITING_PAYMENT: o pagamento pendente dessa reserva é o único que
-    // nos interessa — se já tem link, reaproveita; se não tem (reservado mas
-    // sem resposta confirmada da Asaas ainda), RETOMA a mesma reserva em vez
-    // de tentar criar uma nova (ver fase de reconciliação abaixo). Isto
-    // nunca apaga a reserva nem a troca por outra.
-    const pendingPayment = existingPaidContract?.payments.find((payment) => payment.status === "EM_ABERTO");
+    // Ver lib/checkout-contract-lookup.ts: a reserva AWAITING_PAYMENT
+    // pendente é identificada só por tipo+status, nunca por endDate (item 3
+    // da revisão).
+    const pendingPaidContract: any = findPendingPaidReservation(student.contracts as any[]);
+
+    // O pagamento pendente dessa reserva é o único que nos interessa — se já
+    // tem link, reaproveita; se não tem (reservado mas sem resposta
+    // confirmada da Asaas ainda), RETOMA a mesma reserva em vez de tentar
+    // criar uma nova (ver fase de reconciliação abaixo). Isto nunca apaga a
+    // reserva nem a troca por outra.
+    const pendingPayment = pendingPaidContract?.payments.find((payment: any) => payment.status === "EM_ABERTO");
 
     if (pendingPayment?.paymentLinkUrl) {
       return NextResponse.json({
         ok: true,
         reused: true,
         checkoutUrl: pendingPayment.paymentLinkUrl,
-        contractId: existingPaidContract!.id,
+        contractId: pendingPaidContract!.id,
         paymentId: pendingPayment.id,
       });
     }
@@ -147,7 +149,7 @@ export async function POST(req: NextRequest) {
     // billingOptionId: ao retomar uma reserva existente, usa a opção JÁ
     // reservada (gravada no próprio contrato) — nunca a do corpo da
     // requisição, que poderia divergir de uma tentativa anterior.
-    const billingOptionId = existingPaidContract?.billingOptionId || requestedBillingOptionId;
+    const billingOptionId = pendingPaidContract?.billingOptionId || requestedBillingOptionId;
 
     const billingOption = await prisma.servicePlanBillingOption.findUnique({
       where: { id: billingOptionId },
@@ -206,10 +208,10 @@ export async function POST(req: NextRequest) {
     let pendingProviderPaymentId: string | null;
     let pendingProviderSubscriptionId: string | null;
 
-    if (existingPaidContract && pendingPayment) {
+    if (pendingPaidContract && pendingPayment) {
       // Retomando uma reserva já existente (sem paymentLinkUrl ainda) —
       // nunca reserva de novo, nunca apaga nada (item 1 da revisão).
-      contractId = existingPaidContract.id;
+      contractId = pendingPaidContract.id;
       paymentId = pendingPayment.id;
       checkoutExternalReference = pendingPayment.externalReference || buildCheckoutExternalReference();
       pendingProviderPaymentId = pendingPayment.providerPaymentId || null;

@@ -62,5 +62,25 @@ test('checkout usa resolveCheckoutCharge (reconciliação) em vez de chamar crea
 test('checkout retoma uma reserva pendente existente (sem link) em vez de reservar de novo', () => {
   const source = readRouteSource();
   assert.match(source, /pendingPayment/);
-  assert.match(source, /existingPaidContract\??\.billingOptionId/);
+  assert.match(source, /pendingPaidContract\??\.billingOptionId/);
+});
+
+// REVISÃO (ponto 1, terceira rodada): Date.setMonth() não pode mais existir
+// nesse arquivo — nem para a duração comercial do placeholder da reserva.
+test('checkout não usa mais Date.setMonth() para nenhuma conta de duração comercial', () => {
+  const source = readRouteSource();
+  assert.doesNotMatch(source, /setMonth\(/);
+  assert.match(source, /from ["']@\/lib\/civil-month["']/);
+  assert.match(source, /addCivilMonthsMinusOneDayAsEndOfDay\(/);
+});
+
+// REVISÃO (ponto 3, terceira rodada): a busca da reserva AWAITING_PAYMENT
+// pendente usa o helper puro e testado de lib/checkout-contract-lookup.ts
+// (ver tests/checkout-contract-lookup.test.ts para o comportamento real —
+// nunca filtra por endDate), em vez de reimplementar o filtro inline aqui.
+test('checkout usa findPendingPaidReservation/findActivePaidContract de lib/checkout-contract-lookup em vez de reimplementar o filtro', () => {
+  const source = readRouteSource();
+  assert.match(source, /from ["']@\/lib\/checkout-contract-lookup["']/);
+  assert.match(source, /findPendingPaidReservation\(/);
+  assert.match(source, /findActivePaidContract\(/);
 });
