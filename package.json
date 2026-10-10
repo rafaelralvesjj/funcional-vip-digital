@@ -11,6 +11,8 @@
     "vercel-build": "prisma generate && next build",
     "db:prepare": "prisma migrate dev --name init",
     "db:seed": "prisma db seed",
+    "db:migrate:status": "prisma migrate status",
+    "db:migrate:deploy": "prisma migrate deploy",
     "health": "node scripts/check-health.mjs",
     "reset:local": "node scripts/reset-local.mjs",
     "audit:emails": "node scripts/audit-email-routes.mjs"
