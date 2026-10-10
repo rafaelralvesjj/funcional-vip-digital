@@ -34,8 +34,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
     }
 
+    // Nunca filtra por active: true — um aluno inativo (ex.: contrato
+    // encerrado há tempo) precisa continuar aparecendo no histórico
+    // financeiro, senão o card ENCERRADOS fica incorreto. Só exclui quem
+    // nunca teve contrato nenhum (nada a mostrar no Financeiro mesmo).
     const students = await prisma.student.findMany({
-      where: { active: true },
+      where: { contracts: { some: {} } },
       select: {
         id: true,
         name: true,

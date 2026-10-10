@@ -43,7 +43,6 @@ const plans = [
       "Chat com suporte",
       "Vídeos e orientações dos exercícios",
     ],
-    href: "https://www.asaas.com/c/uw28wkv8oin75u3i",
     highlighted: false,
   },
   {
@@ -60,7 +59,6 @@ const plans = [
       "Chat com suporte",
       "Vídeos e orientações dos exercícios",
     ],
-    href: "https://www.asaas.com/c/ppeor89ansiv6ocr",
     highlighted: true,
   },
 ];
@@ -658,22 +656,20 @@ export default function Home() {
                   ))}
                 </div>
 
-                <a
-                  href={plan.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  href={primaryCta}
                   className={`group mt-8 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black transition duration-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#00A19C] focus:ring-offset-2 focus:ring-offset-[#0a0a0a] ${
                     plan.highlighted
                       ? "bg-[#00A19C] text-black hover:bg-[#24C7C0]"
                       : "border border-[#00A19C]/35 bg-[#00A19C]/8 text-white hover:bg-[#00A19C]/14"
                   }`}
                 >
-                  Assinar plano {plan.shortName}
+                  Começar com o plano {plan.shortName}
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </a>
+                </Link>
 
                 <p className="mt-3 text-center text-[11px] leading-5 text-neutral-500">
-                  Pagamento seguro pela página do Asaas.
+                  Comece pelo cadastro gratuito. A contratação do plano é feita depois, na área do aluno.
                 </p>
               </article>
             ))}

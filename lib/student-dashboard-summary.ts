@@ -183,10 +183,14 @@ function isTrialActiveAndValid(contract: any, today: Date): boolean {
   return endDate.getTime() >= today.getTime();
 }
 
-export function pickCurrentContract(contracts: any[], activeCarePause?: any | null) {
+export function pickCurrentContract(
+  contracts: any[],
+  activeCarePause?: any | null,
+  referenceDate: Date = new Date()
+) {
   if (!contracts?.length) return null;
 
-  const today = startOfDay(new Date());
+  const today = startOfDay(referenceDate);
   const validActiveTrial = contracts.find((contract) => isTrialActiveAndValid(contract, today));
 
   const activeOrAwaiting = contracts.find((contract) => {

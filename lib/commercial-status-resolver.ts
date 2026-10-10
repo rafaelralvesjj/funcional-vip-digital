@@ -12,7 +12,12 @@
  */
 import { pickCurrentContract } from "./student-dashboard-summary";
 import { pickMoneyRelevantPayment } from "./contract-payment-priority";
-import { trialWindowFromContractDates, getTrialDaysRemaining, TRIAL_CTA_DAYS_BEFORE_END } from "./trial-window";
+import {
+  trialWindowFromContractDates,
+  getTrialDaysRemaining,
+  isTrialWindowExpired,
+  TRIAL_CTA_DAYS_BEFORE_END,
+} from "./trial-window";
 import { formatCentsToBRL } from "./service-plan-billing";
 
 export type CommercialStatusCategory =
@@ -58,8 +63,16 @@ const TERMINAL_STATUSES = new Set(["FINALIZED", "CANCELLED"]);
  *    ACTIVE/AWAITING_PAYMENT (ex.: assinatura Asaas com cartão recusado
  *    continua com StudentContract.status ACTIVE — ver lib/asaas-webhook-processor.ts,
  *    que nunca muda o status do contrato em PAYMENT_OVERDUE).
- * 4. TRIAL ACTIVE → janela de teste (EM_TESTE / TESTE_TERMINA_EM_BREVE pelo
- *    mesmo corte de T-2 dias do CTA "Contratar plano", lib/trial-window.ts).
+ * 4. TRIAL ACTIVE → janela de teste: mais de 2 dias restantes → EM_TESTE;
+ *    entre 0 e 2 dias → TESTE_TERMINA_EM_BREVE (mesmo corte do CTA
+ *    "Contratar plano", lib/trial-window.ts); já expirado (status ainda
+ *    ACTIVE porque o cron diário não rodou ainda) → ENCERRADO. Chegar aqui
+ *    com um trial expirado só acontece quando resolveStudentCommercialRow
+ *    não tinha nenhum PAID AWAITING_PAYMENT/ACTIVE selecionável para esse
+ *    aluno (pickCurrentContract prioriza esse PAID sobre um trial vencido —
+ *    ver lib/student-dashboard-summary.ts); getTrialDaysRemaining nunca
+ *    distingue "vence hoje" de "já venceu" (ambos dão 0, por design, para o
+ *    CTA do aluno) — por isso isTrialWindowExpired é checado à parte aqui.
  * 5. PAID AWAITING_PAYMENT → AGUARDANDO_PAGAMENTO.
  * 6. PAID ACTIVE → CONTRATO_ATIVO.
  * 7. Qualquer outro status (DRAFT/AWAITING_ACCEPTANCE — raro, legado) →
@@ -83,6 +96,9 @@ export function resolveContractCommercialCategory(
       startDate: new Date(contract.startDate),
       endDate: new Date(contract.endDate),
     });
+
+    if (isTrialWindowExpired(window, now)) return "ENCERRADO";
+
     const daysRemaining = getTrialDaysRemaining(window, now);
     return daysRemaining <= TRIAL_CTA_DAYS_BEFORE_END ? "TESTE_TERMINA_EM_BREVE" : "EM_TESTE";
   }
@@ -113,10 +129,31 @@ export function formatBillingLabel(contract: any): string {
   return `Pagamento único — ${price}`;
 }
 
+/**
+ * A próxima cobrança EM_ABERTO ainda por vencer (dueDate >= now) — nunca uma
+ * cobrança PAGA antiga, mesmo que pickMoneyRelevantPayment a tivesse
+ * escolhido como "relevante" por falta de outra coisa em aberto. Usado só
+ * para CONTRATO_ATIVO: um contrato ativo recorrente (Asaas MONTHLY) tem
+ * mensalidades PAGAS no histórico, e a "próxima data" relevante nunca pode
+ * ser o vencimento de uma delas.
+ */
+function findUpcomingOpenPayment(payments: any[], now: Date): any | null {
+  const openFuture = (payments || []).filter(
+    (payment) => payment.status === "EM_ABERTO" && new Date(payment.dueDate).getTime() >= now.getTime()
+  );
+
+  if (!openFuture.length) return null;
+
+  return openFuture.reduce((closest, payment) =>
+    new Date(payment.dueDate).getTime() < new Date(closest.dueDate).getTime() ? payment : closest
+  );
+}
+
 function resolveNextRelevantDate(
   category: CommercialStatusCategory,
   contract: any,
-  relevantPayment: any | null
+  relevantPayment: any | null,
+  now: Date
 ): Date | null {
   switch (category) {
     case "SUSPENSO":
@@ -129,8 +166,11 @@ function resolveNextRelevantDate(
           : new Date(contract.endDate);
     case "AGUARDANDO_PAGAMENTO":
     case "PAGAMENTO_ATRASADO":
-    case "CONTRATO_ATIVO":
       return relevantPayment?.dueDate ? new Date(relevantPayment.dueDate) : new Date(contract.endDate);
+    case "CONTRATO_ATIVO": {
+      const upcomingOpenPayment = findUpcomingOpenPayment(contract.payments, now);
+      return upcomingOpenPayment ? new Date(upcomingOpenPayment.dueDate) : new Date(contract.endDate);
+    }
     case "EM_TESTE":
     case "TESTE_TERMINA_EM_BREVE":
     default:
@@ -165,7 +205,11 @@ export function resolveStudentCommercialRow(
   student: { id: string; name: string; contracts: any[] },
   now: Date = new Date()
 ): CommercialStatusRow | null {
-  const contract = pickCurrentContract(student.contracts || []);
+  // Mesmo "now" para escolher o contrato atual (pickCurrentContract) e para
+  // calcular a categoria desse contrato (resolveContractCommercialCategory)
+  // — nunca duas chamadas a `new Date()` em momentos ligeiramente
+  // diferentes decidindo coisas que precisam ser consistentes entre si.
+  const contract = pickCurrentContract(student.contracts || [], null, now);
   if (!contract) return null;
 
   const category = resolveContractCommercialCategory(contract, now);
@@ -181,7 +225,7 @@ export function resolveStudentCommercialRow(
     contractStatus: contract.status,
     planName: contract.plan?.name || "Plano avulso",
     billingLabel: formatBillingLabel(contract),
-    nextDate: resolveNextRelevantDate(category, contract, relevantPayment),
+    nextDate: resolveNextRelevantDate(category, contract, relevantPayment, now),
     paymentId: relevantPayment?.id || null,
     paymentStatus: relevantPayment?.status || null,
     paymentLinkUrl: relevantPayment?.paymentLinkUrl || null,

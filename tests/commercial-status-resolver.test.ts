@@ -62,7 +62,7 @@ test('TRIAL ACTIVE com mais de 2 dias restantes é EM_TESTE', () => {
   assert.equal(resolveContractCommercialCategory(contract, new Date()), 'EM_TESTE');
 });
 
-test('TRIAL ACTIVE com 2 dias ou menos restantes é TESTE_TERMINA_EM_BREVE', () => {
+test('TRIAL ACTIVE com 2 dias ou menos (mas ainda não vencido) restantes é TESTE_TERMINA_EM_BREVE', () => {
   assert.equal(
     resolveContractCommercialCategory(trial({ endDate: daysFromNow(2) }), new Date()),
     'TESTE_TERMINA_EM_BREVE'
@@ -71,12 +71,63 @@ test('TRIAL ACTIVE com 2 dias ou menos restantes é TESTE_TERMINA_EM_BREVE', () 
     resolveContractCommercialCategory(trial({ endDate: daysFromNow(0) }), new Date()),
     'TESTE_TERMINA_EM_BREVE'
   );
-  // já expirado mas ainda ACTIVE (cron não rodou ainda) — continua no bucket
-  // de "termina em breve", nunca some do radar da gestão.
-  assert.equal(
-    resolveContractCommercialCategory(trial({ endDate: daysFromNow(-3) }), new Date()),
-    'TESTE_TERMINA_EM_BREVE'
+});
+
+// REVISÃO (ponto 1): getTrialDaysRemaining nunca retorna negativo (é
+// clampado a 0 por design, para o CTA do aluno) — então um trial já vencido
+// não pode continuar caindo em TESTE_TERMINA_EM_BREVE para sempre só porque
+// "0 dias" também é o valor de quem vence hoje. Passado o fim do teste, e
+// sem nenhum PAID selecionável (ver pickCurrentContract — é ele quem decide
+// se um PAID AWAITING_PAYMENT/ACTIVE assume no lugar do trial vencido), a
+// categoria tem que ser ENCERRADO.
+test('REVISÃO (ponto 1): TRIAL ACTIVE já vencido (cron ainda não rodou) é ENCERRADO, nunca TESTE_TERMINA_EM_BREVE para sempre', () => {
+  assert.equal(resolveContractCommercialCategory(trial({ endDate: daysFromNow(-3) }), new Date()), 'ENCERRADO');
+  assert.equal(resolveContractCommercialCategory(trial({ endDate: daysFromNow(-1) }), new Date()), 'ENCERRADO');
+});
+
+// Cenário completo pedido: o trial já venceu, mas existe um PAID
+// AWAITING_PAYMENT para o mesmo aluno — pickCurrentContract prioriza esse
+// PAID sobre o trial vencido, então resolveStudentCommercialRow nunca chega
+// a avaliar o trial como contrato atual; a situação do aluno é
+// AGUARDANDO_PAGAMENTO, não ENCERRADO.
+test('REVISÃO (ponto 1): trial vencido + PAID AWAITING_PAYMENT já existente → situação é AGUARDANDO_PAGAMENTO, não ENCERRADO', () => {
+  const now = daysFromNow(0);
+  const row = resolveStudentCommercialRow(
+    {
+      id: 's-trial-vencido',
+      name: 'Trial Vencido Com Pendente',
+      contracts: [
+        trial({ id: 'trial-1', endDate: daysFromNow(-3) }),
+        paid({
+          id: 'paid-pendente',
+          status: 'AWAITING_PAYMENT',
+          startDate: daysFromNow(-2),
+          payments: [{ id: 'pay-pendente', status: 'EM_ABERTO', dueDate: daysFromNow(5) }],
+        }),
+      ],
+    },
+    now
   );
+
+  assert.equal(row?.category, 'AGUARDANDO_PAGAMENTO');
+  assert.equal(row?.contractId, 'paid-pendente');
+});
+
+// Mesmo cenário sem nenhum PAID: pickCurrentContract cai no trial vencido
+// (fallback contracts[0]) e a categoria tem que ser ENCERRADO.
+test('REVISÃO (ponto 1): trial vencido sem nenhum PAID selecionável → situação é ENCERRADO', () => {
+  const now = daysFromNow(0);
+  const row = resolveStudentCommercialRow(
+    {
+      id: 's-trial-vencido-2',
+      name: 'Trial Vencido Sem Pendente',
+      contracts: [trial({ id: 'trial-2', endDate: daysFromNow(-3) })],
+    },
+    now
+  );
+
+  assert.equal(row?.category, 'ENCERRADO');
+  assert.equal(row?.contractId, 'trial-2');
 });
 
 test('TRIAL FINALIZED ou CANCELLED é ENCERRADO independentemente do payment', () => {
@@ -166,6 +217,56 @@ test('aluno com assinatura mensal Asaas ativa tem Cobrança "Mensal" e próxima 
   assert.equal(row?.nextDate?.getTime(), dueDate.getTime());
 });
 
+// REVISÃO (ponto 2): CONTRATO_ATIVO não pode usar o vencimento de uma
+// cobrança PAGA antiga como "próxima data". Cenário pedido: duas
+// mensalidades históricas já PAGAS (ex.: assinatura Asaas recorrente) e
+// nenhuma cobrança EM_ABERTO futura — a próxima data relevante tem que ser
+// o endDate do ciclo atual do contrato, nunca o dueDate de uma mensalidade
+// já paga.
+test('REVISÃO (ponto 2): CONTRATO_ATIVO com mensalidades históricas pagas usa contract.endDate, nunca o vencimento de uma cobrança PAGA antiga', () => {
+  const contractEndDate = daysFromNow(15);
+  const row = resolveStudentCommercialRow({
+    id: 's-recorrente',
+    name: 'Assinante Mensal',
+    contracts: [
+      paid({
+        endDate: contractEndDate,
+        payments: [
+          { id: 'mensalidade-1', status: 'PAGO', dueDate: daysFromNow(-60) },
+          { id: 'mensalidade-2', status: 'PAGO', dueDate: daysFromNow(-30) },
+        ],
+      }),
+    ],
+  });
+
+  assert.equal(row?.category, 'CONTRATO_ATIVO');
+  assert.equal(row?.nextDate?.getTime(), contractEndDate.getTime());
+  assert.notEqual(row?.nextDate?.getTime(), daysFromNow(-30).getTime());
+});
+
+// Mesmo cenário, mas com uma cobrança EM_ABERTO futura real (próxima
+// mensalidade já gerada pela Asaas) — essa sim é a próxima data, não o
+// endDate do contrato.
+test('REVISÃO (ponto 2): CONTRATO_ATIVO com próxima mensalidade EM_ABERTO futura usa o vencimento dela, não o endDate', () => {
+  const futureDueDate = daysFromNow(8);
+  const row = resolveStudentCommercialRow({
+    id: 's-recorrente-2',
+    name: 'Assinante Mensal 2',
+    contracts: [
+      paid({
+        endDate: daysFromNow(15),
+        payments: [
+          { id: 'mensalidade-1', status: 'PAGO', dueDate: daysFromNow(-30) },
+          { id: 'mensalidade-2', status: 'EM_ABERTO', dueDate: futureDueDate },
+        ],
+      }),
+    ],
+  });
+
+  assert.equal(row?.category, 'CONTRATO_ATIVO');
+  assert.equal(row?.nextDate?.getTime(), futureDueDate.getTime());
+});
+
 test('aluno aguardando pagamento tem próxima data = vencimento da cobrança pendente', () => {
   const dueDate = daysFromNow(1);
   const row = resolveStudentCommercialRow({
@@ -196,6 +297,24 @@ test('aluno encerrado tem próxima data = data de finalização (não o endDate 
 
   assert.equal(row?.category, 'ENCERRADO');
   assert.equal(row?.nextDate?.getTime(), finalizedAt.getTime());
+});
+
+// REVISÃO (ponto 3): o resolvedor nunca olha para Student.active — a rota
+// de overview é quem não pode mais filtrar por esse campo (ver
+// tests/financeiro-overview-route.test.ts). Aqui confirmamos que, recebendo
+// um aluno (sem o campo active sequer presente, como um aluno inativo que
+// só tem histórico) com um contrato FINALIZED, a linha gerada cai em
+// ENCERRADO normalmente — nada na lógica do resolvedor depende de o aluno
+// estar ativo.
+test('REVISÃO (ponto 3): aluno inativo (sem active=true) com contrato FINALIZED aparece em ENCERRADO', () => {
+  const row = resolveStudentCommercialRow({
+    id: 's-inativo',
+    name: 'Aluno Inativo',
+    contracts: [paid({ status: 'FINALIZED', finalizedAt: daysFromNow(-90), endDate: daysFromNow(-90) })],
+  });
+
+  assert.equal(row?.category, 'ENCERRADO');
+  assert.equal(row?.studentId, 's-inativo');
 });
 
 test('plano sem nome cai no rótulo genérico "Plano avulso"', () => {

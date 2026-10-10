@@ -58,3 +58,14 @@ test('rota de detalhe do aluno só expõe paymentLinkUrl real do ContractPayment
   const source = readSource('../app/api/financeiro/overview/[studentId]/route.ts');
   assert.match(source, /paymentLinkUrl:\s*payment\.paymentLinkUrl\s*\|\|\s*null/);
 });
+
+// REVISÃO (ponto 3): where: { active: true } escondia alunos
+// inativos/encerrados do Financeiro, deixando o card ENCERRADOS incorreto —
+// o histórico financeiro precisa continuar aparecendo mesmo com
+// Student.active = false. O único filtro aceitável é "tem pelo menos um
+// contrato" (nada a mostrar, senão).
+test('REVISÃO (ponto 3): overview do Financeiro não filtra por Student.active — aluno inativo com histórico continua listado', () => {
+  const source = readSource('../app/api/financeiro/overview/route.ts');
+  assert.doesNotMatch(source, /where:\s*\{\s*active:\s*true\s*\}/);
+  assert.match(source, /contracts:\s*\{\s*some:\s*\{\}\s*\}/);
+});
