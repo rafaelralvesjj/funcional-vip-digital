@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getStudentDisplayName } from "@/lib/display-name";
 import { shouldShowContractCta, trialWindowFromContractDates } from "@/lib/trial-window";
+import { pickMoneyRelevantPayment } from "@/lib/contract-payment-priority";
 
 export type StudentDashboardUiState =
   | "EXPERIENCIA_ATIVA"
@@ -152,36 +153,25 @@ function normalizeEmail(email?: string | null) {
   return email?.trim().toLowerCase() || null;
 }
 
-function moneyRelevantPayment(payments: any[]) {
-  if (!payments?.length) return null;
-
-  const priority = ["ATRASADO", "EM_ABERTO", "PARCIAL", "PAGO"];
-
-  return [...payments].sort((a, b) => {
-    const aPriority = priority.indexOf(a.status);
-    const bPriority = priority.indexOf(b.status);
-
-    if (aPriority !== bPriority) {
-      return (aPriority === -1 ? 99 : aPriority) - (bPriority === -1 ? 99 : bPriority);
-    }
-
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-  })[0];
-}
-
 /**
  * Um contrato só conta como "em vigor agora" se seu startDate já chegou.
  * Sem essa checagem, um contrato pago criado com status ACTIVE mas startDate
  * no futuro (ex.: pagamento antecipado que preserva os 7 dias de teste —
  * ver resolvePaidContractStart em lib/trial-window.ts) seria tratado como o
  * contrato atual antes da hora, escondendo o teste que ainda é válido.
+ *
+ * REVISÃO: startDate/endDate são instantes reais (um contrato pago pode
+ * começar literalmente à meia-noite de um dia civil de São Paulo, ou no
+ * instante exato da confirmação do pagamento) — nunca truncar para
+ * "início do dia" no fuso do host (startOfDay/setHours), que reintroduziria
+ * um fuso horário implícito (UTC na Vercel) nessa decisão. Comparação
+ * direta de instante, sempre.
  */
 export function hasContractStarted(
   contract: { startDate: Date | string },
-  today: Date = new Date()
+  referenceDate: Date = new Date()
 ): boolean {
-  const startDate = startOfDay(new Date(contract.startDate));
-  return startDate.getTime() <= startOfDay(today).getTime();
+  return new Date(contract.startDate).getTime() <= referenceDate.getTime();
 }
 
 /**
@@ -191,23 +181,24 @@ export function hasContractStarted(
  * o teste termina de verdade é que o PAID pendente pode virar o contrato
  * "atual" exibido ao aluno.
  */
-function isTrialActiveAndValid(contract: any, today: Date): boolean {
+function isTrialActiveAndValid(contract: any, referenceDate: Date): boolean {
   if (contract.type !== "TRIAL" || contract.status !== "ACTIVE") return false;
-  if (!hasContractStarted(contract, today)) return false;
+  if (!hasContractStarted(contract, referenceDate)) return false;
 
-  const endDate = startOfDay(new Date(contract.endDate));
-  return endDate.getTime() >= today.getTime();
+  return new Date(contract.endDate).getTime() >= referenceDate.getTime();
 }
 
-export function pickCurrentContract(contracts: any[], activeCarePause?: any | null) {
+export function pickCurrentContract(
+  contracts: any[],
+  activeCarePause?: any | null,
+  referenceDate: Date = new Date()
+) {
   if (!contracts?.length) return null;
 
-  const today = startOfDay(new Date());
-  const validActiveTrial = contracts.find((contract) => isTrialActiveAndValid(contract, today));
+  const validActiveTrial = contracts.find((contract) => isTrialActiveAndValid(contract, referenceDate));
 
   const activeOrAwaiting = contracts.find((contract) => {
-    const endDate = startOfDay(new Date(contract.endDate));
-    const isNotExpired = endDate.getTime() >= today.getTime();
+    const isNotExpired = new Date(contract.endDate).getTime() >= referenceDate.getTime();
 
     // Enquanto existir um TRIAL ACTIVE e válido, um PAID AGUARDANDO_PAGAMENTO
     // não pode assumir como contrato atual — o teste em curso prevalece.
@@ -220,7 +211,7 @@ export function pickCurrentContract(contracts: any[], activeCarePause?: any | nu
     }
 
     return (
-      hasContractStarted(contract, today) &&
+      hasContractStarted(contract, referenceDate) &&
       isNotExpired &&
       ["ACTIVE", "AWAITING_PAYMENT", "SUSPENDED"].includes(contract.status)
     );
@@ -231,24 +222,22 @@ export function pickCurrentContract(contracts: any[], activeCarePause?: any | nu
   if (validActiveTrial) return validActiveTrial;
 
   const trialStillValid = contracts.find((contract) => {
-    const endDate = startOfDay(new Date(contract.endDate));
-    return contract.type === "TRIAL" && endDate.getTime() >= today.getTime();
+    return contract.type === "TRIAL" && new Date(contract.endDate).getTime() >= referenceDate.getTime();
   });
 
   if (trialStillValid) return trialStillValid;
 
   if (activeCarePause) {
-    const pauseCreatedAt = startOfDay(new Date(activeCarePause.createdAt));
+    const pauseCreatedAt = new Date(activeCarePause.createdAt);
 
     const frozenTrial = contracts.find((contract) => {
-      const endDate = startOfDay(new Date(contract.endDate));
       const inactiveContractStatus = ["FINALIZED", "CANCELLED"].includes(contract.status);
 
       return (
         contract.type === "TRIAL" &&
         !inactiveContractStatus &&
         !Number.isNaN(pauseCreatedAt.getTime()) &&
-        pauseCreatedAt.getTime() <= endDate.getTime()
+        pauseCreatedAt.getTime() <= new Date(contract.endDate).getTime()
       );
     });
 
@@ -496,7 +485,7 @@ export async function getStudentDashboardSummary(
 
   const activeCarePause = student.careEvents?.[0] || null;
   const contract = pickCurrentContract(student.contracts, activeCarePause);
-  const payment = moneyRelevantPayment(contract?.payments || []);
+  const payment = pickMoneyRelevantPayment(contract?.payments || []);
 
   const fallbackProfessor = ["PROFESSOR", "TEACHER"].includes(student.user?.role)
     ? student.user

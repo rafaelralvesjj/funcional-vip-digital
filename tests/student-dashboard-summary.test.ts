@@ -8,16 +8,15 @@ import {
 import { getSaoPauloCivilDateInput } from '../lib/planning-window.ts';
 
 /**
- * hasContractStarted/pickCurrentContract comparam datas com startOfDay no
- * fuso do HOST (new Date(...).setHours(0,0,0,0)) — nada de São Paulo aí.
- * Este helper casa com essa semântica; usado pelos testes de
- * hasContractStarted/pickCurrentContract abaixo.
+ * REVISÃO: hasContractStarted/pickCurrentContract comparam instantes reais
+ * (new Date(startDate).getTime() <= referenceDate.getTime()), sem nenhum
+ * truncamento de "dia" em fuso nenhum — nem do host, nem de São Paulo. Este
+ * helper reflete isso: desloca a partir do instante exato de "agora", nunca
+ * normalizando para meio-dia ou meia-noite de fuso nenhum, para não
+ * reintroduzir por acidente uma noção de "dia" que a produção não tem mais.
  */
 function daysFromNow(days: number): Date {
-  const date = new Date();
-  date.setHours(12, 0, 0, 0);
-  date.setDate(date.getDate() + days);
-  return date;
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
 /**
@@ -191,6 +190,41 @@ test('um contrato PAID futuro não esconde um TRIAL que já expirou quando não 
   // contrato futuro nunca seja escolhido como "atual" antes de começar.
   assert.notEqual(atual?.id, 'paid-futuro');
   assert.equal(atual?.id, 'trial-1');
+});
+
+// REVISÃO: hasContractStarted/isTrialActiveAndValid/pickCurrentContract não
+// podem depender do fuso do host (startOfDay/setHours) — startDate/endDate
+// são instantes reais. Cenário exato pedido: TRIAL termina
+// 2026-10-09T23:59:59.999-03:00; PAID AWAITING_PAYMENT começa
+// 2026-10-10T00:00:00-03:00 (1ms depois, sem gap nem sobreposição). Em
+// 2026-10-10T02:59:59.999Z (mesmo instante do fim do trial) o trial ainda
+// prevalece; em 2026-10-10T03:00:00Z (1ms depois) o trial já expirou e o
+// PAID pendente deve virar o contrato atual (AGUARDANDO_PAGAMENTO).
+test('REVISÃO: trial termina 23:59:59.999-03:00 e PAID AWAITING_PAYMENT começa no instante seguinte — seleção muda exatamente no limite, sem depender do fuso do host', () => {
+  const trial = {
+    id: 'trial-1',
+    type: 'TRIAL',
+    status: 'ACTIVE',
+    startDate: new Date('2026-10-01T00:00:00-03:00'),
+    endDate: new Date('2026-10-09T23:59:59.999-03:00'),
+  };
+
+  const paidPendente = {
+    id: 'paid-pendente',
+    type: 'PAID',
+    status: 'AWAITING_PAYMENT',
+    startDate: new Date('2026-10-10T00:00:00-03:00'),
+    endDate: new Date('2026-11-09T23:59:59.999-03:00'),
+  };
+
+  const instanteFimDoTrial = new Date('2026-10-10T02:59:59.999Z'); // == 2026-10-09T23:59:59.999-03:00
+  const instanteAposFimDoTrial = new Date('2026-10-10T03:00:00Z'); // 1ms depois
+
+  const atualAntes = pickCurrentContract([trial, paidPendente], null, instanteFimDoTrial);
+  assert.equal(atualAntes?.id, 'trial-1');
+
+  const atualDepois = pickCurrentContract([trial, paidPendente], null, instanteAposFimDoTrial);
+  assert.equal(atualDepois?.id, 'paid-pendente');
 });
 
 // computeShowContractCta: CTA "Contratar plano" (Fase 3).
