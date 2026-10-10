@@ -9,10 +9,8 @@ import {
   AsaasApiError,
   findAsaasCustomerByExternalReference,
   createAsaasCustomer,
-  createAsaasPayment,
-  createAsaasSubscription,
-  listAsaasSubscriptionPayments,
 } from "@/lib/asaas-client";
+import { resolveCheckoutCharge } from "@/lib/checkout-charge";
 import { buildCheckoutExternalReference } from "@/lib/checkout-reference";
 import { assertTermsAccepted, TermsNotAcceptedError, CHECKOUT_TERMS_VERSION } from "@/lib/checkout-terms";
 import { reserveCheckoutSlot, CheckoutAlreadyPendingError } from "@/lib/checkout-reservation";
@@ -59,10 +57,6 @@ function addMonthsMinusOneDay(startDate: Date, months: number): Date {
   return endDate;
 }
 
-function toAsaasDateInput(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 function getClientIp(req: NextRequest): string | null {
   return (
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -72,12 +66,6 @@ function getClientIp(req: NextRequest): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  // Reservado na fase 1 (reserveCheckoutSlot); se a fase 2 (Asaas) falhar,
-  // compensamos removendo essas linhas para o aluno poder tentar de novo —
-  // ver o catch de AsaasApiError/AsaasConfigError mais abaixo.
-  let reservedContractId: string | null = null;
-  let reservedPaymentId: string | null = null;
-
   try {
     const session = await getServerSession(authOptions);
     const sessionUser = session?.user as { id?: string; email?: string | null } | undefined;
@@ -87,12 +75,12 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const billingOptionId = String(body?.billingOptionId || "").trim();
+    const requestedBillingOptionId = String(body?.billingOptionId || "").trim();
     const acceptedTerms = body?.acceptedTerms;
     const cpfCnpjInput = normalizeCpfCnpj(body?.cpfCnpj);
     const phoneInput = String(body?.phone || "").trim() || null;
 
-    if (!billingOptionId) {
+    if (!requestedBillingOptionId) {
       return NextResponse.json({ error: "Selecione uma opção de cobrança." }, { status: 400 });
     }
 
@@ -126,39 +114,40 @@ export async function POST(req: NextRequest) {
 
     const today = startOfDay(new Date());
 
-    // Checagem rápida (não durável sozinha — ver reserveCheckoutSlot para a
-    // trava real): evita a chamada à Asaas no caminho comum de "já existe um
-    // contrato pago", sem depender dela para a exclusão mútua de verdade.
     const existingPaidContract = student.contracts.find((contract) => {
       if (contract.type !== "PAID") return false;
       if (!["ACTIVE", "AWAITING_PAYMENT"].includes(contract.status)) return false;
       return startOfDay(new Date(contract.endDate)).getTime() >= today.getTime();
     });
 
-    if (existingPaidContract) {
-      if (existingPaidContract.status === "ACTIVE") {
-        return NextResponse.json(
-          { error: "Você já tem um contrato pago ativo.", code: "PAID_CONTRACT_ALREADY_ACTIVE" },
-          { status: 409 }
-        );
-      }
-
-      // AWAITING_PAYMENT: reaproveita o checkout já criado em vez de abrir
-      // uma segunda cobrança/assinatura para o mesmo contrato pendente.
-      const pendingPayment = existingPaidContract.payments.find(
-        (payment) => payment.status === "EM_ABERTO" && payment.paymentLinkUrl
+    if (existingPaidContract?.status === "ACTIVE") {
+      return NextResponse.json(
+        { error: "Você já tem um contrato pago ativo.", code: "PAID_CONTRACT_ALREADY_ACTIVE" },
+        { status: 409 }
       );
-
-      if (pendingPayment) {
-        return NextResponse.json({
-          ok: true,
-          reused: true,
-          checkoutUrl: pendingPayment.paymentLinkUrl,
-          contractId: existingPaidContract.id,
-          paymentId: pendingPayment.id,
-        });
-      }
     }
+
+    // AWAITING_PAYMENT: o pagamento pendente dessa reserva é o único que
+    // nos interessa — se já tem link, reaproveita; se não tem (reservado mas
+    // sem resposta confirmada da Asaas ainda), RETOMA a mesma reserva em vez
+    // de tentar criar uma nova (ver fase de reconciliação abaixo). Isto
+    // nunca apaga a reserva nem a troca por outra.
+    const pendingPayment = existingPaidContract?.payments.find((payment) => payment.status === "EM_ABERTO");
+
+    if (pendingPayment?.paymentLinkUrl) {
+      return NextResponse.json({
+        ok: true,
+        reused: true,
+        checkoutUrl: pendingPayment.paymentLinkUrl,
+        contractId: existingPaidContract!.id,
+        paymentId: pendingPayment.id,
+      });
+    }
+
+    // billingOptionId: ao retomar uma reserva existente, usa a opção JÁ
+    // reservada (gravada no próprio contrato) — nunca a do corpo da
+    // requisição, que poderia divergir de uma tentativa anterior.
+    const billingOptionId = existingPaidContract?.billingOptionId || requestedBillingOptionId;
 
     const billingOption = await prisma.servicePlanBillingOption.findUnique({
       where: { id: billingOptionId },
@@ -209,93 +198,114 @@ export async function POST(req: NextRequest) {
     }
 
     const isMonthly = billingOption.billingCycle === "MONTHLY";
-    const durationMonths = isMonthly ? 1 : 12;
-    const checkoutExternalReference = buildCheckoutExternalReference();
-
-    const activeTrial = student.contracts.find(
-      (contract) => contract.type === "TRIAL" && contract.status === "ACTIVE"
-    );
-
-    const placeholderStartDate = new Date();
-    const placeholderEndDate = addMonthsMinusOneDay(placeholderStartDate, durationMonths);
-    const termsAcceptedAt = new Date();
-    const ip = getClientIp(req);
-    const userAgent = req.headers.get("user-agent");
     const description = `${billingOption.servicePlan.name} — ${isMonthly ? "mensal" : "anual"}`;
 
-    // Fase 1: reserva local, atômica e durável, ANTES de qualquer chamada
-    // remota. A trava real é o índice único parcial do Postgres (um PAID
-    // AWAITING_PAYMENT por aluno) — ver lib/checkout-reservation.ts. Isso
-    // fecha a corrida que existiria em "consulta -> cria na Asaas -> grava":
-    // duas requisições simultâneas não conseguem reservar o mesmo slot.
-    let reservation;
-    try {
-      reservation = await prisma.$transaction((tx) =>
-        reserveCheckoutSlot(tx as any, {
-          contractData: {
-            studentId: student.id,
-            planId: billingOption.servicePlanId,
-            professorId: activeTrial?.professorId || null,
-            contractNumber: `CTR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-            type: "PAID",
-            status: "AWAITING_PAYMENT",
-            commercialStatus: "AGUARDANDO_PAGAMENTO",
-            startDate: placeholderStartDate,
-            endDate: placeholderEndDate,
-            durationMonths,
-            workoutsPerWeek: billingOption.servicePlan.workoutsPerWeek,
-            workoutsPerMonth: billingOption.servicePlan.workoutsPerMonth,
-            totalContractedWorkouts: billingOption.servicePlan.workoutsPerMonth * durationMonths,
-            priceCents: billingOption.amountCents,
-            paymentMode: isMonthly ? "RECORRENTE" : "UNICO",
-            source: "CHECKOUT_ASAAS",
-            renewedFromContractId: activeTrial?.id || null,
-            // Auditoria estruturada (item 6 da revisão) — nunca só em notes.
-            billingOptionId: billingOption.id,
-            billingCycle: billingOption.billingCycle,
-            termsVersion: CHECKOUT_TERMS_VERSION,
-            termsAcceptedAt,
-            notes: [
-              "Checkout criado pelo próprio aluno (Asaas).",
-              `Opção de cobrança: ${billingOption.billingCycle} — ${description}.`,
-              `Termos aceitos: versão ${CHECKOUT_TERMS_VERSION} em ${termsAcceptedAt.toISOString()}.`,
-              ip ? `IP: ${ip}.` : null,
-              userAgent ? `User-Agent: ${userAgent}.` : null,
-            ]
-              .filter(Boolean)
-              .join("\n"),
-          },
-          buildPaymentData: (contractId) => ({
-            contractId,
-            studentId: student.id,
-            amountCents: billingOption.amountCents,
-            dueDate: placeholderStartDate,
-            status: "EM_ABERTO",
-            method: "UNDEFINED",
-            provider: "ASAAS",
-            externalReference: checkoutExternalReference,
-          }),
-        })
+    let contractId: string;
+    let paymentId: string;
+    let checkoutExternalReference: string;
+    let pendingProviderPaymentId: string | null;
+    let pendingProviderSubscriptionId: string | null;
+
+    if (existingPaidContract && pendingPayment) {
+      // Retomando uma reserva já existente (sem paymentLinkUrl ainda) —
+      // nunca reserva de novo, nunca apaga nada (item 1 da revisão).
+      contractId = existingPaidContract.id;
+      paymentId = pendingPayment.id;
+      checkoutExternalReference = pendingPayment.externalReference || buildCheckoutExternalReference();
+      pendingProviderPaymentId = pendingPayment.providerPaymentId || null;
+      pendingProviderSubscriptionId = pendingPayment.providerSubscriptionId || null;
+    } else {
+      // Fase 1: reserva local, atômica e durável, ANTES de qualquer chamada
+      // remota. A trava real é o índice único parcial do Postgres (um PAID
+      // AWAITING_PAYMENT por aluno) — ver lib/checkout-reservation.ts.
+      const durationMonths = isMonthly ? 1 : 12;
+      const activeTrial = student.contracts.find(
+        (contract) => contract.type === "TRIAL" && contract.status === "ACTIVE"
       );
-    } catch (error) {
-      if (error instanceof CheckoutAlreadyPendingError) {
-        return NextResponse.json(
-          {
-            error: "Já existe um checkout sendo criado para você agora. Aguarde alguns segundos e atualize a página.",
-            code: "CHECKOUT_IN_PROGRESS",
-          },
-          { status: 409 }
+      const placeholderStartDate = new Date();
+      const placeholderEndDate = addMonthsMinusOneDay(placeholderStartDate, durationMonths);
+      const termsAcceptedAt = new Date();
+      const ip = getClientIp(req);
+      const userAgent = req.headers.get("user-agent");
+
+      checkoutExternalReference = buildCheckoutExternalReference();
+      pendingProviderPaymentId = null;
+      pendingProviderSubscriptionId = null;
+
+      let reservation;
+      try {
+        reservation = await prisma.$transaction((tx) =>
+          reserveCheckoutSlot(tx as any, {
+            contractData: {
+              studentId: student.id,
+              planId: billingOption.servicePlanId,
+              professorId: activeTrial?.professorId || null,
+              contractNumber: `CTR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+              type: "PAID",
+              status: "AWAITING_PAYMENT",
+              commercialStatus: "AGUARDANDO_PAGAMENTO",
+              startDate: placeholderStartDate,
+              endDate: placeholderEndDate,
+              durationMonths,
+              workoutsPerWeek: billingOption.servicePlan.workoutsPerWeek,
+              workoutsPerMonth: billingOption.servicePlan.workoutsPerMonth,
+              totalContractedWorkouts: billingOption.servicePlan.workoutsPerMonth * durationMonths,
+              priceCents: billingOption.amountCents,
+              paymentMode: isMonthly ? "RECORRENTE" : "UNICO",
+              source: "CHECKOUT_ASAAS",
+              renewedFromContractId: activeTrial?.id || null,
+              // Auditoria estruturada (item 6 da revisão anterior) — nunca só em notes.
+              billingOptionId: billingOption.id,
+              billingCycle: billingOption.billingCycle,
+              termsVersion: CHECKOUT_TERMS_VERSION,
+              termsAcceptedAt,
+              notes: [
+                "Checkout criado pelo próprio aluno (Asaas).",
+                `Opção de cobrança: ${billingOption.billingCycle} — ${description}.`,
+                `Termos aceitos: versão ${CHECKOUT_TERMS_VERSION} em ${termsAcceptedAt.toISOString()}.`,
+                ip ? `IP: ${ip}.` : null,
+                userAgent ? `User-Agent: ${userAgent}.` : null,
+              ]
+                .filter(Boolean)
+                .join("\n"),
+            },
+            buildPaymentData: (newContractId) => ({
+              contractId: newContractId,
+              studentId: student.id,
+              amountCents: billingOption.amountCents,
+              dueDate: placeholderStartDate,
+              status: "EM_ABERTO",
+              method: "UNDEFINED",
+              provider: "ASAAS",
+              externalReference: checkoutExternalReference,
+            }),
+          })
         );
+      } catch (error) {
+        if (error instanceof CheckoutAlreadyPendingError) {
+          return NextResponse.json(
+            {
+              error: "Já existe um checkout sendo criado para você agora. Aguarde alguns segundos e atualize a página.",
+              code: "CHECKOUT_IN_PROGRESS",
+            },
+            { status: 409 }
+          );
+        }
+        throw error;
       }
-      throw error;
+
+      contractId = reservation.contract.id;
+      paymentId = reservation.payment.id;
     }
 
-    reservedContractId = reservation.contract.id;
-    reservedPaymentId = reservation.payment.id;
-
-    // Fase 2: chamada remota — fora de qualquer transação local (não dá pra
-    // fazer rollback de uma chamada HTTP já aceita pela Asaas). Falha aqui
-    // aciona a compensação no catch externo (remove a reserva da fase 1).
+    // Fase 2: resolve a cobrança/assinatura — cria na primeira tentativa,
+    // reconcilia com o que já existe (por id já conhecido, ou por busca em
+    // externalReference) em qualquer retomada. Nunca é seguro apagar a
+    // reserva da fase 1 a partir daqui: pode já ter havido efeito remoto, ou
+    // o resultado da chamada pode ter ficado incerto (timeout) — então o
+    // catch externo NUNCA remove StudentContract/ContractPayment. A reserva
+    // fica como âncora reconciliável para a próxima tentativa (item 1 da
+    // revisão).
     let asaasCustomerId = student.asaasCustomerId;
 
     if (!asaasCustomerId) {
@@ -314,46 +324,20 @@ export async function POST(req: NextRequest) {
       asaasCustomerId = customer.id;
     }
 
-    const amountValue = billingOption.amountCents / 100;
-
-    let paymentLinkUrl: string | null = null;
-    let providerPaymentId: string | null = null;
-    let providerSubscriptionId: string | null = null;
-    let dueDate = new Date();
-
-    if (isMonthly) {
-      const subscription = await createAsaasSubscription(asaasConfig, {
-        customerId: asaasCustomerId,
-        billingType: "UNDEFINED",
-        value: amountValue,
-        nextDueDate: toAsaasDateInput(new Date()),
+    const charge = await resolveCheckoutCharge({
+      config: asaasConfig,
+      customerId: asaasCustomerId,
+      billingCycle: billingOption.billingCycle,
+      amountValue: billingOption.amountCents / 100,
+      description,
+      pending: {
+        providerPaymentId: pendingProviderPaymentId,
+        providerSubscriptionId: pendingProviderSubscriptionId,
         externalReference: checkoutExternalReference,
-        description,
-      });
-      providerSubscriptionId = subscription.id;
+      },
+    });
 
-      const firstPayments = await listAsaasSubscriptionPayments(asaasConfig, subscription.id);
-      const firstPayment = firstPayments[0] || null;
-      if (firstPayment) {
-        providerPaymentId = firstPayment.id;
-        paymentLinkUrl = firstPayment.invoiceUrl || null;
-        if (firstPayment.dueDate) dueDate = new Date(`${firstPayment.dueDate}T12:00:00`);
-      }
-    } else {
-      const payment = await createAsaasPayment(asaasConfig, {
-        customerId: asaasCustomerId,
-        billingType: "UNDEFINED",
-        value: amountValue,
-        dueDate: toAsaasDateInput(new Date()),
-        externalReference: checkoutExternalReference,
-        description,
-      });
-      providerPaymentId = payment.id;
-      paymentLinkUrl = payment.invoiceUrl || null;
-      if (payment.dueDate) dueDate = new Date(`${payment.dueDate}T12:00:00`);
-    }
-
-    // Fase 3: finaliza a reserva com os dados reais da Asaas.
+    // Fase 3: finaliza a reserva com os dados reais/reconciliados da Asaas.
     await prisma.$transaction(async (tx) => {
       if (!student.asaasCustomerId) {
         await tx.student.update({
@@ -366,12 +350,12 @@ export async function POST(req: NextRequest) {
       }
 
       await tx.contractPayment.update({
-        where: { id: reservedPaymentId! },
+        where: { id: paymentId },
         data: {
-          paymentLinkUrl,
-          providerPaymentId,
-          providerSubscriptionId,
-          dueDate,
+          paymentLinkUrl: charge.paymentLinkUrl,
+          providerPaymentId: charge.providerPaymentId,
+          providerSubscriptionId: charge.providerSubscriptionId,
+          ...(charge.dueDate ? { dueDate: charge.dueDate } : {}),
         },
       });
     });
@@ -379,20 +363,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       reused: false,
-      checkoutUrl: paymentLinkUrl,
-      contractId: reservedContractId,
-      paymentId: reservedPaymentId,
+      checkoutUrl: charge.paymentLinkUrl,
+      contractId,
+      paymentId,
     });
   } catch (error: any) {
     console.error("POST /api/aluno/checkout error:", error);
 
-    // Compensação: a reserva da fase 1 só faz sentido se a Asaas confirmar a
-    // cobrança. Sem isso, o índice único parcial deixaria o aluno travado,
-    // incapaz de tentar de novo.
-    if (reservedContractId) {
-      await prisma.contractPayment.deleteMany({ where: { contractId: reservedContractId } }).catch(() => {});
-      await prisma.studentContract.delete({ where: { id: reservedContractId } }).catch(() => {});
-    }
+    // Nunca apaga a reserva aqui (ver fase 2 acima): uma falha depois que a
+    // reserva local existe pode já ter tido efeito na Asaas, ou o resultado
+    // pode estar incerto. A reserva permanece como âncora reconciliável; a
+    // próxima tentativa do aluno retoma o mesmo contrato/pagamento em vez de
+    // criar um novo, e resolveCheckoutCharge decide se reconcilia ou cria.
 
     if (error instanceof AsaasApiError) {
       return NextResponse.json(

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activatePaidContractFromTrial } from '../lib/contract-activation.ts';
+import { activatePaidContractFromTrial, extendMonthlyAccessPeriod } from '../lib/contract-activation.ts';
 
 type FakeContractRecord = Record<string, any>;
 
@@ -161,4 +161,61 @@ test('confirmação PAGO repetida: datas e status já aplicados ficam inalterado
   assert.equal(paidAfter?.startDate.getTime(), alreadyScheduledStartDate.getTime());
   const trialAfter = byId.get('trial-1');
   assert.equal(trialAfter?.status, 'ACTIVE');
+});
+
+// extendMonthlyAccessPeriod: aritmética de mês civil com clamp (revisão —
+// nunca Date.setMonth() puro). Casos de borda cobertos em detalhe em
+// tests/civil-month.test.ts (o helper central); aqui testamos a função
+// exportada de verdade, incluindo o timezone America/Sao_Paulo.
+test('extendMonthlyAccessPeriod: caso normal — 14/out + 1 mês = 14/nov', () => {
+  const currentEndDate = new Date('2026-10-14T23:59:59.999-03:00');
+  const paymentConfirmedAt = new Date('2026-10-10T09:00:00-03:00');
+
+  const result = extendMonthlyAccessPeriod({ currentEndDate, paymentConfirmedAt });
+  assert.equal(result.toISOString(), new Date('2026-11-14T23:59:59.999-03:00').toISOString());
+});
+
+test('extendMonthlyAccessPeriod: 31/jan + 1 mês clampa para 28/fev (não estoura para março)', () => {
+  const currentEndDate = new Date('2026-01-31T23:59:59.999-03:00');
+  const paymentConfirmedAt = new Date('2026-01-25T09:00:00-03:00');
+
+  const result = extendMonthlyAccessPeriod({ currentEndDate, paymentConfirmedAt });
+  assert.equal(result.toISOString(), new Date('2026-02-28T23:59:59.999-03:00').toISOString());
+});
+
+test('extendMonthlyAccessPeriod: 31/mar + 1 mês clampa para 30/abr', () => {
+  const currentEndDate = new Date('2026-03-31T23:59:59.999-03:00');
+  const paymentConfirmedAt = new Date('2026-03-25T09:00:00-03:00');
+
+  const result = extendMonthlyAccessPeriod({ currentEndDate, paymentConfirmedAt });
+  assert.equal(result.toISOString(), new Date('2026-04-30T23:59:59.999-03:00').toISOString());
+});
+
+test('extendMonthlyAccessPeriod: 29/fev de ano bissexto + 1 mês = 29/mar (março comporta o dia 29)', () => {
+  const currentEndDate = new Date('2028-02-29T23:59:59.999-03:00');
+  const paymentConfirmedAt = new Date('2028-02-25T09:00:00-03:00');
+
+  const result = extendMonthlyAccessPeriod({ currentEndDate, paymentConfirmedAt });
+  assert.equal(result.toISOString(), new Date('2028-03-29T23:59:59.999-03:00').toISOString());
+});
+
+test('extendMonthlyAccessPeriod: renovações mensais encadeadas depois de um clamp mantêm o dia clampado (28), não tentam voltar a 31', () => {
+  let endDate = new Date('2026-01-31T23:59:59.999-03:00');
+
+  endDate = extendMonthlyAccessPeriod({ currentEndDate: endDate, paymentConfirmedAt: new Date('2026-01-25T09:00:00-03:00') });
+  assert.equal(endDate.toISOString(), new Date('2026-02-28T23:59:59.999-03:00').toISOString());
+
+  endDate = extendMonthlyAccessPeriod({ currentEndDate: endDate, paymentConfirmedAt: new Date('2026-02-25T09:00:00-03:00') });
+  assert.equal(endDate.toISOString(), new Date('2026-03-28T23:59:59.999-03:00').toISOString());
+
+  endDate = extendMonthlyAccessPeriod({ currentEndDate: endDate, paymentConfirmedAt: new Date('2026-03-25T09:00:00-03:00') });
+  assert.equal(endDate.toISOString(), new Date('2026-04-28T23:59:59.999-03:00').toISOString());
+});
+
+test('extendMonthlyAccessPeriod: pagamento atrasado (depois do vencimento) conta o mês a partir da confirmação, não do endDate vencido', () => {
+  const currentEndDate = new Date('2026-01-31T23:59:59.999-03:00');
+  const paymentConfirmedAt = new Date('2026-02-10T09:00:00-03:00'); // depois do vencimento
+
+  const result = extendMonthlyAccessPeriod({ currentEndDate, paymentConfirmedAt });
+  assert.equal(result.toISOString(), new Date('2026-03-10T23:59:59.999-03:00').toISOString());
 });

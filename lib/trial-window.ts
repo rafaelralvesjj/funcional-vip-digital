@@ -39,7 +39,8 @@ export function addCivilDays(civilDateInput: string, days: number): string {
   return anchor.toISOString().slice(0, 10);
 }
 
-function endOfCivilDayInSaoPaulo(civilDateInput: string): Date {
+/** Exportado para lib/civil-month.ts (fim de dia civil, convenção de endDate de contrato). */
+export function endOfCivilDayInSaoPaulo(civilDateInput: string): Date {
   return new Date(`${civilDateInput}T23:59:59.999${SAO_PAULO_UTC_OFFSET}`);
 }
 

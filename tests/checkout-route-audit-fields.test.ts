@@ -31,7 +31,7 @@ test('checkout usa reserveCheckoutSlot (trava local) antes de qualquer chamada �
   const source = readRouteSource();
   const reserveIndex = source.indexOf('reserveCheckoutSlot(');
   const firstAsaasCallIndex = Math.min(
-    ...['createAsaasCustomer(', 'createAsaasPayment(', 'createAsaasSubscription(']
+    ...['createAsaasCustomer(', 'resolveCheckoutCharge(']
       .map((needle) => source.indexOf(needle))
       .filter((index) => index !== -1)
   );
@@ -40,8 +40,27 @@ test('checkout usa reserveCheckoutSlot (trava local) antes de qualquer chamada �
   assert.ok(reserveIndex < firstAsaasCallIndex, 'a reserva local precisa vir antes da primeira chamada à Asaas');
 });
 
-test('checkout compensa (remove a reserva) quando a chamada à Asaas falha', () => {
+// REVISÃO (ponto 1): depois que a reserva local existe, pode já ter havido
+// efeito remoto na Asaas (ou o resultado ficou incerto) — a rota nunca pode
+// apagar StudentContract/ContractPayment a partir daí. A reserva fica como
+// âncora reconciliável (ver lib/checkout-charge.ts) para a próxima
+// tentativa, em vez de ser removida.
+test('checkout NUNCA apaga a reserva local (StudentContract/ContractPayment) depois de chamar a Asaas', () => {
   const source = readRouteSource();
-  assert.match(source, /studentContract\.delete/);
-  assert.match(source, /contractPayment\.deleteMany/);
+  assert.doesNotMatch(source, /studentContract\.delete/);
+  assert.doesNotMatch(source, /contractPayment\.deleteMany/);
+});
+
+test('checkout usa resolveCheckoutCharge (reconciliação) em vez de chamar createAsaasSubscription/createAsaasPayment diretamente', () => {
+  const source = readRouteSource();
+  assert.match(source, /from ["']@\/lib\/checkout-charge["']/);
+  assert.match(source, /resolveCheckoutCharge\(/);
+  assert.doesNotMatch(source, /createAsaasSubscription\(/);
+  assert.doesNotMatch(source, /createAsaasPayment\(/);
+});
+
+test('checkout retoma uma reserva pendente existente (sem link) em vez de reservar de novo', () => {
+  const source = readRouteSource();
+  assert.match(source, /pendingPayment/);
+  assert.match(source, /existingPaidContract\??\.billingOptionId/);
 });

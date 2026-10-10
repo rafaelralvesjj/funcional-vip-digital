@@ -43,7 +43,8 @@ export function isRetriableWebhookReason(reason: ProcessWebhookResult["reason"] 
  * `tx` (sem banco), do mesmo jeito que activatePaidContractFromTrial em
  * tests/contract-activation.test.ts.
  *
- * Confirmação de pagamento (PAYMENT_CONFIRMED/PAYMENT_RECEIVED):
+ * Confirmação de pagamento (PAYMENT_CONFIRMED/PAYMENT_RECEIVED), nesta
+ * ordem de prioridade (importa: ver nota sobre externalReference abaixo):
  * 1. Localiza o ContractPayment por providerPaymentId — é a MESMA cobrança
  *    já registrada (ex.: reentrega do mesmo evento, ou a primeira
  *    confirmação do checkout). Marca PAGO e delega a ativação do contrato a
@@ -60,7 +61,17 @@ export function isRetriableWebhookReason(reason: ProcessWebhookResult["reason"] 
  *    verdade a primeira confirmação (delega a activatePaidContractFromTrial
  *    normalmente); se já estava ativo, é uma renovação — estende o período
  *    de acesso (extendMonthlyAccessPeriod) sem reprocessar a ativação.
- * 3. Se não achar de nenhuma forma, devolve reason="payment_not_found"
+ *    ESSA checagem vem antes de externalReference de propósito: o checkout
+ *    pode gravar o MESMO externalReference em toda a assinatura (é o
+ *    identificador do checkout, não de uma cobrança específica), então uma
+ *    busca por externalReference encontraria a cobrança do primeiro mês e
+ *    "engoliria" a nova mensalidade como se já estivesse paga — nunca
+ *    criando a linha nova nem estendendo o acesso.
+ * 3. externalReference só entra como último recurso de reconciliação (ex.:
+ *    cobrança ANNUAL cujo providerPaymentId não foi capturado no checkout
+ *    por alguma falha) — nunca antes do passo 2, e nunca pode transformar
+ *    uma nova mensalidade de uma assinatura na cobrança anterior.
+ * 4. Se não achar de nenhuma forma, devolve reason="payment_not_found"
  *    (retriable — ver isRetriableWebhookReason).
  *
  * PAYMENT_OVERDUE só marca o ContractPayment como ATRASADO, sem mexer no
@@ -96,22 +107,25 @@ async function processPaymentConfirmation(
   tx: AsaasWebhookProcessorTx,
   normalized: NormalizedAsaasWebhookEvent
 ): Promise<ProcessWebhookResult> {
-  const exactPayment =
-    (await findPaymentByProviderPaymentId(tx, normalized.providerPaymentId)) ||
-    (normalized.externalReference
-      ? await tx.contractPayment.findFirst({ where: { externalReference: normalized.externalReference } })
-      : null);
-
-  if (exactPayment) {
-    return confirmExistingPayment(tx, exactPayment, normalized);
+  // 1. Mesma cobrança já conhecida.
+  const byProviderPaymentId = await findPaymentByProviderPaymentId(tx, normalized.providerPaymentId);
+  if (byProviderPaymentId) {
+    return confirmExistingPayment(tx, byProviderPaymentId, normalized);
   }
 
-  // payment.id novo, mas pertence a uma assinatura que já conhecemos: é uma
-  // nova mensalidade recorrente, não a primeira cobrança do checkout.
+  // 2. payment.id novo, mas a assinatura já é conhecida: nova mensalidade
+  // recorrente — tem que vir ANTES de externalReference (ver docstring).
   const sameSubscriptionPayment = await findAnyPaymentBySubscription(tx, normalized.providerSubscriptionId);
-
   if (sameSubscriptionPayment) {
     return confirmNewRecurringCycle(tx, sameSubscriptionPayment, normalized);
+  }
+
+  // 3. externalReference: só reconciliação/fallback.
+  const byExternalReference = normalized.externalReference
+    ? await tx.contractPayment.findFirst({ where: { externalReference: normalized.externalReference } })
+    : null;
+  if (byExternalReference) {
+    return confirmExistingPayment(tx, byExternalReference, normalized);
   }
 
   return { handled: false, reason: "payment_not_found" };

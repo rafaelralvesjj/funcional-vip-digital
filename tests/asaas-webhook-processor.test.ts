@@ -291,7 +291,9 @@ test('nova mensalidade recorrente (payment.id novo, mesma subscription) com cont
     commercialStatus: 'CONTRATO_ATIVO',
     acceptedAt: new Date('2026-10-14T09:00:00-03:00'),
     startDate: new Date('2026-10-14T12:00:00-03:00'),
-    endDate: new Date('2026-11-13T12:00:00-03:00'),
+    // endDate real sempre vem no formato "fim do dia civil" (ver
+    // addMonthsMinusOneDay/extendMonthlyAccessPeriod em lib/contract-activation.ts).
+    endDate: new Date('2026-11-13T23:59:59.999-03:00'),
   });
   const firstCyclePayment = buildPendingPayment({
     status: 'PAGO',
@@ -334,7 +336,7 @@ test('nova mensalidade recorrente (payment.id novo, mesma subscription) com cont
 
   // O contrato foi estendido em mais um mês, não reativado do zero.
   const updatedContract = contractsById.get('paid-1');
-  assert.equal(updatedContract?.endDate.toISOString(), new Date('2026-12-13T12:00:00-03:00').toISOString());
+  assert.equal(updatedContract?.endDate.toISOString(), new Date('2026-12-13T23:59:59.999-03:00').toISOString());
   assert.equal(updatedContract?.commercialStatus, 'CONTRATO_ATIVO');
 });
 
@@ -412,4 +414,58 @@ test('evento desconhecido é ignorado (handled=false), sem nenhuma escrita', asy
   assert.equal(result.reason, 'event_type_ignored');
   assert.deepEqual(contractsById.get('paid-1'), contract);
   assert.deepEqual(paymentsById.get('payment-1'), payment);
+});
+
+test('REVISÃO (ponto 3): segunda mensalidade com payment.id novo, mesmo subscription E o mesmo externalReference do checkout original — cria nova linha e estende exatamente um mês, nunca reaproveita a cobrança anterior pelo externalReference', async () => {
+  const sharedExternalReference = 'chk_abc123'; // o checkout grava o MESMO externalReference em toda a assinatura
+  const firstCycleContract = buildPendingContract({
+    status: 'ACTIVE',
+    commercialStatus: 'CONTRATO_ATIVO',
+    acceptedAt: new Date('2026-10-14T09:00:00-03:00'),
+    endDate: new Date('2026-11-13T23:59:59.999-03:00'),
+  });
+  const firstCyclePayment = buildPendingPayment({
+    status: 'PAGO',
+    paidAt: new Date('2026-10-14T09:00:00-03:00'),
+    providerPaymentId: 'pay_mes_1',
+    providerSubscriptionId: 'sub_123',
+    externalReference: sharedExternalReference,
+    amountCents: 990,
+  });
+  const { tx, contractsById, paymentsById } = createFakeTx({
+    contracts: [firstCycleContract],
+    payments: [firstCyclePayment],
+  });
+
+  const normalized = normalizeAsaasWebhookEvent({
+    event: 'PAYMENT_CONFIRMED',
+    payment: {
+      id: 'pay_mes_2', // novo
+      status: 'CONFIRMED',
+      subscription: 'sub_123', // mesma assinatura
+      externalReference: sharedExternalReference, // MESMO externalReference do checkout original
+      value: 9.9,
+    },
+  });
+
+  const result = await processAsaasWebhookEvent(tx as any, normalized);
+  assert.equal(result.handled, true);
+
+  // A cobrança do primeiro mês continua intocada.
+  assert.equal(paymentsById.get('payment-1')?.providerPaymentId, 'pay_mes_1');
+
+  // Uma linha NOVA foi criada para pay_mes_2 — o externalReference repetido
+  // não pode ter feito a rota tratar isso como a cobrança do primeiro mês.
+  const allPayments = [...paymentsById.values()];
+  assert.equal(allPayments.length, 2);
+  const secondCyclePayment = allPayments.find((payment) => payment.providerPaymentId === 'pay_mes_2');
+  assert.ok(secondCyclePayment, 'esperava uma linha nova para pay_mes_2');
+  assert.equal(secondCyclePayment.status, 'PAGO');
+
+  // O contrato foi estendido em exatamente um mês a partir do endDate atual.
+  const updatedContract = contractsById.get('paid-1');
+  assert.equal(
+    updatedContract?.endDate.toISOString(),
+    new Date('2026-12-13T23:59:59.999-03:00').toISOString()
+  );
 });

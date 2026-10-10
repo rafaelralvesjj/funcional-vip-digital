@@ -229,3 +229,40 @@ export async function listAsaasSubscriptionPayments(
 
   return result.data || [];
 }
+
+export async function getAsaasPaymentById(config: AsaasClientConfig, paymentId: string): Promise<AsaasPayment> {
+  return asaasRequest<AsaasPayment>(config, `/payments/${encodeURIComponent(paymentId)}`, { method: "GET" });
+}
+
+/**
+ * Busca de reconciliação (lib/checkout-charge.ts): usada quando não temos
+ * providerSubscriptionId/providerPaymentId localmente capturados (ex.: uma
+ * tentativa anterior criou o recurso na Asaas mas falhou antes de
+ * persistir o id) — permite recuperar o que já existe em vez de criar um
+ * recurso duplicado.
+ */
+export async function findAsaasSubscriptionByExternalReference(
+  config: AsaasClientConfig,
+  externalReference: string
+): Promise<AsaasSubscription | null> {
+  const result = await asaasRequest<{ data: AsaasSubscription[] }>(
+    config,
+    `/subscriptions?externalReference=${encodeURIComponent(externalReference)}`,
+    { method: "GET" }
+  );
+
+  return result.data?.[0] || null;
+}
+
+export async function findAsaasPaymentByExternalReference(
+  config: AsaasClientConfig,
+  externalReference: string
+): Promise<AsaasPayment | null> {
+  const result = await asaasRequest<{ data: AsaasPayment[] }>(
+    config,
+    `/payments?externalReference=${encodeURIComponent(externalReference)}`,
+    { method: "GET" }
+  );
+
+  return result.data?.[0] || null;
+}

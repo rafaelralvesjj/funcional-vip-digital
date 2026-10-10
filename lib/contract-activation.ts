@@ -1,12 +1,17 @@
 import { resolveContractPaymentTransition } from "./contract-payment-transition";
+import { addCivilMonthsClamped, addCivilMonthsMinusOneDayAsEndOfDay } from "./civil-month";
+import { getSaoPauloCivilDateInput } from "./planning-window";
+import { endOfCivilDayInSaoPaulo } from "./trial-window";
 
+/**
+ * Nunca usar Date.setMonth() diretamente para vigência comercial: ele "rola"
+ * dias excedentes para o mês seguinte (31/jan vira 3/mar, pulando fevereiro
+ * inteiro) em vez de truncar para o último dia válido do mês de destino.
+ * addCivilMonthsMinusOneDayAsEndOfDay (lib/civil-month.ts) faz a aritmética
+ * certa, com clamp, sobre a data civil em America/Sao_Paulo.
+ */
 function addMonthsMinusOneDay(startDate: Date, months: number): Date {
-  const endDate = new Date(startDate);
-  endDate.setMonth(endDate.getMonth() + Math.max(months, 1));
-  endDate.setDate(endDate.getDate() - 1);
-  endDate.setHours(23, 59, 59, 999);
-
-  return endDate;
+  return addCivilMonthsMinusOneDayAsEndOfDay(startDate, Math.max(months, 1));
 }
 
 export type ContractTx = {
@@ -129,10 +134,15 @@ export function extendMonthlyAccessPeriod(params: {
 }): Date {
   const base =
     params.currentEndDate.getTime() >= params.paymentConfirmedAt.getTime()
-      ? new Date(params.currentEndDate)
-      : new Date(params.paymentConfirmedAt);
+      ? params.currentEndDate
+      : params.paymentConfirmedAt;
 
-  const extended = new Date(base);
-  extended.setMonth(extended.getMonth() + 1);
-  return extended;
+  // Mesmo helper central de mês civil com clamp usado por addMonthsMinusOneDay
+  // acima — nunca Date.setMonth() diretamente. Uma vez que um ciclo "bate" no
+  // último dia do mês por causa do clamp (31/jan -> 28/fev), os ciclos
+  // seguintes continuam a partir desse dia (28/fev -> 28/mar -> ...), em vez
+  // de tentar "recuperar" o dia 31 original.
+  const baseCivilDate = getSaoPauloCivilDateInput(base);
+  const extendedCivilDate = addCivilMonthsClamped(baseCivilDate, 1);
+  return endOfCivilDayInSaoPaulo(extendedCivilDate);
 }
