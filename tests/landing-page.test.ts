@@ -71,3 +71,24 @@ test('REVISÃO: a landing mostra mensal e anual (anual recomendado) para o mesmo
   assert.match(source, /\{COMMERCIAL_OFFER_WORKOUTS_PER_WEEK\}\s*treinos por semana/);
   assert.match(source, /\{COMMERCIAL_OFFER_TRIAL_DAYS\}\s*dias de teste/);
 });
+
+// REVISÃO (copy): "7 dias de teste grátis" e "período experimental
+// gratuito" davam a entender que a cobrança (mensal/anual) é que seria
+// "grátis" por algum período, quando na verdade o teste é um produto à
+// parte (sem cartão) antes de qualquer cobrança existir. E mensal/anual são
+// formas de pagamento do mesmo plano de 3 treinos/semana — chamar uma delas
+// de "o plano Mensal"/"o plano Anual" sugeria (de novo) dois produtos
+// diferentes, como nos cards antigos (Essencial/Evolução).
+test('REVISÃO (copy): landing nunca usa "teste grátis", "experimental gratuito", "plano Mensal" nem "plano Anual"', () => {
+  const source = readPageSource();
+  assert.doesNotMatch(source, /teste grátis/i);
+  assert.doesNotMatch(source, /experimental gratuito/i);
+  assert.doesNotMatch(source, /plano Mensal/i);
+  assert.doesNotMatch(source, /plano Anual/i);
+});
+
+test('REVISÃO (copy): o CTA de cada forma de pagamento é neutro (não nomeia mensal/anual), já que as duas levam ao mesmo cadastro', () => {
+  const source = readPageSource();
+  assert.doesNotMatch(source, /Começar com o plano/);
+  assert.match(source, /Começar \{COMMERCIAL_OFFER_TRIAL_DAYS\} dias de teste/);
+});

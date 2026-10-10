@@ -173,24 +173,24 @@ const faqs = [
       "Registre no próprio treino qualquer incômodo, dor ou desconforto. Em caso de dúvida antes de continuar, use o chat da plataforma para falar com o professor.",
   },
   {
-    question: "Qual é a diferença entre o plano mensal e o anual?",
+    question: "Qual é a diferença entre a cobrança mensal e a anual?",
     answer:
-      "O treino é o mesmo nos dois: 3 treinos personalizados por semana, acompanhamento do professor, chat e vídeos. A diferença é só a forma de pagamento — mensal, mês a mês, ou anual, num pagamento único com o melhor custo-benefício.",
+      "O treino é o mesmo nas duas: 3 treinos personalizados por semana, acompanhamento do professor, chat e vídeos. A diferença é só a forma de pagamento — mensal, mês a mês, ou anual, num pagamento único com o melhor custo-benefício.",
   },
   {
-    question: "Posso experimentar antes de escolher um plano?",
+    question: "Posso experimentar antes de escolher a forma de pagamento?",
     answer:
-      "Sim. Você pode começar pelo período experimental gratuito, sem cadastrar cartão. Depois, escolhe o plano que melhor combina com sua rotina.",
+      "Sim. Você pode começar pelo período de teste, sem cadastrar cartão. Depois, escolhe entre mensal ou anual.",
   },
   {
-    question: "A cobrança começa automaticamente depois do período experimental?",
+    question: "A cobrança começa automaticamente depois do período de teste?",
     answer:
-      "Não. Como o período experimental não solicita cartão, não existe cobrança automática. A assinatura só começa quando você escolher e contratar um dos planos.",
+      "Não. Como o período de teste não solicita cartão, não existe cobrança automática. A assinatura só começa quando você escolher a forma de pagamento e contratar.",
   },
   {
     question: "Preciso informar cartão para começar?",
     answer:
-      "Não. O cadastro do período experimental não solicita cartão de crédito.",
+      "Não. O cadastro para o período de teste não solicita cartão de crédito.",
   },
 ];
 
@@ -589,7 +589,7 @@ export default function Home() {
             <p className="mt-5 text-base leading-7 text-neutral-400 sm:text-lg">
               Treino personalizado, acompanhamento do professor, chat com
               suporte e vídeos e orientações dos exercícios. Comece com{" "}
-              {COMMERCIAL_OFFER_TRIAL_DAYS} dias de teste grátis, sem cartão, e
+              {COMMERCIAL_OFFER_TRIAL_DAYS} dias de teste, sem cartão, e
               escolha depois a forma de pagamento que preferir.
             </p>
           </div>
@@ -665,12 +665,12 @@ export default function Home() {
                       : "border border-[#00A19C]/35 bg-[#00A19C]/8 text-white hover:bg-[#00A19C]/14"
                   }`}
                 >
-                  Começar com o plano {choice.label}
+                  Começar {COMMERCIAL_OFFER_TRIAL_DAYS} dias de teste
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
 
                 <p className="mt-3 text-center text-[11px] leading-5 text-neutral-500">
-                  Comece pelo cadastro gratuito. A contratação do plano é feita depois, na área do aluno.
+                  Comece pelo cadastro gratuito. A contratação é feita depois, na área do aluno.
                 </p>
               </article>
             ))}
@@ -682,7 +682,7 @@ export default function Home() {
                 Ainda não sabe qual forma de pagamento escolher?
               </p>
               <p className="mt-1 text-xs leading-5 text-neutral-400">
-                Comece pelo período experimental gratuito, sem informar cartão.
+                Comece pelo período de teste, sem informar cartão.
               </p>
             </div>
             <PrimaryButton
