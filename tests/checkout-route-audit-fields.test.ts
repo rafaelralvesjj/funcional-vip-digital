@@ -84,3 +84,22 @@ test('checkout usa findPendingPaidReservation/findActivePaidContract de lib/chec
   assert.match(source, /findPendingPaidReservation\(/);
   assert.match(source, /findActivePaidContract\(/);
 });
+
+// REVISÃO (ponto 1, quinta rodada): findActivePaidContract não pode mais ser
+// comparado contra um "hoje" truncado no fuso do host (setHours/startOfDay)
+// — só o instante real "agora".
+test('checkout não trunca a hora atual (startOfDay/setHours) antes de comparar vigência de contrato', () => {
+  const source = readRouteSource();
+  assert.doesNotMatch(source, /setHours\(/);
+  assert.doesNotMatch(source, /function startOfDay/);
+});
+
+// REVISÃO (ponto 2, quinta rodada): a cobrança pendente retomável não pode
+// ser só EM_ABERTO — ATRASADO (marcado pelo webhook em PAYMENT_OVERDUE)
+// também precisa ser retomável, senão o aluno fica preso em
+// CHECKOUT_IN_PROGRESS sem conseguir pagar.
+test('checkout usa findResumablePendingPayment (EM_ABERTO ou ATRASADO) em vez de filtrar só por EM_ABERTO', () => {
+  const source = readRouteSource();
+  assert.match(source, /findResumablePendingPayment\(/);
+  assert.doesNotMatch(source, /\.find\(\s*\(?payment\)?\s*=>\s*payment\.status\s*===\s*["']EM_ABERTO["']\s*\)/);
+});

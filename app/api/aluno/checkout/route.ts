@@ -15,7 +15,11 @@ import { buildCheckoutExternalReference } from "@/lib/checkout-reference";
 import { assertTermsAccepted, TermsNotAcceptedError, CHECKOUT_TERMS_VERSION } from "@/lib/checkout-terms";
 import { reserveCheckoutSlot, CheckoutAlreadyPendingError } from "@/lib/checkout-reservation";
 import { addCivilMonthsMinusOneDayAsEndOfDay } from "@/lib/civil-month";
-import { findActivePaidContract, findPendingPaidReservation } from "@/lib/checkout-contract-lookup";
+import {
+  findActivePaidContract,
+  findPendingPaidReservation,
+  findResumablePendingPayment,
+} from "@/lib/checkout-contract-lookup";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +46,6 @@ function buildStudentWhere(userId?: string | null, email?: string | null) {
   }
 
   return orWhere;
-}
-
-function startOfDay(date: Date) {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
 }
 
 // Nunca o setMonth nativo de Date diretamente para a duração comercial do
@@ -113,9 +111,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Aluno não encontrado para o usuário autenticado." }, { status: 404 });
     }
 
-    const today = startOfDay(new Date());
+    // Instante real "agora" — nunca truncado para início do dia no fuso do
+    // host: findActivePaidContract compara diretamente contra o instante de
+    // término do contrato (ver lib/checkout-contract-lookup.ts).
+    const now = new Date();
 
-    const activePaidContract: any = findActivePaidContract(student.contracts as any[], today);
+    const activePaidContract: any = findActivePaidContract(student.contracts as any[], now);
 
     if (activePaidContract) {
       return NextResponse.json(
@@ -133,8 +134,10 @@ export async function POST(req: NextRequest) {
     // tem link, reaproveita; se não tem (reservado mas sem resposta
     // confirmada da Asaas ainda), RETOMA a mesma reserva em vez de tentar
     // criar uma nova (ver fase de reconciliação abaixo). Isto nunca apaga a
-    // reserva nem a troca por outra.
-    const pendingPayment = pendingPaidContract?.payments.find((payment: any) => payment.status === "EM_ABERTO");
+    // reserva nem a troca por outra. EM_ABERTO ou ATRASADO (webhook marcou o
+    // vencimento sem confirmação) são ambos retomáveis — ver
+    // lib/checkout-contract-lookup.ts.
+    const pendingPayment = findResumablePendingPayment((pendingPaidContract?.payments || []) as any[]);
 
     if (pendingPayment?.paymentLinkUrl) {
       return NextResponse.json({

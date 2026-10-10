@@ -11,27 +11,24 @@ type PaidContractLike = {
   [key: string]: unknown;
 };
 
-function startOfDay(date: Date): Date {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
-}
-
 /**
  * Um contrato PAID ACTIVE só bloqueia um novo checkout enquanto ainda está
- * em vigor (endDate não passou) — aqui o endDate É a data real de término,
- * não um placeholder.
+ * em vigor — aqui o endDate É a data real de término (um instante preciso,
+ * sempre gravado como fim do dia civil de America/Sao_Paulo por
+ * lib/civil-month.ts), não um placeholder. Comparação direta de instante
+ * (getTime() >= getTime()), nunca truncando para "início do dia" com
+ * setHours(0,0,0,0): isso dependeria do fuso horário do HOST rodando o
+ * processo (na Vercel, UTC) e poderia considerar "ainda vigente" um
+ * contrato que, em America/Sao_Paulo, já expirou — ou vice-versa.
  */
 export function findActivePaidContract<T extends PaidContractLike>(
   contracts: T[],
-  today: Date = new Date()
+  referenceDate: Date = new Date()
 ): T | undefined {
-  const todayStart = startOfDay(today);
-
   return contracts.find((contract) => {
     if (contract.type !== "PAID") return false;
     if (contract.status !== "ACTIVE") return false;
-    return startOfDay(new Date(contract.endDate)).getTime() >= todayStart.getTime();
+    return new Date(contract.endDate).getTime() >= referenceDate.getTime();
   });
 }
 
@@ -49,4 +46,31 @@ export function findActivePaidContract<T extends PaidContractLike>(
  */
 export function findPendingPaidReservation<T extends PaidContractLike>(contracts: T[]): T | undefined {
   return contracts.find((contract) => contract.type === "PAID" && contract.status === "AWAITING_PAYMENT");
+}
+
+type PaymentLike = {
+  status: string;
+  [key: string]: unknown;
+};
+
+// Status de ContractPayment que ainda representam a MESMA tentativa de
+// cobrança, nunca uma cobrança encerrada/cancelada. O webhook (ver
+// lib/asaas-webhook-processor.ts, PAYMENT_OVERDUE) transforma EM_ABERTO em
+// ATRASADO quando a Asaas marca o vencimento sem pagamento — isso não torna
+// a reserva "concluída" nem libera o aluno para gerar outra: o mesmo
+// contrato/pagamento continua sendo o caminho de retomada.
+const RESUMABLE_PENDING_PAYMENT_STATUSES = new Set(["EM_ABERTO", "ATRASADO"]);
+
+/**
+ * A cobrança de uma reserva AWAITING_PAYMENT ainda pendente — EM_ABERTO (o
+ * pagamento nunca venceu) ou ATRASADO (venceu sem confirmação, mas ainda é
+ * a cobrança que o aluno precisa pagar). Sem isso, um pagamento marcado
+ * ATRASADO pelo webhook ficaria com o StudentContract preso em
+ * AWAITING_PAYMENT (protegido pelo índice único parcial) sem nenhum
+ * ContractPayment "visível" para o checkout retomar — o aluno não
+ * conseguiria gerar uma nova reserva (índice único) nem reaproveitar a
+ * antiga (filtro restrito a EM_ABERTO).
+ */
+export function findResumablePendingPayment<T extends PaymentLike>(payments: T[]): T | undefined {
+  return payments.find((payment) => RESUMABLE_PENDING_PAYMENT_STATUSES.has(payment.status));
 }
