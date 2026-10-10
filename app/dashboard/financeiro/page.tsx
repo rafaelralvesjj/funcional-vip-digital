@@ -85,6 +85,135 @@ type PaymentItem = {
   createdAt: string;
 };
 
+type CommercialStatusCategory =
+  | "EM_TESTE"
+  | "TESTE_TERMINA_EM_BREVE"
+  | "AGUARDANDO_PAGAMENTO"
+  | "CONTRATO_ATIVO"
+  | "PAGAMENTO_ATRASADO"
+  | "SUSPENSO"
+  | "ENCERRADO";
+
+type CommercialStatusCard = {
+  category: CommercialStatusCategory;
+  label: string;
+  count: number;
+};
+
+type CommercialStatusRow = {
+  studentId: string;
+  studentName: string;
+  category: CommercialStatusCategory;
+  categoryLabel: string;
+  contractId: string;
+  contractType: string;
+  contractStatus: string;
+  planName: string;
+  billingLabel: string;
+  nextDate: string | null;
+  paymentId: string | null;
+  paymentStatus: string | null;
+  paymentLinkUrl: string | null;
+};
+
+type FinanceiroOverviewResponse = {
+  cards: CommercialStatusCard[];
+  rows: CommercialStatusRow[];
+};
+
+type FinanceiroDetailPayment = {
+  id: string;
+  status: string;
+  amountCents: number;
+  dueDate: string;
+  paidAt: string | null;
+  method: string | null;
+  provider: string | null;
+  paymentLinkUrl: string | null;
+  externalReference: string | null;
+  providerPaymentId: string | null;
+  providerSubscriptionId: string | null;
+  receiptUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+};
+
+type FinanceiroDetailContract = {
+  id: string;
+  type: string;
+  status: string;
+  commercialStatus: string;
+  source: string | null;
+  paymentMode: string | null;
+  planName: string;
+  billingLabel: string;
+  billingCycle: string | null;
+  billingOptionAmountCents: number | null;
+  priceCents: number;
+  durationMonths: number;
+  startDate: string;
+  endDate: string;
+  acceptedAt: string | null;
+  activatedAt: string | null;
+  finalizedAt: string | null;
+  cancelledAt: string | null;
+  suspendedAt: string | null;
+  termsVersion: string | null;
+  termsAcceptedAt: string | null;
+  renewedFromContractId: string | null;
+  notes: string | null;
+  payments: FinanceiroDetailPayment[];
+};
+
+type FinanceiroDetailResponse = {
+  student: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    cpfCnpj: string | null;
+    asaasCustomerId: string | null;
+    commercialStatus: string;
+  };
+  currentRow: CommercialStatusRow | null;
+  contracts: FinanceiroDetailContract[];
+  history: { date: string; label: string; contractId: string; paymentId: string | null }[];
+};
+
+// Mesma ordem/rótulos de lib/commercial-status-resolver.ts (servidor) — só
+// para exibição enquanto overview ainda não carregou; a categoria de cada
+// aluno em si sempre vem calculada pela API (resolveStudentCommercialRow),
+// nunca recalculada aqui no cliente.
+const COMMERCIAL_STATUS_CATEGORIES_FALLBACK: CommercialStatusCard[] = [
+  { category: "EM_TESTE", label: "Em teste", count: 0 },
+  { category: "TESTE_TERMINA_EM_BREVE", label: "Teste termina em até 2 dias", count: 0 },
+  { category: "AGUARDANDO_PAGAMENTO", label: "Aguardando pagamento", count: 0 },
+  { category: "CONTRATO_ATIVO", label: "Contratos ativos", count: 0 },
+  { category: "PAGAMENTO_ATRASADO", label: "Pagamento atrasado", count: 0 },
+  { category: "SUSPENSO", label: "Suspensos", count: 0 },
+  { category: "ENCERRADO", label: "Encerrados", count: 0 },
+];
+
+const COMMERCIAL_STATUS_CATEGORY_LABELS: Record<CommercialStatusCategory, string> = {
+  EM_TESTE: "Em teste",
+  TESTE_TERMINA_EM_BREVE: "Teste termina em até 2 dias",
+  AGUARDANDO_PAGAMENTO: "Aguardando pagamento",
+  CONTRATO_ATIVO: "Contratos ativos",
+  PAGAMENTO_ATRASADO: "Pagamento atrasado",
+  SUSPENSO: "Suspensos",
+  ENCERRADO: "Encerrados",
+};
+
+const COMMERCIAL_STATUS_BADGE_CLASSES: Record<CommercialStatusCategory, string> = {
+  EM_TESTE: "bg-blue-500/15 border-blue-500/30 text-blue-300",
+  TESTE_TERMINA_EM_BREVE: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300",
+  AGUARDANDO_PAGAMENTO: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300",
+  CONTRATO_ATIVO: "bg-green-500/15 border-green-500/30 text-green-300",
+  PAGAMENTO_ATRASADO: "bg-red-500/15 border-red-500/30 text-red-300",
+  SUSPENSO: "bg-orange-500/15 border-orange-500/30 text-orange-300",
+  ENCERRADO: "bg-[#1a1a1a] border-[#ffffff10] text-[#6b6b6b]",
+};
+
 type TrialContinuationRequestItem = {
   id: string;
   studentId: string;
@@ -240,11 +369,19 @@ export default function FinanceiroPage() {
   const [contractsData, setContractsData] = useState<ContractsResponse | null>(null);
   const [paymentsData, setPaymentsData] = useState<PaymentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [overview, setOverview] = useState<FinanceiroOverviewResponse | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState<CommercialStatusCategory | null>(null);
+  const [tableSearch, setTableSearch] = useState("");
+
+  const [detailStudentId, setDetailStudentId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<FinanceiroDetailResponse | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const [savingContract, setSavingContract] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
   const [renewingContractId, setRenewingContractId] = useState("");
-  const [filter, setFilter] = useState("VENCENDO");
-  const [paymentFilter, setPaymentFilter] = useState("TODOS");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [studentId, setStudentId] = useState("");
@@ -324,6 +461,54 @@ export default function FinanceiroPage() {
     setLoading(false);
   }
 
+  async function loadOverview() {
+    setOverviewLoading(true);
+
+    try {
+      const res = await fetch("/api/financeiro/overview", { cache: "no-store" });
+      const json = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setOverview(json);
+      } else {
+        setMessage({ type: "error", text: json?.error || "Erro ao carregar a situação comercial dos alunos." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao carregar a situação comercial dos alunos." });
+    }
+
+    setOverviewLoading(false);
+  }
+
+  async function loadDetail(targetStudentId: string) {
+    setDetailLoading(true);
+
+    try {
+      const res = await fetch(`/api/financeiro/overview/${targetStudentId}`, { cache: "no-store" });
+      const json = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setDetail(json);
+      } else {
+        setMessage({ type: "error", text: json?.error || "Erro ao carregar o detalhe financeiro do aluno." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao carregar o detalhe financeiro do aluno." });
+    }
+
+    setDetailLoading(false);
+  }
+
+  function openStudentDetail(targetStudentId: string) {
+    setDetailStudentId(targetStudentId);
+    loadDetail(targetStudentId);
+  }
+
+  function closeStudentDetail() {
+    setDetailStudentId(null);
+    setDetail(null);
+  }
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const initialStudentId = params.get("studentId") || "";
@@ -331,10 +516,10 @@ export default function FinanceiroPage() {
     if (initialStudentId) {
       setPendingStudentIdFromUrl(initialStudentId);
       setStudentId(initialStudentId);
-      setFilter("EXPERIENCIA");
     }
 
     loadData();
+    loadOverview();
   }, []);
 
   useEffect(() => {
@@ -363,7 +548,6 @@ export default function FinanceiroPage() {
 
     if (activeTrialContract) {
       setConversionTrialContractId(activeTrialContract.id);
-      setFilter("EXPERIENCIA");
       setMessage({
         type: "success",
         text: `Experiência de ${selectedStudent.name} selecionada. Agora escolha o plano pago e conclua a conversão.`,
@@ -458,66 +642,8 @@ export default function FinanceiroPage() {
     };
   }, [selectedPlan, durationMonths, startDate]);
 
-  const filteredContracts = useMemo(() => {
-    const contracts = contractsData?.contracts || [];
-    const now = new Date();
-    const in7Days = new Date(now);
-    in7Days.setDate(in7Days.getDate() + 7);
-
-    if (filter === "TODOS") return contracts;
-
-    if (filter === "ATIVOS") {
-      return contracts.filter((contract) => contract.status === "ACTIVE");
-    }
-
-    if (filter === "PAGOS_ATIVOS") {
-      return contracts.filter((contract) => contract.type === "PAID" && contract.status === "ACTIVE");
-    }
-
-    if (filter === "VENCENDO") {
-      return contracts.filter((contract) => {
-        const endDate = new Date(contract.endDate);
-        return contract.status === "ACTIVE" && endDate >= now && endDate <= in7Days;
-      });
-    }
-
-    if (filter === "VENCIDOS") {
-      return contracts.filter((contract) => {
-        const endDate = new Date(contract.endDate);
-        return contract.status === "ACTIVE" && endDate < now;
-      });
-    }
-
-    if (filter === "EXPERIENCIA") {
-      return contracts.filter((contract) => contract.type === "TRIAL");
-    }
-
-    if (filter === "EXPERIENCIA_VENCENDO") {
-      return contracts.filter((contract) => {
-        const endDate = new Date(contract.endDate);
-        return contract.type === "TRIAL" && contract.status === "ACTIVE" && endDate >= now && endDate <= in7Days;
-      });
-    }
-
-    if (filter === "CONVERTIDOS") {
-      return contracts.filter((contract) => contract.type === "PAID" && contract.source === "CONVERSAO_EXPERIENCIA");
-    }
-
-    if (filter === "PAGAMENTO") {
-      return contracts.filter((contract) => contract.status === "AWAITING_PAYMENT" || contract.status === "SUSPENDED");
-    }
-
-    return contracts;
-  }, [contractsData, filter]);
-
-  const filteredPayments = useMemo(() => {
-    const payments = paymentsData?.payments || [];
-
-    if (paymentFilter === "TODOS") return payments;
-
-    return payments.filter((payment) => payment.status === paymentFilter);
-  }, [paymentsData, paymentFilter]);
-
+  // Alunos já renovados (StudentContract.renewedFromContractId aponta pra
+  // cá) não podem mostrar o botão "Renovar" de novo no drawer de detalhe.
   const renewedSourceContractIds = useMemo(() => {
     return new Set(
       (contractsData?.contracts || [])
@@ -526,21 +652,16 @@ export default function FinanceiroPage() {
     );
   }, [contractsData]);
 
-  function contractFilterLabel(item: string): string {
-    const labels: Record<string, string> = {
-      VENCENDO: "Vencendo",
-      VENCIDOS: "Vencidos",
-      ATIVOS: "Ativos",
-      PAGOS_ATIVOS: "Pagos ativos",
-      EXPERIENCIA: "Experiências",
-      EXPERIENCIA_VENCENDO: "Exp. vencendo",
-      CONVERTIDOS: "Convertidos",
-      PAGAMENTO: "Aguardando pagamento",
-      TODOS: "Todos",
-    };
+  const filteredOverviewRows = useMemo(() => {
+    const rows = overview?.rows || [];
+    const search = tableSearch.trim().toLowerCase();
 
-    return labels[item] || item;
-  }
+    return rows.filter((row) => {
+      if (activeCategory && row.category !== activeCategory) return false;
+      if (search && !row.studentName.toLowerCase().includes(search)) return false;
+      return true;
+    });
+  }, [overview, activeCategory, tableSearch]);
 
   async function handleCreateContract(event: React.FormEvent) {
     event.preventDefault();
@@ -595,6 +716,8 @@ export default function FinanceiroPage() {
 
         setNotes("");
         await loadData();
+        await loadOverview();
+        if (detailStudentId) await loadDetail(detailStudentId);
       } else {
         setMessage({ type: "error", text: json?.error || "Erro ao criar contrato." });
       }
@@ -631,12 +754,13 @@ export default function FinanceiroPage() {
             json?.message ||
             `Renovação criada. A cobrança de ${formatMoney(contract.priceCents)} está em aberto para o próximo ciclo.`,
         });
-        setFilter("PAGAMENTO");
         if (json?.contract?.id) {
           setPaymentContractId(json.contract.id);
           setPaymentAmountReais(String(contract.priceCents / 100));
         }
         await loadData();
+        await loadOverview();
+        if (detailStudentId) await loadDetail(detailStudentId);
       } else {
         setMessage({ type: "error", text: json?.error || "Erro ao renovar contrato." });
       }
@@ -667,6 +791,8 @@ export default function FinanceiroPage() {
       if (res.ok) {
         setMessage({ type: "success", text: "Contrato atualizado." });
         await loadData();
+        await loadOverview();
+        if (detailStudentId) await loadDetail(detailStudentId);
       } else {
         setMessage({ type: "error", text: json?.error || "Erro ao atualizar contrato." });
       }
@@ -725,6 +851,8 @@ export default function FinanceiroPage() {
         setPaymentNotes("");
         setPaymentStatus("EM_ABERTO");
         await loadData();
+        await loadOverview();
+        if (detailStudentId) await loadDetail(detailStudentId);
       } else {
         setMessage({ type: "error", text: json?.error || "Erro ao registrar pagamento." });
       }
@@ -762,6 +890,8 @@ export default function FinanceiroPage() {
               : "Pagamento atualizado.",
         });
         await loadData();
+        await loadOverview();
+        if (detailStudentId) await loadDetail(detailStudentId);
       } else {
         setMessage({ type: "error", text: json?.error || "Erro ao atualizar pagamento." });
       }
@@ -832,6 +962,8 @@ export default function FinanceiroPage() {
         setConversionPlanId("");
 
         await loadData();
+        await loadOverview();
+        if (detailStudentId) await loadDetail(detailStudentId);
       } else {
         setMessage({
           type: "error",
@@ -850,6 +982,8 @@ export default function FinanceiroPage() {
 
   const metrics = contractsData?.metrics;
   const paymentMetrics = paymentsData?.metrics;
+  const currentRow = detail?.currentRow ?? null;
+  const currentPaymentId = currentRow?.paymentId ?? null;
 
   return (
     <main className="p-6 space-y-6 bg-[#0a0a0a] min-h-screen text-[#f5f5f5]">
@@ -883,109 +1017,34 @@ export default function FinanceiroPage() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Contratos pagos ativos</p>
-          <p className="text-2xl font-bold text-green-400">{metrics?.activePaidContracts ?? metrics?.activeContracts ?? 0}</p>
-          <p className="text-[11px] text-[#6b6b6b] mt-1">Receita ativa: {formatMoney(metrics?.activePaidRevenueCents || 0)}</p>
-        </div>
+        {(overview?.cards || COMMERCIAL_STATUS_CATEGORIES_FALLBACK).map((card) => {
+          const isActive = activeCategory === card.category;
 
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Experiências ativas</p>
-          <p className="text-2xl font-bold text-blue-400">{metrics?.activeTrialContracts ?? metrics?.trialContracts ?? 0}</p>
-          <p className="text-[11px] text-[#6b6b6b] mt-1">Vencendo: {metrics?.trialEndingSoonContracts ?? 0}</p>
-        </div>
-
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Interesses em continuar</p>
-          <p className="text-2xl font-bold text-[#00A19C]">{metrics?.openTrialContinuationRequests ?? 0}</p>
-          <a
-            href="/dashboard/gestor/interesses-experiencia"
-            className="text-[11px] text-[#00A19C] underline mt-1 inline-block"
-          >
-            Abrir fila
-          </a>
-        </div>
-
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Taxa de conversão</p>
-          <p className="text-2xl font-bold text-[#00A19C]">{formatPercent(metrics?.trialConversionRatePercent)}</p>
-          <p className="text-[11px] text-[#6b6b6b] mt-1">Convertidos: {metrics?.convertedFromTrialContracts ?? 0}</p>
-        </div>
-
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Aguardando pagamento</p>
-          <p className="text-2xl font-bold text-yellow-400">{metrics?.awaitingPaymentContracts ?? 0}</p>
-          <p className="text-[11px] text-[#6b6b6b] mt-1">Alunos: {metrics?.awaitingPaymentStudents ?? 0}</p>
-        </div>
-
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Receita em aberto</p>
-          <p className="text-2xl font-bold text-yellow-400">{formatMoney(metrics?.awaitingPaymentRevenueCents ?? paymentMetrics?.openCents ?? 0)}</p>
-          <p className="text-[11px] text-[#6b6b6b] mt-1">Pagamentos: {paymentMetrics?.openPayments || 0}</p>
-        </div>
-
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Pagamentos atrasados</p>
-          <p className="text-2xl font-bold text-red-400">{formatMoney(paymentMetrics?.overdueCents || 0)}</p>
-          <p className="text-[11px] text-[#6b6b6b] mt-1">Qtd.: {paymentMetrics?.overduePayments || 0}</p>
-        </div>
-
-        <div className="bg-[#111] border border-[#ffffff10] rounded-2xl p-4">
-          <p className="text-xs uppercase text-[#6b6b6b]">Sem contrato ativo</p>
-          <p className="text-2xl font-bold text-[#00A19C]">{metrics?.noContractStudents || 0}</p>
-          <p className="text-[11px] text-[#6b6b6b] mt-1">Acompanhar para não perder aluno</p>
-        </div>
+          return (
+            <button
+              key={card.category}
+              type="button"
+              onClick={() => setActiveCategory(isActive ? null : card.category)}
+              className={`text-left bg-[#111] border rounded-2xl p-4 transition ${
+                isActive ? "border-[#00A19C] ring-1 ring-[#00A19C]" : "border-[#ffffff10] hover:border-[#ffffff30]"
+              }`}
+            >
+              <p className="text-xs uppercase text-[#6b6b6b]">{card.label}</p>
+              <p className="text-2xl font-bold text-[#f5f5f5] mt-1">{overviewLoading ? "…" : card.count}</p>
+            </button>
+          );
+        })}
       </div>
 
-      <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-[#00A19C]">Visão executiva do funil</h2>
-          <p className="text-xs text-[#a1a1a1] mt-1">
-            Leitura rápida da jornada: experiência, interesse, conversão e pagamento.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
-            <p className="text-xs uppercase text-[#6b6b6b]">Experiência</p>
-            <p className="text-sm text-[#f5f5f5] mt-2">
-              Ativas: <strong className="text-blue-300">{metrics?.activeTrialContracts ?? metrics?.trialContracts ?? 0}</strong>
-            </p>
-            <p className="text-sm text-[#f5f5f5] mt-1">
-              Vencendo: <strong className="text-yellow-300">{metrics?.trialEndingSoonContracts ?? 0}</strong>
-            </p>
-            <p className="text-sm text-[#f5f5f5] mt-1">
-              Vencidas: <strong className="text-red-300">{metrics?.expiredTrialContracts ?? 0}</strong>
-            </p>
-          </div>
-
-          <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
-            <p className="text-xs uppercase text-[#6b6b6b]">Conversão</p>
-            <p className="text-sm text-[#f5f5f5] mt-2">
-              Interessados: <strong className="text-[#00A19C]">{metrics?.openTrialContinuationRequests ?? 0}</strong>
-            </p>
-            <p className="text-sm text-[#f5f5f5] mt-1">
-              Convertidos: <strong className="text-green-300">{metrics?.convertedFromTrialContracts ?? 0}</strong>
-            </p>
-            <p className="text-sm text-[#f5f5f5] mt-1">
-              Taxa simples: <strong className="text-[#00A19C]">{formatPercent(metrics?.trialConversionRatePercent)}</strong>
-            </p>
-          </div>
-
-          <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4">
-            <p className="text-xs uppercase text-[#6b6b6b]">Contrato pago</p>
-            <p className="text-sm text-[#f5f5f5] mt-2">
-              Ativos: <strong className="text-green-300">{metrics?.activePaidContracts ?? 0}</strong>
-            </p>
-            <p className="text-sm text-[#f5f5f5] mt-1">
-              Vencendo: <strong className="text-yellow-300">{metrics?.paidEndingSoonContracts ?? 0}</strong>
-            </p>
-            <p className="text-sm text-[#f5f5f5] mt-1">
-              Suspensos: <strong className="text-red-300">{metrics?.suspendedContracts ?? 0}</strong>
-            </p>
-          </div>
-        </div>
-      </section>
+      {activeCategory && (
+        <button
+          type="button"
+          onClick={() => setActiveCategory(null)}
+          className="text-xs text-[#00A19C] underline"
+        >
+          Limpar filtro de situação ({COMMERCIAL_STATUS_CATEGORY_LABELS[activeCategory]})
+        </button>
+      )}
 
       <section id="converter-experiencia" className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4 scroll-mt-6">
         <div>
@@ -1392,252 +1451,283 @@ export default function FinanceiroPage() {
       <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-[#00A19C]">Pagamentos</h2>
+            <h2 className="text-lg font-semibold text-[#00A19C]">Alunos</h2>
             <p className="text-xs text-[#a1a1a1] mt-1">
-              Marque como pago quando confirmar o recebimento. Isso ativa o contrato vinculado.
+              Uma linha por aluno, com a situação comercial calculada automaticamente (ver cards acima para filtrar).
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {["TODOS", "EM_ABERTO", "PAGO", "ATRASADO", "PARCIAL", "CANCELADO"].map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setPaymentFilter(item)}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                  paymentFilter === item
-                    ? "bg-[#00A19C] text-[#0a0a0a]"
-                    : "bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10]"
-                }`}
-              >
-                {item === "TODOS" ? "Todos" : paymentStatusLabel(item)}
-              </button>
-            ))}
-          </div>
+          <input
+            value={tableSearch}
+            onChange={(event) => setTableSearch(event.target.value)}
+            placeholder="Buscar aluno..."
+            className="bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C] w-full lg:w-64"
+          />
         </div>
 
-        <div className="space-y-3">
-          {filteredPayments.length === 0 ? (
+        <div className="overflow-x-auto">
+          {overviewLoading ? (
             <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-sm text-[#a1a1a1]">
-              Nenhum pagamento encontrado.
+              Carregando situação comercial...
+            </div>
+          ) : filteredOverviewRows.length === 0 ? (
+            <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-sm text-[#a1a1a1]">
+              Nenhum aluno encontrado para esse filtro.
             </div>
           ) : (
-            filteredPayments.map((payment) => (
-              <div
-                key={payment.id}
-                className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-4 space-y-3"
-              >
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-[#f5f5f5]">{payment.studentName}</h3>
-                      <span className="rounded-full bg-[#00A19C]/15 text-[#00A19C] px-2 py-1 text-[11px] font-semibold">
-                        {paymentStatusLabel(payment.status)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#a1a1a1] mt-1">
-                      {payment.planName} · {typeLabel(payment.contractType || "")} · {payment.method || "-"}
-                    </p>
-                    <p className="text-xs text-[#6b6b6b] mt-1">
-                      Vencimento: {formatDate(payment.dueDate)}
-                      {payment.paidAt ? ` · Pago em: ${formatDate(payment.paidAt)}` : ""}
-                    </p>
-                    {payment.paymentLinkUrl && (
-                      <a
-                        href={payment.paymentLinkUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-[#00A19C] underline mt-1 inline-block"
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase text-[#6b6b6b] border-b border-[#ffffff10]">
+                  <th className="py-2 pr-3">Aluno</th>
+                  <th className="py-2 pr-3">Situação</th>
+                  <th className="py-2 pr-3">Plano</th>
+                  <th className="py-2 pr-3">Cobrança</th>
+                  <th className="py-2 pr-3">Próxima data</th>
+                  <th className="py-2 pr-3">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOverviewRows.map((row) => (
+                  <tr key={row.studentId} className="border-b border-[#ffffff08] hover:bg-[#ffffff05]">
+                    <td className="py-3 pr-3 font-medium text-[#f5f5f5]">{row.studentName}</td>
+                    <td className="py-3 pr-3">
+                      <span
+                        className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${COMMERCIAL_STATUS_BADGE_CLASSES[row.category]}`}
                       >
-                        Abrir link de pagamento
-                      </a>
-                    )}
-                  </div>
-
-                  <div className="text-left lg:text-right">
-                    <p className="text-xl font-bold text-[#00A19C]">{formatMoney(payment.amountCents)}</p>
-                    <p className="text-xs text-[#6b6b6b]">{payment.contractNumber || "Sem número"}</p>
-                  </div>
-                </div>
-
-                {payment.notes && (
-                  <p className="text-xs text-[#a1a1a1] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl p-3">
-                    {payment.notes}
-                  </p>
-                )}
-
-                <div className="flex flex-wrap gap-2">
-                  {payment.status !== "PAGO" && (
-                    <button
-                      type="button"
-                      onClick={() => handleUpdatePaymentStatus(payment.id, "PAGO")}
-                      className="rounded-xl bg-green-500/15 border border-green-500/20 text-green-300 px-3 py-2 text-xs font-semibold"
-                    >
-                      Marcar pago e ativar contrato
-                    </button>
-                  )}
-
-                  {payment.status !== "ATRASADO" && payment.status !== "PAGO" && (
-                    <button
-                      type="button"
-                      onClick={() => handleUpdatePaymentStatus(payment.id, "ATRASADO")}
-                      className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 px-3 py-2 text-xs font-semibold"
-                    >
-                      Marcar atrasado
-                    </button>
-                  )}
-
-                  {payment.status !== "CANCELADO" && (
-                    <button
-                      type="button"
-                      onClick={() => handleUpdatePaymentStatus(payment.id, "CANCELADO")}
-                      className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#a1a1a1] px-3 py-2 text-xs font-semibold"
-                    >
-                      Cancelar
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
+                        {row.categoryLabel}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-3 text-[#d6d6d6]">{row.planName}</td>
+                    <td className="py-3 pr-3 text-[#d6d6d6]">{row.billingLabel}</td>
+                    <td className="py-3 pr-3 text-[#d6d6d6]">{formatDate(row.nextDate)}</td>
+                    <td className="py-3 pr-3">
+                      <button
+                        type="button"
+                        onClick={() => openStudentDetail(row.studentId)}
+                        className="rounded-xl bg-[#1a1a1a] border border-[#00A19C]/30 text-[#00A19C] px-3 py-2 text-xs font-semibold"
+                      >
+                        Ver detalhes
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </section>
 
-      <section className="bg-[#111] border border-[#ffffff10] rounded-2xl p-5 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[#00A19C]">Contratos e ciclos</h2>
-            <p className="text-xs text-[#a1a1a1] mt-1">
-              Acompanhe experiências, contratos pagos, vencimentos e suspensões.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {["VENCENDO", "VENCIDOS", "ATIVOS", "PAGOS_ATIVOS", "EXPERIENCIA", "EXPERIENCIA_VENCENDO", "CONVERTIDOS", "PAGAMENTO", "TODOS"].map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setFilter(item)}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                  filter === item
-                    ? "bg-[#00A19C] text-[#0a0a0a]"
-                    : "bg-[#1a1a1a] text-[#a1a1a1] border border-[#ffffff10]"
-                }`}
-              >
-                {contractFilterLabel(item)}
+      {detailStudentId && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={closeStudentDetail}>
+          <div
+            className="w-full max-w-xl h-full bg-[#111] border-l border-[#ffffff10] overflow-y-auto p-6 space-y-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-[#00A19C]">{detail?.student.name || "Carregando..."}</h2>
+                {detail?.student.email && <p className="text-xs text-[#a1a1a1]">{detail.student.email}</p>}
+                {detail?.student.phone && <p className="text-xs text-[#a1a1a1]">{detail.student.phone}</p>}
+              </div>
+              <button type="button" onClick={closeStudentDetail} className="text-[#a1a1a1] hover:text-[#f5f5f5] text-sm">
+                Fechar
               </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {filteredContracts.length === 0 ? (
-            <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-sm text-[#a1a1a1]">
-              Nenhum contrato encontrado.
             </div>
-          ) : (
-            filteredContracts.map((contract) => (
-              <div
-                key={contract.id}
-                className="rounded-2xl border border-[#ffffff10] bg-[#0f0f0f] p-4 space-y-3"
-              >
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-[#f5f5f5]">{contract.studentName}</h3>
-                      <span className="rounded-full bg-[#00A19C]/15 text-[#00A19C] px-2 py-1 text-[11px] font-semibold">
-                        {statusLabel(contract.status)}
-                      </span>
-                      <span className="rounded-full bg-[#ffffff08] text-[#a1a1a1] px-2 py-1 text-[11px]">
-                        {typeLabel(contract.type)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#a1a1a1] mt-1">
-                      {contract.planName} · Professor: {contract.professorName || "Sem professor"}
-                    </p>
-                    <p className="text-xs text-[#6b6b6b] mt-1">
-                      {formatDate(contract.startDate)} até {formatDate(contract.endDate)} · {contract.totalContractedWorkouts} treino(s)
-                    </p>
-                  </div>
 
-                  <div className="text-left lg:text-right">
-                    <p className="text-xl font-bold text-[#00A19C]">{formatMoney(contract.priceCents)}</p>
-                    <p className="text-xs text-[#6b6b6b]">{contract.contractNumber || "Sem número"}</p>
-                  </div>
-                </div>
+            {detailLoading && !detail && (
+              <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 text-sm text-[#a1a1a1]">
+                Carregando detalhe financeiro...
+              </div>
+            )}
 
-                {contract.notes && (
-                  <p className="text-xs text-[#a1a1a1] bg-[#1a1a1a] border border-[#ffffff10] rounded-xl p-3">
-                    {contract.notes}
-                  </p>
-                )}
+            {currentRow && (
+              <div className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 space-y-2">
+                <span
+                  className={`inline-block rounded-full border px-2 py-1 text-[11px] font-semibold ${COMMERCIAL_STATUS_BADGE_CLASSES[currentRow.category]}`}
+                >
+                  {currentRow.categoryLabel}
+                </span>
+                <p className="text-sm text-[#f5f5f5]">
+                  {currentRow.planName} · {currentRow.billingLabel}
+                </p>
+                <p className="text-xs text-[#6b6b6b]">Próxima data: {formatDate(currentRow.nextDate)}</p>
 
-                <div className="flex flex-wrap gap-2">
-                  {contract.status !== "ACTIVE" && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {currentRow.contractStatus !== "ACTIVE" && (
                     <button
                       type="button"
-                      onClick={() => handleUpdateContractStatus(contract.id, "ACTIVE")}
+                      onClick={() => handleUpdateContractStatus(currentRow.contractId, "ACTIVE")}
                       className="rounded-xl bg-green-500/15 border border-green-500/20 text-green-300 px-3 py-2 text-xs font-semibold"
                     >
                       Ativar
                     </button>
                   )}
-
-                  {contract.status !== "SUSPENDED" && (
+                  {currentRow.contractStatus !== "SUSPENDED" && (
                     <button
                       type="button"
-                      onClick={() => handleUpdateContractStatus(contract.id, "SUSPENDED")}
+                      onClick={() => handleUpdateContractStatus(currentRow.contractId, "SUSPENDED")}
                       className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 px-3 py-2 text-xs font-semibold"
                     >
                       Suspender
                     </button>
                   )}
-
-                  {contract.status !== "FINALIZED" && (
+                  {currentRow.contractStatus !== "FINALIZED" && (
                     <button
                       type="button"
-                      onClick={() => handleUpdateContractStatus(contract.id, "FINALIZED")}
+                      onClick={() => handleUpdateContractStatus(currentRow.contractId, "FINALIZED")}
                       className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#a1a1a1] px-3 py-2 text-xs font-semibold"
                     >
                       Finalizar
                     </button>
                   )}
-
-                  {contract.type === "PAID" && contract.status === "ACTIVE" && (
-                    renewedSourceContractIds.has(contract.id) ? (
-                      <span className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#6b6b6b] px-3 py-2 text-xs font-semibold">
-                        Renovação criada
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleRenewContract(contract)}
-                        disabled={Boolean(renewingContractId)}
-                        className="rounded-xl bg-[#00A19C]/15 border border-[#00A19C]/30 text-[#00A19C] px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {renewingContractId === contract.id ? "Renovando..." : "Renovar"}
-                      </button>
-                    )
+                  {currentPaymentId && currentRow.paymentStatus !== "PAGO" && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdatePaymentStatus(currentPaymentId, "PAGO")}
+                      className="rounded-xl bg-green-500/15 border border-green-500/20 text-green-300 px-3 py-2 text-xs font-semibold"
+                    >
+                      Marcar pago e ativar contrato
+                    </button>
                   )}
-
                   <button
                     type="button"
                     onClick={() => {
-                      setPaymentContractId(contract.id);
-                      setPaymentAmountReais(contract.priceCents ? String(contract.priceCents / 100) : "");
+                      setPaymentContractId(currentRow.contractId);
+                      setPaymentAmountReais("");
                       setPaymentDueDate(todayIso());
+                      closeStudentDetail();
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                     className="rounded-xl bg-[#1a1a1a] border border-[#00A19C]/30 text-[#00A19C] px-3 py-2 text-xs font-semibold"
                   >
                     Registrar pagamento
                   </button>
+                  {currentRow.contractType === "TRIAL" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConversionTrialContractId(currentRow.contractId);
+                        closeStudentDetail();
+                        window.setTimeout(() => {
+                          document.getElementById("converter-experiencia")?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                          });
+                        }, 150);
+                      }}
+                      className="rounded-xl bg-[#00A19C]/15 border border-[#00A19C]/30 text-[#00A19C] px-3 py-2 text-xs font-semibold"
+                    >
+                      Converter para plano pago
+                    </button>
+                  )}
+                  {currentRow.contractType === "PAID" &&
+                    currentRow.contractStatus === "ACTIVE" &&
+                    (renewedSourceContractIds.has(currentRow.contractId) ? (
+                      <span className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] text-[#6b6b6b] px-3 py-2 text-xs font-semibold">
+                        Renovação já criada
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const legacyContract = contractsData?.contracts.find((c) => c.id === currentRow.contractId);
+                          if (legacyContract) handleRenewContract(legacyContract);
+                        }}
+                        disabled={Boolean(renewingContractId)}
+                        className="rounded-xl bg-[#00A19C]/15 border border-[#00A19C]/30 text-[#00A19C] px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {renewingContractId === currentRow.contractId ? "Renovando..." : "Renovar"}
+                      </button>
+                    ))}
                 </div>
               </div>
-            ))
-          )}
+            )}
+
+            {detail && detail.contracts.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-[#00A19C]">Contratos e cobranças</h3>
+                {detail.contracts.map((contract) => (
+                  <div key={contract.id} className="rounded-xl bg-[#1a1a1a] border border-[#ffffff10] p-4 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-[#f5f5f5]">{typeLabel(contract.type)}</span>
+                      <span className="rounded-full bg-[#ffffff08] text-[#a1a1a1] px-2 py-1 text-[11px]">
+                        {statusLabel(contract.status)}
+                      </span>
+                      {contract.source && (
+                        <span className="rounded-full bg-[#ffffff08] text-[#6b6b6b] px-2 py-1 text-[11px]">{contract.source}</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[#a1a1a1]">
+                      {contract.planName} · {contract.billingLabel}
+                    </p>
+                    <p className="text-xs text-[#6b6b6b]">
+                      {formatDate(contract.startDate)} até {formatDate(contract.endDate)}
+                    </p>
+                    {contract.termsAcceptedAt && (
+                      <p className="text-xs text-[#6b6b6b]">
+                        Termos aceitos: versão {contract.termsVersion || "?"} em {formatDate(contract.termsAcceptedAt)}
+                      </p>
+                    )}
+
+                    {contract.payments.length > 0 && (
+                      <div className="pt-2 space-y-2">
+                        {contract.payments.map((payment) => (
+                          <div key={payment.id} className="rounded-lg bg-[#0f0f0f] border border-[#ffffff08] p-3 text-xs space-y-1">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-semibold text-[#f5f5f5]">{formatMoney(payment.amountCents)}</span>
+                              <span className="rounded-full bg-[#00A19C]/15 text-[#00A19C] px-2 py-1 text-[11px] font-semibold">
+                                {paymentStatusLabel(payment.status)}
+                              </span>
+                            </div>
+                            <p className="text-[#6b6b6b]">
+                              Vencimento: {formatDate(payment.dueDate)}
+                              {payment.paidAt ? ` · Pago em: ${formatDate(payment.paidAt)}` : ""}
+                              {payment.method ? ` · ${payment.method}` : ""}
+                            </p>
+                            {/* Referências reais da Asaas só aparecem quando a cobrança
+                                de fato passou pelo checkout/webhook self-service — nunca
+                                um valor inventado ou um link estático. */}
+                            {(payment.provider === "ASAAS" || payment.providerPaymentId || payment.providerSubscriptionId) && (
+                              <p className="text-[#6b6b6b] break-all">
+                                Asaas: {payment.providerPaymentId || "-"}
+                                {payment.providerSubscriptionId ? ` · assinatura ${payment.providerSubscriptionId}` : ""}
+                                {payment.externalReference ? ` · ref. ${payment.externalReference}` : ""}
+                              </p>
+                            )}
+                            {payment.paymentLinkUrl && (
+                              <a
+                                href={payment.paymentLinkUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[#00A19C] underline inline-block"
+                              >
+                                Abrir link de pagamento
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {detail && detail.history.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-[#00A19C]">Histórico</h3>
+                <div className="space-y-1">
+                  {detail.history.map((event, index) => (
+                    <p key={`${event.contractId}-${event.paymentId || "c"}-${index}`} className="text-xs text-[#a1a1a1]">
+                      <span className="text-[#6b6b6b]">{formatDate(event.date)}</span> — {event.label}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </section>
+      )}
     </main>
   );
 }

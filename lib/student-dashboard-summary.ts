@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getStudentDisplayName } from "@/lib/display-name";
 import { shouldShowContractCta, trialWindowFromContractDates } from "@/lib/trial-window";
+import { pickMoneyRelevantPayment } from "@/lib/contract-payment-priority";
 
 export type StudentDashboardUiState =
   | "EXPERIENCIA_ATIVA"
@@ -150,23 +151,6 @@ function getDaysLeftAtPauseStart(endDate: Date, pauseCreatedAt?: Date | string |
 
 function normalizeEmail(email?: string | null) {
   return email?.trim().toLowerCase() || null;
-}
-
-function moneyRelevantPayment(payments: any[]) {
-  if (!payments?.length) return null;
-
-  const priority = ["ATRASADO", "EM_ABERTO", "PARCIAL", "PAGO"];
-
-  return [...payments].sort((a, b) => {
-    const aPriority = priority.indexOf(a.status);
-    const bPriority = priority.indexOf(b.status);
-
-    if (aPriority !== bPriority) {
-      return (aPriority === -1 ? 99 : aPriority) - (bPriority === -1 ? 99 : bPriority);
-    }
-
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-  })[0];
 }
 
 /**
@@ -496,7 +480,7 @@ export async function getStudentDashboardSummary(
 
   const activeCarePause = student.careEvents?.[0] || null;
   const contract = pickCurrentContract(student.contracts, activeCarePause);
-  const payment = moneyRelevantPayment(contract?.payments || []);
+  const payment = pickMoneyRelevantPayment(contract?.payments || []);
 
   const fallbackProfessor = ["PROFESSOR", "TEACHER"].includes(student.user?.role)
     ? student.user
