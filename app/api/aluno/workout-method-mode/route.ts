@@ -13,7 +13,8 @@ import {
 } from "@/lib/workout-method-mode";
 import {
   isStudentSelfServiceRole,
-  buildStudentSelfServiceWhere,
+  resolveStudentSelfService,
+  AmbiguousStudentSelfServiceMatchError,
 } from "@/lib/workout-method-mode-access";
 
 export const dynamic = "force-dynamic";
@@ -70,34 +71,59 @@ export async function POST(request: NextRequest) {
     }
     const requestedMode = requestedModeRaw as WorkoutMethodMode;
 
-    const orWhere = buildStudentSelfServiceWhere({
-      sessionUserId: sessionUser?.id || null,
-      sessionEmail: sessionUser?.email || null,
-    });
-
-    if (!orWhere.length) {
-      return NextResponse.json(
-        { ok: false, error: "Usuário sem identificação suficiente." },
-        { status: 400 }
-      );
-    }
-
-    const student = await prisma.student.findFirst({
-      where: { active: true, OR: orWhere },
-      select: {
-        id: true,
-        workoutMethodMode: true,
-        workouts: {
-          where: {
-            status: { in: COMPLETED_WORKOUT_STATUSES },
-            completedAt: { not: null },
-          },
-          orderBy: { completedAt: "asc" },
-          take: 1,
-          select: { completedAt: true },
+    const studentSelect = {
+      id: true,
+      workoutMethodMode: true,
+      workouts: {
+        where: {
+          status: { in: COMPLETED_WORKOUT_STATUSES },
+          completedAt: { not: null },
         },
+        orderBy: { completedAt: "asc" as const },
+        take: 1,
+        select: { completedAt: true },
       },
-    });
+    } as const;
+
+    let student;
+    try {
+      student = await resolveStudentSelfService({
+        sessionUserId: sessionUser?.id || null,
+        sessionEmail: sessionUser?.email || null,
+        // Etapa 1: userAuthId é @unique no schema — no máximo um resultado.
+        findByUserAuthId: (userAuthId) =>
+          prisma.student.findFirst({
+            where: { active: true, userAuthId },
+            select: studentSelect,
+          }),
+        // Etapa 2 (só se a etapa 1 não encontrou nada): compatibilidade
+        // legada só para aluno ainda sem login vinculado (userAuthId null).
+        // Student.email não é unique — devolve TODOS os candidatos para que
+        // resolveStudentSelfService rejeite ambiguidade em vez de escolher
+        // um arbitrariamente.
+        findLegacyCandidatesByEmail: (normalizedEmail) =>
+          prisma.student.findMany({
+            where: {
+              active: true,
+              userAuthId: null,
+              email: { equals: normalizedEmail, mode: "insensitive" },
+            },
+            select: studentSelect,
+          }),
+      });
+    } catch (error) {
+      if (error instanceof AmbiguousStudentSelfServiceMatchError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Não foi possível identificar seu cadastro com segurança (mais de um aluno legado com o mesmo e-mail). Fale com a equipe.",
+          },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
 
     if (!student) {
       return NextResponse.json(

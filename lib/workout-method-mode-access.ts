@@ -24,32 +24,54 @@ export function isStudentSelfServiceRole(role: unknown): boolean {
   return normalizeStudentSelfServiceRole(role) === "STUDENT";
 }
 
-export type StudentSelfServiceWhereClause =
-  | { userAuthId: string }
-  | { email: { equals: string; mode: "insensitive" } }
-  | { userAuth: { email: { equals: string; mode: "insensitive" } } };
+export class AmbiguousStudentSelfServiceMatchError extends Error {
+  constructor(count: number) {
+    super(
+      `Encontrados ${count} alunos legados com o mesmo e-mail — resolução ambígua, não é seguro escolher um automaticamente.`
+    );
+    this.name = "AmbiguousStudentSelfServiceMatchError";
+  }
+}
 
 /**
- * Filtro Prisma para localizar o PRÓPRIO aluno autenticado. Só aceita
- * userAuthId (o vínculo de login do aluno) e, como fallback só para contas
- * legadas sem userAuthId preenchido, o e-mail do próprio aluno — nunca
- * `Student.userId` (professor responsável, não o aluno da sessão).
+ * Decide o aluno a partir de uma lista de candidatos já filtrada pelo
+ * chamador (ex.: fallback por e-mail). Zero candidatos: ninguém encontrado.
+ * Um candidato: esse é o aluno. Mais de um: a resolução é ambígua — NUNCA
+ * escolhe um arbitrariamente (Student.email não é unique), rejeita.
  */
-export function buildStudentSelfServiceWhere(params: {
+export function resolveStudentSelfServiceMatch<T>(candidates: T[]): T | null {
+  if (candidates.length === 0) return null;
+  if (candidates.length > 1) throw new AmbiguousStudentSelfServiceMatchError(candidates.length);
+  return candidates[0];
+}
+
+/**
+ * Resolução do aluno dono da sessão em duas etapas, nunca num único OR:
+ *
+ * 1. Se há session.user.id, procura EXCLUSIVAMENTE por
+ *    userAuthId === session.user.id (campo @unique no schema — no máximo um
+ *    resultado possível). Encontrando, o e-mail nunca é consultado.
+ * 2. Só na ausência de aluno por userAuthId, cai para compatibilidade
+ *    legada por e-mail. O chamador (findLegacyByEmail) é responsável por
+ *    filtrar só alunos com userAuthId = null — um aluno já vinculado a um
+ *    login nunca pode ser "reencontrado" por e-mail. Se mais de um aluno
+ *    legado ativo compartilha o e-mail, rejeita como ambíguo (ver
+ *    resolveStudentSelfServiceMatch) em vez de usar findFirst arbitrário.
+ */
+export async function resolveStudentSelfService<T>(params: {
   sessionUserId?: string | null;
   sessionEmail?: string | null;
-}): StudentSelfServiceWhereClause[] {
-  const orWhere: StudentSelfServiceWhereClause[] = [];
-  const normalizedEmail = params.sessionEmail?.trim().toLowerCase() || null;
-
+  findByUserAuthId: (userAuthId: string) => Promise<T | null>;
+  findLegacyCandidatesByEmail: (normalizedEmail: string) => Promise<T[]>;
+}): Promise<T | null> {
   if (params.sessionUserId) {
-    orWhere.push({ userAuthId: params.sessionUserId });
+    const studentByAuth = await params.findByUserAuthId(params.sessionUserId);
+    if (studentByAuth) return studentByAuth;
   }
 
-  if (normalizedEmail) {
-    orWhere.push({ email: { equals: normalizedEmail, mode: "insensitive" } });
-    orWhere.push({ userAuth: { email: { equals: normalizedEmail, mode: "insensitive" } } });
-  }
+  const normalizedEmail = params.sessionEmail?.trim().toLowerCase() || null;
+  if (!normalizedEmail) return null;
 
-  return orWhere;
+  const legacyCandidates = await params.findLegacyCandidatesByEmail(normalizedEmail);
+  return resolveStudentSelfServiceMatch(legacyCandidates);
 }

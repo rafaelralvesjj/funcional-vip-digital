@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   normalizeStudentSelfServiceRole,
   isStudentSelfServiceRole,
-  buildStudentSelfServiceWhere,
+  resolveStudentSelfService,
+  resolveStudentSelfServiceMatch,
+  AmbiguousStudentSelfServiceMatchError,
 } from '../lib/workout-method-mode-access.ts';
 
 // REVISÃO (PR #13, item 1): POST /api/aluno/workout-method-mode é exclusiva
@@ -40,88 +42,140 @@ test('normalizeStudentSelfServiceRole mantém o mesmo mapeamento usado no resto 
   assert.equal(normalizeStudentSelfServiceRole('GESTOR'), 'GESTOR');
 });
 
-test('buildStudentSelfServiceWhere NUNCA inclui Student.userId', () => {
-  const orWhere = buildStudentSelfServiceWhere({
-    sessionUserId: 'qualquer-id-de-sessao',
+// --- resolveStudentSelfServiceMatch -----------------------------------------
+
+test('resolveStudentSelfServiceMatch: zero candidatos -> null (ninguém encontrado)', () => {
+  assert.equal(resolveStudentSelfServiceMatch([]), null);
+});
+
+test('resolveStudentSelfServiceMatch: um candidato -> esse é o aluno', () => {
+  const candidate = { id: 'aluno-1' };
+  assert.equal(resolveStudentSelfServiceMatch([candidate]), candidate);
+});
+
+test('dois alunos legados com o mesmo e-mail -> rejeita ambiguidade, nunca escolhe um aleatoriamente', () => {
+  assert.throws(
+    () => resolveStudentSelfServiceMatch([{ id: 'aluno-1' }, { id: 'aluno-2' }]),
+    AmbiguousStudentSelfServiceMatchError
+  );
+});
+
+// --- resolveStudentSelfService (resolução em duas etapas) -------------------
+
+test('sessão com id + email: encontrando por userAuthId, o e-mail NUNCA é consultado', async () => {
+  const studentByAuth = { id: 'aluno-1', via: 'userAuthId' };
+  let emailLookupCalls = 0;
+
+  const result = await resolveStudentSelfService({
+    sessionUserId: 'auth-123',
     sessionEmail: 'aluno@example.com',
+    findByUserAuthId: async (userAuthId) => {
+      assert.equal(userAuthId, 'auth-123');
+      return studentByAuth;
+    },
+    findLegacyCandidatesByEmail: async () => {
+      emailLookupCalls += 1;
+      return [];
+    },
   });
 
-  for (const clause of orWhere) {
-    assert.ok(!('userId' in clause), 'cláusula não pode conter userId (professor responsável, não o aluno da sessão)');
-  }
+  assert.equal(result, studentByAuth);
+  assert.equal(emailLookupCalls, 0, 'o fallback por e-mail nunca deveria ser chamado');
 });
 
-test('buildStudentSelfServiceWhere usa userAuthId quando há sessionUserId', () => {
-  const orWhere = buildStudentSelfServiceWhere({ sessionUserId: 'auth-123', sessionEmail: null });
+test('userAuthId não encontra ninguém: cai para o fallback por e-mail', async () => {
+  const legacyStudent = { id: 'aluno-legado' };
 
-  assert.deepEqual(orWhere, [{ userAuthId: 'auth-123' }]);
+  const result = await resolveStudentSelfService({
+    sessionUserId: 'auth-sem-aluno',
+    sessionEmail: 'legado@example.com',
+    findByUserAuthId: async () => null,
+    findLegacyCandidatesByEmail: async (email) => {
+      assert.equal(email, 'legado@example.com');
+      return [legacyStudent];
+    },
+  });
+
+  assert.equal(result, legacyStudent);
 });
 
-test('buildStudentSelfServiceWhere cai para e-mail (normalizado) só como fallback legado', () => {
-  const orWhere = buildStudentSelfServiceWhere({ sessionUserId: null, sessionEmail: 'Aluno@Example.com ' });
+test('e-mail é normalizado (trim + lowercase) antes do fallback legado', async () => {
+  let receivedEmail: string | null = null;
 
-  assert.deepEqual(orWhere, [
-    { email: { equals: 'aluno@example.com', mode: 'insensitive' } },
-    { userAuth: { email: { equals: 'aluno@example.com', mode: 'insensitive' } } },
-  ]);
+  await resolveStudentSelfService({
+    sessionUserId: null,
+    sessionEmail: '  Aluno@Example.com ',
+    findByUserAuthId: async () => null,
+    findLegacyCandidatesByEmail: async (email) => {
+      receivedEmail = email;
+      return [];
+    },
+  });
+
+  assert.equal(receivedEmail, 'aluno@example.com');
 });
 
-test('sem sessionUserId nem sessionEmail, o filtro fica vazio (rota deve recusar, nunca casar com qualquer aluno)', () => {
-  assert.deepEqual(buildStudentSelfServiceWhere({ sessionUserId: null, sessionEmail: null }), []);
+test('sem sessionUserId nem sessionEmail: nunca consulta nada, devolve null', async () => {
+  let authCalls = 0;
+  let emailCalls = 0;
+
+  const result = await resolveStudentSelfService({
+    sessionUserId: null,
+    sessionEmail: null,
+    findByUserAuthId: async () => {
+      authCalls += 1;
+      return null;
+    },
+    findLegacyCandidatesByEmail: async () => {
+      emailCalls += 1;
+      return [];
+    },
+  });
+
+  assert.equal(result, null);
+  assert.equal(authCalls, 0);
+  assert.equal(emailCalls, 0);
+});
+
+test('dois alunos legados com o mesmo e-mail (via resolveStudentSelfService) rejeita ambiguidade, nunca escolhe um aleatoriamente', async () => {
+  await assert.rejects(
+    () =>
+      resolveStudentSelfService({
+        sessionUserId: 'auth-sem-aluno',
+        sessionEmail: 'duplicado@example.com',
+        findByUserAuthId: async () => null,
+        findLegacyCandidatesByEmail: async () => [{ id: 'aluno-1' }, { id: 'aluno-2' }],
+      }),
+    AmbiguousStudentSelfServiceMatchError
+  );
 });
 
 /**
- * Simula o casamento OR do Prisma contra uma "base" de alunos realista: um
- * professor com vários alunos vinculados por Student.userId (igual ao
- * schema real — ver prisma/schema.prisma). Antes da correção, a rota
- * incluía `{ userId: sessionUserId }` no OR, então logar como esse
- * professor "encontrava" qualquer um desses alunos. Aqui provamos que,
- * usando só o filtro desta lib, nenhum deles nunca casa.
+ * REVISÃO (rodada anterior do PR #13): antes, o self-service montava um OR
+ * único com userAuthId + e-mail no mesmo findFirst. Aqui provamos, com uma
+ * base de alunos realista (um professor com vários alunos vinculados por
+ * Student.userId, igual ao schema real), que a resolução em duas etapas
+ * nunca "encontra" nenhum desses alunos a partir do id de sessão do
+ * professor — porque a etapa 1 só olha userAuthId, e esses alunos não têm
+ * userAuthId igual ao id do professor.
  */
-function matchesClause(student: Record<string, unknown>, clause: Record<string, any>): boolean {
-  return Object.entries(clause).every(([key, condition]) => {
-    const value = student[key];
-    if (condition && typeof condition === 'object' && 'equals' in condition) {
-      return typeof value === 'string' && value.toLowerCase() === String(condition.equals).toLowerCase();
-    }
-    if (key === 'userAuth' && condition && typeof condition === 'object') {
-      const nested = (student.userAuth as Record<string, unknown> | null) || {};
-      return Object.entries(condition).every(([nestedKey, nestedCondition]: [string, any]) =>
-        matchesClause(nested, { [nestedKey]: nestedCondition })
-      );
-    }
-    return value === condition;
-  });
-}
-
-function findMatchingStudent(students: Array<Record<string, unknown>>, orWhere: Record<string, any>[]) {
-  return students.find((student) => orWhere.some((clause) => matchesClause(student, clause)));
-}
-
-test('professor com vários alunos vinculados por Student.userId nunca consegue alterar nenhum deles por esta rota', () => {
+test('professor com vários alunos vinculados por Student.userId nunca consegue alterar nenhum deles por esta rota', async () => {
   const professorSessionId = 'professor-1';
 
   const studentsLinkedToProfessor = [
-    { id: 'aluno-a', userId: professorSessionId, userAuthId: 'auth-aluno-a', email: 'a@example.com', userAuth: null },
-    { id: 'aluno-b', userId: professorSessionId, userAuthId: 'auth-aluno-b', email: 'b@example.com', userAuth: null },
-    { id: 'aluno-c', userId: professorSessionId, userAuthId: null, email: 'c@example.com', userAuth: null },
+    { id: 'aluno-a', userId: professorSessionId, userAuthId: 'auth-aluno-a' },
+    { id: 'aluno-b', userId: professorSessionId, userAuthId: 'auth-aluno-b' },
+    { id: 'aluno-c', userId: professorSessionId, userAuthId: null },
   ];
 
-  const orWhere = buildStudentSelfServiceWhere({ sessionUserId: professorSessionId, sessionEmail: null });
-  const match = findMatchingStudent(studentsLinkedToProfessor, orWhere);
+  const result = await resolveStudentSelfService({
+    sessionUserId: professorSessionId,
+    sessionEmail: null,
+    // Simula prisma.student.findFirst({ where: { userAuthId: professorSessionId } })
+    findByUserAuthId: async (userAuthId) =>
+      studentsLinkedToProfessor.find((student) => student.userAuthId === userAuthId) || null,
+    findLegacyCandidatesByEmail: async () => [],
+  });
 
-  assert.equal(match, undefined, 'nenhum aluno vinculado por userId pode casar com o filtro self-service');
-});
-
-test('o próprio aluno (userAuthId === id da sessão) é encontrado normalmente', () => {
-  const sessionUserId = 'auth-aluno-a';
-  const students = [
-    { id: 'aluno-a', userId: 'professor-1', userAuthId: 'auth-aluno-a', email: 'a@example.com', userAuth: null },
-    { id: 'aluno-b', userId: 'professor-1', userAuthId: 'auth-aluno-b', email: 'b@example.com', userAuth: null },
-  ];
-
-  const orWhere = buildStudentSelfServiceWhere({ sessionUserId, sessionEmail: null });
-  const match = findMatchingStudent(students, orWhere);
-
-  assert.equal((match as any)?.id, 'aluno-a');
+  assert.equal(result, null, 'nenhum aluno vinculado por userId pode ser resolvido pelo id do professor');
 });

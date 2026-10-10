@@ -74,9 +74,21 @@ test('POST /api/aluno/workout-method-mode exige role STUDENT e nunca usa Student
   assert.match(source, /isStudentSelfServiceRole\(/);
   assert.match(source, /from ["']@\/lib\/workout-method-mode-access["']/);
   assert.match(source, /status:\s*403/);
-  assert.match(source, /buildStudentSelfServiceWhere\(/);
+  assert.match(source, /resolveStudentSelfService\(/);
   assert.doesNotMatch(source, /\{\s*userId\s*\}/);
   assert.doesNotMatch(source, /student\.userId/);
+});
+
+// REVISÃO (rodada anterior do PR #13): a resolução não pode ser um único OR
+// com userAuthId + e-mail — tem que ser em duas etapas, e o fallback por
+// e-mail só pode considerar aluno ainda sem login vinculado (Student.email
+// não é unique, então um OR misturado arriscaria casar o aluno errado).
+test('a resolução por e-mail (etapa 2) só considera aluno com userAuthId null, nunca um OR único com userAuthId', () => {
+  const source = readSource('app/api/aluno/workout-method-mode/route.ts');
+
+  assert.match(source, /findLegacyCandidatesByEmail/);
+  assert.match(source, /userAuthId:\s*null/);
+  assert.doesNotMatch(source, /OR:\s*orWhere/);
 });
 
 // REVISÃO (PR #13, item 2): a janela de 30 dias usa o instante REAL de
@@ -87,8 +99,8 @@ test('POST /api/aluno/workout-method-mode e lib/student-dashboard-summary.ts usa
 
   for (const source of [routeSource, summarySource]) {
     assert.match(source, /completedAt:\s*\{\s*not:\s*null\s*\}/);
-    assert.match(source, /orderBy:\s*\{\s*completedAt:\s*["']asc["']\s*\}/);
-    assert.doesNotMatch(source, /orderBy:\s*\{\s*date:\s*["']asc["']\s*\}/);
+    assert.match(source, /orderBy:\s*\{\s*completedAt:\s*["']asc["']/);
+    assert.doesNotMatch(source, /orderBy:\s*\{\s*date:\s*["']asc["']/);
   }
 });
 
