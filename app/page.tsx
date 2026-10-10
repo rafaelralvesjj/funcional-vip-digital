@@ -2,6 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import BrandLogo from "../components/BrandLogo";
 import {
+  COMMERCIAL_OFFER_WORKOUTS_PER_WEEK,
+  COMMERCIAL_OFFER_TRIAL_DAYS,
+  COMMERCIAL_OFFER_ANNUAL_RECOMMENDED,
+  formatCommercialOfferMonthlyPrice,
+  formatCommercialOfferAnnualPrice,
+} from "../lib/commercial-offer-config";
+import {
   Activity,
   ArrowRight,
   CalendarDays,
@@ -28,38 +35,26 @@ export const metadata: Metadata = {
 
 const primaryCta = "/auth/aluno-registro";
 
-const plans = [
+// Produto único (ver lib/commercial-offer-config.ts, fonte compartilhada
+// com scripts/setup-trial-offer.ts): nenhum preço ou frequência aqui é
+// hardcoded fora desse arquivo. As duas entradas abaixo são as formas de
+// pagamento da MESMA oferta (3 treinos/semana), não planos diferentes.
+const billingChoices = [
   {
-    name: "Funcional UP Essencial",
-    shortName: "Essencial",
-    eyebrow: "Para criar consistência",
-    price: "49,90",
-    frequency: "2 treinos por semana",
-    description:
-      "Uma rotina objetiva para começar, retomar ou manter o cuidado com o corpo sem sobrecarregar a semana.",
-    features: [
-      "2 treinos personalizados por semana",
-      "Acompanhamento do professor",
-      "Chat com suporte",
-      "Vídeos e orientações dos exercícios",
-    ],
-    highlighted: false,
+    cycle: "MONTHLY" as const,
+    label: "Mensal",
+    price: formatCommercialOfferMonthlyPrice(),
+    priceSuffix: "/mês",
+    description: "Pague mês a mês, sem compromisso de permanência.",
+    highlighted: !COMMERCIAL_OFFER_ANNUAL_RECOMMENDED,
   },
   {
-    name: "Funcional UP Evolução",
-    shortName: "Evolução",
-    eyebrow: "Para avançar com mais frequência",
-    price: "79,90",
-    frequency: "4 treinos por semana",
-    description:
-      "Mais estímulos na semana para quem quer acelerar a evolução com organização e acompanhamento próximo.",
-    features: [
-      "4 treinos personalizados por semana",
-      "Acompanhamento do professor",
-      "Chat com suporte",
-      "Vídeos e orientações dos exercícios",
-    ],
-    highlighted: true,
+    cycle: "ANNUAL" as const,
+    label: "Anual",
+    price: formatCommercialOfferAnnualPrice(),
+    priceSuffix: "/ano",
+    description: "Um pagamento único para o ano todo — o melhor custo-benefício.",
+    highlighted: COMMERCIAL_OFFER_ANNUAL_RECOMMENDED,
   },
 ];
 
@@ -178,9 +173,9 @@ const faqs = [
       "Registre no próprio treino qualquer incômodo, dor ou desconforto. Em caso de dúvida antes de continuar, use o chat da plataforma para falar com o professor.",
   },
   {
-    question: "Qual é a diferença entre os planos Essencial e Evolução?",
+    question: "Qual é a diferença entre o plano mensal e o anual?",
     answer:
-      "Os dois planos incluem treino personalizado, acompanhamento do professor, chat, vídeos e orientações. A diferença principal é a frequência: o Essencial oferece 2 treinos por semana e o Evolução oferece 4 treinos por semana.",
+      "O treino é o mesmo nos dois: 3 treinos personalizados por semana, acompanhamento do professor, chat e vídeos. A diferença é só a forma de pagamento — mensal, mês a mês, ou anual, num pagamento único com o melhor custo-benefício.",
   },
   {
     question: "Posso experimentar antes de escolher um plano?",
@@ -586,65 +581,71 @@ export default function Home() {
         <div className="mx-auto max-w-7xl">
           <div className="mx-auto max-w-3xl text-center">
             <p className="text-xs font-black uppercase tracking-[0.28em] text-[#00A19C]">
-              Planos mensais
+              Plano único
             </p>
             <h2 className="mt-4 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl lg:text-5xl">
-              Escolha a frequência que cabe na sua rotina
+              {COMMERCIAL_OFFER_WORKOUTS_PER_WEEK} treinos por semana, acompanhamento de verdade
             </h2>
             <p className="mt-5 text-base leading-7 text-neutral-400 sm:text-lg">
-              Nos dois planos, o treino é personalizado e você conta com o
-              acompanhamento de um professor de verdade. O que muda é a
-              quantidade de treinos por semana.
+              Treino personalizado, acompanhamento do professor, chat com
+              suporte e vídeos e orientações dos exercícios. Comece com{" "}
+              {COMMERCIAL_OFFER_TRIAL_DAYS} dias de teste grátis, sem cartão, e
+              escolha depois a forma de pagamento que preferir.
             </p>
           </div>
 
           <div className="mx-auto mt-12 grid max-w-5xl gap-5 lg:grid-cols-2">
-            {plans.map((plan) => (
+            {billingChoices.map((choice) => (
               <article
-                key={plan.name}
+                key={choice.cycle}
                 className={`relative overflow-hidden rounded-[28px] border p-6 sm:p-8 ${
-                  plan.highlighted
+                  choice.highlighted
                     ? "border-[#00A19C]/60 bg-[radial-gradient(circle_at_top_right,rgba(0,161,156,0.22),transparent_42%),linear-gradient(145deg,#121918,#0c0c0c_68%)] shadow-[0_24px_80px_-40px_rgba(0,161,156,0.9)]"
                     : "border-white/[0.1] bg-[#111111]"
                 }`}
               >
-                {plan.highlighted && (
+                {choice.highlighted && (
                   <div className="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-[#00A19C] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">
                     <Sparkles className="h-3.5 w-3.5" />
-                    Mais completo
+                    Recomendado
                   </div>
                 )}
 
                 <div className="pr-28">
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#7FE2DE]">
-                    {plan.eyebrow}
+                    Cobrança {choice.label.toLowerCase()}
                   </p>
                   <h3 className="mt-3 text-2xl font-black text-white sm:text-3xl">
-                    {plan.name}
+                    {choice.label}
                   </h3>
                 </div>
 
                 <div className="mt-7 flex items-end gap-2">
                   <span className="pb-1 text-sm font-bold text-neutral-400">R$</span>
                   <span className="text-5xl font-black tracking-[-0.05em] text-white">
-                    {plan.price}
+                    {choice.price}
                   </span>
                   <span className="pb-1.5 text-sm font-semibold text-neutral-400">
-                    /mês
+                    {choice.priceSuffix}
                   </span>
                 </div>
 
                 <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#00A19C]/25 bg-[#00A19C]/8 px-3 py-2 text-xs font-black text-[#7FE2DE]">
                   <CalendarDays className="h-4 w-4" />
-                  {plan.frequency}
+                  {COMMERCIAL_OFFER_WORKOUTS_PER_WEEK} treinos por semana
                 </div>
 
                 <p className="mt-5 text-sm leading-6 text-neutral-400">
-                  {plan.description}
+                  {choice.description}
                 </p>
 
                 <div className="mt-7 space-y-3">
-                  {plan.features.map((feature) => (
+                  {[
+                    `${COMMERCIAL_OFFER_WORKOUTS_PER_WEEK} treinos personalizados por semana`,
+                    "Acompanhamento do professor",
+                    "Chat com suporte",
+                    "Vídeos e orientações dos exercícios",
+                  ].map((feature) => (
                     <div key={feature} className="flex items-start gap-3">
                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#00A19C]/12 text-[#00A19C]">
                         <Check className="h-3.5 w-3.5" />
@@ -659,12 +660,12 @@ export default function Home() {
                 <Link
                   href={primaryCta}
                   className={`group mt-8 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black transition duration-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#00A19C] focus:ring-offset-2 focus:ring-offset-[#0a0a0a] ${
-                    plan.highlighted
+                    choice.highlighted
                       ? "bg-[#00A19C] text-black hover:bg-[#24C7C0]"
                       : "border border-[#00A19C]/35 bg-[#00A19C]/8 text-white hover:bg-[#00A19C]/14"
                   }`}
                 >
-                  Começar com o plano {plan.shortName}
+                  Começar com o plano {choice.label}
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
 
@@ -678,7 +679,7 @@ export default function Home() {
           <div className="mx-auto mt-8 flex max-w-3xl flex-col items-center justify-between gap-5 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-5 text-center sm:flex-row sm:text-left">
             <div>
               <p className="text-sm font-black text-white">
-                Ainda não sabe qual plano escolher?
+                Ainda não sabe qual forma de pagamento escolher?
               </p>
               <p className="mt-1 text-xs leading-5 text-neutral-400">
                 Comece pelo período experimental gratuito, sem informar cartão.

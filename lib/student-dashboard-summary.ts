@@ -159,13 +159,19 @@ function normalizeEmail(email?: string | null) {
  * no futuro (ex.: pagamento antecipado que preserva os 7 dias de teste —
  * ver resolvePaidContractStart em lib/trial-window.ts) seria tratado como o
  * contrato atual antes da hora, escondendo o teste que ainda é válido.
+ *
+ * REVISÃO: startDate/endDate são instantes reais (um contrato pago pode
+ * começar literalmente à meia-noite de um dia civil de São Paulo, ou no
+ * instante exato da confirmação do pagamento) — nunca truncar para
+ * "início do dia" no fuso do host (startOfDay/setHours), que reintroduziria
+ * um fuso horário implícito (UTC na Vercel) nessa decisão. Comparação
+ * direta de instante, sempre.
  */
 export function hasContractStarted(
   contract: { startDate: Date | string },
-  today: Date = new Date()
+  referenceDate: Date = new Date()
 ): boolean {
-  const startDate = startOfDay(new Date(contract.startDate));
-  return startDate.getTime() <= startOfDay(today).getTime();
+  return new Date(contract.startDate).getTime() <= referenceDate.getTime();
 }
 
 /**
@@ -175,12 +181,11 @@ export function hasContractStarted(
  * o teste termina de verdade é que o PAID pendente pode virar o contrato
  * "atual" exibido ao aluno.
  */
-function isTrialActiveAndValid(contract: any, today: Date): boolean {
+function isTrialActiveAndValid(contract: any, referenceDate: Date): boolean {
   if (contract.type !== "TRIAL" || contract.status !== "ACTIVE") return false;
-  if (!hasContractStarted(contract, today)) return false;
+  if (!hasContractStarted(contract, referenceDate)) return false;
 
-  const endDate = startOfDay(new Date(contract.endDate));
-  return endDate.getTime() >= today.getTime();
+  return new Date(contract.endDate).getTime() >= referenceDate.getTime();
 }
 
 export function pickCurrentContract(
@@ -190,12 +195,10 @@ export function pickCurrentContract(
 ) {
   if (!contracts?.length) return null;
 
-  const today = startOfDay(referenceDate);
-  const validActiveTrial = contracts.find((contract) => isTrialActiveAndValid(contract, today));
+  const validActiveTrial = contracts.find((contract) => isTrialActiveAndValid(contract, referenceDate));
 
   const activeOrAwaiting = contracts.find((contract) => {
-    const endDate = startOfDay(new Date(contract.endDate));
-    const isNotExpired = endDate.getTime() >= today.getTime();
+    const isNotExpired = new Date(contract.endDate).getTime() >= referenceDate.getTime();
 
     // Enquanto existir um TRIAL ACTIVE e válido, um PAID AGUARDANDO_PAGAMENTO
     // não pode assumir como contrato atual — o teste em curso prevalece.
@@ -208,7 +211,7 @@ export function pickCurrentContract(
     }
 
     return (
-      hasContractStarted(contract, today) &&
+      hasContractStarted(contract, referenceDate) &&
       isNotExpired &&
       ["ACTIVE", "AWAITING_PAYMENT", "SUSPENDED"].includes(contract.status)
     );
@@ -219,24 +222,22 @@ export function pickCurrentContract(
   if (validActiveTrial) return validActiveTrial;
 
   const trialStillValid = contracts.find((contract) => {
-    const endDate = startOfDay(new Date(contract.endDate));
-    return contract.type === "TRIAL" && endDate.getTime() >= today.getTime();
+    return contract.type === "TRIAL" && new Date(contract.endDate).getTime() >= referenceDate.getTime();
   });
 
   if (trialStillValid) return trialStillValid;
 
   if (activeCarePause) {
-    const pauseCreatedAt = startOfDay(new Date(activeCarePause.createdAt));
+    const pauseCreatedAt = new Date(activeCarePause.createdAt);
 
     const frozenTrial = contracts.find((contract) => {
-      const endDate = startOfDay(new Date(contract.endDate));
       const inactiveContractStatus = ["FINALIZED", "CANCELLED"].includes(contract.status);
 
       return (
         contract.type === "TRIAL" &&
         !inactiveContractStatus &&
         !Number.isNaN(pauseCreatedAt.getTime()) &&
-        pauseCreatedAt.getTime() <= endDate.getTime()
+        pauseCreatedAt.getTime() <= new Date(contract.endDate).getTime()
       );
     });
 
