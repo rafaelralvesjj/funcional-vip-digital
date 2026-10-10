@@ -39,7 +39,8 @@ export function addCivilDays(civilDateInput: string, days: number): string {
   return anchor.toISOString().slice(0, 10);
 }
 
-function endOfCivilDayInSaoPaulo(civilDateInput: string): Date {
+/** Exportado para lib/civil-month.ts (fim de dia civil, convenção de endDate de contrato). */
+export function endOfCivilDayInSaoPaulo(civilDateInput: string): Date {
   return new Date(`${civilDateInput}T23:59:59.999${SAO_PAULO_UTC_OFFSET}`);
 }
 
@@ -145,6 +146,25 @@ export type PaidContractStartResolution = {
  * persistido no StudentContract do teste — não uma janela recém-calculada
  * a partir de "agora".
  */
+/**
+ * Reconstrói uma TrialWindow a partir das datas já persistidas num
+ * StudentContract TRIAL — para avaliar shouldShowContractCta/getTrialDaysRemaining
+ * contra o teste real do aluno, sem recalcular uma janela nova a partir de
+ * "agora" (que daria datas erradas para um teste que já começou no passado).
+ */
+export function trialWindowFromContractDates(params: {
+  startDate: Date;
+  endDate: Date;
+}): TrialWindow {
+  return {
+    startDate: params.startDate,
+    endDate: params.endDate,
+    startCivilDate: getSaoPauloCivilDateInput(params.startDate),
+    endCivilDate: getSaoPauloCivilDateInput(params.endDate),
+    maxWorkouts: TRIAL_MAX_WORKOUTS,
+  };
+}
+
 export function resolvePaidContractStart(params: {
   trialEndDate: Date;
   paymentConfirmedAt: Date;

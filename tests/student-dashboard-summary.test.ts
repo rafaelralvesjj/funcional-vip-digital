@@ -1,12 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pickCurrentContract, hasContractStarted } from '../lib/student-dashboard-summary.ts';
+import {
+  pickCurrentContract,
+  hasContractStarted,
+  computeShowContractCta,
+} from '../lib/student-dashboard-summary.ts';
+import { getSaoPauloCivilDateInput } from '../lib/planning-window.ts';
 
+/**
+ * hasContractStarted/pickCurrentContract comparam datas com startOfDay no
+ * fuso do HOST (new Date(...).setHours(0,0,0,0)) — nada de São Paulo aí.
+ * Este helper casa com essa semântica; usado pelos testes de
+ * hasContractStarted/pickCurrentContract abaixo.
+ */
 function daysFromNow(days: number): Date {
   const date = new Date();
   date.setHours(12, 0, 0, 0);
   date.setDate(date.getDate() + days);
   return date;
+}
+
+/**
+ * computeShowContractCta, por outro lado, compara datas CIVIS de São Paulo
+ * (ver shouldShowContractCta/getTrialDaysRemaining em lib/trial-window.ts) —
+ * um fuso diferente do de daysFromNow acima. Usar daysFromNow (fuso do host)
+ * para testar essa função específica é incorreto durante a janela em que o
+ * dia civil de São Paulo ainda é "ontem" em relação ao UTC (00:00–03:00
+ * UTC) — gera um teste "flaky" sem nenhum bug real na produção. Este helper
+ * separado usa o mesmo fuso que a função testada.
+ */
+function saoPauloDaysFromNow(days: number): Date {
+  const todayCivilDate = getSaoPauloCivilDateInput(new Date());
+  const anchor = new Date(`${todayCivilDate}T00:00:00Z`);
+  anchor.setUTCDate(anchor.getUTCDate() + days);
+  const targetCivilDate = anchor.toISOString().slice(0, 10);
+  return new Date(`${targetCivilDate}T12:00:00-03:00`);
 }
 
 test('hasContractStarted é falso para um startDate no futuro', () => {
@@ -163,4 +191,92 @@ test('um contrato PAID futuro não esconde um TRIAL que já expirou quando não 
   // contrato futuro nunca seja escolhido como "atual" antes de começar.
   assert.notEqual(atual?.id, 'paid-futuro');
   assert.equal(atual?.id, 'trial-1');
+});
+
+// computeShowContractCta: CTA "Contratar plano" (Fase 3).
+test('CTA não aparece quando faltam mais de 2 dias para o fim do teste', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'ACTIVE',
+      startDate: saoPauloDaysFromNow(-1),
+      endDate: saoPauloDaysFromNow(6),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), false);
+});
+
+test('CTA aparece a partir de 2 dias antes do fim do teste', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'ACTIVE',
+      startDate: saoPauloDaysFromNow(-5),
+      endDate: saoPauloDaysFromNow(2),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), true);
+});
+
+test('CTA continua aparecendo depois que o teste expira, sem contrato pago', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'ACTIVE',
+      startDate: saoPauloDaysFromNow(-10),
+      endDate: saoPauloDaysFromNow(-3),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), true);
+});
+
+test('CTA some quando já existe um PAID ativo', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'FINALIZED',
+      startDate: saoPauloDaysFromNow(-10),
+      endDate: saoPauloDaysFromNow(-3),
+    },
+    {
+      type: 'PAID',
+      status: 'ACTIVE',
+      startDate: saoPauloDaysFromNow(-2),
+      endDate: saoPauloDaysFromNow(28),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), false);
+});
+
+test('CTA some quando já existe um PAID agendado (AWAITING_PAYMENT ou ACTIVE futuro)', () => {
+  const contracts = [
+    {
+      type: 'TRIAL',
+      status: 'ACTIVE',
+      startDate: saoPauloDaysFromNow(-6),
+      endDate: saoPauloDaysFromNow(1),
+    },
+    {
+      type: 'PAID',
+      status: 'AWAITING_PAYMENT',
+      startDate: saoPauloDaysFromNow(2),
+      endDate: saoPauloDaysFromNow(32),
+    },
+  ];
+
+  assert.equal(computeShowContractCta(contracts), false);
+});
+
+test('CTA é falso quando não há nenhum TRIAL', () => {
+  assert.equal(computeShowContractCta([]), false);
+  assert.equal(
+    computeShowContractCta([
+      { type: 'PAID', status: 'FINALIZED', startDate: saoPauloDaysFromNow(-40), endDate: saoPauloDaysFromNow(-10) },
+    ]),
+    false
+  );
 });
