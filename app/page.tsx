@@ -30,37 +30,39 @@ const primaryCta = "/auth/aluno-registro";
 
 const plans = [
   {
-    name: "Funcional UP Essencial",
-    shortName: "Essencial",
-    eyebrow: "Para criar consistência",
-    price: "49,90",
-    frequency: "2 treinos por semana",
+    name: "Plano Mensal",
+    shortName: "Mensal",
+    eyebrow: "Flexibilidade mês a mês",
+    price: "9,90",
+    period: "/mês",
+    frequency: "3 treinos por semana",
     description:
-      "Uma rotina objetiva para começar, retomar ou manter o cuidado com o corpo sem sobrecarregar a semana.",
+      "Cobrança mensal para continuar treinando com acompanhamento e programação personalizada.",
     features: [
-      "2 treinos personalizados por semana",
+      "3 treinos personalizados por semana",
       "Acompanhamento do professor",
       "Chat com suporte",
       "Vídeos e orientações dos exercícios",
     ],
-    href: "https://www.asaas.com/c/uw28wkv8oin75u3i",
+    href: primaryCta,
     highlighted: false,
   },
   {
-    name: "Funcional UP Evolução",
-    shortName: "Evolução",
-    eyebrow: "Para avançar com mais frequência",
-    price: "79,90",
-    frequency: "4 treinos por semana",
+    name: "Plano Anual",
+    shortName: "Anual",
+    eyebrow: "Melhor custo-benefício",
+    price: "99,90",
+    period: "/ano",
+    frequency: "3 treinos por semana",
     description:
-      "Mais estímulos na semana para quem quer acelerar a evolução com organização e acompanhamento próximo.",
+      "Um ano de acompanhamento com o mesmo treino personalizado e uma economia de R$ 18,90 no período.",
     features: [
-      "4 treinos personalizados por semana",
+      "3 treinos personalizados por semana",
       "Acompanhamento do professor",
       "Chat com suporte",
       "Vídeos e orientações dos exercícios",
     ],
-    href: "https://www.asaas.com/c/ppeor89ansiv6ocr",
+    href: primaryCta,
     highlighted: true,
   },
 ];
@@ -180,9 +182,9 @@ const faqs = [
       "Registre no próprio treino qualquer incômodo, dor ou desconforto. Em caso de dúvida antes de continuar, use o chat da plataforma para falar com o professor.",
   },
   {
-    question: "Qual é a diferença entre os planos Essencial e Evolução?",
+    question: "Qual é a diferença entre o plano mensal e o anual?",
     answer:
-      "Os dois planos incluem treino personalizado, acompanhamento do professor, chat, vídeos e orientações. A diferença principal é a frequência: o Essencial oferece 2 treinos por semana e o Evolução oferece 4 treinos por semana.",
+      "Nos dois ciclos você recebe 3 treinos personalizados por semana, acompanhamento do professor, chat, vídeos e orientações. O que muda é a cobrança: R$ 9,90 por mês no mensal ou R$ 99,90 por ano no anual.",
   },
   {
     question: "Posso experimentar antes de escolher um plano?",
@@ -588,15 +590,15 @@ export default function Home() {
         <div className="mx-auto max-w-7xl">
           <div className="mx-auto max-w-3xl text-center">
             <p className="text-xs font-black uppercase tracking-[0.28em] text-[#00A19C]">
-              Planos mensais
+              Planos
             </p>
             <h2 className="mt-4 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl lg:text-5xl">
-              Escolha a frequência que cabe na sua rotina
+              Escolha como prefere pagar
             </h2>
             <p className="mt-5 text-base leading-7 text-neutral-400 sm:text-lg">
-              Nos dois planos, o treino é personalizado e você conta com o
-              acompanhamento de um professor de verdade. O que muda é a
-              quantidade de treinos por semana.
+              Nos dois ciclos, você recebe 3 treinos personalizados por semana
+              e acompanhamento de um professor de verdade. O que muda é apenas
+              a forma de cobrança: mensal ou anual.
             </p>
           </div>
 
@@ -613,7 +615,7 @@ export default function Home() {
                 {plan.highlighted && (
                   <div className="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-[#00A19C] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-black">
                     <Sparkles className="h-3.5 w-3.5" />
-                    Mais completo
+                    Melhor custo-benefício
                   </div>
                 )}
 
@@ -632,7 +634,7 @@ export default function Home() {
                     {plan.price}
                   </span>
                   <span className="pb-1.5 text-sm font-semibold text-neutral-400">
-                    /mês
+                    {plan.period}
                   </span>
                 </div>
 
@@ -658,22 +660,20 @@ export default function Home() {
                   ))}
                 </div>
 
-                <a
+                <Link
                   href={plan.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className={`group mt-8 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black transition duration-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#00A19C] focus:ring-offset-2 focus:ring-offset-[#0a0a0a] ${
                     plan.highlighted
                       ? "bg-[#00A19C] text-black hover:bg-[#24C7C0]"
                       : "border border-[#00A19C]/35 bg-[#00A19C]/8 text-white hover:bg-[#00A19C]/14"
                   }`}
                 >
-                  Assinar plano {plan.shortName}
+                  Começar período experimental
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </a>
+                </Link>
 
                 <p className="mt-3 text-center text-[11px] leading-5 text-neutral-500">
-                  Pagamento seguro pela página do Asaas.
+                  Sem cartão no período experimental. Depois, a contratação é feita dentro da plataforma.
                 </p>
               </article>
             ))}
