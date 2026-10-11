@@ -61,7 +61,7 @@ test('createAsaasCustomer nunca envia credencial em texto puro no corpo, só no 
   assert.equal(capturedInit.method, 'POST');
   assert.equal(capturedInit.headers.access_token, 'minha-chave-secreta');
   const body = JSON.parse(capturedInit.body);
-  assert.equal(body.externalReference, 'chk_abc');
+  assert.equal(body.externalReference, 'funcional-up-digital:chk_abc');
   assert.doesNotMatch(capturedInit.body, /minha-chave-secreta/);
 });
 
@@ -98,6 +98,25 @@ test('findAsaasCustomerByExternalReference devolve null quando não encontra nen
 
   const customer = await findAsaasCustomerByExternalReference(config, 'chk_inexistente');
   assert.equal(customer, null);
+});
+
+test('findAsaasCustomerByExternalReference isola o Student.id no namespace do Funcional UP', async () => {
+  let capturedUrl = '';
+  const config = getAsaasClientConfig({
+    apiKey: 'key',
+    baseUrl: 'https://api-sandbox.asaas.com/v3',
+    fetchImpl: fakeFetch((url) => {
+      capturedUrl = url;
+      return { status: 200, body: { data: [] } };
+    }) as any,
+  });
+
+  await findAsaasCustomerByExternalReference(config, 'student_1');
+
+  assert.equal(
+    capturedUrl,
+    'https://api-sandbox.asaas.com/v3/customers?externalReference=funcional-up-digital%3Astudent_1'
+  );
 });
 
 test('createAsaasPayment propaga erro da Asaas como AsaasApiError com status e corpo', async () => {
