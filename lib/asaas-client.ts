@@ -96,6 +96,12 @@ export function getAsaasClientConfig(overrides?: Partial<AsaasClientConfig>): As
  */
 export const ASAAS_CLIENT_USER_AGENT = "FuncionalUpDigital/1.0";
 
+const ASAAS_CUSTOMER_EXTERNAL_REFERENCE_PREFIX = "funcional-up-digital:";
+
+function buildAsaasCustomerExternalReference(externalReference: string): string {
+  return `${ASAAS_CUSTOMER_EXTERNAL_REFERENCE_PREFIX}${externalReference}`;
+}
+
 async function asaasRequest<T>(
   config: AsaasClientConfig,
   path: string,
@@ -136,7 +142,7 @@ export async function findAsaasCustomerByExternalReference(
 ): Promise<AsaasCustomer | null> {
   const result = await asaasRequest<{ data: AsaasCustomer[] }>(
     config,
-    `/customers?externalReference=${encodeURIComponent(externalReference)}`,
+    `/customers?externalReference=${encodeURIComponent(buildAsaasCustomerExternalReference(externalReference))}`,
     { method: "GET" }
   );
 
@@ -160,7 +166,7 @@ export async function createAsaasCustomer(
       email: params.email,
       cpfCnpj: params.cpfCnpj,
       mobilePhone: params.phone || undefined,
-      externalReference: params.externalReference,
+      externalReference: buildAsaasCustomerExternalReference(params.externalReference),
     },
   });
 }
