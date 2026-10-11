@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getStudentDisplayName } from "@/lib/display-name";
+import { shouldShowContractCta, trialWindowFromContractDates } from "@/lib/trial-window";
 
 export type StudentDashboardUiState =
   | "EXPERIENCIA_ATIVA"
@@ -94,6 +95,7 @@ export type StudentDashboardSummary = {
     isTrialScheduledToStart: boolean;
     daysUntilTrialStart: number | null;
     shouldEvaluateCommercialCompensation: boolean;
+    showContractCta: boolean;
   };
   uiState: StudentDashboardUiState;
   hasActiveAccess: boolean;
@@ -254,6 +256,40 @@ export function pickCurrentContract(contracts: any[], activeCarePause?: any | nu
   }
 
   return contracts[0] || null;
+}
+
+/**
+ * Existe um PAID em vigor (ACTIVE já iniciado ou ainda por iniciar) ou
+ * aguardando pagamento, ainda não expirado — qualquer um desses esconde o
+ * CTA "Contratar plano" (ver computeShowContractCta).
+ */
+function hasPaidContractActiveOrScheduled(contracts: any[], today: Date): boolean {
+  return (contracts || []).some((contract) => {
+    if (contract.type !== "PAID") return false;
+    if (!["ACTIVE", "AWAITING_PAYMENT"].includes(contract.status)) return false;
+
+    const endDate = startOfDay(new Date(contract.endDate));
+    return endDate.getTime() >= today.getTime();
+  });
+}
+
+/**
+ * CTA "Contratar plano": só faz sentido existir um TRIAL (é dele que vem a
+ * contagem T-2 dias). Reaproveita shouldShowContractCta (lib/trial-window.ts)
+ * contra as datas reais do TRIAL do aluno, não uma janela recém-calculada.
+ */
+export function computeShowContractCta(contracts: any[], today: Date = new Date()): boolean {
+  const trial = (contracts || []).find((contract) => contract.type === "TRIAL");
+  if (!trial) return false;
+
+  return shouldShowContractCta({
+    window: trialWindowFromContractDates({
+      startDate: new Date(trial.startDate),
+      endDate: new Date(trial.endDate),
+    }),
+    now: today,
+    hasPaidContractActiveOrScheduled: hasPaidContractActiveOrScheduled(contracts, today),
+  });
 }
 
 function buildUiState(params: {
@@ -503,6 +539,7 @@ export async function getStudentDashboardSummary(
     isTrialScheduledToStart: uiState === "EXPERIENCIA_AGENDADA",
     daysUntilTrialStart,
     shouldEvaluateCommercialCompensation: Boolean(activeCarePause),
+    showContractCta: computeShowContractCta(student.contracts),
   };
 
   const commercialImpactStatus = activeCarePause

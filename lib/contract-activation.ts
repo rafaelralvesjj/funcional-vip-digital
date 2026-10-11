@@ -1,12 +1,17 @@
 import { resolveContractPaymentTransition } from "./contract-payment-transition";
+import { addCivilMonthsClamped, addCivilMonthsMinusOneDayAsEndOfDay } from "./civil-month";
+import { getSaoPauloCivilDateInput } from "./planning-window";
+import { endOfCivilDayInSaoPaulo } from "./trial-window";
 
+/**
+ * Nunca usar Date.setMonth() diretamente para vigência comercial: ele "rola"
+ * dias excedentes para o mês seguinte (31/jan vira 3/mar, pulando fevereiro
+ * inteiro) em vez de truncar para o último dia válido do mês de destino.
+ * addCivilMonthsMinusOneDayAsEndOfDay (lib/civil-month.ts) faz a aritmética
+ * certa, com clamp, sobre a data civil em America/Sao_Paulo.
+ */
 function addMonthsMinusOneDay(startDate: Date, months: number): Date {
-  const endDate = new Date(startDate);
-  endDate.setMonth(endDate.getMonth() + Math.max(months, 1));
-  endDate.setDate(endDate.getDate() - 1);
-  endDate.setHours(23, 59, 59, 999);
-
-  return endDate;
+  return addCivilMonthsMinusOneDayAsEndOfDay(startDate, Math.max(months, 1));
 }
 
 export type ContractTx = {
@@ -111,4 +116,33 @@ export async function activatePaidContractFromTrial(
   }
 
   return updatedContract;
+}
+
+/**
+ * Renovação de uma assinatura MONTHLY já ativa (não é a primeira
+ * confirmação — essa passa por activatePaidContractFromTrial). Cada nova
+ * mensalidade confirmada pela Asaas estende o período de acesso em mais um
+ * mês a partir do endDate atual (nunca da data de pagamento, para não criar
+ * lacuna nem sobreposição entre ciclos pagos em dias ligeiramente
+ * diferentes) — a menos que o acesso já tenha expirado (ex.: pagamento
+ * atrasado processado depois do vencimento), caso em que o novo mês conta a
+ * partir da confirmação.
+ */
+export function extendMonthlyAccessPeriod(params: {
+  currentEndDate: Date;
+  paymentConfirmedAt: Date;
+}): Date {
+  const base =
+    params.currentEndDate.getTime() >= params.paymentConfirmedAt.getTime()
+      ? params.currentEndDate
+      : params.paymentConfirmedAt;
+
+  // Mesmo helper central de mês civil com clamp usado por addMonthsMinusOneDay
+  // acima — nunca Date.setMonth() diretamente. Uma vez que um ciclo "bate" no
+  // último dia do mês por causa do clamp (31/jan -> 28/fev), os ciclos
+  // seguintes continuam a partir desse dia (28/fev -> 28/mar -> ...), em vez
+  // de tentar "recuperar" o dia 31 original.
+  const baseCivilDate = getSaoPauloCivilDateInput(base);
+  const extendedCivilDate = addCivilMonthsClamped(baseCivilDate, 1);
+  return endOfCivilDayInSaoPaulo(extendedCivilDate);
 }

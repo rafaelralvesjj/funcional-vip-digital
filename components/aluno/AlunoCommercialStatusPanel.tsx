@@ -73,6 +73,7 @@ type DashboardSummary = {
     shouldEvaluateCommercialCompensation?: boolean;
     isTrialScheduledToStart?: boolean;
     daysUntilTrialStart?: number | null;
+    showContractCta?: boolean;
   };
   uiState:
     | "EXPERIENCIA_ATIVA"
@@ -313,6 +314,24 @@ export function AlunoCommercialStatusPanel() {
               Pagar
             </a>
           )}
+        </div>
+      )}
+
+      {summary.flags?.showContractCta && (
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[#00A19C]/30 bg-[#00A19C]/10 px-2.5 py-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold text-[#00A19C]">Continue treinando sem interrupção</p>
+            <p className="mt-0.5 text-[9px] leading-snug text-[#bdf5f2]">
+              Contrate seu plano agora e mantenha o acompanhamento ativo.
+            </p>
+          </div>
+
+          <a
+            href="/aluno/contratar"
+            className="shrink-0 rounded-lg bg-[#00A19C] px-3 py-1.5 text-[10px] font-semibold text-[#0a0a0a]"
+          >
+            Contratar plano
+          </a>
         </div>
       )}
 
