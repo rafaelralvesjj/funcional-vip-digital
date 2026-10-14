@@ -1134,7 +1134,7 @@ export default function FinanceiroPage() {
               <input
                 value={conversionPriceReais}
                 onChange={(event) => setConversionPriceReais(event.target.value)}
-                placeholder="Ex.: 297,00"
+                placeholder="Informe o valor em R$"
                 className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
@@ -1288,7 +1288,7 @@ export default function FinanceiroPage() {
               <input
                 value={priceReais}
                 onChange={(event) => setPriceReais(event.target.value)}
-                placeholder="Ex.: 297,00"
+                placeholder="Informe o valor em R$"
                 className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
@@ -1363,7 +1363,7 @@ export default function FinanceiroPage() {
               <input
                 value={paymentAmountReais}
                 onChange={(event) => setPaymentAmountReais(event.target.value)}
-                placeholder="Ex.: 297,00"
+                placeholder="Informe o valor em R$"
                 className="w-full bg-[#1a1a1a] border border-[#ffffff10] rounded-xl px-3 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#00A19C]"
               />
             </div>
