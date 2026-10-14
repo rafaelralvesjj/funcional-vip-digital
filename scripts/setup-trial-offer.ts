@@ -20,12 +20,20 @@
  *   DATABASE_URL="<producao>" npx tsx scripts/setup-trial-offer.ts --deactivate-old-plans
  *
  * Reaproveita as constantes já usadas pela lógica do teste (lib/trial-plan.ts,
- * lib/trial-window.ts) para que a oferta semeada aqui nunca saia de sincronia
- * com as regras de negócio que a validam depois.
+ * lib/trial-window.ts) e a configuração comercial compartilhada com a
+ * landing pública (lib/commercial-offer-config.ts) para que a oferta
+ * semeada aqui nunca saia de sincronia nem com as regras de negócio que a
+ * validam depois, nem com o texto mostrado para quem ainda não é aluno.
  */
 import { PrismaClient } from "@prisma/client";
-import { TRIAL_OFFER_WORKOUTS_PER_WEEK } from "../lib/trial-plan";
-import { TRIAL_DURATION_DAYS } from "../lib/trial-window";
+import {
+  COMMERCIAL_OFFER_NAME,
+  COMMERCIAL_OFFER_WORKOUTS_PER_WEEK,
+  COMMERCIAL_OFFER_TRIAL_DAYS,
+  COMMERCIAL_OFFER_MONTHLY_PRICE_CENTS,
+  COMMERCIAL_OFFER_ANNUAL_PRICE_CENTS,
+  COMMERCIAL_OFFER_ANNUAL_RECOMMENDED,
+} from "../lib/commercial-offer-config";
 import {
   assertNoDuplicateBillingCycle,
   assertAtMostOneRecommendedActiveOption,
@@ -33,10 +41,10 @@ import {
 
 const prisma = new PrismaClient();
 
-const OFFER_NAME = "Funcional UP — 3 treinos por semana";
-const WORKOUTS_PER_MONTH = 12;
-const MONTHLY_PRICE_CENTS = 990;
-const ANNUAL_PRICE_CENTS = 9990;
+const OFFER_NAME = COMMERCIAL_OFFER_NAME;
+const WORKOUTS_PER_MONTH = COMMERCIAL_OFFER_WORKOUTS_PER_WEEK * 4;
+const MONTHLY_PRICE_CENTS = COMMERCIAL_OFFER_MONTHLY_PRICE_CENTS;
+const ANNUAL_PRICE_CENTS = COMMERCIAL_OFFER_ANNUAL_PRICE_CENTS;
 const BILLING_PROVIDER = "ASAAS";
 const DEACTIVATE_OLD_PLANS = process.argv.includes("--deactivate-old-plans");
 
@@ -53,7 +61,7 @@ function describeDatabaseTarget(): string {
 
 async function main() {
   console.log(`Alvo: ${describeDatabaseTarget()}`);
-  console.log(`Oferta: "${OFFER_NAME}" — ${TRIAL_OFFER_WORKOUTS_PER_WEEK}x/semana, teste de ${TRIAL_DURATION_DAYS} dias.`);
+  console.log(`Oferta: "${OFFER_NAME}" — ${COMMERCIAL_OFFER_WORKOUTS_PER_WEEK}x/semana, teste de ${COMMERCIAL_OFFER_TRIAL_DAYS} dias.`);
 
   const result = await prisma.$transaction(async (tx) => {
     let plan = await tx.servicePlan.findFirst({ where: { name: OFFER_NAME } });
@@ -62,11 +70,11 @@ async function main() {
       plan = await tx.servicePlan.update({
         where: { id: plan.id },
         data: {
-          workoutsPerWeek: TRIAL_OFFER_WORKOUTS_PER_WEEK,
+          workoutsPerWeek: COMMERCIAL_OFFER_WORKOUTS_PER_WEEK,
           workoutsPerMonth: WORKOUTS_PER_MONTH,
           durationMonths: 1,
           allowTrial: true,
-          trialDays: TRIAL_DURATION_DAYS,
+          trialDays: COMMERCIAL_OFFER_TRIAL_DAYS,
           active: true,
           // Campo legado, preservado só para telas antigas que ainda leem
           // priceCents direto do ServicePlan; novas aquisições usam
@@ -80,12 +88,12 @@ async function main() {
         data: {
           name: OFFER_NAME,
           description: "Plano único atual: 3 treinos por semana, com 7 dias de teste.",
-          workoutsPerWeek: TRIAL_OFFER_WORKOUTS_PER_WEEK,
+          workoutsPerWeek: COMMERCIAL_OFFER_WORKOUTS_PER_WEEK,
           workoutsPerMonth: WORKOUTS_PER_MONTH,
           durationMonths: 1,
           priceCents: MONTHLY_PRICE_CENTS,
           allowTrial: true,
-          trialDays: TRIAL_DURATION_DAYS,
+          trialDays: COMMERCIAL_OFFER_TRIAL_DAYS,
           active: true,
           sortOrder: 0,
         },
@@ -94,8 +102,18 @@ async function main() {
     }
 
     const desiredBillingOptions = [
-      { billingCycle: "MONTHLY" as const, amountCents: MONTHLY_PRICE_CENTS, recommended: false, active: true },
-      { billingCycle: "ANNUAL" as const, amountCents: ANNUAL_PRICE_CENTS, recommended: true, active: true },
+      {
+        billingCycle: "MONTHLY" as const,
+        amountCents: MONTHLY_PRICE_CENTS,
+        recommended: !COMMERCIAL_OFFER_ANNUAL_RECOMMENDED,
+        active: true,
+      },
+      {
+        billingCycle: "ANNUAL" as const,
+        amountCents: ANNUAL_PRICE_CENTS,
+        recommended: COMMERCIAL_OFFER_ANNUAL_RECOMMENDED,
+        active: true,
+      },
     ];
 
     // Validação de camada de serviço antes de persistir (espelha a unique
