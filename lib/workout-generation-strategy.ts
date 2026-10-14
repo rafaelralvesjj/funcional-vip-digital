@@ -1,3 +1,5 @@
+import { normalizeWorkoutMethodMode, type WorkoutMethodMode } from "./workout-method-mode";
+
 export type ExerciseLike = { id: string; name: string };
 
 function normalize(value: unknown): string {
@@ -78,6 +80,15 @@ export function rotateRecentlyUsedExercises<T extends ExerciseLike>(
 }
 
 export function buildWorkoutGenerationStrategy(input: {
+  /**
+   * Modo estruturado do aluno (Student.workoutMethodMode) — a ÚNICA fonte
+   * aceita para decidir COMBINADO vs NORMAL. Nunca inferido de
+   * summaryText/openQuestions/activePreferences: um histórico, mensagem ou
+   * resumo que mencione "combinado" não pode mudar o que é gerado — só uma
+   * mudança explícita do próprio modo (ver lib/workout-method-mode.ts) faz
+   * isso.
+   */
+  workoutMethodMode: WorkoutMethodMode;
   summaryText?: string;
   openQuestions?: unknown[];
   activePreferences?: unknown[];
@@ -86,15 +97,13 @@ export function buildWorkoutGenerationStrategy(input: {
 }) {
   const questionText = collectQuestionText(input.openQuestions || []).join(" ");
   const preferenceText = collectQuestionText(input.activePreferences || []).join(" ");
-  const currentMethodContext = normalize(`${preferenceText} ${questionText}`);
   const broaderContext = normalize(`${input.summaryText || ""} ${questionText} ${preferenceText}`);
 
-  // O formato combinado é uma preferência específica do aluno, não um padrão global.
-  // Uma menção histórica/genérica a "combinado" no resumo não pode contaminar outros alunos.
-  const normalWorkoutRequested = /(nao quero(?: mais)?(?: o| um)? treino combinad|sem treino combinad|sem combinad|voltar (?:ao|pro|para o) treino normal|quero (?:voltar ao |voltar pro |um )?treino normal|prefiro (?:o )?treino normal|formato normal|metodo normal)/i.test(currentMethodContext);
-  const explicitCombinedRequest = /(quero|prefiro|gostaria|preciso|pedido|solicito|formato|metodo|treino).{0,80}(treino )?(combinad|dinamic|sequencia metabol|metabolic|superset|super set|bi-set|biset|intercalad)|(combinad|sequencia metabol|superset|super set|bi-set|biset).{0,80}(quero|prefiro|gostaria|preciso|pedido|solicito)|um exercicio.{0,80}outro.{0,80}descans|uma serie de cada exercicio direto|a1.{0,30}a2.{0,80}descans/i.test(currentMethodContext);
-  const combinedSequenceRequested = !normalWorkoutRequested && explicitCombinedRequest;
+  const combinedSequenceRequested = normalizeWorkoutMethodMode(input.workoutMethodMode) === "COMBINADO";
   const dynamicPairedSetsRequested = combinedSequenceRequested;
+  // Continua textual de propósito: é uma preferência de conteúdo do treino
+  // (não adicionar cardio por já correr em outro dia), não uma decisão de
+  // modo NORMAL/COMBINADO — fora do escopo desta revisão.
   const strengthOnlyBecauseRuns = /(ja corre|corrida|corredor|corredora).*(somente musculacao|so musculacao|apenas musculacao|musculacao na academia|cardio.*dias de corrida)|(somente musculacao|so musculacao|apenas musculacao|musculacao na academia).*(ja corre|corrida|corredor|corredora)/i.test(broaderContext);
   const recentExerciseNames = Array.from(new Set(input.recentExerciseNames || [])).filter(Boolean);
 

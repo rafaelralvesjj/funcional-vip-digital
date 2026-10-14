@@ -8,6 +8,7 @@ import { getSaoPauloCivilDateInput, getSaoPauloWeekday } from "@/lib/planning-wi
 import { resolveRecurringWorkoutOffsets } from "@/lib/student-workout-days";
 import { buildExplicitExerciseRequestContext, prioritizeExplicitExerciseMentions } from "@/lib/exercise-library-priority";
 import { buildWorkoutGenerationStrategy, getRecentlyUsedExerciseNames, rotateRecentlyUsedExercises } from "@/lib/workout-generation-strategy";
+import { normalizeWorkoutMethodMode } from "@/lib/workout-method-mode";
 
 type StudentOption = {
   id: string;
@@ -64,6 +65,11 @@ type SummaryResponse = {
     isMinor?: boolean;
     professorName?: string | null;
     weeklyLimit?: number | null;
+    // Modo de treino estruturado deste aluno especificamente — a resposta
+    // de /api/students/[id]/ai-summary é por definição sobre ESTE aluno,
+    // nunca sobre o aluno selecionado na tela (relevante no modo em lote,
+    // onde vários alunos são processados num mesmo laço).
+    workoutMethodMode?: "NORMAL" | "COMBINADO";
   };
   metrics: Record<string, number>;
   evolutionContext?: {
@@ -1115,6 +1121,13 @@ export default function ResumoAlunoPage() {
     const recentExerciseNames = getRecentlyUsedExerciseNames(summaryData.summaryText || "", exerciseLibrary);
 
     return buildWorkoutGenerationStrategy({
+      // Único campo que decide NORMAL/COMBINADO — nunca o texto do resumo/
+      // perguntas/preferências abaixo (ainda enviados só para outras
+      // decisões do prompt, como variedade de exercícios). Vem de
+      // summaryData.student (o aluno desta chamada específica), nunca de
+      // selectedStudent: no modo em lote, vários alunos são processados no
+      // mesmo laço e selectedStudent reflete só o dropdown da tela única.
+      workoutMethodMode: normalizeWorkoutMethodMode(summaryData.student?.workoutMethodMode),
       summaryText: summaryData.summaryText || "",
       openQuestions: summaryData.openQuestions || [],
       activePreferences: summaryData.technicalContext?.activePreferences || [],

@@ -4,6 +4,7 @@ import {
   pickCurrentContract,
   hasContractStarted,
   computeShowContractCta,
+  computeShowCombinedWorkoutCta,
 } from '../lib/student-dashboard-summary.ts';
 import { getSaoPauloCivilDateInput } from '../lib/planning-window.ts';
 
@@ -312,5 +313,50 @@ test('CTA é falso quando não há nenhum TRIAL', () => {
       { type: 'PAID', status: 'FINALIZED', startDate: saoPauloDaysFromNow(-40), endDate: saoPauloDaysFromNow(-10) },
     ]),
     false
+  );
+});
+
+// computeShowCombinedWorkoutCta: CTA "Experimente um treino combinado".
+function daysFromNowExact(days: number): Date {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
+test('CTA de combinado nunca aparece para quem já está em COMBINADO', () => {
+  assert.equal(
+    computeShowCombinedWorkoutCta({
+      workoutMethodMode: 'COMBINADO',
+      firstCompletedWorkoutDate: daysFromNowExact(-90),
+    }),
+    false
+  );
+});
+
+test('CTA de combinado não aparece sem nenhum treino concluído', () => {
+  assert.equal(
+    computeShowCombinedWorkoutCta({
+      workoutMethodMode: 'NORMAL',
+      firstCompletedWorkoutDate: null,
+    }),
+    false
+  );
+});
+
+test('CTA de combinado não aparece com 29 dias desde o primeiro treino concluído', () => {
+  assert.equal(
+    computeShowCombinedWorkoutCta({
+      workoutMethodMode: 'NORMAL',
+      firstCompletedWorkoutDate: daysFromNowExact(-29),
+    }),
+    false
+  );
+});
+
+test('CTA de combinado aparece com 30 dias desde o primeiro treino concluído', () => {
+  assert.equal(
+    computeShowCombinedWorkoutCta({
+      workoutMethodMode: 'NORMAL',
+      firstCompletedWorkoutDate: daysFromNowExact(-30),
+    }),
+    true
   );
 });

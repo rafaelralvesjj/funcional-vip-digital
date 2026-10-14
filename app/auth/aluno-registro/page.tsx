@@ -18,6 +18,7 @@ import {
   WORKOUT_DAY_OPTIONS,
   type WorkoutDayCode,
 } from "@/lib/student-workout-days";
+import { COMMERCIAL_OFFER_TRIAL_DAYS } from "@/lib/commercial-offer-config";
 
 const OTHER_OBJECTIVE = "Outro";
 
@@ -446,10 +447,10 @@ export default function AlunoRegisterPage() {
 
           <div className="rounded-xl bg-[#00A19C]/10 border border-[#00A19C]/20 px-4 py-3">
             <p className="text-sm text-[#00A19C] font-semibold">
-              Experiência gratuita de 1 mês
+              Experiência gratuita de {COMMERCIAL_OFFER_TRIAL_DAYS} dias
             </p>
             <p className="text-xs text-[#a1a1a1] mt-1">
-              Seu cadastro ativa uma experiência grátis. Depois disso, a equipe irá vincular um professor para liberar seus primeiros treinos.
+              Seu cadastro ativa uma experiência de {COMMERCIAL_OFFER_TRIAL_DAYS} dias. Depois disso, a equipe irá vincular um professor para liberar seus primeiros treinos.
             </p>
           </div>
 

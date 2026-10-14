@@ -20,6 +20,7 @@ import {
   getWorkoutValidationDeadlineCivilKey,
   workoutDateToCivilKey,
 } from "@/lib/workout-validation-window";
+import { resolveWorkoutCompletedAt } from "@/lib/workout-completion";
 
 function normalizeRole(role?: string | null): string {
   const value = String(role || "").toUpperCase();
@@ -1570,7 +1571,18 @@ export async function POST(req: NextRequest) {
         id: true,
         status: true,
         contractId: true,
+        completedAt: true,
       },
+    });
+
+    // Instante REAL de conclusão (nunca a data planejada) — ver
+    // lib/workout-completion.ts. Só é gravado na primeira transição para
+    // CONCLUIDO/CONCLUIDO_PARCIALMENTE; reenvio/idempotência nunca sobrescreve.
+    const completedAtToPersist = resolveWorkoutCompletedAt({
+      previousStatus: existingWorkout?.status ?? null,
+      nextStatus: workoutStatus,
+      previousCompletedAt: existingWorkout?.completedAt ?? null,
+      now: new Date(),
     });
 
     const workoutPlanForContract = await prisma.workoutPlan.findUnique({
@@ -1589,6 +1601,7 @@ export async function POST(req: NextRequest) {
             status: workoutStatus,
             date: workoutDate,
             contractId: existingWorkout.contractId || workoutPlanForContract?.contractId || null,
+            completedAt: completedAtToPersist,
           },
           select: {
             id: true,
@@ -1597,6 +1610,7 @@ export async function POST(req: NextRequest) {
             contractId: true,
             date: true,
             status: true,
+            completedAt: true,
           },
         })
       : await prisma.workout.create({
@@ -1606,6 +1620,7 @@ export async function POST(req: NextRequest) {
             contractId: workoutPlanForContract?.contractId || null,
             date: workoutDate,
             status: workoutStatus,
+            completedAt: completedAtToPersist,
           },
           select: {
             id: true,
@@ -1614,6 +1629,7 @@ export async function POST(req: NextRequest) {
             contractId: true,
             date: true,
             status: true,
+            completedAt: true,
           },
         });
 
