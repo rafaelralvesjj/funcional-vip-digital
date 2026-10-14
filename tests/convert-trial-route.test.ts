@@ -51,6 +51,11 @@ test('financeiro: usa a regra explícita de elegibilidade (lib/service-plan-elig
   assert.match(source, /filterServicePlansEligibleForPaidContracting\(/);
 });
 
+test('financeiro: não mantém exemplo monetário legado de R$ 297,00 nos campos de valor', () => {
+  const source = readFinanceiroPageSource();
+  assert.doesNotMatch(source, /297,00/);
+});
+
 // Preservação dos 7 dias de teste quando o pagamento é antecipado, e a
 // transição EM_ABERTO → PAGO em geral, foram centralizadas em
 // lib/contract-payment-transition.ts (que por sua vez usa
