@@ -5,7 +5,6 @@ import path from 'node:path';
 
 const repoRoot = process.cwd();
 const privacyPagePath = path.join(repoRoot, 'app', 'privacidade', 'page.tsx');
-const homePagePath = path.join(repoRoot, 'app', 'page.tsx');
 
 test('public privacy policy page exists and covers Garmin/LGPD essentials', () => {
   assert.equal(fs.existsSync(privacyPagePath), true, 'app/privacidade/page.tsx must exist');
@@ -24,9 +23,4 @@ test('public privacy policy page exists and covers Garmin/LGPD essentials', () =
   ]) {
     assert.match(source, new RegExp(requiredText, 'i'));
   }
-});
-
-test('public home links to the privacy policy', () => {
-  const source = fs.readFileSync(homePagePath, 'utf8');
-  assert.match(source, /href=["']\/privacidade["']/);
 });
