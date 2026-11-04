@@ -9,10 +9,12 @@ export const metadata: Metadata = {
   title: 'Funcional UP Digital',
   description: 'Treinamento funcional personalizado com acompanhamento humano.',
   icons: {
+    // O mesmo símbolo oficial exibido pelo componente BrandLogo.
+    // A versão da URL força o navegador a buscar o novo favicon.
     icon: [
-      { url: '/branding/favicon-32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/branding/favicon-64.png', sizes: '64x64', type: 'image/png' },
+      { url: '/branding/icon-funcional-up.svg?v=20261104', sizes: 'any', type: 'image/svg+xml' },
     ],
+    shortcut: '/branding/icon-funcional-up.svg?v=20261104',
     apple: [{ url: '/branding/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   openGraph: {
