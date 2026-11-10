@@ -44,6 +44,7 @@ export type StudentDashboardSummary = {
     id: string;
     type: string;
     status: string;
+    source: string | null;
     commercialStatus: string;
     startDate: string;
     endDate: string;
@@ -104,6 +105,7 @@ export type StudentDashboardSummary = {
     daysUntilTrialStart: number | null;
     shouldEvaluateCommercialCompensation: boolean;
     showContractCta: boolean;
+    showResumeCheckoutCta: boolean;
     showCombinedWorkoutCta: boolean;
   };
   uiState: StudentDashboardUiState;
@@ -287,6 +289,25 @@ export function computeShowContractCta(contracts: any[], today: Date = new Date(
     now: today,
     hasPaidContractActiveOrScheduled: hasPaidContractActiveOrScheduled(contracts, today),
   });
+}
+
+/**
+ * Permite retomar somente uma reserva criada pelo checkout Asaas e ainda sem link.
+ * O endpoint de checkout já reconcilia a reserva existente pelo contrato/pagamento.
+ * Não expor CTA para contratos manuais, pagos ou que já possuem link.
+ */
+export function shouldShowCheckoutResumeCta(
+  contract: { type: string; status: string; source?: string | null } | null | undefined,
+  payment: { status: string; paymentLinkUrl?: string | null } | null | undefined
+): boolean {
+  return (
+    contract?.type === "PAID" &&
+    contract.status === "AWAITING_PAYMENT" &&
+    contract.source === "CHECKOUT_ASAAS" &&
+    Boolean(payment) &&
+    ["EM_ABERTO", "ATRASADO"].includes(payment?.status || "") &&
+    !payment?.paymentLinkUrl
+  );
 }
 
 /**
@@ -579,6 +600,7 @@ export async function getStudentDashboardSummary(
     daysUntilTrialStart,
     shouldEvaluateCommercialCompensation: Boolean(activeCarePause),
     showContractCta: computeShowContractCta(student.contracts),
+    showResumeCheckoutCta: shouldShowCheckoutResumeCta(contract, payment),
     showCombinedWorkoutCta: computeShowCombinedWorkoutCta({
       workoutMethodMode,
       firstCompletedWorkoutDate,
@@ -626,6 +648,7 @@ export async function getStudentDashboardSummary(
           id: contract.id,
           type: contract.type,
           status: contract.status,
+          source: contract.source || null,
           commercialStatus: contract.commercialStatus,
           startDate: toDateOnlyISOString(contract.startDate),
           endDate: toDateOnlyISOString(contract.endDate),

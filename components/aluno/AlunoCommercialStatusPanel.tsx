@@ -15,6 +15,7 @@ type DashboardSummary = {
     id: string;
     type: string;
     status: string;
+    source: string | null;
     commercialStatus: string;
     startDate: string;
     endDate: string;
@@ -75,6 +76,7 @@ type DashboardSummary = {
     isTrialScheduledToStart?: boolean;
     daysUntilTrialStart?: number | null;
     showContractCta?: boolean;
+    showResumeCheckoutCta?: boolean;
     showCombinedWorkoutCta?: boolean;
   };
   uiState:
@@ -372,6 +374,23 @@ export function AlunoCommercialStatusPanel() {
               Pagar
             </a>
           )}
+        </div>
+      )}
+
+      {summary.flags?.showResumeCheckoutCta && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#00A19C]/30 bg-[#00A19C]/10 px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-[#00A19C]">Pagamento ainda sem link</p>
+            <p className="mt-1 text-[10px] text-[#bdf5f2]">
+              A cobrança ainda não foi gerada. Retome o pagamento da reserva existente.
+            </p>
+          </div>
+          <a
+            href="/aluno/contratar"
+            className="shrink-0 rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-semibold text-[#0a0a0a]"
+          >
+            Retomar pagamento
+          </a>
         </div>
       )}
 

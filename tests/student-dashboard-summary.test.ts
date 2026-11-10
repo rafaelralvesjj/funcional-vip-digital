@@ -4,6 +4,7 @@ import {
   pickCurrentContract,
   hasContractStarted,
   computeShowContractCta,
+  shouldShowCheckoutResumeCta,
   computeShowCombinedWorkoutCta,
 } from '../lib/student-dashboard-summary.ts';
 import { getSaoPauloCivilDateInput } from '../lib/planning-window.ts';
@@ -359,4 +360,19 @@ test('CTA de combinado aparece com 30 dias desde o primeiro treino concluído', 
     }),
     true
   );
+});
+
+test('reserva Asaas sem link pode retomar checkout sem criar novo contrato', () => {
+  const reserva = { type: 'PAID', status: 'AWAITING_PAYMENT', source: 'CHECKOUT_ASAAS' };
+  assert.equal(shouldShowCheckoutResumeCta(reserva, { status: 'EM_ABERTO', paymentLinkUrl: null }), true);
+  assert.equal(shouldShowCheckoutResumeCta(reserva, { status: 'ATRASADO', paymentLinkUrl: null }), true);
+});
+
+test('não permite retomar checkout de contratos manuais, com link ou pagos', () => {
+  const reserva = { type: 'PAID', status: 'AWAITING_PAYMENT', source: 'CHECKOUT_ASAAS' };
+  assert.equal(shouldShowCheckoutResumeCta(reserva, { status: 'EM_ABERTO', paymentLinkUrl: 'https://example.com/pay' }), false);
+  assert.equal(shouldShowCheckoutResumeCta(reserva, { status: 'PAGO', paymentLinkUrl: null }), false);
+  assert.equal(shouldShowCheckoutResumeCta(reserva, null), false);
+  assert.equal(shouldShowCheckoutResumeCta({ ...reserva, source: 'RENOVACAO' }, { status: 'EM_ABERTO', paymentLinkUrl: null }), false);
+  assert.equal(shouldShowCheckoutResumeCta({ ...reserva, status: 'ACTIVE' }, { status: 'EM_ABERTO', paymentLinkUrl: null }), false);
 });
