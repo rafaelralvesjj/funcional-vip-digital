@@ -395,38 +395,31 @@ export function AlunoCommercialStatusPanel() {
               href={summary.payment.paymentLinkUrl}
               target="_blank"
               rel="noreferrer"
-              className="ml-auto rounded-md bg-[#00A19C] px-2.5 py-1 text-[9px] font-semibold text-[#0a0a0a]"
+              className="ml-auto rounded-md border border-[#00A19C]/40 px-2.5 py-1 text-[9px] font-semibold text-[#00A19C]"
             >
-              Pagar
+              Ver cobrança
             </a>
+          )}
+          {summary.currentCycle?.status === "AWAITING_PAYMENT" &&
+            summary.currentCycle.type === "PAID" &&
+            summary.payment.paymentLinkUrl &&
+            ["EM_ABERTO", "ATRASADO"].includes(summary.payment.status) && (
+              <button
+                type="button"
+                onClick={handleReconcileAsaasPayment}
+                disabled={paymentCheckStatus === "loading" || paymentCheckStatus === "success"}
+                className="rounded-md bg-[#00A19C] px-2.5 py-1 text-[9px] font-semibold text-[#0a0a0a] disabled:opacity-60"
+              >
+                {paymentCheckStatus === "loading" ? "Conferindo na Asaas..." : "Já paguei — verificar"}
+              </button>
+            )}
+          {paymentCheckMessage && (
+            <p className={`w-full text-[10px] ${paymentCheckStatus === "error" ? "text-red-300" : "text-emerald-300"}`}>
+              {paymentCheckMessage}
+            </p>
           )}
         </div>
       )}
-
-      {summary.currentCycle?.source === "CHECKOUT_ASAAS" &&
-        summary.currentCycle?.status === "AWAITING_PAYMENT" &&
-        summary.payment?.paymentLinkUrl &&
-        ["EM_ABERTO", "ATRASADO"].includes(summary.payment.status) && (
-          <div className="mt-2 rounded-lg border border-[#00A19C]/30 bg-[#00A19C]/10 px-3 py-3">
-            <p className="text-[11px] font-semibold text-[#00A19C]">Ja pagou na Asaas?</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-[#bdf5f2]">
-              Verifique a cobranca existente diretamente com a Asaas, sem gerar outra.
-            </p>
-            <button
-              type="button"
-              onClick={handleReconcileAsaasPayment}
-              disabled={paymentCheckStatus === "loading" || paymentCheckStatus === "success"}
-              className="mt-2 rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-semibold text-[#0a0a0a] disabled:opacity-60"
-            >
-              {paymentCheckStatus === "loading" ? "Conferindo pagamento..." : "Ja paguei — verificar na Asaas"}
-            </button>
-            {paymentCheckMessage && (
-              <p className={`mt-2 text-[10px] ${paymentCheckStatus === "error" ? "text-red-300" : "text-emerald-300"}`}>
-                {paymentCheckMessage}
-              </p>
-            )}
-          </div>
-        )}
 
       {summary.flags?.showContractCta && (
         <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[#00A19C]/30 bg-[#00A19C]/10 px-2.5 py-2">
