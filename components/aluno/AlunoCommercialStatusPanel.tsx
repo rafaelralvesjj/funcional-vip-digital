@@ -15,6 +15,7 @@ type DashboardSummary = {
     id: string;
     type: string;
     status: string;
+    source: string | null;
     commercialStatus: string;
     startDate: string;
     endDate: string;
@@ -150,6 +151,8 @@ export function AlunoCommercialStatusPanel() {
   const [pendingModeRequest, setPendingModeRequest] = useState<"NORMAL" | "COMBINADO" | null>(null);
   const [modeChangeStatus, setModeChangeStatus] = useState<RequestState>("idle");
   const [modeChangeMessage, setModeChangeMessage] = useState<string | null>(null);
+  const [paymentCheckStatus, setPaymentCheckStatus] = useState<RequestState>("idle");
+  const [paymentCheckMessage, setPaymentCheckMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -230,6 +233,31 @@ export function AlunoCommercialStatusPanel() {
           ? error.message
           : "Não foi possível alterar o modo de treino agora. Tente novamente mais tarde."
       );
+    }
+  }
+
+  async function handleReconcileAsaasPayment() {
+    if (paymentCheckStatus === "loading") return;
+    setPaymentCheckStatus("loading");
+    setPaymentCheckMessage(null);
+
+    try {
+      const response = await fetch("/api/aluno/reconciliar-pagamento-asaas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Nao foi possivel confirmar o pagamento na Asaas.");
+      }
+
+      setPaymentCheckStatus("success");
+      setPaymentCheckMessage("Pagamento validado pela Asaas! Atualizando o acompanhamento.");
+      await refreshSummary();
+    } catch (error) {
+      setPaymentCheckStatus("error");
+      setPaymentCheckMessage(error instanceof Error ? error.message : "Erro ao verificar pagamento.");
     }
   }
 
@@ -374,6 +402,31 @@ export function AlunoCommercialStatusPanel() {
           )}
         </div>
       )}
+
+      {summary.currentCycle?.source === "CHECKOUT_ASAAS" &&
+        summary.currentCycle?.status === "AWAITING_PAYMENT" &&
+        summary.payment?.paymentLinkUrl &&
+        ["EM_ABERTO", "ATRASADO"].includes(summary.payment.status) && (
+          <div className="mt-2 rounded-lg border border-[#00A19C]/30 bg-[#00A19C]/10 px-3 py-3">
+            <p className="text-[11px] font-semibold text-[#00A19C]">Ja pagou na Asaas?</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-[#bdf5f2]">
+              Verifique a cobranca existente diretamente com a Asaas, sem gerar outra.
+            </p>
+            <button
+              type="button"
+              onClick={handleReconcileAsaasPayment}
+              disabled={paymentCheckStatus === "loading" || paymentCheckStatus === "success"}
+              className="mt-2 rounded-lg bg-[#00A19C] px-3 py-2 text-[11px] font-semibold text-[#0a0a0a] disabled:opacity-60"
+            >
+              {paymentCheckStatus === "loading" ? "Conferindo pagamento..." : "Ja paguei — verificar na Asaas"}
+            </button>
+            {paymentCheckMessage && (
+              <p className={`mt-2 text-[10px] ${paymentCheckStatus === "error" ? "text-red-300" : "text-emerald-300"}`}>
+                {paymentCheckMessage}
+              </p>
+            )}
+          </div>
+        )}
 
       {summary.flags?.showContractCta && (
         <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[#00A19C]/30 bg-[#00A19C]/10 px-2.5 py-2">

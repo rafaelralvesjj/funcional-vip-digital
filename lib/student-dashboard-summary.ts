@@ -44,6 +44,7 @@ export type StudentDashboardSummary = {
     id: string;
     type: string;
     status: string;
+    source: string | null;
     commercialStatus: string;
     startDate: string;
     endDate: string;
@@ -626,6 +627,7 @@ export async function getStudentDashboardSummary(
           id: contract.id,
           type: contract.type,
           status: contract.status,
+          source: contract.source || null,
           commercialStatus: contract.commercialStatus,
           startDate: toDateOnlyISOString(contract.startDate),
           endDate: toDateOnlyISOString(contract.endDate),
