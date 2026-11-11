@@ -38,6 +38,7 @@ export type AsaasPayment = {
   value?: number | null;
   externalReference?: string | null;
   subscription?: string | null;
+  customer?: string | null;
 };
 
 export type AsaasSubscription = {
