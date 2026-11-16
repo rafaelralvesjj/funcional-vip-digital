@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
 
   for (const workout of workouts) {
     const student = workout.student;
-    const eventKey = workout.id;
+    const eventKey = window.civilDate; // uma notificação no máximo por aluno e data, inclusive entre crons concorrentes
     const uniqueWhere = {
       studentId_eventType_eventKey: {
         studentId: workout.studentId,
