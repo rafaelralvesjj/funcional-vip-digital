@@ -72,6 +72,10 @@
     {
       "path": "/api/cron/saturday-communication",
       "schedule": "30 12 * * 6"
+    },
+    {
+      "path": "/api/cron/workout-nightly-reminder",
+      "schedule": "0 0 * * *"
     }
   ]
 }
