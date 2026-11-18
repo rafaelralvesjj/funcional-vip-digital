@@ -1,7 +1,12 @@
 // Netlify scheduled-function adapter. Keep workout business rules in the existing Next.js route.
 // Never log CRON_SECRET or student-level responses.
 export async function invokeWorkoutRelease(path) {
-  const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
+  // Previews share credentials with production; never let a preview trigger real releases.
+  if (process.env.CONTEXT !== "production") {
+    console.log("Workout release skipped outside production");
+    return;
+  }
+  const baseUrl = process.env.URL;
   const secret = process.env.CRON_SECRET;
   if (!baseUrl || !secret) throw new Error("Netlify URL or CRON_SECRET is missing");
 
