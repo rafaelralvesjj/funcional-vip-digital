@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 // 🔥 Tipos MIME permitidos
 const ALLOWED_TYPES = [
@@ -20,6 +22,11 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const folderRaw = String(formData.get("folder") || "").trim();
