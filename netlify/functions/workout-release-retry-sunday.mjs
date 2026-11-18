@@ -1,4 +1,4 @@
-import { invokeWorkoutRelease } from "./_workout-release-helper.mjs";
+import { invokeWorkoutRelease } from "../lib/workout-release-helper.mjs";
 
 // UTC: preserves the original Vercel schedule in vercel.json.
 export default async () => {
