@@ -13,7 +13,7 @@ function isAuthorized(request: NextRequest): boolean {
     process.env.NEXT_PUBLIC_CRON_SECRET;
 
   if (!configuredSecret) {
-    return true;
+    return process.env.NODE_ENV !== "production";
   }
 
   const headerSecret = request.headers.get("x-cron-secret");
