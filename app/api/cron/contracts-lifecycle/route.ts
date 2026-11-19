@@ -7,24 +7,9 @@ export const maxDuration = 60;
 type ContractWithStudent = Awaited<ReturnType<typeof getActiveContractsForLifecycle>>[number];
 
 function isAuthorized(request: NextRequest): boolean {
-  const configuredSecret =
-    process.env.CRON_SECRET ||
-    process.env.VERCEL_CRON_SECRET ||
-    process.env.NEXT_PUBLIC_CRON_SECRET;
-
-  if (!configuredSecret) {
-    return true;
-  }
-
-  const headerSecret = request.headers.get("x-cron-secret");
-  const querySecret = request.nextUrl.searchParams.get("secret");
-  const authorization = request.headers.get("authorization");
-
-  return (
-    headerSecret === configuredSecret ||
-    querySecret === configuredSecret ||
-    authorization === `Bearer ${configuredSecret}`
-  );
+  const configuredSecret = process.env.CRON_SECRET;
+  if (!configuredSecret) return false;
+  return request.headers.get("authorization") === `Bearer ${configuredSecret}`;
 }
 
 function startOfToday(): Date {
