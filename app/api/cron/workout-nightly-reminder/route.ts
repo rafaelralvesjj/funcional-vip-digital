@@ -50,7 +50,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Em Preview não disparamos e-mails reais; testar apenas os helpers/build.
-  if (process.env.CONTEXT !== "production" && process.env.VERCEL_ENV !== "production") {
+  if (process.env.CONTEXT
+    ? process.env.CONTEXT !== "production"
+    : process.env.VERCEL_ENV !== "production") {
     return NextResponse.json({ ok: true, paused: true, reason: "Somente produção envia lembretes" });
   }
 
